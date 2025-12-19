@@ -1,0 +1,28 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-04T19:09:45+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "ov1iii",
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "region": "ap-southeast-1",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

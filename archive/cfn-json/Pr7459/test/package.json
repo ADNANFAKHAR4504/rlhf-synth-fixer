@@ -1,0 +1,21 @@
+{
+  "name": "trade-processing-tests",
+  "version": "1.0.0",
+  "description": "Tests for Serverless Trade Processing System",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "lib/**/*.js",
+      "!lib/**/*.test.js"
+    ]
+  }
+}

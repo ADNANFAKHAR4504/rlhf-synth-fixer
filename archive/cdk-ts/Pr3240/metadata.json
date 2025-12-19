@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "39582146",
+  "team": "synth",
+  "startedAt": "2025-10-01T14:23:02+00:00",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "Serverless Infrastructure",
+    "API Gateway Configuration",
+    "Lambda Functions",
+    "DynamoDB Setup",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Access Control",
+    "Rate Limiting Implementation",
+    "X-Ray Distributed Tracing",
+    "Parameter Store Configuration"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "Amazon API Gateway",
+    "AWS Lambda",
+    "Amazon DynamoDB",
+    "AWS IAM",
+    "AWS Systems Manager Parameter Store",
+    "Amazon CloudWatch",
+    "AWS X-Ray"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,1065 @@
+### Reasoning Trace
+
+---
+
+This is a comprehensive request for a production-ready CloudFormation template with strict security requirements. Let me break down what's needed:
+
+1. **VPC Configuration**:
+   - VPC with public and private subnets
+   - At least 2 availability zones
+   - Internet Gateway for public subnets
+   - NAT Gateway for private subnet outbound access
+
+2. **Security Requirements**:
+   - Security groups with least privilege
+   - Web servers: Only HTTP (80) and HTTPS (443)
+   - RDS in private subnet with no internet access
+   - Bastion host with restricted SSH access
+   - Encrypted EBS volumes with KMS
+   - No hardcoded credentials
+
+3. **Compute & Database**:
+   - EC2 instances with IAM roles
+   - RDS MySQL database
+   - S3 buckets with proper permissions
+   - Automated backups for RDS (7 days retention)
+
+4. **Monitoring & Logging**:
+   - VPC Flow Logs to S3
+   - CloudWatch Alarms for EC2 and RDS
+   - Systems Manager Parameter Store for configuration
+
+5. **Best Practices**:
+   - Tags for all resources (Name, Environment, Owner)
+   - Rollback on failure support
+   - Production-ready configuration
+
+Let me create a comprehensive CloudFormation template that addresses all these requirements.
+
+### Answer
+
+---
+
+I'll create a comprehensive, production-ready CloudFormation template that implements all your security and infrastructure requirements. This template follows AWS best practices and includes all the components you've specified.
+
+## secure-infrastructure-stack.yaml
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure Multi-Tier Web Application Infrastructure with Best Practices'
+
+# Template Metadata
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Network Configuration'
+        Parameters:
+          - VPCCIDR
+          - PublicSubnet1CIDR
+          - PublicSubnet2CIDR
+          - PrivateSubnet1CIDR
+          - PrivateSubnet2CIDR
+          - BastionSubnetCIDR
+      - Label:
+          default: 'Security Configuration'
+        Parameters:
+          - BastionAllowedIP
+          - KeyPairName
+      - Label:
+          default: 'Database Configuration'
+        Parameters:
+          - DBMasterUsername
+          - DBInstanceClass
+      - Label:
+          default: 'Application Configuration'
+        Parameters:
+          - InstanceType
+          - Environment
+          - Owner
+
+# Parameters
+Parameters:
+  VPCCIDR:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: 'CIDR block for VPC'
+    AllowedPattern: "^(10|172|192)\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(16|17|18|19|20|21|22|23|24)$"
+
+  PublicSubnet1CIDR:
+    Type: String
+    Default: '10.0.1.0/24'
+    Description: 'CIDR block for Public Subnet 1'
+
+  PublicSubnet2CIDR:
+    Type: String
+    Default: '10.0.2.0/24'
+    Description: 'CIDR block for Public Subnet 2'
+
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: '10.0.10.0/24'
+    Description: 'CIDR block for Private Subnet 1'
+
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: '10.0.11.0/24'
+    Description: 'CIDR block for Private Subnet 2'
+
+  BastionSubnetCIDR:
+    Type: String
+    Default: '10.0.20.0/24'
+    Description: 'CIDR block for Bastion Subnet'
+
+  BastionAllowedIP:
+    Type: String
+    Description: 'IP address allowed to SSH to bastion (e.g., your office IP/32)'
+    AllowedPattern: "^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})$"
+    ConstraintDescription: 'Must be a valid IP CIDR range of the form x.x.x.x/x'
+
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: 'EC2 Key Pair for SSH access'
+    ConstraintDescription: 'Must be an existing EC2 KeyPair'
+
+  DBMasterUsername:
+    Type: String
+    Default: 'dbadmin'
+    Description: 'Database master username'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: 'Must begin with letter and contain only alphanumeric characters'
+
+  DBInstanceClass:
+    Type: String
+    Default: 'db.t3.micro'
+    Description: 'RDS instance type'
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+      - db.m5.large
+      - db.m5.xlarge
+
+  InstanceType:
+    Type: String
+    Default: 't3.micro'
+    Description: 'EC2 instance type'
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+      - m5.large
+      - m5.xlarge
+
+  Environment:
+    Type: String
+    Default: 'Production'
+    Description: 'Environment tag value'
+    AllowedValues:
+      - Development
+      - Staging
+      - Production
+
+  Owner:
+    Type: String
+    Description: 'Owner tag value (email or team name)'
+    MinLength: 1
+
+# Mappings
+Mappings:
+  AWSRegionToAMI:
+    ca-central-1:
+      AMI: 'ami-0c02fb55731490381' # Amazon Linux 2 AMI
+
+# Resources
+Resources:
+  # ==================== VPC Configuration ====================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-VPC'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-IGW'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # ==================== Subnet Configuration ====================
+
+  # Public Subnet 1
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet1CIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicSubnet-1'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Public Subnet 2
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet2CIDR
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicSubnet-2'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Private Subnet 1
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PrivateSubnet-1'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Private Subnet 2
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PrivateSubnet-2'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Bastion Subnet
+  BastionSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref BastionSubnetCIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-BastionSubnet'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ==================== NAT Gateway Configuration ====================
+
+  # Elastic IP for NAT Gateway
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-NAT-EIP'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # NAT Gateway
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-NATGateway'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ==================== Route Tables ====================
+
+  # Public Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicRouteTable'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  BastionSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref BastionSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # Private Route Table
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PrivateRouteTable'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # ==================== Security Groups ====================
+
+  # Web Server Security Group
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for web servers'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow HTTP from anywhere'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow HTTPS from anywhere'
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref BastionSecurityGroup
+          Description: 'Allow SSH from Bastion'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-WebServerSG'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Database Security Group
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for RDS database'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: 'Allow MySQL from Web Servers'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-DatabaseSG'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Bastion Security Group
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Bastion Host'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref BastionAllowedIP
+          Description: 'Allow SSH from whitelisted IP'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-BastionSG'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ==================== KMS Key for Encryption ====================
+
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS key for EBS and RDS encryption'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow use of the key for encryption
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - rds.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-KMSKey'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${AWS::StackName}-encryption-key'
+      TargetKeyId: !Ref KMSKey
+
+  # ==================== S3 Buckets ====================
+
+  # S3 Bucket for VPC Flow Logs
+  FlowLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-flowlogs-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldFlowLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-FlowLogsBucket'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # S3 Bucket for Application Data
+  ApplicationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-app-data-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ApplicationBucket'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ==================== VPC Flow Logs ====================
+
+  VPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: FlowLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetBucketLocation'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt FlowLogsBucket.Arn
+                  - !Sub '${FlowLogsBucket.Arn}/*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-FlowLogRole'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    DependsOn: FlowLogsBucket
+    Properties:
+      ResourceType: VPC
+      ResourceId: !Ref VPC
+      TrafficType: ALL
+      LogDestinationType: s3
+      LogDestination: !GetAtt FlowLogsBucket.Arn
+      LogFormat: '${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-VPCFlowLog'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ==================== IAM Roles ====================
+
+  # EC2 Instance Role
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt ApplicationBucket.Arn
+                  - !Sub '${ApplicationBucket.Arn}/*'
+        - PolicyName: ParameterStoreAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ssm:GetParameter'
+                  - 'ssm:GetParameters'
+                  - 'ssm:GetParametersByPath'
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*'
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                Resource: !GetAtt KMSKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-EC2Role'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # ==================== Systems Manager Parameters ====================
+
+  DBPasswordParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${AWS::StackName}/database/password'
+      Description: 'RDS Master Password'
+      Type: String
+      Value: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+      Tags:
+        Name: !Sub '${AWS::StackName}-DBPassword'
+        Environment: !Ref Environment
+        Owner: !Ref Owner
+
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: 'RDS Master Password'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-DBSecret'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ==================== RDS Database ====================
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-DBSubnetGroup'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  RDSDatabase:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-database'
+      Engine: mysql
+      EngineVersion: '8.0.35'
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: 20
+      StorageType: gp3
+      StorageEncrypted: true
+      KmsKeyId: !Ref KMSKey
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      MultiAZ: true
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      DeletionProtection: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-RDSDatabase'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ==================== EC2 Instances ====================
+
+  # Launch Template for Web Servers
+  WebServerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-WebServerTemplate'
+      LaunchTemplateData:
+        ImageId: !FindInMap [AWSRegionToAMI, !Ref 'AWS::Region', AMI]
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyPairName
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+              KmsKeyId: !Ref KMSKey
+              DeleteOnTermination: true
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd mysql
+            systemctl start httpd
+            systemctl enable httpd
+
+            # Install CloudWatch agent
+            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+            rpm -U ./amazon-cloudwatch-agent.rpm
+
+            # Basic web page
+            echo "<h1>Secure Web Server - ${AWS::StackName}</h1>" > /var/www/html/index.html
+
+            # Install SSM agent (usually pre-installed on Amazon Linux 2)
+            yum install -y amazon-ssm-agent
+            systemctl enable amazon-ssm-agent
+            systemctl start amazon-ssm-agent
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${AWS::StackName}-WebServer'
+              - Key: Environment
+                Value: !Ref Environment
+              - Key: Owner
+                Value: !Ref Owner
+          - ResourceType: volume
+            Tags:
+              - Key: Name
+                Value: !Sub '${AWS::StackName}-WebServerVolume'
+              - Key: Environment
+                Value: !Ref Environment
+              - Key: Owner
+                Value: !Ref Owner
+
+  # Web Server Instance 1
+  WebServerInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WebServerLaunchTemplate
+        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-WebServer-1'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Web Server Instance 2
+  WebServerInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WebServerLaunchTemplate
+        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-WebServer-2'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Bastion Host
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap [AWSRegionToAMI, !Ref 'AWS::Region', AMI]
+      InstanceType: t3.micro
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref BastionSubnet
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 10
+            VolumeType: gp3
+            Encrypted: true
+            KmsKeyId: !Ref KMSKey
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+
+          # Harden bastion
+          echo "AllowUsers ec2-user" >> /etc/ssh/sshd_config
+          echo "PermitRootLogin no" >> /etc/ssh/sshd_config
+          systemctl restart sshd
+
+          # Install useful tools
+          yum install -y mysql
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-BastionHost'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ==================== CloudWatch Alarms ====================
+
+  # Web Server CPU Alarm
+  WebServer1CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-WebServer1-HighCPU'
+      AlarmDescription: 'Alarm when CPU exceeds 80%'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref WebServerInstance1
+      TreatMissingData: notBreaching
+
+  WebServer2CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-WebServer2-HighCPU'
+      AlarmDescription: 'Alarm when CPU exceeds 80%'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref WebServerInstance2
+      TreatMissingData: notBreaching
+
+  # RDS CPU Alarm
+  DatabaseCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-Database-HighCPU'
+      AlarmDescription: 'Alarm when database CPU exceeds 80%'
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref RDSDatabase
+      TreatMissingData: notBreaching
+
+  # RDS Storage Alarm
+  DatabaseStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-Database-LowStorage'
+      AlarmDescription: 'Alarm when free storage is less than 2GB'
+      MetricName: FreeStorageSpace
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2147483648 # 2GB in bytes
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref RDSDatabase
+      TreatMissingData: notBreaching
+
+# ==================== Outputs ====================
+Outputs:
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  WebServer1PublicIP:
+    Description: 'Public IP of Web Server 1'
+    Value: !GetAtt WebServerInstance1.PublicIp
+
+  WebServer2PublicIP:
+    Description: 'Public IP of Web Server 2'
+    Value: !GetAtt WebServerInstance2.PublicIp
+
+  BastionPublicIP:
+    Description: 'Public IP of Bastion Host'
+    Value: !GetAtt BastionInstance.PublicIp
+
+  DatabaseEndpoint:
+    Description: 'RDS Database Endpoint'
+    Value: !GetAtt RDSDatabase.Endpoint.Address
+
+  ApplicationBucketName:
+    Description: 'Application S3 Bucket Name'
+    Value: !Ref ApplicationBucket
+
+  FlowLogsBucketName:
+    Description: 'VPC Flow Logs S3 Bucket Name'
+    Value: !Ref FlowLogsBucket
+
+  SSHCommand:
+    Description: 'SSH command to connect to bastion'
+    Value: !Sub 'ssh -i ${KeyPairName}.pem ec2-user@${BastionInstance.PublicIp}'
+
+  DatabasePasswordLocation:
+    Description: 'Location of database password in Secrets Manager'
+    Value: !Ref DBPasswordSecret
+```
+
+## Template Features & Security Implementation
+
+### **Security Features Implemented:**
+
+1. **Network Segmentation**
+   - Multi-tier architecture with public, private, and bastion subnets
+   - NAT Gateway for secure outbound traffic from private subnets
+   - No direct internet access to database tier
+
+2. **Access Control**
+   - Bastion host with IP-restricted SSH access
+   - Security groups following least privilege principle
+   - IAM roles with minimal required permissions
+
+3. **Encryption**
+   - KMS-managed encryption for all EBS volumes
+   - Encrypted RDS storage
+   - S3 bucket encryption enabled
+
+4. **Monitoring & Auditing**
+   - VPC Flow Logs to S3
+   - CloudWatch alarms for CPU and storage metrics
+   - Versioning enabled on S3 buckets
+
+5. **Secrets Management**
+   - AWS Secrets Manager for database passwords
+   - Systems Manager Parameter Store integration
+   - No hardcoded credentials
+
+6. **High Availability**
+   - Multi-AZ deployment
+   - Resources distributed across availability zones
+   - RDS Multi-AZ configuration
+
+### **Deployment Instructions:**
+
+1. **Prerequisites:**
+   - Create an EC2 Key Pair in ca-central-1
+   - Note your current IP address for bastion access
+
+2. **Deploy via AWS CLI:**
+
+```bash
+aws cloudformation create-stack \
+  --stack-name secure-infrastructure \
+  --template-body file://secure-infrastructure-stack.yaml \
+  --parameters \
+    ParameterKey=KeyPairName,ParameterValue=your-key-pair \
+    ParameterKey=BastionAllowedIP,ParameterValue=your.ip.address.here/32 \
+    ParameterKey=Owner,ParameterValue=your-email@example.com \
+  --capabilities CAPABILITY_IAM \
+  --region ca-central-1
+```
+
+3. **Deploy via AWS Console:**
+   - Navigate to CloudFormation console
+   - Create stack → Upload template
+   - Fill in parameters
+   - Check "I acknowledge that AWS CloudFormation might create IAM resources"
+   - Create stack
+
+### **Post-Deployment Verification:**
+
+1. Test bastion connectivity: `ssh -i your-key.pem ec2-user@<bastion-ip>`
+2. Verify web servers are accessible via HTTP/HTTPS
+3. Check CloudWatch alarms are active
+4. Confirm VPC Flow Logs are being written to S3
+5. Verify database is only accessible from web servers
+
+This template provides a production-ready, secure foundation that can be extended based on specific application requirements.

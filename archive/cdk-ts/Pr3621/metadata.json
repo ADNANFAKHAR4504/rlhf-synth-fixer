@@ -1,0 +1,40 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "18697283",
+  "team": "1",
+  "startedAt": "2025-10-06T11:19:25.599Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudFormation",
+    "DynamoDB",
+    "CloudWatch",
+    "Lambda",
+    "SNS",
+    "SQS",
+    "Kinesis Data Streams",
+    "Kinesis Data Firehose",
+    "Kinesis Analytics",
+    "OpenSearch Service",
+    "API Gateway",
+    "Glue",
+    "Athena",
+    "KMS",
+    "IAM",
+    "EC2",
+    "VPC"
+  ],
+  "training_quality": "high",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

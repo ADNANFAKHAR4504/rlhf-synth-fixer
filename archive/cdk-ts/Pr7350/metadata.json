@@ -1,0 +1,41 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912194",
+  "team": "3",
+  "startedAt": "2025-11-26T07:30:39.036Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "ACM",
+    "WAFv2",
+    "RDS",
+    "Aurora MySQL",
+    "Secrets Manager",
+    "SSM Parameter Store",
+    "CloudFront",
+    "S3",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS",
+    "IAM",
+    "KMS",
+    "X-Ray"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

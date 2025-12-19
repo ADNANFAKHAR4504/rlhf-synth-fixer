@@ -1,0 +1,9 @@
+I’d like to create a fully serverless image processing application using the AWS CDK in Python (main.py - single stack). The idea is to have a Lambda function that handles image uploads, retrieves stored images, and interacts directly with S3 for storage. When a new image is uploaded, the Lambda should store its metadata — like the image ID, timestamp, and user info — in a DynamoDB table.
+
+This Lambda function should be exposed through an API Gateway endpoint that supports both GET and POST methods. The POST method will handle image uploads and should validate the incoming request before doing anything. The GET method can be used to fetch image metadata or retrieve details from DynamoDB.
+
+The API should have CORS enabled so requests from any origin are allowed. I also want to make sure everything is running securely — IAM roles need to follow the principle of least privilege, so the Lambda should have just the right permissions to interact with S3 and DynamoDB, nothing more.
+
+CloudWatch should be set up to capture logs from both the Lambda and API Gateway. The Lambda’s logs should include key events — like what data it receives, when a process starts or ends, and any errors that occur. Make sure error handling is solid, so failed requests return proper HTTP status codes and the function can gracefully manage unexpected issues.
+
+When everything’s deployed, this CDK Python stack should bring up the entire system: a functioning API Gateway endpoint that triggers the Lambda, which processes images and stores metadata, all wired up with S3, DynamoDB, CloudWatch, and IAM roles configured correctly.

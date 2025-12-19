@@ -1,0 +1,36 @@
+{
+  "task_id": "101912493",
+  "platform": "tf",
+  "language": "hcl",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912493",
+  "team": "synth",
+  "category": "Infrastructure as Code",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "ci/cd-pipeline-integration"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "CodeStarConnections",
+    "S3",
+    "IAM",
+    "SNS",
+    "CloudWatch",
+    "EventBridge"
+  ],
+  "region": "us-east-1",
+  "startedAt": "2025-11-18T08:27:00Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

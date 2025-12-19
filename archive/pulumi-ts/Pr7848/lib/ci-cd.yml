@@ -1,0 +1,211 @@
+# CI/CD Pipeline Configuration
+# This file defines the CI/CD pipeline stages and configuration for GitHub-based deployment
+
+version: 1.0
+
+pipeline:
+  name: github-cicd-pipeline
+  description: >-
+    Automated CI/CD pipeline for containerized application deployment
+    with GitHub source, Docker builds, and Lambda-triggered deployments
+
+stages:
+  - name: Source
+    type: source
+    provider: GitHub
+    configuration:
+      connection_type: OAuth
+      repository_owner: ${githubOwner}
+      repository_name: ${githubRepo}
+      branch: ${githubBranch}
+      trigger_on_push: true
+      webhook_enabled: true
+      description: >-
+        Source stage pulls code from GitHub repository
+        with webhook integration for automatic triggering
+
+  - name: Build
+    type: build
+    provider: CodeBuild
+    configuration:
+      project: docker-build
+      compute_type: BUILD_GENERAL1_SMALL
+      image: aws/codebuild/standard:7.0
+      privileged_mode: true
+      buildspec:
+        version: 0.2
+        phases:
+          pre_build:
+            commands:
+              - echo Logging in to Amazon ECR...
+              - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URI
+              - echo Running unit tests...
+              - npm install
+              - npm test
+          build:
+            commands:
+              - echo Building Docker image...
+              - docker build -t $IMAGE_TAG .
+              - docker tag $IMAGE_TAG:latest $ECR_REPOSITORY_URI:$IMAGE_TAG
+          post_build:
+            commands:
+              - echo Scanning Docker image for vulnerabilities...
+              - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL $IMAGE_TAG:latest || true
+              - echo Pushing Docker image to ECR...
+              - docker push $ECR_REPOSITORY_URI:$IMAGE_TAG
+              - echo Build completed on `date`
+      environment_variables:
+        - name: AWS_DEFAULT_REGION
+          value: us-east-1
+          type: PLAINTEXT
+        - name: AWS_ACCOUNT_ID
+          type: PLAINTEXT
+        - name: ECR_REPOSITORY_URI
+          type: PLAINTEXT
+        - name: IMAGE_TAG
+          value: latest
+          type: PLAINTEXT
+      logs:
+        cloudwatch:
+          enabled: true
+          retention_days: 7
+          group_name: /aws/codebuild/docker-build
+      description: >-
+        Build stage builds Docker images, runs unit tests,
+        and pushes to ECR repository
+
+  - name: Deploy
+    type: invoke
+    provider: Lambda
+    configuration:
+      function_name: deployment-handler
+      input_artifact: BuildArtifact
+      user_parameters:
+        action: deploy
+        image_tag: ${IMAGE_TAG}
+      description: >-
+        Deploy stage invokes Lambda function to trigger
+        downstream deployments or integrations
+
+artifacts:
+  type: S3
+  encryption: aws:kms
+  encryption_algorithm: AES256
+  versioning: true
+  lifecycle:
+    expiration_days: 30
+    description: >-
+      Automatically delete artifacts older than 30 days
+      to keep storage costs down
+
+container_registry:
+  type: ECR
+  scan_on_push: true
+  image_tag_mutability: IMMUTABLE
+  lifecycle:
+    max_image_count: 10
+    description: >-
+      Keep last 10 images and delete older ones
+      to optimize storage costs
+
+monitoring:
+  type: CloudWatch Events
+  event_patterns:
+    - source: aws.codepipeline
+      detail_type: CodePipeline Pipeline Execution State Change
+      detail:
+        state:
+          - STARTED
+          - SUCCEEDED
+          - FAILED
+  targets:
+    - type: SNS
+      arn: ${sns_topic_arn}
+  description: >-
+    Monitor pipeline state changes and send notifications
+    to SNS topic for alerting
+
+notifications:
+  type: SNS
+  events:
+    - pipeline_execution_started
+    - pipeline_execution_succeeded
+    - pipeline_execution_failed
+  endpoints:
+    - type: email
+      protocol: email
+    - type: webhook
+      protocol: https
+  description: >-
+    Send notifications to team via email or webhook
+    for pipeline state changes
+
+iam:
+  least_privilege: true
+  no_wildcard_permissions: true
+  roles:
+    - name: codebuild-role
+      service: codebuild.amazonaws.com
+      permissions:
+        - logs:CreateLogGroup
+        - logs:CreateLogStream
+        - logs:PutLogEvents
+        - s3:GetObject
+        - s3:GetObjectVersion
+        - s3:PutObject
+        - s3:ListBucket
+        - ecr:GetAuthorizationToken
+        - ecr:BatchCheckLayerAvailability
+        - ecr:GetDownloadUrlForLayer
+        - ecr:BatchGetImage
+        - ecr:PutImage
+        - ecr:InitiateLayerUpload
+        - ecr:UploadLayerPart
+        - ecr:CompleteLayerUpload
+      description: >-
+        CodeBuild role with permissions for ECR, S3,
+        and CloudWatch Logs access
+
+    - name: codepipeline-role
+      service: codepipeline.amazonaws.com
+      permissions:
+        - s3:GetObject
+        - s3:GetObjectVersion
+        - s3:PutObject
+        - s3:ListBucket
+        - codebuild:BatchGetBuilds
+        - codebuild:StartBuild
+        - lambda:InvokeFunction
+      description: >-
+        CodePipeline role with permissions for S3,
+        CodeBuild, and Lambda invocation
+
+    - name: lambda-execution-role
+      service: lambda.amazonaws.com
+      permissions:
+        - logs:CreateLogGroup
+        - logs:CreateLogStream
+        - logs:PutLogEvents
+        - codepipeline:PutJobSuccessResult
+        - codepipeline:PutJobFailureResult
+      description: >-
+        Lambda role with permissions for CloudWatch Logs
+        and CodePipeline job results
+
+security:
+  encryption_at_rest: true
+  encryption_in_transit: true
+  kms_managed_keys: false
+  aws_managed_keys: true
+  encryption_algorithm: AES256
+  enforce_ssl: true
+  description: >-
+    All data encrypted at rest and in transit
+    using AWS managed keys with AES256 algorithm
+
+tags:
+  Environment: ${environmentSuffix}
+  Project: CI/CD-Pipeline
+  ManagedBy: Pulumi
+  AutomationType: CI/CD
+  DeploymentType: Automated

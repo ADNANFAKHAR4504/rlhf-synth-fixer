@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-06T18:58:00+05:30",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance, and Governance"
+  ],
+  "po_id": "7bad2",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "KMS",
+    "IAM",
+    "Secrets Manager",
+    "GuardDuty",
+    "EventBridge",
+    "SNS",
+    "AWS Config",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "VPC Endpoints"
+  ],
+  "author": "mayanksethi-turing",
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,1189 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Crowdfunding Platform - Production-grade serverless infrastructure with milestone-based fund release, fraud prevention, and analytics'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+          - CampaignMediaBucketName
+          - AthenaResultsBucketName
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'prod'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+  
+  CampaignMediaBucketName:
+    Type: String
+    Default: 'crowdfunding-campaign-media'
+    Description: 'Base name for S3 bucket storing campaign media files'
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+  
+  AthenaResultsBucketName:
+    Type: String
+    Default: 'crowdfunding-athena-results'
+    Description: 'Base name for S3 bucket storing Athena query results'
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+
+
+Resources:
+  #  Security - KMS Encryption Key 
+  PaymentDataEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS key for encrypting payment data and sensitive crowdfunding information'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+      EnableKeyRotation: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+  
+  PaymentDataEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/crowdfunding-payment-key-${EnvironmentSuffix}'
+      TargetKeyId: !Ref PaymentDataEncryptionKey
+
+  #  Data Layer - DynamoDB Tables 
+  CampaignsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub 'Campaigns${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: 'campaignId'
+          AttributeType: 'S'
+        - AttributeName: 'creatorId'
+          AttributeType: 'S'
+        - AttributeName: 'status'
+          AttributeType: 'S'
+        - AttributeName: 'deadline'
+          AttributeType: 'N'
+      KeySchema:
+        - AttributeName: 'campaignId'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref PaymentDataEncryptionKey
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      GlobalSecondaryIndexes:
+        - IndexName: 'CreatorIdIndex'
+          KeySchema:
+            - AttributeName: 'creatorId'
+              KeyType: 'HASH'
+          Projection:
+            ProjectionType: ALL
+        - IndexName: 'StatusDeadlineIndex'
+          KeySchema:
+            - AttributeName: 'status'
+              KeyType: 'HASH'
+            - AttributeName: 'deadline'
+              KeyType: 'RANGE'
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+  
+  ContributionsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub 'Contributions${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: 'contributionId'
+          AttributeType: 'S'
+        - AttributeName: 'campaignId'
+          AttributeType: 'S'
+        - AttributeName: 'backerId'
+          AttributeType: 'S'
+        - AttributeName: 'timestamp'
+          AttributeType: 'N'
+      KeySchema:
+        - AttributeName: 'contributionId'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref PaymentDataEncryptionKey
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      GlobalSecondaryIndexes:
+        - IndexName: 'CampaignIdTimestampIndex'
+          KeySchema:
+            - AttributeName: 'campaignId'
+              KeyType: 'HASH'
+            - AttributeName: 'timestamp'
+              KeyType: 'RANGE'
+          Projection:
+            ProjectionType: ALL
+        - IndexName: 'BackerIdIndex'
+          KeySchema:
+            - AttributeName: 'backerId'
+              KeyType: 'HASH'
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+
+  #  Storage - S3 Buckets 
+  CampaignMediaBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${CampaignMediaBucketName}-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref PaymentDataEncryptionKey
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+  
+  AthenaResultsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${AthenaResultsBucketName}-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldQueries
+            Status: Enabled
+            ExpirationInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+
+  #  CDN - CloudFront Distribution 
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for campaign media bucket ${EnvironmentSuffix}'
+  
+  CampaignMediaBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CampaignMediaBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontOAI
+            Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+            Action: 's3:GetObject'
+            Resource: !Sub '${CampaignMediaBucket.Arn}/*'
+  
+  CampaignMediaDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'CloudFront distribution for campaign media ${EnvironmentSuffix}'
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt CampaignMediaBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}'
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          MinTTL: 0
+          DefaultTTL: 86400
+          MaxTTL: 31536000
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+
+  #  Authentication - Cognito 
+  CrowdfundingUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub 'CrowdfundingUserPool${EnvironmentSuffix}'
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: false
+        - Name: name
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UserPoolTags:
+        Environment: !Ref EnvironmentSuffix
+        Application: CrowdfundingPlatform
+  
+  CrowdfundingUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub 'CrowdfundingWebApp${EnvironmentSuffix}'
+      UserPoolId: !Ref CrowdfundingUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      PreventUserExistenceErrors: ENABLED
+      RefreshTokenValidity: 30
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      TokenValidityUnits:
+        RefreshToken: days
+        AccessToken: minutes
+        IdToken: minutes
+  
+  CreatorsUserGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Creators
+      Description: 'Campaign creators group'
+      UserPoolId: !Ref CrowdfundingUserPool
+      Precedence: 1
+  
+  BackersUserGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Backers
+      Description: 'Campaign backers group'
+      UserPoolId: !Ref CrowdfundingUserPool
+      Precedence: 2
+
+  #  Notifications - SNS 
+  MilestoneNotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'MilestoneNotifications${EnvironmentSuffix}'
+      DisplayName: 'Campaign Milestone Notifications'
+      KmsMasterKeyId: !Ref PaymentDataEncryptionKey
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+  
+  CampaignDeadlinesTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'CampaignDeadlines${EnvironmentSuffix}'
+      DisplayName: 'Campaign Deadline Notifications'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+
+  #  Monitoring - CloudWatch 
+  CampaignManagementLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/CampaignManagement${EnvironmentSuffix}'
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt PaymentDataEncryptionKey.Arn
+  
+  PaymentProcessingLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/PaymentProcessing${EnvironmentSuffix}'
+      RetentionInDays: 90
+      KmsKeyId: !GetAtt PaymentDataEncryptionKey.Arn
+  
+  ContributionScreeningLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/ContributionScreening${EnvironmentSuffix}'
+      RetentionInDays: 90
+      KmsKeyId: !GetAtt PaymentDataEncryptionKey.Arn
+  
+  FundingMetricsDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'CrowdfundingMetrics${EnvironmentSuffix}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum"}],
+                  [".", "Errors", {"stat": "Sum"}],
+                  [".", "Duration", {"stat": "Average"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Lambda Performance Metrics"
+              }
+            }
+          ]
+        }
+  
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'HighLambdaErrorRate${EnvironmentSuffix}'
+      AlarmDescription: 'Triggers when Lambda error rate exceeds threshold'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref CampaignDeadlinesTopic
+
+  #  IAM Roles 
+  CampaignManagementLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'CampaignManagementLambdaRole${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                Resource:
+                  - !GetAtt CampaignsTable.Arn
+                  - !Sub '${CampaignsTable.Arn}/index/*'
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                Resource: !Sub '${CampaignMediaBucket.Arn}/*'
+        - PolicyName: KMSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:Encrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !GetAtt PaymentDataEncryptionKey.Arn
+        - PolicyName: SNSPublish
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'sns:Publish'
+                Resource: !Ref MilestoneNotificationsTopic
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  PaymentProcessingLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'PaymentProcessingLambdaRole${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: DynamoDBTransactions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:BatchWriteItem'
+                Resource:
+                  - !GetAtt CampaignsTable.Arn
+                  - !GetAtt ContributionsTable.Arn
+                  - !Sub '${ContributionsTable.Arn}/index/*'
+        - PolicyName: FraudDetectorAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'frauddetector:GetEventPrediction'
+                  - 'frauddetector:GetDetectors'
+                Resource: '*'
+        - PolicyName: KMSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:Encrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !GetAtt PaymentDataEncryptionKey.Arn
+        - PolicyName: SESAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ses:SendEmail'
+                  - 'ses:SendRawEmail'
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  ContributionScreeningLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ContributionScreeningLambdaRole${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: FraudDetectorFullAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'frauddetector:GetEventPrediction'
+                  - 'frauddetector:GetDetectors'
+                  - 'frauddetector:GetEventTypes'
+                Resource: '*'
+        - PolicyName: DynamoDBRead
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                Resource:
+                  - !GetAtt ContributionsTable.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  StepFunctionsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'MilestoneWorkflowRole${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: LambdaInvocation
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'lambda:InvokeFunction'
+                Resource:
+                  - !GetAtt CampaignManagementFunction.Arn
+                  - !GetAtt PaymentProcessingFunction.Arn
+        - PolicyName: SNSPublish
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'sns:Publish'
+                Resource: !Ref MilestoneNotificationsTopic
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                Resource: !GetAtt CampaignsTable.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  EventBridgeInvokeLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'EventBridgeLambdaRole${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'lambda:InvokeFunction'
+                Resource: !GetAtt CampaignManagementFunction.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  #  Compute Layer - Lambda Functions 
+  CampaignManagementFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'CampaignManagement${EnvironmentSuffix}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt CampaignManagementLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          CAMPAIGNS_TABLE: !Ref CampaignsTable
+          CONTRIBUTIONS_TABLE: !Ref ContributionsTable
+          SNS_TOPIC_ARN: !Ref MilestoneNotificationsTopic
+          KMS_KEY_ID: !Ref PaymentDataEncryptionKey
+          MEDIA_BUCKET: !Ref CampaignMediaBucket
+          CLOUDFRONT_DOMAIN: !GetAtt CampaignMediaDistribution.DomainName
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            console.log('Campaign Management Event:', JSON.stringify(event, null, 2));
+            return {
+              statusCode: 200,
+              body: JSON.stringify({ message: 'Campaign operation successful' })
+            };
+          };
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+  
+  PaymentProcessingFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'PaymentProcessing${EnvironmentSuffix}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PaymentProcessingLambdaRole.Arn
+      Timeout: 60
+      MemorySize: 1024
+      ReservedConcurrentExecutions: 100
+      Environment:
+        Variables:
+          CAMPAIGNS_TABLE: !Ref CampaignsTable
+          CONTRIBUTIONS_TABLE: !Ref ContributionsTable
+          KMS_KEY_ID: !Ref PaymentDataEncryptionKey
+          FRAUD_DETECTOR_NAME: 'crowdfunding_fraud_detector'
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            console.log('Payment Processing Event:', JSON.stringify(event, null, 2));
+            return {
+              statusCode: 200,
+              body: JSON.stringify({ 
+                message: 'Payment processed successfully',
+                transactionId: 'txn_' + Date.now()
+              })
+            };
+          };
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+  
+  ContributionScreeningFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'ContributionScreening${EnvironmentSuffix}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt ContributionScreeningLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          CONTRIBUTIONS_TABLE: !Ref ContributionsTable
+          FRAUD_DETECTOR_NAME: 'crowdfunding_fraud_detector'
+          FRAUD_DETECTOR_EVENT_TYPE: 'contribution_event'
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            console.log('Contribution Screening Event:', JSON.stringify(event, null, 2));
+            return {
+              statusCode: 200,
+              body: JSON.stringify({ 
+                fraudScore: 0.1,
+                approved: true
+              })
+            };
+          };
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+
+  #  Workflow - Step Functions 
+  MilestoneWorkflowStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub 'MilestoneWorkflow${EnvironmentSuffix}'
+      RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Milestone-based fund release workflow with approval gates",
+          "StartAt": "ValidateMilestone",
+          "States": {
+            "ValidateMilestone": {
+              "Type": "Task",
+              "Resource": "${CampaignManagementFunction.Arn}",
+              "ResultPath": "$.validationResult",
+              "Next": "CheckMilestoneStatus",
+              "Catch": [{
+                "ErrorEquals": ["States.ALL"],
+                "Next": "NotifyFailure",
+                "ResultPath": "$.error"
+              }],
+              "Retry": [{
+                "ErrorEquals": ["States.TaskFailed"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 2.0
+              }]
+            },
+            "CheckMilestoneStatus": {
+              "Type": "Choice",
+              "Choices": [{
+                "Variable": "$.validationResult.approved",
+                "BooleanEquals": true,
+                "Next": "WaitForApproval"
+              }],
+              "Default": "NotifyRejection"
+            },
+            "WaitForApproval": {
+              "Type": "Wait",
+              "Seconds": 300,
+              "Next": "ProcessFundRelease"
+            },
+            "ProcessFundRelease": {
+              "Type": "Task",
+              "Resource": "${PaymentProcessingFunction.Arn}",
+              "ResultPath": "$.releaseResult",
+              "Next": "NotifyMilestoneCompletion",
+              "Retry": [{
+                "ErrorEquals": ["States.TaskFailed"],
+                "IntervalSeconds": 5,
+                "MaxAttempts": 5,
+                "BackoffRate": 2.0
+              }]
+            },
+            "NotifyMilestoneCompletion": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${MilestoneNotificationsTopic}",
+                "Message.$": "$.releaseResult",
+                "Subject": "Milestone Completed - Funds Released"
+              },
+              "Next": "Success"
+            },
+            "NotifyRejection": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${MilestoneNotificationsTopic}",
+                "Message": "Milestone validation failed",
+                "Subject": "Milestone Rejected"
+              },
+              "Next": "Fail"
+            },
+            "NotifyFailure": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${MilestoneNotificationsTopic}",
+                "Message.$": "$.error",
+                "Subject": "Milestone Workflow Error"
+              },
+              "Next": "Fail"
+            },
+            "Success": {
+              "Type": "Succeed"
+            },
+            "Fail": {
+              "Type": "Fail"
+            }
+          }
+        }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+
+  #  API Layer - API Gateway 
+  CrowdfundingApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'CrowdfundingAPI${EnvironmentSuffix}'
+      Description: 'API Gateway for crowdfunding campaign management'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+  
+  ApiGatewayAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: !Sub 'CognitoAuthorizer${EnvironmentSuffix}'
+      Type: COGNITO_USER_POOLS
+      IdentitySource: method.request.header.Authorization
+      RestApiId: !Ref CrowdfundingApiGateway
+      ProviderARNs:
+        - !GetAtt CrowdfundingUserPool.Arn
+  
+  CampaignsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt CrowdfundingApiGateway.RootResourceId
+      PathPart: campaigns
+      RestApiId: !Ref CrowdfundingApiGateway
+  
+  CampaignsPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref CrowdfundingApiGateway
+      ResourceId: !Ref CampaignsResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiGatewayAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CampaignManagementFunction.Arn}/invocations'
+  
+  CampaignsGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref CrowdfundingApiGateway
+      ResourceId: !Ref CampaignsResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiGatewayAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CampaignManagementFunction.Arn}/invocations'
+  
+  ContributionsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt CrowdfundingApiGateway.RootResourceId
+      PathPart: contributions
+      RestApiId: !Ref CrowdfundingApiGateway
+  
+  ContributionsPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref CrowdfundingApiGateway
+      ResourceId: !Ref ContributionsResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiGatewayAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PaymentProcessingFunction.Arn}/invocations'
+  
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - CampaignsPostMethod
+      - CampaignsGetMethod
+      - ContributionsPostMethod
+    Properties:
+      RestApiId: !Ref CrowdfundingApiGateway
+      StageName: !Ref EnvironmentSuffix
+  
+  ApiGatewayInvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CampaignManagementFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CrowdfundingApiGateway}/*'
+  
+  ApiGatewayInvokePaymentLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PaymentProcessingFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CrowdfundingApiGateway}/*'
+
+  #  EventBridge - Campaign Deadline Monitoring 
+  CampaignDeadlineRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'CampaignDeadlineMonitoring${EnvironmentSuffix}'
+      Description: 'Monitor campaign deadlines and trigger notifications'
+      ScheduleExpression: 'rate(1 hour)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CampaignManagementFunction.Arn
+          Id: CampaignDeadlineTarget
+          Input: !Sub |
+            {
+              "action": "checkDeadlines",
+              "environment": "${EnvironmentSuffix}"
+            }
+  
+  EventBridgeInvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CampaignManagementFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CampaignDeadlineRule.Arn
+
+  #  Analytics - Athena 
+  AthenaWorkgroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: !Sub 'CrowdfundingAnalytics${EnvironmentSuffix}'
+      Description: 'Athena workgroup for campaign analytics'
+      State: ENABLED
+      WorkGroupConfiguration:
+        ResultConfiguration:
+          OutputLocation: !Sub 's3://${AthenaResultsBucket}/results/'
+          EncryptionConfiguration:
+            EncryptionOption: SSE_S3
+        EnforceWorkGroupConfiguration: true
+        PublishCloudWatchMetricsEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: CrowdfundingPlatform
+
+Outputs:
+  # API Outputs
+  ApiGatewayUrl:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${CrowdfundingApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
+  
+  ApiGatewayId:
+    Description: 'API Gateway ID'
+    Value: !Ref CrowdfundingApiGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayId'
+  
+  # DynamoDB Outputs
+  CampaignsTableName:
+    Description: 'Name of the Campaigns DynamoDB table'
+    Value: !Ref CampaignsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-CampaignsTableName'
+  
+  CampaignsTableArn:
+    Description: 'ARN of the Campaigns DynamoDB table'
+    Value: !GetAtt CampaignsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CampaignsTableArn'
+  
+  ContributionsTableName:
+    Description: 'Name of the Contributions DynamoDB table'
+    Value: !Ref ContributionsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ContributionsTableName'
+  
+  ContributionsTableArn:
+    Description: 'ARN of the Contributions DynamoDB table'
+    Value: !GetAtt ContributionsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ContributionsTableArn'
+  
+  # Lambda Outputs
+  CampaignManagementFunctionArn:
+    Description: 'ARN of Campaign Management Lambda function'
+    Value: !GetAtt CampaignManagementFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CampaignManagementFunctionArn'
+  
+  PaymentProcessingFunctionArn:
+    Description: 'ARN of Payment Processing Lambda function'
+    Value: !GetAtt PaymentProcessingFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-PaymentProcessingFunctionArn'
+  
+  ContributionScreeningFunctionArn:
+    Description: 'ARN of Contribution Screening Lambda function'
+    Value: !GetAtt ContributionScreeningFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ContributionScreeningFunctionArn'
+  
+  # Step Functions Output
+  MilestoneWorkflowArn:
+    Description: 'ARN of Milestone Workflow State Machine'
+    Value: !GetAtt MilestoneWorkflowStateMachine.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-MilestoneWorkflowArn'
+  
+  # S3 Outputs
+  CampaignMediaBucketName:
+    Description: 'Name of Campaign Media S3 bucket'
+    Value: !Ref CampaignMediaBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CampaignMediaBucketName'
+  
+  AthenaResultsBucketName:
+    Description: 'Name of Athena Results S3 bucket'
+    Value: !Ref AthenaResultsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AthenaResultsBucketName'
+  
+  # CloudFront Output
+  CloudFrontDomainName:
+    Description: 'CloudFront distribution domain name'
+    Value: !GetAtt CampaignMediaDistribution.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontDomainName'
+  
+  # Cognito Outputs
+  UserPoolId:
+    Description: 'Cognito User Pool ID'
+    Value: !Ref CrowdfundingUserPool
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolId'
+  
+  UserPoolClientId:
+    Description: 'Cognito User Pool Client ID'
+    Value: !Ref CrowdfundingUserPoolClient
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolClientId'
+  
+  # SNS Outputs
+  MilestoneNotificationsTopicArn:
+    Description: 'ARN of Milestone Notifications SNS topic'
+    Value: !Ref MilestoneNotificationsTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-MilestoneNotificationsTopicArn'
+  
+  CampaignDeadlinesTopicArn:
+    Description: 'ARN of Campaign Deadlines SNS topic'
+    Value: !Ref CampaignDeadlinesTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-CampaignDeadlinesTopicArn'
+  
+  # KMS Output
+  PaymentEncryptionKeyId:
+    Description: 'KMS Key ID for payment data encryption'
+    Value: !Ref PaymentDataEncryptionKey
+    Export:
+      Name: !Sub '${AWS::StackName}-PaymentEncryptionKeyId'
+  
+  PaymentEncryptionKeyArn:
+    Description: 'KMS Key ARN for payment data encryption'
+    Value: !GetAtt PaymentDataEncryptionKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-PaymentEncryptionKeyArn'
+  
+  # Athena Output
+  AthenaWorkgroupName:
+    Description: 'Athena Workgroup name'
+    Value: !Ref AthenaWorkgroup
+    Export:
+      Name: !Sub '${AWS::StackName}-AthenaWorkgroupName'
+  
+  # EventBridge Output
+  CampaignDeadlineRuleArn:
+    Description: 'ARN of Campaign Deadline EventBridge rule'
+    Value: !GetAtt CampaignDeadlineRule.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CampaignDeadlineRuleArn'
+  
+  # CloudWatch Output
+  FundingMetricsDashboardName:
+    Description: 'CloudWatch Dashboard name for funding metrics'
+    Value: !Ref FundingMetricsDashboard
+    Export:
+      Name: !Sub '${AWS::StackName}-FundingMetricsDashboardName'
+  
+  # Stack Metadata
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+  
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'

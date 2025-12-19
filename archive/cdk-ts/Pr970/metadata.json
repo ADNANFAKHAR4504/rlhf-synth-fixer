@@ -1,0 +1,45 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "trainr238",
+  "team": "synth",
+  "startedAt": "2025-08-12T22:30:07+05:30",
+  "subtask": "enhanced_serverless_api_with_eventbridge_xray",
+  "subject_labels": [
+    "serverless",
+    "rest-api",
+    "event-driven-architecture",
+    "distributed-tracing",
+    "vpc-networking",
+    "lambda-functions",
+    "api-gateway",
+    "dynamodb",
+    "eventbridge",
+    "xray",
+    "sqs",
+    "crud-operations",
+    "iam-security",
+    "cloudwatch-logging"
+  ],
+  "training_quality": "excellent",
+  "aws_services": [
+    "VPC",
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "EventBridge",
+    "X-Ray",
+    "SQS",
+    "IAM",
+    "CloudWatch Logs",
+    "EC2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
+}

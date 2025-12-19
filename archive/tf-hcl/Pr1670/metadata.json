@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291937",
+  "team": "3",
+  "startedAt": "2025-08-19T14:16:22.113Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Network Configuration",
+    "Database Management",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Performance Optimization",
+    "IaC Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "Auto Scaling",
+    "RDS",
+    "CloudFront",
+    "CloudWatch",
+    "IAM",
+    "Route53",
+    "ACM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Akash-TuringOps",
+  "dockerS3Location": ""
+}

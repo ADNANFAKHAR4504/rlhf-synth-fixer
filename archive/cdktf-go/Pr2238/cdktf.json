@@ -1,0 +1,11 @@
+{
+  "language": "go",
+  "app": "go run .",
+  "projectId": "e8a8c1b9-7e1e-4d3e-9a81-5e5a3f3c8a1b",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 6.0"
+  ],
+  "terraformModules": [],
+  "context": {}
+}

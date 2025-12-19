@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "19483756",
+  "team": "synth",
+  "startedAt": "2025-10-03T21:16:10+05:30",
+  "training_quality": 8,
+  "aws_services": [
+    "AppConfig",
+    "Systems Manager Parameter Store",
+    "Secrets Manager",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "S3",
+    "IAM",
+    "EventBridge",
+    "X-Ray",
+    "Step Functions Express"
+  ],
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

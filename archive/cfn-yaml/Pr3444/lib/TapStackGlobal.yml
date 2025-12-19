@@ -1,0 +1,219 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Global Resources for CloudFront (WAF and Lambda@Edge) - Must be deployed in us-east-1'
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Domain name for the website (e.g., example.com)
+    Default: example.com
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: Environment suffix for resource naming
+
+Resources:
+  # IAM Role for Lambda@Edge Functions
+  LambdaEdgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - edgelambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda@Edge Function for Security Headers (Viewer Request)
+  SecurityHeadersFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub
+        - '${DomainNameClean}-security-headers-${EnvironmentSuffix}'
+        - DomainNameClean: !Join
+            - '-'
+            - !Split
+                - '.'
+                - !Ref DomainName
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaEdgeRole.Arn
+      Timeout: 5
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+              const request = event.Records[0].cf.request;
+              const headers = request.headers;
+
+              // Add security headers
+              headers['x-frame-options'] = [{key: 'X-Frame-Options', value: 'DENY'}];
+              headers['x-content-type-options'] = [{key: 'X-Content-Type-Options', value: 'nosniff'}];
+              headers['strict-transport-security'] = [{key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains'}];
+              headers['x-xss-protection'] = [{key: 'X-XSS-Protection', value: '1; mode=block'}];
+
+              return request;
+          };
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda@Edge Function Version for Security Headers
+  SecurityHeadersFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref SecurityHeadersFunction
+
+  # Lambda@Edge Function for Custom Headers (Origin Response)
+  CustomHeadersFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub
+        - '${DomainNameClean}-custom-headers-${EnvironmentSuffix}'
+        - DomainNameClean: !Join
+            - '-'
+            - !Split
+                - '.'
+                - !Ref DomainName
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaEdgeRole.Arn
+      Timeout: 5
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+              const response = event.Records[0].cf.response;
+              const headers = response.headers;
+
+              // Add cache control headers for static content
+              if (!headers['cache-control']) {
+                  headers['cache-control'] = [{
+                      key: 'Cache-Control',
+                      value: 'public, max-age=86400'
+                  }];
+              }
+
+              // Remove server headers for security
+              delete headers['server'];
+              delete headers['x-amzn-trace-id'];
+
+              // Add custom header
+              headers['x-custom-header'] = [{key: 'X-Custom-Header', value: 'CloudFront-Enhanced'}];
+
+              return response;
+          };
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda@Edge Function Version for Custom Headers
+  CustomHeadersFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref CustomHeadersFunction
+
+  # AWS WAF WebACL
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub
+        - '${DomainNameClean}-waf-${EnvironmentSuffix}'
+        - DomainNameClean: !Join
+            - '-'
+            - !Split
+                - '.'
+                - !Ref DomainName
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      Rules:
+        - Name: RateLimitRule
+          Priority: 1
+          Statement:
+            RateBasedStatement:
+              Limit: 2000
+              AggregateKeyType: IP
+          Action:
+            Block:
+              CustomResponse:
+                ResponseCode: 429
+                ResponseHeaders:
+                  - Name: 'Retry-After'
+                    Value: '300'
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitRule
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 2
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+              ExcludedRules: []
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRuleSetMetric
+        - Name: AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 3
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+              ExcludedRules: []
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: KnownBadInputsMetric
+        - Name: AWSManagedRulesSQLiRuleSet
+          Priority: 4
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+              ExcludedRules: []
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: SQLiRuleSetMetric
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: WebACLMetric
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+Outputs:
+  WebACLArn:
+    Description: AWS WAF WebACL ARN
+    Value: !GetAtt WebACL.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WebACLArn'
+
+  SecurityHeadersFunctionArn:
+    Description: Lambda@Edge Security Headers Function ARN
+    Value: !Ref SecurityHeadersFunctionVersion
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityHeadersFunction'
+
+  CustomHeadersFunctionArn:
+    Description: Lambda@Edge Custom Headers Function ARN
+    Value: !Ref CustomHeadersFunctionVersion
+    Export:
+      Name: !Sub '${AWS::StackName}-CustomHeadersFunction'

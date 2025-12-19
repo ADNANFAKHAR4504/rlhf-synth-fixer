@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349426",
+  "team": "1",
+  "startedAt": "2025-10-16T10:15:09.608Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "EC2",
+    "VPC",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "Secrets Manager",
+    "Lambda",
+    "SNS",
+    "EventBridge",
+    "CloudFormation"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

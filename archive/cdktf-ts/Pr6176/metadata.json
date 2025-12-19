@@ -1,0 +1,39 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-10T15:53:24+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "po_id": "ofm6x",
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups",
+    "RDS",
+    "ECS",
+    "ALB",
+    "IAM",
+    "CloudWatch Logs",
+    "VPC Peering",
+    "S3",
+    "DynamoDB",
+    "KMS"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

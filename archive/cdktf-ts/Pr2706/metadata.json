@@ -1,0 +1,40 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349456",
+  "team": "6",
+  "startedAt": "2025-09-04T08:20:17.921Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Monitoring Setup",
+    "Access Control",
+    "Web Application Deployment"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "KMS",
+    "IAM",
+    "S3",
+    "VPC",
+    "EC2",
+    "ELB",
+    "RDS",
+    "Redshift",
+    "CloudWatch",
+    "SNS",
+    "Config",
+    "Auto Scaling"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

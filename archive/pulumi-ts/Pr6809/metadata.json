@@ -1,0 +1,39 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "c9q4o3",
+  "team": "synth",
+  "startedAt": "2025-11-18T20:36:00.000Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "serverless",
+    "financial-analytics",
+    "data-processing",
+    "lambda",
+    "s3",
+    "dynamodb",
+    "sqs",
+    "eventbridge",
+    "api-gateway"
+  ],
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "SQS",
+    "EventBridge",
+    "API Gateway",
+    "CloudWatch",
+    "IAM",
+    "X-Ray"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

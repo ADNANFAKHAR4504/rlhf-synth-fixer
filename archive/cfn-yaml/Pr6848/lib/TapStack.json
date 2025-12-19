@@ -1,0 +1,928 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure Transaction Processing Pipeline with KMS encryption, VPC isolation, and compliance monitoring",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Unique suffix for resource naming to prevent conflicts across deployments",
+            "MinLength": 1,
+            "MaxLength": 20,
+            "AllowedPattern": "[a-zA-Z0-9-]*",
+            "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
+        },
+        "EnableTerminationProtection": {
+            "Type": "String",
+            "Description": "Enable CloudFormation stack termination protection (set to true for production)",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "transaction-vpc-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "transaction-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "transaction-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.3.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "transaction-private-subnet-3-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "transaction-private-rt-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "LambdaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Lambda transaction processor",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "10.0.0.0/16",
+                        "Description": "HTTPS to VPC endpoints within VPC CIDR"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "lambda-sg-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCEndpointSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for VPC endpoints",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "SourceSecurityGroupId": {
+                            "Ref": "LambdaSecurityGroup"
+                        },
+                        "Description": "HTTPS from Lambda functions"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "vpc-endpoint-sg-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "DynamoDBVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable"
+                    }
+                ]
+            }
+        },
+        "KinesisVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.kinesis-streams"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "PrivateSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "VPCEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "KMSVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.kms"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "PrivateSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "VPCEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "CloudWatchLogsVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.logs"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "PrivateSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "VPCEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "LambdaVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.lambda"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "PrivateSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "VPCEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "EncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "Customer-managed KMS key for transaction processing pipeline encryption",
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudWatch Logs to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": {
+                                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                                }
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "ArnLike": {
+                                    "kms:EncryptionContext:aws:logs:arn": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow DynamoDB to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "dynamodb.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:GenerateDataKey",
+                                "kms:CreateGrant"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Kinesis to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "kinesis.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "EncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/transaction-key-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "EncryptionKey"
+                }
+            }
+        },
+        "LambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/transaction-processor-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 90,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "EncryptionKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "TransactionTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "transactions-${EnvironmentSuffix}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": {
+                        "Ref": "EncryptionKey"
+                    }
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "transactionId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "transactionId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "transactions-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "TransactionStream": {
+            "Type": "AWS::Kinesis::Stream",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "transaction-stream-${EnvironmentSuffix}"
+                },
+                "ShardCount": 1,
+                "RetentionPeriodHours": 24,
+                "StreamEncryption": {
+                    "EncryptionType": "KMS",
+                    "KeyId": {
+                        "Ref": "EncryptionKey"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "transaction-stream-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "lambda-transaction-processor-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "KinesisAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kinesis:PutRecord",
+                                        "kinesis:PutRecords",
+                                        "kinesis:DescribeStream"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionStream",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "KMSAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:Encrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "EncryptionKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CloudWatchLogsAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "LambdaLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "TransactionProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DependsOn": "LambdaLogGroup",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "transaction-processor-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.handler",
+                "MemorySize": 1024,
+                "Timeout": 60,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        },
+                        {
+                            "Ref": "PrivateSubnet3"
+                        }
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE_NAME": {
+                            "Ref": "TransactionTable"
+                        },
+                        "KINESIS_STREAM_NAME": {
+                            "Ref": "TransactionStream"
+                        },
+                        "KMS_KEY_ID": {
+                            "Ref": "EncryptionKey"
+                        }
+                    }
+                },
+                "KmsKeyArn": {
+                    "Fn::GetAtt": [
+                        "EncryptionKey",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\nimport time\nimport boto3\nfrom decimal import Decimal\n\n# Initialize AWS clients\ndynamodb = boto3.resource('dynamodb')\nkinesis = boto3.client('kinesis')\n\n# Get environment variables\ntable_name = os.environ['DYNAMODB_TABLE_NAME']\nstream_name = os.environ['KINESIS_STREAM_NAME']\n\ntable = dynamodb.Table(table_name)\n\ndef handler(event, context):\n    \"\"\"\n    Process transaction events and store in DynamoDB and Kinesis\n    \"\"\"\n    try:\n        # Extract transaction data from event\n        transaction_id = event.get('transactionId', f\"txn-{int(time.time())}\")\n        amount = Decimal(str(event.get('amount', 0)))\n        customer_id = event.get('customerId', 'unknown')\n        timestamp = int(time.time())\n\n        # Store transaction in DynamoDB\n        table.put_item(\n            Item={\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'amount': amount,\n                'customerId': customer_id,\n                'status': 'processed'\n            }\n        )\n\n        # Publish to Kinesis for real-time analytics\n        kinesis.put_record(\n            StreamName=stream_name,\n            Data=json.dumps({\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'amount': float(amount),\n                'customerId': customer_id\n            }),\n            PartitionKey=customer_id\n        )\n\n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Transaction processed successfully',\n                'transactionId': transaction_id\n            })\n        }\n\n    except Exception as e:\n        print(f\"Error processing transaction: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'message': 'Transaction processing failed',\n                'error': str(e)\n            })\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "transaction-processor-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "lambda-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert on Lambda function errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "TransactionProcessorFunction"
+                        }
+                    }
+                ]
+            }
+        },
+        "DynamoDBThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "dynamodb-throttle-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert on DynamoDB throttled requests",
+                "MetricName": "UserErrors",
+                "Namespace": "AWS/DynamoDB",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TableName",
+                        "Value": {
+                            "Ref": "TransactionTable"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID for transaction processing",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-Id"
+                }
+            }
+        },
+        "PrivateSubnetIds": {
+            "Description": "Private subnet IDs across 3 AZs",
+            "Value": {
+                "Fn::Sub": "${PrivateSubnet1},${PrivateSubnet2},${PrivateSubnet3}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnets"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "KMS Key ID for encryption",
+            "Value": {
+                "Ref": "EncryptionKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMS-Key-Id"
+                }
+            }
+        },
+        "KMSKeyArn": {
+            "Description": "KMS Key ARN for encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EncryptionKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMS-Key-Arn"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "DynamoDB table name for transactions",
+            "Value": {
+                "Ref": "TransactionTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDB-Table"
+                }
+            }
+        },
+        "DynamoDBTableArn": {
+            "Description": "DynamoDB table ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TransactionTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDB-Table-Arn"
+                }
+            }
+        },
+        "KinesisStreamName": {
+            "Description": "Kinesis stream name for transaction analytics",
+            "Value": {
+                "Ref": "TransactionStream"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Kinesis-Stream"
+                }
+            }
+        },
+        "KinesisStreamArn": {
+            "Description": "Kinesis stream ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TransactionStream",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Kinesis-Stream-Arn"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Lambda function name for transaction processing",
+            "Value": {
+                "Ref": "TransactionProcessorFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Lambda-Function"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "Lambda function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TransactionProcessorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Lambda-Function-Arn"
+                }
+            }
+        },
+        "CloudWatchLogGroupName": {
+            "Description": "CloudWatch Log Group name for Lambda logs",
+            "Value": {
+                "Ref": "LambdaLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Log-Group"
+                }
+            }
+        },
+        "LambdaSecurityGroupId": {
+            "Description": "Security group ID for Lambda function",
+            "Value": {
+                "Ref": "LambdaSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Lambda-SG"
+                }
+            }
+        },
+        "LambdaErrorAlarmName": {
+            "Description": "CloudWatch alarm for Lambda errors",
+            "Value": {
+                "Ref": "LambdaErrorAlarm"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Lambda-Error-Alarm"
+                }
+            }
+        },
+        "DynamoDBThrottleAlarmName": {
+            "Description": "CloudWatch alarm for DynamoDB throttling",
+            "Value": {
+                "Ref": "DynamoDBThrottleAlarm"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDB-Throttle-Alarm"
+                }
+            }
+        },
+        "TerminationProtectionEnabled": {
+            "Description": "Stack termination protection setting (for reference when creating stack)",
+            "Value": {
+                "Ref": "EnableTerminationProtection"
+            }
+        }
+    }
+}

@@ -1,0 +1,39 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "po_id": "101912847",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-28T05:11:19Z",
+  "subtask": "Serverless Event Processing",
+  "subject_labels": [
+    "Lambda functions must use ARM-based Graviton2 processors for cost optimization",
+    "DynamoDB tables must use point-in-time recovery with 35-day backup retention",
+    "All Lambda functions must have reserved concurrent executions set to prevent throttling",
+    "SNS topics must have server-side encryption using AWS managed keys",
+    "Lambda functions must use container images stored in private ECR repositories",
+    "CloudWatch Log Groups must have KMS encryption enabled with customer managed keys",
+    "Step Functions state machines must use Express workflows for cost efficiency",
+    "All IAM policies must follow least privilege with no wildcard resource permissions"
+  ],
+  "aws_services": [
+    "Lambda",
+    "Step Functions",
+    "DynamoDB",
+    "SNS",
+    "SQS",
+    "ECR",
+    "CloudWatch",
+    "KMS",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7365",
+  "team": "5",
+  "startedAt": "2025-11-26T13:34:10.974Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "Production-grade observability platform for financial services microservices with centralized logging, distributed tracing, severity-based alerting, anomaly detection, and custom business KPI tracking to meet SLA commitments and regulatory compliance requirements",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "ECS",
+    "EC2",
+    "VPC",
+    "ALB",
+    "X-Ray",
+    "Lambda",
+    "SNS",
+    "EventBridge",
+    "KMS",
+    "S3",
+    "SQS",
+    "IAM"
+  ],
+  "training_quality": 9.8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

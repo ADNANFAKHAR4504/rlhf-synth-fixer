@@ -1,0 +1,35 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-03T13:55:10.085509Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Application Deployment",
+    "Web Application Deployment"
+  ],
+  "po_id": "chu686",
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "Fargate",
+    "ECR",
+    "ALB",
+    "Route53",
+    "ACM",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "NAT Gateway",
+    "Application Auto Scaling"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

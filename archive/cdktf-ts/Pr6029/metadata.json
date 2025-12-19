@@ -1,0 +1,39 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "khpmi",
+  "team": "synth",
+  "startedAt": "2025-11-07T04:01:37+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "EIP",
+    "NatGateway",
+    "RouteTable",
+    "Route",
+    "RouteTableAssociation",
+    "NetworkAcl",
+    "NetworkAclRule",
+    "CloudWatchLogGroup",
+    "IAMRole",
+    "IAMPolicy",
+    "IAMRolePolicyAttachment",
+    "FlowLog"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,325 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless Image Upload Processing System with S3, Lambda, SNS, and CloudWatch",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix to append to resource names (e.g., dev, staging, prod)",
+      "Default": "dev",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Description": "Email address for receiving processing notifications",
+      "Default": "admin@example.com"
+    }
+  },
+  "Resources": {
+    "ImageUploadBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "image-upload-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionExpirationInDays": 30
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ImageProcessing"
+          }
+        ]
+      }
+    },
+    "ProcessedImageBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "processed-images-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ImageProcessing"
+          }
+        ]
+      }
+    },
+    "ImageProcessingTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "image-processing-notifications-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Image Processing Notifications",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "NotificationEmail"
+            },
+            "Protocol": "email"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ImageProcessing"
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Sub": "ImageProcessingPolicy-${EnvironmentSuffix}"
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::image-upload-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::processed-images-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "ImageProcessingTopic"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ImageProcessing"
+          }
+        ]
+      }
+    },
+    "ImageProcessingLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "image-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs20.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 60,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "PROCESSED_BUCKET": {
+              "Ref": "ProcessedImageBucket"
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "ImageProcessingTopic"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');\nconst { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');\n\nconst s3Client = new S3Client();\nconst snsClient = new SNSClient();\n\nexports.handler = async (event) => {\n  console.log('Event received:', JSON.stringify(event, null, 2));\n  \n  const processedBucket = process.env.PROCESSED_BUCKET;\n  const snsTopicArn = process.env.SNS_TOPIC_ARN;\n  const environment = process.env.ENVIRONMENT;\n  \n  const results = [];\n  \n  for (const record of event.Records) {\n    try {\n      const sourceBucket = record.s3.bucket.name;\n      const sourceKey = decodeURIComponent(record.s3.object.key.replace(/\\+/g, ' '));\n      \n      console.log(`Processing image: ${sourceKey} from bucket: ${sourceBucket}`);\n      \n      // Get the image from S3\n      const getCommand = new GetObjectCommand({\n        Bucket: sourceBucket,\n        Key: sourceKey\n      });\n      \n      const imageData = await s3Client.send(getCommand);\n      const imageBody = await streamToBuffer(imageData.Body);\n      \n      // Simulate image processing (resize, optimize, etc.)\n      const processedKey = sourceKey.replace('uploads/', 'processed/');\n      const metadata = {\n        originalBucket: sourceBucket,\n        originalKey: sourceKey,\n        processedAt: new Date().toISOString(),\n        environment: environment,\n        imageSize: imageBody.length,\n        contentType: imageData.ContentType || 'image/jpeg'\n      };\n      \n      // Save processed image\n      const putCommand = new PutObjectCommand({\n        Bucket: processedBucket,\n        Key: processedKey,\n        Body: imageBody,\n        ContentType: imageData.ContentType || 'image/jpeg',\n        Metadata: {\n          'original-bucket': sourceBucket,\n          'original-key': sourceKey,\n          'processed-at': metadata.processedAt,\n          'environment': environment\n        }\n      });\n      \n      await s3Client.send(putCommand);\n      \n      console.log(`Image processed successfully: ${processedKey}`);\n      \n      // Send SNS notification\n      const message = {\n        status: 'SUCCESS',\n        originalImage: sourceKey,\n        processedImage: processedKey,\n        bucket: processedBucket,\n        timestamp: metadata.processedAt,\n        environment: environment,\n        imageSize: `${(metadata.imageSize / 1024).toFixed(2)} KB`\n      };\n      \n      const publishCommand = new PublishCommand({\n        TopicArn: snsTopicArn,\n        Subject: `[${environment.toUpperCase()}] Image Processing Complete`,\n        Message: JSON.stringify(message, null, 2)\n      });\n      \n      await snsClient.send(publishCommand);\n      \n      results.push({\n        sourceKey,\n        processedKey,\n        status: 'success'\n      });\n      \n    } catch (error) {\n      console.error('Error processing image:', error);\n      \n      // Send error notification\n      try {\n        const errorCommand = new PublishCommand({\n          TopicArn: snsTopicArn,\n          Subject: `[${environment.toUpperCase()}] Image Processing Failed`,\n          Message: JSON.stringify({\n            status: 'ERROR',\n            error: error.message,\n            sourceKey: record.s3.object.key,\n            timestamp: new Date().toISOString()\n          }, null, 2)\n        });\n        \n        await snsClient.send(errorCommand);\n      } catch (snsError) {\n        console.error('Error sending SNS notification:', snsError);\n      }\n      \n      results.push({\n        sourceKey: record.s3.object.key,\n        status: 'error',\n        error: error.message\n      });\n    }\n  }\n  \n  return {\n    statusCode: 200,\n    body: JSON.stringify({\n      message: 'Image processing completed',\n      results: results\n    })\n  };\n};\n\nasync function streamToBuffer(stream) {\n  const chunks = [];\n  for await (const chunk of stream) {\n    chunks.push(chunk);\n  }\n  return Buffer.concat(chunks);\n}"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ImageProcessing"
+          }
+        ]
+      }
+    },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ImageProcessingLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "s3.amazonaws.com",
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        },
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:s3:::image-upload-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "UploadBucketName": {
+      "Description": "Name of the S3 bucket for image uploads",
+      "Value": {
+        "Ref": "ImageUploadBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-UploadBucket"
+        }
+      }
+    },
+    "ProcessedBucketName": {
+      "Description": "Name of the S3 bucket for processed images",
+      "Value": {
+        "Ref": "ProcessedImageBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ProcessedBucket"
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "ARN of the Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "ImageProcessingLambda",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaArn"
+        }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "ARN of the SNS topic for notifications",
+      "Value": {
+        "Ref": "ImageProcessingTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNSTopic"
+        }
+      }
+    }
+  }
+}

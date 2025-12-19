@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349032",
+  "team": "3",
+  "startedAt": "2025-10-17T10:01:24.871Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing v2",
+    "RDS",
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch Logs",
+    "IAM",
+    "SSM",
+    "Lambda",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Tables",
+    "Security Groups"
+  ],
+  "training_quality": 9,
+  "background": "Provision a secure, private-only VPC web application stack in us-west-2 using CloudFormation. The stack includes private app subnets behind an internet-facing ALB (in dedicated egress subnets), an EC2 Auto Scaling Group (Amazon Linux 2023) with nginx, RDS (PostgreSQL/MySQL) in private DB subnets, KMS for encryption (S3, Logs, SSM, RDS, and optional EBS), S3 buckets for app data and logs, VPC Flow Logs, CloudTrail, SSM SecureString parameter via a Lambda-backed custom resource, and least-privilege IAM. The design enforces region guard, TLS-only S3 access, and robust logging.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

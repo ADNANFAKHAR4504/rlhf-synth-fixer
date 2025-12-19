@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "E2AFCF",
+  "team": "3",
+  "training_quality": "8",
+  "startedAt": "2025-10-12T13:43:41.248Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Kinesis",
+    "Lambda",
+    "S3",
+    "IAM",
+    "SQS",
+    "CloudWatch",
+    "DynamoDB",
+    "VPC",
+    "EC2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "deepaktatineni",
+  "dockerS3Location": ""
+}

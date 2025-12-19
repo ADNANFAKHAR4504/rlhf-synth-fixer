@@ -1,0 +1,2440 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Active-Passive DR Architecture for Financial Transaction System",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "Production",
+            "AllowedValues": [
+                "Production",
+                "Staging"
+            ],
+            "Description": "Environment name"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix to append to resource names for uniqueness"
+        },
+        "DomainName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "(Optional) Domain name for the application that you own (e.g., myapp.yourdomain.com). Leave empty to skip Route53 setup."
+        },
+        "DBMasterUsername": {
+            "Type": "String",
+            "Default": "admin",
+            "Description": "Database master username",
+            "NoEcho": false
+        },
+        "AlertEmail": {
+            "Type": "String",
+            "Default": "admin@example.com",
+            "Description": "Email address for alerts"
+        },
+        "DataRetentionDays": {
+            "Type": "Number",
+            "Default": 2555,
+            "Description": "Data retention period in days (7 years default for financial compliance)"
+        }
+    },
+    "Conditions": {
+        "CreateRoute53Resources": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DomainName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "HostedZone": {
+            "Type": "AWS::Route53::HostedZone",
+            "Condition": "CreateRoute53Resources",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Ref": "DomainName"
+                },
+                "HostedZoneConfig": {
+                    "Comment": {
+                        "Fn::Sub": "Hosted zone for ${DomainName}"
+                    }
+                },
+                "HostedZoneTags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-hosted-zone"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-vpc"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-igw"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-public-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-public-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.10.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-private-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.11.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-private-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "DatabaseSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.20.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "DatabaseSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.21.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "NATGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "EIP1",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-nat-gw-1"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "EIP1": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-eip-1"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-public-rt"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-private-rt"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway1"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Application Load Balancer",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS from internet"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTP from internet"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb-sg"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "AppSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for application servers",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ALBSecurityGroup"
+                        },
+                        "Description": "HTTP from ALB only"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-app-sg"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Aurora database",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "AppSecurityGroup"
+                        },
+                        "Description": "MySQL from app servers only"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "LambdaSecurityGroup"
+                        },
+                        "Description": "MySQL from Lambda functions only"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-sg"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "LambdaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Lambda functions",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-lambda-sg"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "S3Endpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable"
+                    }
+                ]
+            }
+        },
+        "DynamoDBEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
+                },
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable"
+                    }
+                ]
+            }
+        },
+        "KMSKey": {
+            "Type": "AWS::KMS::Key",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Description": "Customer managed KMS key for encryption",
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow RDS to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "rds.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "rds.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow S3 to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow Lambda to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "lambda.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow CloudWatch Logs to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": {
+                                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                                }
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "ArnLike": {
+                                    "kms:EncryptionContext:aws:logs:arn": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow DynamoDB to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "dynamodb.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "dynamodb.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow SNS to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "sns.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Secrets Manager to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "secretsmanager.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "secretsmanager.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-kms-key"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "KMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${AWS::StackName}-${EnvironmentSuffix}-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "KMSKey"
+                }
+            }
+        },
+        "DBMasterPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Description": "Master password for Aurora database cluster",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\",
+                    "RequireEachIncludedType": true
+                },
+                "KmsKeyId": {
+                    "Ref": "KMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-master-password"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ApplicationArtifactsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "KMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "RetentionRule",
+                            "Status": "Enabled",
+                            "ExpirationInDays": {
+                                "Ref": "DataRetentionDays"
+                            },
+                            "NoncurrentVersionExpirationInDays": 90
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-artifacts"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ConfigurationBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "KMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-config"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for Aurora cluster",
+                "SubnetIds": [
+                    {
+                        "Ref": "DatabaseSubnet1"
+                    },
+                    {
+                        "Ref": "DatabaseSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-subnet-group"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "DBClusterParameterGroup": {
+            "Type": "AWS::RDS::DBClusterParameterGroup",
+            "Properties": {
+                "Description": "Cluster parameter group for Aurora MySQL",
+                "Family": "aurora-mysql8.0",
+                "Parameters": {
+                    "binlog_format": "ROW",
+                    "binlog_backup": "0",
+                    "binlog_replication_globaldb": "0",
+                    "aurora_enhanced_binlog": "1",
+                    "innodb_trx_commit_allow_data_loss": "1",
+                    "innodb_flush_log_at_trx_commit": "1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-cluster-param-group"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "AuroraDBCluster": {
+            "Type": "AWS::RDS::DBCluster",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Engine": "aurora-mysql",
+                "EngineMode": "provisioned",
+                "EngineVersion": "8.0.mysql_aurora.3.04.0",
+                "DatabaseName": "financedb",
+                "MasterUsername": {
+                    "Ref": "DBMasterUsername"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "DBClusterParameterGroupName": {
+                    "Ref": "DBClusterParameterGroup"
+                },
+                "VpcSecurityGroupIds": [
+                    {
+                        "Ref": "DatabaseSecurityGroup"
+                    }
+                ],
+                "BackupRetentionPeriod": 7,
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "KMSKey"
+                },
+                "DeletionProtection": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-aurora-cluster"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrimaryDBInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DBInstanceClass": "db.r6g.xlarge",
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraDBCluster"
+                },
+                "Engine": "aurora-mysql",
+                "PubliclyAccessible": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-primary-db"
+                        }
+                    },
+                    {
+                        "Key": "Role",
+                        "Value": "Primary"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "StandbyDBInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DBInstanceClass": "db.r6g.xlarge",
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraDBCluster"
+                },
+                "Engine": "aurora-mysql",
+                "PubliclyAccessible": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-standby-db"
+                        }
+                    },
+                    {
+                        "Key": "Role",
+                        "Value": "Standby"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "SessionStateTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-sessions"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "SessionId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "UserId",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "SessionId",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "UserIdIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "UserId",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": {
+                        "Ref": "KMSKey"
+                    }
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "ContributorInsightsSpecification": {
+                    "Enabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-sessions"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "FailoverStateTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-failover-state"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "StateKey",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "StateKey",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": {
+                        "Ref": "KMSKey"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-failover-state"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrimaryALB": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "Type": "application",
+                "Scheme": "internet-facing",
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-primary-alb"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Primary"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "StandbyALB": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "Type": "application",
+                "Scheme": "internet-facing",
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-standby-alb"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Standby"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrimaryTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "HealthCheckEnabled": true,
+                "HealthCheckPath": "/health",
+                "HealthCheckIntervalSeconds": 10,
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-primary-tg"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "StandbyTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "HealthCheckEnabled": true,
+                "HealthCheckPath": "/health",
+                "HealthCheckIntervalSeconds": 10,
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-standby-tg"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrimaryListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "PrimaryTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "PrimaryALB"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "StandbyListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "StandbyTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "StandbyALB"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "PrimaryHealthCheck": {
+            "Type": "AWS::Route53::HealthCheck",
+            "Condition": "CreateRoute53Resources",
+            "Properties": {
+                "HealthCheckConfig": {
+                    "Type": "HTTP",
+                    "ResourcePath": "/health",
+                    "FullyQualifiedDomainName": {
+                        "Fn::GetAtt": [
+                            "PrimaryALB",
+                            "DNSName"
+                        ]
+                    },
+                    "Port": 80,
+                    "RequestInterval": 10,
+                    "FailureThreshold": 3
+                },
+                "HealthCheckTags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-primary-health"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "StandbyHealthCheck": {
+            "Type": "AWS::Route53::HealthCheck",
+            "Condition": "CreateRoute53Resources",
+            "Properties": {
+                "HealthCheckConfig": {
+                    "Type": "HTTP",
+                    "ResourcePath": "/health",
+                    "FullyQualifiedDomainName": {
+                        "Fn::GetAtt": [
+                            "StandbyALB",
+                            "DNSName"
+                        ]
+                    },
+                    "Port": 80,
+                    "RequestInterval": 10,
+                    "FailureThreshold": 3
+                },
+                "HealthCheckTags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-standby-health"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrimaryRecord": {
+            "Type": "AWS::Route53::RecordSet",
+            "Condition": "CreateRoute53Resources",
+            "Properties": {
+                "HostedZoneId": {
+                    "Ref": "HostedZone"
+                },
+                "Name": {
+                    "Ref": "DomainName"
+                },
+                "Type": "A",
+                "SetIdentifier": "Primary",
+                "Failover": "PRIMARY",
+                "HealthCheckId": {
+                    "Ref": "PrimaryHealthCheck"
+                },
+                "AliasTarget": {
+                    "HostedZoneId": {
+                        "Fn::GetAtt": [
+                            "PrimaryALB",
+                            "CanonicalHostedZoneID"
+                        ]
+                    },
+                    "DNSName": {
+                        "Fn::GetAtt": [
+                            "PrimaryALB",
+                            "DNSName"
+                        ]
+                    },
+                    "EvaluateTargetHealth": true
+                }
+            }
+        },
+        "StandbyRecord": {
+            "Type": "AWS::Route53::RecordSet",
+            "Condition": "CreateRoute53Resources",
+            "Properties": {
+                "HostedZoneId": {
+                    "Ref": "HostedZone"
+                },
+                "Name": {
+                    "Ref": "DomainName"
+                },
+                "Type": "A",
+                "SetIdentifier": "Standby",
+                "Failover": "SECONDARY",
+                "HealthCheckId": {
+                    "Ref": "StandbyHealthCheck"
+                },
+                "AliasTarget": {
+                    "HostedZoneId": {
+                        "Fn::GetAtt": [
+                            "StandbyALB",
+                            "CanonicalHostedZoneID"
+                        ]
+                    },
+                    "DNSName": {
+                        "Fn::GetAtt": [
+                            "StandbyALB",
+                            "DNSName"
+                        ]
+                    },
+                    "EvaluateTargetHealth": true
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "FailoverPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "RDSManagement",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "rds:FailoverDBCluster",
+                                        "rds:DescribeDBClusters",
+                                        "rds:DescribeDBInstances"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "Route53Management",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "route53:ChangeResourceRecordSets",
+                                        "route53:GetHealthCheck",
+                                        "route53:ListHostedZones",
+                                        "route53:ListHealthChecks"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "ELBManagement",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "elasticloadbalancing:DescribeTargetHealth",
+                                        "elasticloadbalancing:RegisterTargets",
+                                        "elasticloadbalancing:DeregisterTargets",
+                                        "elasticloadbalancing:DescribeLoadBalancers",
+                                        "elasticloadbalancing:DescribeTargetGroups"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "PrimaryTargetGroup",
+                                                "TargetGroupArn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "StandbyTargetGroup",
+                                                "TargetGroupArn"
+                                            ]
+                                        },
+                                        {
+                                            "Ref": "PrimaryALB"
+                                        },
+                                        {
+                                            "Ref": "StandbyALB"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "DynamoDBAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "FailoverStateTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "SessionStateTable",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "SNSPublish",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Ref": "AlertTopic"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "CloudWatchMetrics",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "SSMParameterAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ssm:GetParameter",
+                                        "ssm:PutParameter"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/dr-system/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "KMSAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "KMSKey",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "SecretsManagerAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue",
+                                        "secretsmanager:DescribeSecret"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Ref": "DBMasterPasswordSecret"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "LambdaInvoke",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "lambda:InvokeFunction"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-${EnvironmentSuffix}-*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-lambda-execution-role"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "FailoverOrchestratorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Timeout": 60,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "CLUSTER_ID": {
+                            "Ref": "AuroraDBCluster"
+                        },
+                        "FAILOVER_STATE_TABLE": {
+                            "Ref": "FailoverStateTable"
+                        },
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "AlertTopic"
+                        },
+                        "PRIMARY_ALB_ARN": {
+                            "Ref": "PrimaryALB"
+                        },
+                        "STANDBY_ALB_ARN": {
+                            "Ref": "StandbyALB"
+                        },
+                        "HOSTED_ZONE_ID": {
+                            "Fn::If": [
+                                "CreateRoute53Resources",
+                                {
+                                    "Ref": "HostedZone"
+                                },
+                                ""
+                            ]
+                        },
+                        "DOMAIN_NAME": {
+                            "Ref": "DomainName"
+                        }
+                    }
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nimport time\nfrom datetime import datetime\n\nrds = boto3.client('rds')\nroute53 = boto3.client('route53')\ndynamodb = boto3.resource('dynamodb')\nsns = boto3.client('sns')\ncloudwatch = boto3.client('cloudwatch')\n\ndef handler(event, context):\n    start_time = time.time()\n    cluster_id = os.environ['CLUSTER_ID']\n    table = dynamodb.Table(os.environ['FAILOVER_STATE_TABLE'])\n\n    try:\n        # Check current cluster status\n        response = rds.describe_db_clusters(DBClusterIdentifier=cluster_id)\n        cluster = response['DBClusters'][0]\n\n        # Determine if failover is needed\n        if should_failover(event, cluster):\n            # Record failover start\n            table.put_item(Item={\n                'StateKey': 'FAILOVER_STATUS',\n                'Status': 'IN_PROGRESS',\n                'StartTime': datetime.utcnow().isoformat(),\n                'Reason': json.dumps(event)\n            })\n\n            # Initiate RDS failover\n            print(f\"Initiating failover for cluster {cluster_id}\")\n            rds.failover_db_cluster(DBClusterIdentifier=cluster_id)\n\n            # Update Route53 records\n            update_dns_routing()\n\n            # Wait for failover to complete\n            wait_for_failover_completion(cluster_id)\n\n            # Record metrics\n            elapsed_time = time.time() - start_time\n            cloudwatch.put_metric_data(\n                Namespace='DRSystem',\n                MetricData=[\n                    {\n                        'MetricName': 'FailoverDuration',\n                        'Value': elapsed_time,\n                        'Unit': 'Seconds'\n                    }\n                ]\n            )\n\n            # Update failover status\n            table.put_item(Item={\n                'StateKey': 'FAILOVER_STATUS',\n                'Status': 'COMPLETED',\n                'CompletedTime': datetime.utcnow().isoformat(),\n                'Duration': elapsed_time\n            })\n\n            # Send notification\n            sns.publish(\n                TopicArn=os.environ['SNS_TOPIC_ARN'],\n                Subject='Failover Completed Successfully',\n                Message=f'Failover completed in {elapsed_time:.2f} seconds'\n            )\n\n            return {\n                'statusCode': 200,\n                'body': json.dumps('Failover completed successfully')\n            }\n        else:\n            return {\n                'statusCode': 200,\n                'body': json.dumps('Failover not required')\n            }\n\n    except Exception as e:\n        print(f\"Error during failover: {str(e)}\")\n        sns.publish(\n            TopicArn=os.environ['SNS_TOPIC_ARN'],\n            Subject='Failover Failed',\n            Message=f'Error: {str(e)}'\n        )\n        raise\n\ndef should_failover(event, cluster):\n    # Implement logic to determine if failover should occur\n    # Check multiple signals: DB health, app health, manual trigger\n    return event.get('trigger_failover', False)\n\ndef update_dns_routing():\n    # Update Route53 weights or failover routing\n    pass\n\ndef wait_for_failover_completion(cluster_id, max_wait=120):\n    elapsed = 0\n    while elapsed < max_wait:\n        response = rds.describe_db_clusters(DBClusterIdentifier=cluster_id)\n        status = response['DBClusters'][0]['Status']\n        if status == 'available':\n            return True\n        time.sleep(5)\n        elapsed += 5\n    raise Exception('Failover timeout exceeded')\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-failover-orchestrator"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "HealthMonitorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Timeout": 30,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "CLUSTER_ID": {
+                            "Ref": "AuroraDBCluster"
+                        },
+                        "PRIMARY_TG_ARN": {
+                            "Ref": "PrimaryTargetGroup"
+                        },
+                        "SESSION_TABLE": {
+                            "Ref": "SessionStateTable"
+                        },
+                        "FAILOVER_FUNCTION_NAME": {
+                            "Ref": "FailoverOrchestratorFunction"
+                        }
+                    }
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\nrds = boto3.client('rds')\nelbv2 = boto3.client('elbv2')\ncloudwatch = boto3.client('cloudwatch')\nlambda_client = boto3.client('lambda')\n\ndef handler(event, context):\n    health_status = {\n        'timestamp': datetime.utcnow().isoformat(),\n        'checks': {}\n    }\n\n    # Check RDS cluster health\n    try:\n        cluster_response = rds.describe_db_clusters(\n            DBClusterIdentifier=os.environ['CLUSTER_ID']\n        )\n        cluster = cluster_response['DBClusters'][0]\n\n        health_status['checks']['database'] = {\n            'status': cluster['Status'],\n            'healthy': cluster['Status'] == 'available'\n        }\n\n        # Check replication lag\n        for member in cluster['DBClusterMembers']:\n            if member['IsClusterWriter']:\n                continue\n            instance_response = rds.describe_db_instances(\n                DBInstanceIdentifier=member['DBInstanceIdentifier']\n            )\n            instance = instance_response['DBInstances'][0]\n            lag = instance.get('StatusInfos', [{}])[0].get('StatusType')\n            health_status['checks']['replication_lag'] = {\n                'lag_seconds': lag if lag else 0,\n                'healthy': True if not lag or lag < 1 else False\n            }\n    except Exception as e:\n        health_status['checks']['database'] = {\n            'status': 'error',\n            'healthy': False,\n            'error': str(e)\n        }\n\n    # Check ALB target health\n    try:\n        target_health = elbv2.describe_target_health(\n            TargetGroupArn=os.environ['PRIMARY_TG_ARN']\n        )\n        healthy_targets = sum(1 for t in target_health['TargetHealthDescriptions']\n                            if t['TargetHealth']['State'] == 'healthy')\n        health_status['checks']['alb_targets'] = {\n            'healthy_count': healthy_targets,\n            'healthy': healthy_targets > 0\n        }\n    except Exception as e:\n        health_status['checks']['alb_targets'] = {\n            'status': 'error',\n            'healthy': False,\n            'error': str(e)\n        }\n\n    # Determine overall health\n    overall_health = all(check.get('healthy', False)\n                        for check in health_status['checks'].values())\n\n    # If unhealthy, consider triggering failover\n    if not overall_health:\n        print(\"Health check failed, evaluating failover criteria\")\n        evaluate_failover(health_status)\n\n    # Publish metrics\n    publish_health_metrics(health_status)\n\n    return {\n        'statusCode': 200,\n        'body': json.dumps(health_status)\n    }\n\ndef evaluate_failover(health_status):\n    # Complex logic to determine if automatic failover should be triggered\n    # This prevents false positives by checking multiple conditions\n    failures = []\n\n    if not health_status['checks'].get('database', {}).get('healthy'):\n        failures.append('database')\n    if not health_status['checks'].get('alb_targets', {}).get('healthy'):\n        failures.append('alb_targets')\n    if health_status['checks'].get('replication_lag', {}).get('lag_seconds', 0) > 5:\n        failures.append('replication_lag')\n\n    if len(failures) >= 2:\n        # Trigger failover if multiple components are unhealthy\n        lambda_client.invoke(\n            FunctionName=os.environ['FAILOVER_FUNCTION_NAME'],\n            InvocationType='Event',\n            Payload=json.dumps({\n                'trigger_failover': True,\n                'reason': failures\n            })\n        )\n\ndef publish_health_metrics(health_status):\n    metrics = []\n\n    if 'database' in health_status['checks']:\n        metrics.append({\n            'MetricName': 'DatabaseHealth',\n            'Value': 1 if health_status['checks']['database']['healthy'] else 0,\n            'Unit': 'None'\n        })\n\n    if 'replication_lag' in health_status['checks']:\n        lag = health_status['checks']['replication_lag'].get('lag_seconds', 0)\n        metrics.append({\n            'MetricName': 'ReplicationLag',\n            'Value': lag,\n            'Unit': 'Seconds'\n        })\n\n    if metrics:\n        cloudwatch.put_metric_data(\n            Namespace='DRSystem',\n            MetricData=metrics\n        )\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-health-monitor"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "HealthCheckScheduleRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Description": "Trigger health checks every minute",
+                "ScheduleExpression": "rate(1 minute)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "HealthMonitorFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "HealthCheckTarget"
+                    }
+                ]
+            }
+        },
+        "HealthCheckPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "HealthMonitorFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "HealthCheckScheduleRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "RDSEventRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Description": "Capture RDS failover events",
+                "EventPattern": {
+                    "source": [
+                        "aws.rds"
+                    ],
+                    "detail-type": [
+                        "RDS DB Cluster Event"
+                    ],
+                    "detail": {
+                        "EventCategories": [
+                            "failover"
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Ref": "AlertTopic"
+                        },
+                        "Id": "RDSEventTarget"
+                    }
+                ]
+            }
+        },
+        "DatabaseConnectionAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-connections"
+                },
+                "AlarmDescription": "Alert when database connections are high",
+                "MetricName": "DatabaseConnections",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBClusterIdentifier",
+                        "Value": {
+                            "Ref": "AuroraDBCluster"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        },
+        "ReplicationLagAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-replication-lag"
+                },
+                "AlarmDescription": "Alert when replication lag exceeds 1 second",
+                "MetricName": "AuroraReplicaLag",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 60,
+                "EvaluationPeriods": 2,
+                "Threshold": 1000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBClusterIdentifier",
+                        "Value": {
+                            "Ref": "AuroraDBCluster"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "CompositeAlarm": {
+            "Type": "AWS::CloudWatch::CompositeAlarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-critical-failure"
+                },
+                "AlarmDescription": "Composite alarm for critical system failures",
+                "ActionsEnabled": true,
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ],
+                "AlarmRule": {
+                    "Fn::Sub": "(ALARM(\"${DatabaseConnectionAlarm}\") AND ALARM(\"${ReplicationLagAlarm}\")) OR ALARM(\"${ALBUnhealthyTargetsAlarm}\")"
+                }
+            }
+        },
+        "ALBUnhealthyTargetsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb-unhealthy-targets"
+                },
+                "AlarmDescription": "Alert when ALB has no healthy targets",
+                "MetricName": "HealthyHostCount",
+                "Namespace": "AWS/ApplicationELB",
+                "Statistic": "Average",
+                "Period": 60,
+                "EvaluationPeriods": 2,
+                "Threshold": 1,
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "LoadBalancer",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "PrimaryALB",
+                                "LoadBalancerFullName"
+                            ]
+                        }
+                    },
+                    {
+                        "Name": "TargetGroup",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "PrimaryTargetGroup",
+                                "TargetGroupFullName"
+                            ]
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        },
+        "AlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "DisplayName": "DR System Alerts",
+                "KmsMasterKeyId": {
+                    "Ref": "KMSKey"
+                },
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "AlertEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alerts"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "AlertTopicPolicy": {
+            "Type": "AWS::SNS::TopicPolicy",
+            "Properties": {
+                "Topics": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowCloudWatchPublish",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudwatch.amazonaws.com"
+                            },
+                            "Action": [
+                                "SNS:Publish"
+                            ],
+                            "Resource": {
+                                "Ref": "AlertTopic"
+                            }
+                        },
+                        {
+                            "Sid": "AllowEventBridgePublish",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "events.amazonaws.com"
+                            },
+                            "Action": [
+                                "SNS:Publish"
+                            ],
+                            "Resource": {
+                                "Ref": "AlertTopic"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "FailoverConfigParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/dr-system/${EnvironmentSuffix}/failover/config"
+                },
+                "Type": "String",
+                "Value": {
+                    "Fn::Sub": "{\n  \"primary_endpoint\": \"${PrimaryALB.DNSName}\",\n  \"standby_endpoint\": \"${StandbyALB.DNSName}\",\n  \"rto_seconds\": 30,\n  \"rpo_seconds\": 1,\n  \"auto_failover_enabled\": true,\n  \"health_check_interval\": 60\n}\n"
+                },
+                "Description": "Failover configuration parameters",
+                "Tags": {
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "project": "iac-rlhf-amazon",
+                    "team-number": "2"
+                }
+            }
+        },
+        "DatabaseEndpointParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/dr-system/${EnvironmentSuffix}/database/endpoint"
+                },
+                "Type": "String",
+                "Value": {
+                    "Fn::GetAtt": [
+                        "AuroraDBCluster",
+                        "Endpoint.Address"
+                    ]
+                },
+                "Description": "Database cluster endpoint",
+                "Tags": {
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "project": "iac-rlhf-amazon",
+                    "team-number": "2"
+                }
+            }
+        },
+        "MonitoringDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/RDS\", \"DatabaseConnections\", {\"stat\": \"Average\", \"label\": \"DB Connections\"}],\n          [\".\", \"AuroraReplicaLag\", {\"stat\": \"Maximum\", \"label\": \"Replica Lag (ms)\"}],\n          [\"DRSystem\", \"FailoverDuration\", {\"stat\": \"Average\", \"label\": \"Failover Time (s)\"}],\n          [\"AWS/ApplicationELB\", \"HealthyHostCount\", {\"stat\": \"Minimum\", \"label\": \"Healthy Targets\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DR System Metrics\",\n        \"yAxis\": {\"left\": {\"min\": 0}}\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"DRSystem\", \"DatabaseHealth\", {\"stat\": \"Minimum\"}],\n          [\".\", \"ReplicationLag\", {\"stat\": \"Maximum\"}]\n        ],\n        \"period\": 60,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Health Status\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "FailoverLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${FailoverOrchestratorFunction}"
+                },
+                "RetentionInDays": 90,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "KMSKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "HealthMonitorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${HealthMonitorFunction}"
+                },
+                "RetentionInDays": 90,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "KMSKey",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "HostedZoneId": {
+            "Condition": "CreateRoute53Resources",
+            "Description": "Route53 Hosted Zone ID",
+            "Value": {
+                "Ref": "HostedZone"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-hosted-zone-id"
+                }
+            }
+        },
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-vpc"
+                }
+            }
+        },
+        "PrimaryEndpoint": {
+            "Description": "Primary Application Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PrimaryALB",
+                    "DNSName"
+                ]
+            }
+        },
+        "StandbyEndpoint": {
+            "Description": "Standby Application Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "StandbyALB",
+                    "DNSName"
+                ]
+            }
+        },
+        "DatabaseEndpoint": {
+            "Description": "Aurora Cluster Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraDBCluster",
+                    "Endpoint.Address"
+                ]
+            }
+        },
+        "DatabaseMasterPasswordSecretArn": {
+            "Description": "ARN of Secrets Manager secret containing database master password",
+            "Value": {
+                "Ref": "DBMasterPasswordSecret"
+            }
+        },
+        "DatabaseReadEndpoint": {
+            "Description": "Aurora Cluster Read Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraDBCluster",
+                    "ReadEndpoint.Address"
+                ]
+            }
+        },
+        "SessionTableName": {
+            "Description": "DynamoDB Session Table Name",
+            "Value": {
+                "Ref": "SessionStateTable"
+            }
+        },
+        "FailoverStateTableName": {
+            "Description": "DynamoDB Failover State Table Name",
+            "Value": {
+                "Ref": "FailoverStateTable"
+            }
+        },
+        "ArtifactsBucket": {
+            "Description": "S3 Bucket for Application Artifacts",
+            "Value": {
+                "Ref": "ApplicationArtifactsBucket"
+            }
+        },
+        "ConfigBucket": {
+            "Description": "S3 Bucket for Configuration Files",
+            "Value": {
+                "Ref": "ConfigurationBucket"
+            }
+        },
+        "AlertTopicArn": {
+            "Description": "SNS Topic for Alerts",
+            "Value": {
+                "Ref": "AlertTopic"
+            }
+        },
+        "DashboardURL": {
+            "Description": "CloudWatch Dashboard URL",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${MonitoringDashboard}"
+            }
+        },
+        "KMSKeyId": {
+            "Description": "KMS Key ID for Encryption",
+            "Value": {
+                "Ref": "KMSKey"
+            }
+        },
+        "FailoverFunctionArn": {
+            "Description": "Failover Orchestrator Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "FailoverOrchestratorFunction",
+                    "Arn"
+                ]
+            }
+        },
+        "HealthMonitorFunctionArn": {
+            "Description": "Health Monitor Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "HealthMonitorFunction",
+                    "Arn"
+                ]
+            }
+        }
+    }
+}

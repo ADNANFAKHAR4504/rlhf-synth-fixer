@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912966",
+  "team": "synth",
+  "startedAt": "2025-12-01T00:00:00.000Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS Aurora PostgreSQL",
+    "Auto Scaling Groups",
+    "Application Load Balancer",
+    "IAM",
+    "CloudWatch",
+    "S3",
+    "Security Groups",
+    "NAT Gateway",
+    "KMS"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

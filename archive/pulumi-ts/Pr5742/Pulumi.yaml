@@ -1,0 +1,7 @@
+name: TapStack
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Security-hardened AWS infrastructure for financial services
+main: bin/tap.ts

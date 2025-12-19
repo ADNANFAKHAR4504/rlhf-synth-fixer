@@ -1,0 +1,618 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Development Environment deployment template for us-east-1'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+      - Label:
+          default: 'Network Configuration'
+        Parameters:
+          - AvailabilityZone1
+          - AvailabilityZone2
+          - OfficeIpCidr
+      - Label:
+          default: 'Compute Configuration'
+        Parameters:
+          - KeyName
+          - LatestAmiId
+      - Label:
+          default: 'Database Configuration'
+        Parameters:
+          - DbUsername
+          - DbSnapshotOnDelete
+      - Label:
+          default: 'Monitoring Configuration'
+        Parameters:
+          - AlarmEmail
+          - NumberOfDevelopers
+
+Parameters:
+  # Environment Parameters
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
+  # Network Parameters
+  AvailabilityZone1:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-east-1a
+    Description: First Availability Zone
+    
+  AvailabilityZone2:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-east-1b
+    Description: Second Availability Zone
+    
+  OfficeIpCidr:
+    Type: String
+    Description: CIDR block for office IPs that can SSH to the bastion host
+    Default: 203.32.0.1/32
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    ConstraintDescription: 'Must be a valid CIDR block'
+    
+  # Compute Parameters
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: SSH Key for EC2 instances
+    Default: mohit-nuke-ec2-kay-pair
+    ConstraintDescription: 'Must be an existing EC2 KeyPair'
+
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: 'Latest Amazon Linux 2 AMI ID'
+    
+  # Database Parameters
+  DbUsername:
+    Type: String
+    Description: Username for RDS PostgreSQL
+    Default: postgres
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
+    
+  # Removed DbPassword parameter - will use Secrets Manager instead
+    
+  DbSnapshotOnDelete:
+    Type: String
+    Description: Create DB snapshot on deletion
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+  
+  # Monitoring Parameters
+  NumberOfDevelopers:
+    Type: Number
+    Description: Number of developers
+    Default: 10
+    MinValue: 1
+    MaxValue: 100
+    
+  AlarmEmail:
+    Type: String
+    Description: Email for alarm notifications
+    Default: test@gmail.com
+    AllowedPattern: '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    ConstraintDescription: 'Must be a valid email address'
+
+Conditions:
+  CreateDbSnapshot: !Equals [!Ref DbSnapshotOnDelete, 'true']
+
+Resources:
+  # DATABASE SECRET
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${AWS::StackName}-db-password-${EnvironmentSuffix}"
+      Description: RDS Master password
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DbUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-DB-Secret-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+
+  # NETWORKING RESOURCES
+  DevVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.20.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-VPC-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+        - Key: NumberOfDevelopers
+          Value: !Ref NumberOfDevelopers
+          
+  # Subnets
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DevVPC
+      CidrBlock: 10.20.1.0/24
+      AvailabilityZone: !Ref AvailabilityZone1
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Public-Subnet-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DevVPC
+      CidrBlock: 10.20.10.0/24
+      AvailabilityZone: !Ref AvailabilityZone1
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private-Subnet-1-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DevVPC
+      CidrBlock: 10.20.20.0/24
+      AvailabilityZone: !Ref AvailabilityZone2
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private-Subnet-2-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-IGW-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref DevVPC
+      InternetGatewayId: !Ref InternetGateway
+      
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DevVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Public-Route-Table-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+      
+  # NAT Gateway
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-NAT-EIP-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+      
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-NAT-Gateway-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DevVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private-Route-Table-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+      
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+      
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+      
+  # SECURITY GROUPS
+  BastionSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Bastion host
+      GroupName: !Sub "${AWS::StackName}-Bastion-SG-${EnvironmentSuffix}"
+      VpcId: !Ref DevVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref OfficeIpCidr
+          Description: SSH access from office
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Bastion-SG-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  AppSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application servers
+      GroupName: !Sub "${AWS::StackName}-App-SG-${EnvironmentSuffix}"
+      VpcId: !Ref DevVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref BastionSG
+          Description: SSH access from bastion
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-App-SG-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  DbSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS PostgreSQL
+      GroupName: !Sub "${AWS::StackName}-DB-SG-${EnvironmentSuffix}"
+      VpcId: !Ref DevVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref AppSG
+          Description: PostgreSQL access from app servers
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-DB-SG-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  # COMPUTE RESOURCES
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref BastionSG
+      ImageId: !Ref LatestAmiId
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Bastion-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+  
+  # DATABASE RESOURCES
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      DBSubnetGroupName: !Sub "${AWS::StackName}-db-subnet-group-${EnvironmentSuffix}"
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-DB-Subnet-Group-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  # Secret Attachment for RDS
+  SecretRDSInstanceAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DBSecret
+      TargetId: !Ref PostgreSQLInstance
+      TargetType: AWS::RDS::DBInstance
+          
+  PostgreSQLInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: !If [CreateDbSnapshot, Snapshot, Delete]
+    UpdateReplacePolicy: !If [CreateDbSnapshot, Snapshot, Delete]  # Fixed W3011
+    Properties:
+      DBInstanceIdentifier: !Sub "${AWS::StackName}-postgres-${EnvironmentSuffix}"
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.medium
+      Engine: postgres
+      MasterUsername: !Ref DbUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'  # Fixed W1011
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DbSG
+      CopyTagsToSnapshot: true
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: "03:00-04:00"
+      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
+      EnableCloudwatchLogsExports:
+        - postgresql
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-PostgreSQL-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  # STORAGE RESOURCES
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain  # Fixed W3011
+    Properties:
+      BucketName: "cfn-bucket-12345"
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            NoncurrentVersionExpirationInDays: 90
+            Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-S3-Bucket-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: DevEnv
+        - Key: Owner
+          Value: DevTeam
+          
+  # MONITORING RESOURCES
+  BastionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/ec2/${AWS::StackName}-bastion-${EnvironmentSuffix}"
+      RetentionInDays: 7
+      
+  RDSLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/rds/instance/${AWS::StackName}-postgres-${EnvironmentSuffix}/postgresql"
+      RetentionInDays: 7
+      
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub "${AWS::StackName} ${EnvironmentSuffix} Environment Alarms"
+      TopicName: !Sub "${AWS::StackName}-alarms-${EnvironmentSuffix}"
+      Subscription:
+        - Endpoint: !Ref AlarmEmail
+          Protocol: email
+          
+  BastionCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-bastion-cpu-alarm-${EnvironmentSuffix}"
+      AlarmDescription: Alarm if Bastion CPU exceeds 80% for 5 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref BastionInstance
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+      TreatMissingData: notBreaching
+        
+  RDSCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-rds-cpu-alarm-${EnvironmentSuffix}"
+      AlarmDescription: Alarm if RDS CPU exceeds 80% for 5 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref PostgreSQLInstance
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+      TreatMissingData: notBreaching
+        
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref DevVPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VPC-${EnvironmentSuffix}"
+    
+  PublicSubnetId:
+    Description: Public Subnet ID
+    Value: !Ref PublicSubnet
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet-${EnvironmentSuffix}"
+    
+  PrivateSubnet1Id:
+    Description: First Private Subnet ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet1-${EnvironmentSuffix}"
+    
+  PrivateSubnet2Id:
+    Description: Second Private Subnet ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet2-${EnvironmentSuffix}"
+    
+  BastionSecurityGroupId:
+    Description: Bastion Security Group ID
+    Value: !Ref BastionSG
+    Export:
+      Name: !Sub "${AWS::StackName}-BastionSG-${EnvironmentSuffix}"
+    
+  AppSecurityGroupId:
+    Description: Application Security Group ID
+    Value: !Ref AppSG
+    Export:
+      Name: !Sub "${AWS::StackName}-AppSG-${EnvironmentSuffix}"
+    
+  DbSecurityGroupId:
+    Description: Database Security Group ID
+    Value: !Ref DbSG
+    Export:
+      Name: !Sub "${AWS::StackName}-DbSG-${EnvironmentSuffix}"
+    
+  BastionPublicIP:
+    Description: Public IP of Bastion host
+    Value: !GetAtt BastionInstance.PublicIp
+    
+  RDSEndpoint:
+    Description: Endpoint of the RDS instance
+    Value: !GetAtt PostgreSQLInstance.Endpoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-RDSEndpoint-${EnvironmentSuffix}"
+    
+  S3BucketName:
+    Description: Name of S3 bucket for shared files
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub "${AWS::StackName}-S3Bucket-${EnvironmentSuffix}"
+      
+  DBSecretArn:
+    Description: ARN of the database secret in Secrets Manager
+    Value: !Ref DBSecret
+    Export:
+      Name: !Sub "${AWS::StackName}-DBSecret-${EnvironmentSuffix}"

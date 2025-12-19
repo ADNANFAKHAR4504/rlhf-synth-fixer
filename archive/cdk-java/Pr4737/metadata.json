@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000681",
+  "team": "synth",
+  "startedAt": "2025-10-17T13:37:41.380Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "background": "Serverless backend infrastructure for scalable web application with Lambda functions, API Gateway, S3 static assets, CloudWatch monitoring, KMS encryption, and SNS alerting",
+  "training_quality": 9,
+  "aws_services": [
+    "lambda",
+    "apigateway",
+    "cloudwatch",
+    "s3",
+    "kms",
+    "sns",
+    "iam",
+    "logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,958 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Enterprise Log Analytics System for 500 servers",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Environment suffix for resource naming to avoid conflicts",
+            "Default": "dev"
+        }
+    },
+    "Resources": {
+        "LogBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "enterprise-log-analytics-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "TransitionToStandardIA",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                }
+                            ]
+                        },
+                        {
+                            "Id": "TransitionToGlacier",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 90,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                }
+            }
+        },
+        "AthenaQueryResultsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "enterprise-log-analytics-athena-results-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "ExpireResults",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 30
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                }
+            }
+        },
+        "FirehoseDeliveryRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "firehose.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "StringEquals": {
+                                    "sts:ExternalId": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "FirehoseS3DeliveryPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:AbortMultipartUpload",
+                                        "s3:GetBucketLocation",
+                                        "s3:GetObject",
+                                        "s3:ListBucket",
+                                        "s3:ListBucketMultipartUploads",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "LogBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${LogBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "FirehoseCloudWatchLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "FirehoseLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ]
+            }
+        },
+        "GlueServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "glue.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "GlueS3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "LogBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${LogBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "AthenaQueryResultsBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${AthenaQueryResultsBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudWatchLogsRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "PutRecordToFirehose",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "firehose:PutRecord",
+                                        "firehose:PutRecordBatch"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "LogDeliveryStream",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "FirehoseLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/kinesisfirehose/EnterpriseLogDeliveryStream-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "LogDeliveryStream": {
+            "Type": "AWS::KinesisFirehose::DeliveryStream",
+            "Properties": {
+                "DeliveryStreamName": {
+                    "Fn::Sub": "EnterpriseLogDeliveryStream-${EnvironmentSuffix}"
+                },
+                "DeliveryStreamType": "DirectPut",
+                "ExtendedS3DestinationConfiguration": {
+                    "BucketARN": {
+                        "Fn::GetAtt": [
+                            "LogBucket",
+                            "Arn"
+                        ]
+                    },
+                    "RoleARN": {
+                        "Fn::GetAtt": [
+                            "FirehoseDeliveryRole",
+                            "Arn"
+                        ]
+                    },
+                    "Prefix": "logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/",
+                    "ErrorOutputPrefix": "errors/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/!{firehose:error-output-type}",
+                    "BufferingHints": {
+                        "IntervalInSeconds": 60,
+                        "SizeInMBs": 50
+                    },
+                    "CompressionFormat": "GZIP",
+                    "EncryptionConfiguration": {
+                        "NoEncryptionConfig": "NoEncryption"
+                    },
+                    "CloudWatchLoggingOptions": {
+                        "Enabled": true,
+                        "LogGroupName": {
+                            "Ref": "FirehoseLogGroup"
+                        },
+                        "LogStreamName": "S3Delivery"
+                    },
+                    "ProcessingConfiguration": {
+                        "Enabled": true,
+                        "Processors": [
+                            {
+                                "Type": "Lambda",
+                                "Parameters": [
+                                    {
+                                        "ParameterName": "LambdaArn",
+                                        "ParameterValue": {
+                                            "Fn::GetAtt": [
+                                                "LogProcessorLambda",
+                                                "Arn"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "ParameterName": "NumberOfRetries",
+                                        "ParameterValue": "3"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        "LogProcessorLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "LogProcessorFunction-${EnvironmentSuffix}"
+                },
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "exports.handler = async (event, context) => {\n  const output = [];\n  event.records.forEach(record => {\n    // Base64 decode the payload\n    const payload = Buffer.from(record.data, 'base64').toString('utf8');\n    \n    // Parse and process log data\n    let processedPayload;\n    try {\n      const jsonData = JSON.parse(payload);\n      \n      // Add processing timestamp\n      jsonData.processingTimestamp = new Date().toISOString();\n      \n      // Add log level classification if not present\n      if (!jsonData.logLevel) {\n        if (payload.toLowerCase().includes(\"error\") || payload.toLowerCase().includes(\"exception\")) {\n          jsonData.logLevel = \"ERROR\";\n        } else if (payload.toLowerCase().includes(\"warn\")) {\n          jsonData.logLevel = \"WARN\";\n        } else {\n          jsonData.logLevel = \"INFO\";\n        }\n      }\n      \n      processedPayload = JSON.stringify(jsonData) + '\\n';\n    } catch (e) {\n      // If not JSON, just add a timestamp\n      processedPayload = payload.trim() + ' | processed_at=' + new Date().toISOString() + '\\n';\n    }\n    \n    // Return processed record\n    output.push({\n      recordId: record.recordId,\n      result: 'Ok',\n      data: Buffer.from(processedPayload).toString('base64')\n    });\n  });\n  return { records: output };\n};\n"
+                },
+                "Runtime": "nodejs20.x",
+                "Timeout": 60,
+                "MemorySize": 256
+            }
+        },
+        "S3UploaderLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3PutPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:DeleteObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${LogBucket.Arn}/scripts/log_etl_job.py"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "S3UploaderLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "GlueScriptS3Uploader-${EnvironmentSuffix}"
+                },
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "S3UploaderLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.11",
+                "Timeout": 60,
+                "MemorySize": 128,
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport cfnresponse\nimport traceback\n\ns3_client = boto3.client('s3')\n\ndef handler(event, context):\n    response_data = {}\n    status = cfnresponse.SUCCESS\n    try:\n        bucket_name = event['ResourceProperties']['BucketName']\n        script_key = event['ResourceProperties']['ScriptKey']\n        script_content = event['ResourceProperties']['ScriptContent']\n        \n        if event['RequestType'] in ['Create', 'Update']:\n            s3_client.put_object(\n                Bucket=bucket_name,\n                Key=script_key,\n                Body=script_content,\n                ContentType='text/x-python'\n            )\n            print(f\"Uploaded script to s3://{bucket_name}/{script_key}\")\n        \n        elif event['RequestType'] == 'Delete':\n            s3_client.delete_object(\n                Bucket=bucket_name,\n                Key=script_key\n            )\n            print(f\"Deleted script from s3://{bucket_name}/{script_key}\")\n\n    except Exception as e:\n        print(f\"Failed to upload/delete script: {e}\")\n        traceback.print_exc()\n        status = cfnresponse.FAILED\n        response_data['Error'] = str(e)\n    \n    cfnresponse.send(event, context, status, response_data, \"CustomResourceForScriptUpload\")\n"
+                }
+            }
+        },
+        "GlueScriptUploaderCustomResource": {
+            "Type": "Custom::S3ScriptUploader",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "S3UploaderLambda",
+                        "Arn"
+                    ]
+                },
+                "BucketName": {
+                    "Ref": "LogBucket"
+                },
+                "ScriptKey": "scripts/log_etl_job.py",
+                "ScriptContent": "import sys\nfrom awsglue.transforms import *\nfrom awsglue.utils import getResolvedOptions\nfrom pyspark.context import SparkContext\nfrom awsglue.context import GlueContext\nfrom awsglue.job import Job\nfrom pyspark.sql.functions import col, date_format\nfrom pyspark.sql.types import TimestampType, StringType, StructType, StructField\n\nargs = getResolvedOptions(sys.argv, ['JOB_NAME'])\nsc = SparkContext()\nglueContext = GlueContext(sc)\nspark = glueContext.spark_session\njob = Job(glueContext)\njob.init(args['JOB_NAME'], args)\n\nlog_schema = StructType([\n    StructField(\"timestamp\", TimestampType(), True),\n    StructField(\"message\", StringType(), True),\n    StructField(\"server_ip\", StringType(), True),\n    StructField(\"host_name\", StringType(), True),\n    StructField(\"logLevel\", StringType(), True),\n    StructField(\"processingTimestamp\", TimestampType(), True),\n    StructField(\"correlation_id\", StringType(), True)\n])\n\ndatasource = glueContext.create_dynamic_frame.from_options(\n    connection_type=\"s3\",\n    connection_options={\n        \"paths\": [f\"s3://{LogBucket.GetAtt('Name')}/logs/\"],\n        \"recurse\": True\n    },\n    format=\"json\",\n    transformation_ctx=\"datasource\"\n)\n\ndf = datasource.toDF()\n\n# Casting and selecting columns\nprocessed_df = df.select(\n    col(\"timestamp\").cast(TimestampType()).alias(\"log_timestamp\"),\n    col(\"message\").alias(\"message_raw\"),\n    col(\"server_ip\").alias(\"server_ip\"),\n    col(\"host_name\").alias(\"host_name\"),\n    col(\"logLevel\").alias(\"log_level\"),\n    col(\"processingTimestamp\").cast(TimestampType()).alias(\"processing_ts\")\n)\n\n# Adding dynamic partitioning columns\nfinal_df = processed_df.withColumn(\"year\", date_format(col(\"log_timestamp\"), \"yyyy\")) \\\n                       .withColumn(\"month\", date_format(col(\"log_timestamp\"), \"MM\")) \\\n                       .withColumn(\"day\", date_format(col(\"log_timestamp\"), \"dd\"))\n\ndatasink = DynamicFrame.fromDF(final_df, glueContext, \"datasink\")\n\n# Writing optimized data in Parquet format\nglueContext.write_dynamic_frame.from_options(\n    frame=datasink,\n    connection_type=\"s3\",\n    connection_options={\n        \"path\": f\"s3://{LogBucket.GetAtt('Name')}/processed_logs/\",\n        \"partitionKeys\": [\"year\", \"month\", \"day\"]\n    },\n    format=\"parquet\",\n    transformation_ctx=\"datasink\"\n)\n\njob.commit()\n"
+            }
+        },
+        "LogAnalyticsDatabase": {
+            "Type": "AWS::Glue::Database",
+            "Properties": {
+                "CatalogId": {
+                    "Ref": "AWS::AccountId"
+                },
+                "DatabaseInput": {
+                    "Name": {
+                        "Fn::Sub": "enterprise-log-analytics-${EnvironmentSuffix}"
+                    },
+                    "Description": "Database for enterprise log analytics"
+                }
+            }
+        },
+        "LogCrawler": {
+            "Type": "AWS::Glue::Crawler",
+            "DependsOn": "GlueScriptUploaderCustomResource",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "EnterpriseLogCrawler-${EnvironmentSuffix}"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "GlueServiceRole",
+                        "Arn"
+                    ]
+                },
+                "DatabaseName": {
+                    "Ref": "LogAnalyticsDatabase"
+                },
+                "Targets": {
+                    "S3Targets": [
+                        {
+                            "Path": {
+                                "Fn::Sub": "s3://${LogBucket}/logs/"
+                            }
+                        }
+                    ]
+                },
+                "Schedule": {
+                    "ScheduleExpression": "cron(0 */3 * * ? *)"
+                },
+                "SchemaChangePolicy": {
+                    "UpdateBehavior": "UPDATE_IN_DATABASE",
+                    "DeleteBehavior": "LOG"
+                },
+                "Configuration": "{\"Version\":1.0,\"CrawlerOutput\":{\"Partitions\":{\"AddOrUpdateBehavior\":\"InheritFromTable\"},\"Tables\":{\"AddOrUpdateBehavior\":\"MergeNewColumns\"}}}"
+            }
+        },
+        "LogETLJob": {
+            "Type": "AWS::Glue::Job",
+            "DependsOn": "GlueScriptUploaderCustomResource",
+            "Properties": {
+                "Command": {
+                    "Name": "glueetl",
+                    "ScriptLocation": {
+                        "Fn::Sub": "s3://${LogBucket}/scripts/log_etl_job.py"
+                    }
+                },
+                "DefaultArguments": {
+                    "--job-bookmark-option": "job-bookmark-enable",
+                    "--enable-metrics": "true"
+                },
+                "ExecutionProperty": {
+                    "MaxConcurrentRuns": 2
+                },
+                "MaxRetries": 2,
+                "Name": {
+                    "Fn::Sub": "EnterpriseLogETLJob-${EnvironmentSuffix}"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "GlueServiceRole",
+                        "Arn"
+                    ]
+                },
+                "GlueVersion": "3.0",
+                "NumberOfWorkers": 5,
+                "WorkerType": "G.1X"
+            }
+        },
+        "LogAnalyticsWorkgroup": {
+            "Type": "AWS::Athena::WorkGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "EnterpriseLogAnalytics-${EnvironmentSuffix}"
+                },
+                "Description": "Workgroup for enterprise log analytics",
+                "State": "ENABLED",
+                "WorkGroupConfiguration": {
+                    "EnforceWorkGroupConfiguration": true,
+                    "PublishCloudWatchMetricsEnabled": true,
+                    "ResultConfiguration": {
+                        "OutputLocation": {
+                            "Fn::Sub": "s3://${AthenaQueryResultsBucket}/athena-results/"
+                        },
+                        "EncryptionConfiguration": {
+                            "EncryptionOption": "SSE_S3"
+                        }
+                    }
+                }
+            }
+        },
+        "LogAnalyticsDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "EnterpriseLogAnalyticsDashboard-${EnvironmentSuffix}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Firehose\", \"DeliveryToS3.Records\", \"DeliveryStreamName\", \"${LogDeliveryStream}\"],\n          [\"AWS/Firehose\", \"DeliveryToS3.Success\", \"DeliveryStreamName\", \"${LogDeliveryStream}\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Firehose Delivery Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"${LogProcessorLambda}\"],\n          [\"AWS/Lambda\", \"Errors\", \"FunctionName\", \"${LogProcessorLambda}\"],\n          [\"AWS/Lambda\", \"Duration\", \"FunctionName\", \"${LogProcessorLambda}\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Processor Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/S3\", \"BucketSizeBytes\", \"BucketName\", \"${LogBucket}\", \"StorageType\", \"StandardStorage\"],\n          [\"AWS/S3\", \"NumberOfObjects\", \"BucketName\", \"${LogBucket}\", \"StorageType\", \"AllStorageTypes\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"S3 Storage Metrics\",\n        \"period\": 86400\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Athena\", \"TotalExecutionTime\", \"QueryType\", \"DML\", \"WorkGroup\", \"${LogAnalyticsWorkgroup}\"],\n          [\"AWS/Athena\", \"ProcessedBytes\", \"QueryType\", \"DML\", \"WorkGroup\", \"${LogAnalyticsWorkgroup}\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Athena Query Metrics\",\n        \"period\": 300\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "LogAnalyticsAlarmTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "LogAnalyticsAlarmTopic-${EnvironmentSuffix}"
+                },
+                "DisplayName": "Log Analytics Alarms"
+            }
+        },
+        "FirehoseErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "FirehoseDeliveryError-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm for Firehose delivery errors",
+                "MetricName": "DeliveryToS3.DataFreshness",
+                "Namespace": "AWS/Firehose",
+                "Statistic": "Maximum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 900,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DeliveryStreamName",
+                        "Value": {
+                            "Ref": "LogDeliveryStream"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "LogAnalyticsAlarmTopic"
+                    }
+                ]
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "LambdaProcessorError-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm for Lambda processor errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "LogProcessorLambda"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "LogAnalyticsAlarmTopic"
+                    }
+                ]
+            }
+        },
+        "SyslogLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/enterprise/servers/syslog-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "AuthLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/enterprise/servers/auth-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "ApplicationLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/enterprise/servers/application-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "CloudWatchAgentConfigParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/log-analytics/cloudwatch-agent-config-${EnvironmentSuffix}"
+                },
+                "Type": "String",
+                "Value": {
+                    "Fn::Sub": "{\n  \"agent\": {\n    \"metrics_collection_interval\": 60,\n    \"run_as_user\": \"cwagent\"\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/syslog\",\n            \"log_group_name\": \"/enterprise/servers/syslog-${EnvironmentSuffix}\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timezone\": \"UTC\"\n          },\n          {\n            \"file_path\": \"/var/log/auth.log\",\n            \"log_group_name\": \"/enterprise/servers/auth-${EnvironmentSuffix}\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timezone\": \"UTC\"\n          },\n          {\n            \"file_path\": \"/var/log/application.log\",\n            \"log_group_name\": \"/enterprise/servers/application-${EnvironmentSuffix}\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timezone\": \"UTC\"\n          }\n        ]\n      }\n    }\n  }\n}\n"
+                },
+                "Description": "Configuration for CloudWatch Agent on servers"
+            }
+        },
+        "SyslogSubscriptionFilter": {
+            "Type": "AWS::Logs::SubscriptionFilter",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "SyslogLogGroup"
+                },
+                "FilterPattern": "",
+                "DestinationArn": {
+                    "Fn::GetAtt": [
+                        "LogDeliveryStream",
+                        "Arn"
+                    ]
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "CloudWatchLogsRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "AuthLogSubscriptionFilter": {
+            "Type": "AWS::Logs::SubscriptionFilter",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "AuthLogGroup"
+                },
+                "FilterPattern": "",
+                "DestinationArn": {
+                    "Fn::GetAtt": [
+                        "LogDeliveryStream",
+                        "Arn"
+                    ]
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "CloudWatchLogsRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "ApplicationLogSubscriptionFilter": {
+            "Type": "AWS::Logs::SubscriptionFilter",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "ApplicationLogGroup"
+                },
+                "FilterPattern": "",
+                "DestinationArn": {
+                    "Fn::GetAtt": [
+                        "LogDeliveryStream",
+                        "Arn"
+                    ]
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "CloudWatchLogsRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "AuditLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/enterprise/log-analytics/audit-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 365
+            }
+        },
+        "QuickSightAccessPolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "Description": "Policy for QuickSight to access log analytics resources",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "athena:*",
+                                "s3:GetBucketLocation",
+                                "s3:GetObject",
+                                "s3:ListBucket",
+                                "s3:ListBucketMultipartUploads",
+                                "s3:ListMultipartUploadParts",
+                                "s3:AbortMultipartUpload",
+                                "s3:CreateBucket",
+                                "s3:PutObject",
+                                "glue:GetDatabase",
+                                "glue:GetTable",
+                                "glue:GetPartition",
+                                "glue:GetPartitions",
+                                "glue:GetDatabases",
+                                "glue:GetTables"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "LogBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${LogBucket.Arn}/*"
+                                },
+                                {
+                                    "Fn::GetAtt": [
+                                        "AthenaQueryResultsBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${AthenaQueryResultsBucket.Arn}/*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/enterprise_log_analytics"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/enterprise_log_analytics/*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:athena:${AWS::Region}:${AWS::AccountId}:workgroup/EnterpriseLogAnalytics-${EnvironmentSuffix}"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "QuickSightUpdaterLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "QuickSightPermissionsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "iam:AttachRolePolicy",
+                                        "iam:DetachRolePolicy",
+                                        "iam:GetRole"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "QuickSightUpdaterLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "QuickSightPermissionUpdater-${EnvironmentSuffix}"
+                },
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "QuickSightUpdaterLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.11",
+                "Timeout": 300,
+                "MemorySize": 256,
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport cfnresponse\nimport traceback\nfrom botocore.exceptions import ClientError\n\niam_client = boto3.client('iam')\n\ndef handler(event, context):\n    response_data = {}\n    status = cfnresponse.SUCCESS\n    try:\n        policy_arn = event['ResourceProperties']['QuickSightAccessPolicyArn']\n        qs_role_name = 'aws-quicksight-service-role-v0'\n        \n        if event['RequestType'] in ['Create', 'Update']:\n            try:\n                # First check if the role exists\n                iam_client.get_role(RoleName=qs_role_name)\n                \n                # Role exists, attach the policy\n                iam_client.attach_role_policy(\n                    RoleName=qs_role_name,\n                    PolicyArn=policy_arn\n                )\n                print(f\"Attached policy {policy_arn} to QuickSight role.\")\n                response_data['Message'] = f\"Successfully attached policy to {qs_role_name}\"\n                \n            except ClientError as e:\n                if e.response['Error']['Code'] == 'NoSuchEntity':\n                    print(f\"QuickSight service role {qs_role_name} does not exist. This is expected if QuickSight hasn't been set up yet.\")\n                    response_data['Message'] = f\"QuickSight role {qs_role_name} not found - skipping policy attachment. Set up QuickSight first if needed.\"\n                    # Don't fail the stack - just log and continue\n                else:\n                    raise # Re-raise other unexpected errors\n        \n        elif event['RequestType'] == 'Delete':\n            try:\n                iam_client.detach_role_policy(\n                    RoleName=qs_role_name,\n                    PolicyArn=policy_arn\n                )\n                print(f\"Detached policy {policy_arn} from QuickSight role.\")\n            except ClientError as e:\n                # Ignore the error if the policy is already detached or role doesn't exist\n                if e.response['Error']['Code'] == 'NoSuchEntity':\n                    print(f\"Policy {policy_arn} not attached or role {qs_role_name} not found. Continuing stack deletion.\")\n                    pass\n                else:\n                    raise # Re-raise other unexpected errors\n\n    except Exception as e:\n        print(f\"Failed to update QuickSight permissions: {e}\")\n        traceback.print_exc()\n        status = cfnresponse.FAILED\n        response_data['Error'] = str(e)\n    \n    cfnresponse.send(event, context, status, response_data, \"CustomResourceForQuickSight\")\n\n    \n"
+                }
+            }
+        },
+        "QuickSightPermissionCustomResource": {
+            "Type": "Custom::QuickSightPermissionUpdater",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "QuickSightUpdaterLambda",
+                        "Arn"
+                    ]
+                },
+                "QuickSightAccessPolicyArn": {
+                    "Ref": "QuickSightAccessPolicy"
+                },
+                "AccountId": {
+                    "Ref": "AWS::AccountId"
+                },
+                "Region": {
+                    "Ref": "AWS::Region"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "LogBucketName": {
+            "Description": "Name of the S3 bucket for log storage",
+            "Value": {
+                "Ref": "LogBucket"
+            }
+        },
+        "AthenaQueryResultsBucketName": {
+            "Description": "Name of the S3 bucket for Athena query results",
+            "Value": {
+                "Ref": "AthenaQueryResultsBucket"
+            }
+        },
+        "DeliveryStreamName": {
+            "Description": "Name of the Kinesis Firehose Delivery Stream",
+            "Value": {
+                "Ref": "LogDeliveryStream"
+            }
+        },
+        "GlueDatabaseName": {
+            "Description": "Name of the Glue Database",
+            "Value": {
+                "Ref": "LogAnalyticsDatabase"
+            }
+        },
+        "AthenaWorkgroup": {
+            "Description": "Name of the Athena Workgroup",
+            "Value": {
+                "Ref": "LogAnalyticsWorkgroup"
+            }
+        },
+        "CloudWatchDashboard": {
+            "Description": "CloudWatch Dashboard URL",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=EnterpriseLogAnalyticsDashboard-${EnvironmentSuffix}"
+            }
+        },
+        "CloudWatchAgentConfig": {
+            "Description": "SSM Parameter for CloudWatch Agent configuration",
+            "Value": {
+                "Ref": "CloudWatchAgentConfigParameter"
+            }
+        },
+        "AuditLogGroupName": {
+            "Description": "CloudWatch Log Group for audit logs.",
+            "Value": {
+                "Ref": "AuditLogGroup"
+            }
+        }
+    }
+}

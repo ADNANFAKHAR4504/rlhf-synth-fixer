@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912257",
+  "team": "4",
+  "startedAt": "2025-11-13T12:36:58.742Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "RouteTables",
+    "NATGateway",
+    "SecurityGroups",
+    "EKS",
+    "IAM",
+    "Lambda",
+    "CloudWatch",
+    "CloudFormation",
+    "STS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

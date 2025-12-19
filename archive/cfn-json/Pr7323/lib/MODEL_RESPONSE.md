@@ -1,0 +1,924 @@
+# MODEL_RESPONSE - CI/CD Pipeline Infrastructure
+
+This response provides a complete CloudFormation JSON template for a CI/CD pipeline that orchestrates containerized application deployments across staging and production environments.
+
+## File: lib/template.json
+
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CI/CD Pipeline for Containerized Applications with CodePipeline, CodeBuild, CodeCommit, CodeDeploy, and ECR",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to avoid conflicts",
+      "Default": "dev"
+    },
+    "RepositoryName": {
+      "Type": "String",
+      "Description": "Name of the CodeCommit repository",
+      "Default": "my-app"
+    },
+    "BranchName": {
+      "Type": "String",
+      "Description": "Branch to trigger pipeline",
+      "Default": "main"
+    },
+    "StagingAccountId": {
+      "Type": "String",
+      "Description": "AWS Account ID for staging environment",
+      "Default": "123456789012"
+    },
+    "ProductionAccountId": {
+      "Type": "String",
+      "Description": "AWS Account ID for production environment",
+      "Default": "987654321098"
+    }
+  },
+  "Resources": {
+    "CodeCommitRepository": {
+      "Type": "AWS::CodeCommit::Repository",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RepositoryName": {
+          "Fn::Sub": "${RepositoryName}-${EnvironmentSuffix}"
+        },
+        "RepositoryDescription": "Source code repository for containerized applications",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ECRRepository": {
+      "Type": "AWS::ECR::Repository",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RepositoryName": {
+          "Fn::Sub": "app-repo-${EnvironmentSuffix}"
+        },
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "EncryptionConfiguration": {
+          "EncryptionType": "AES256"
+        },
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep last 10 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":10},\"action\":{\"type\":\"expire\"}}]}"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ArtifactBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "pipeline-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldArtifacts",
+              "Status": "Enabled",
+              "ExpirationInDays": 30
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "CodePipelineServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "codepipeline-service-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codepipeline.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CodePipelineServicePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject",
+                    "s3:GetBucketLocation",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": ["ArtifactBucket", "Arn"]
+                    },
+                    {
+                      "Fn::Sub": "${ArtifactBucket.Arn}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codecommit:GetBranch",
+                    "codecommit:GetCommit",
+                    "codecommit:UploadArchive",
+                    "codecommit:GetUploadArchiveStatus",
+                    "codecommit:CancelUploadArchive"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["CodeCommitRepository", "Arn"]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codebuild:BatchGetBuilds",
+                    "codebuild:StartBuild"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["CodeBuildProject", "Arn"]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codedeploy:CreateDeployment",
+                    "codedeploy:GetApplication",
+                    "codedeploy:GetApplicationRevision",
+                    "codedeploy:GetDeployment",
+                    "codedeploy:GetDeploymentConfig",
+                    "codedeploy:RegisterApplicationRevision"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sts:AssumeRole"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:iam::${StagingAccountId}:role/cross-account-codepipeline-role-${EnvironmentSuffix}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:iam::${ProductionAccountId}:role/cross-account-codepipeline-role-${EnvironmentSuffix}"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "CodeBuildServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "codebuild-service-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CodeBuildServicePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${ArtifactBucket.Arn}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:GetAuthorizationToken",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage",
+                    "ecr:PutImage",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:UploadLayerPart",
+                    "ecr:CompleteLayerUpload"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codecommit:GitPull"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["CodeCommitRepository", "Arn"]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "CodeBuildProject": {
+      "Type": "AWS::CodeBuild::Project",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "build-project-${EnvironmentSuffix}"
+        },
+        "Description": "Build Docker images for containerized applications",
+        "ServiceRole": {
+          "Fn::GetAtt": ["CodeBuildServiceRole", "Arn"]
+        },
+        "Artifacts": {
+          "Type": "CODEPIPELINE"
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": "aws/codebuild/standard:5.0",
+          "PrivilegedMode": true,
+          "EnvironmentVariables": [
+            {
+              "Name": "AWS_DEFAULT_REGION",
+              "Value": {
+                "Ref": "AWS::Region"
+              }
+            },
+            {
+              "Name": "AWS_ACCOUNT_ID",
+              "Value": {
+                "Ref": "AWS::AccountId"
+              }
+            },
+            {
+              "Name": "IMAGE_REPO_NAME",
+              "Value": {
+                "Ref": "ECRRepository"
+              }
+            },
+            {
+              "Name": "IMAGE_TAG",
+              "Value": "latest"
+            }
+          ]
+        },
+        "Source": {
+          "Type": "CODEPIPELINE",
+          "BuildSpec": "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo Logging in to Amazon ECR...\n      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com\n      - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME\n      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)\n      - IMAGE_TAG=${COMMIT_HASH:=latest}\n  build:\n    commands:\n      - echo Build started on `date`\n      - echo Building the Docker image...\n      - docker build -t $REPOSITORY_URI:latest .\n      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG\n  post_build:\n    commands:\n      - echo Build completed on `date`\n      - echo Pushing the Docker images...\n      - docker push $REPOSITORY_URI:latest\n      - docker push $REPOSITORY_URI:$IMAGE_TAG\n      - printf '[{\"name\":\"app-container\",\"imageUri\":\"%s\"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json\nartifacts:\n  files:\n    - imagedefinitions.json\n"
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {
+              "Fn::Sub": "/aws/codebuild/build-project-${EnvironmentSuffix}"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "CodeDeployApplication": {
+      "Type": "AWS::CodeDeploy::Application",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "ApplicationName": {
+          "Fn::Sub": "app-deployment-${EnvironmentSuffix}"
+        },
+        "ComputePlatform": "Server",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "CodeDeployServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "codedeploy-service-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codedeploy.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AWSCodeDeployRole"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "StagingDeploymentGroup": {
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "ApplicationName": {
+          "Ref": "CodeDeployApplication"
+        },
+        "DeploymentGroupName": {
+          "Fn::Sub": "staging-deployment-group-${EnvironmentSuffix}"
+        },
+        "ServiceRoleArn": {
+          "Fn::GetAtt": ["CodeDeployServiceRole", "Arn"]
+        },
+        "DeploymentConfigName": "CodeDeployDefault.OneAtATime",
+        "Ec2TagFilters": [
+          {
+            "Key": "Environment",
+            "Value": "staging",
+            "Type": "KEY_AND_VALUE"
+          }
+        ],
+        "AutoRollbackConfiguration": {
+          "Enabled": true,
+          "Events": ["DEPLOYMENT_FAILURE"]
+        }
+      }
+    },
+    "ProductionDeploymentGroup": {
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "ApplicationName": {
+          "Ref": "CodeDeployApplication"
+        },
+        "DeploymentGroupName": {
+          "Fn::Sub": "production-deployment-group-${EnvironmentSuffix}"
+        },
+        "ServiceRoleArn": {
+          "Fn::GetAtt": ["CodeDeployServiceRole", "Arn"]
+        },
+        "DeploymentConfigName": "CodeDeployDefault.OneAtATime",
+        "Ec2TagFilters": [
+          {
+            "Key": "Environment",
+            "Value": "production",
+            "Type": "KEY_AND_VALUE"
+          }
+        ],
+        "AutoRollbackConfiguration": {
+          "Enabled": true,
+          "Events": ["DEPLOYMENT_FAILURE"]
+        }
+      }
+    },
+    "PipelineSNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "pipeline-notifications-${EnvironmentSuffix}"
+        },
+        "DisplayName": "CI/CD Pipeline Notifications",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "SNSTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "Topics": [
+          {
+            "Ref": "PipelineSNSTopic"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "SNS:Publish",
+              "Resource": {
+                "Ref": "PipelineSNSTopic"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Pipeline": {
+      "Type": "AWS::CodePipeline::Pipeline",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "cicd-pipeline-${EnvironmentSuffix}"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": ["CodePipelineServiceRole", "Arn"]
+        },
+        "ArtifactStore": {
+          "Type": "S3",
+          "Location": {
+            "Ref": "ArtifactBucket"
+          }
+        },
+        "Stages": [
+          {
+            "Name": "Source",
+            "Actions": [
+              {
+                "Name": "SourceAction",
+                "ActionTypeId": {
+                  "Category": "Source",
+                  "Owner": "AWS",
+                  "Provider": "CodeCommit",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "RepositoryName": {
+                    "Fn::GetAtt": ["CodeCommitRepository", "Name"]
+                  },
+                  "BranchName": {
+                    "Ref": "BranchName"
+                  },
+                  "PollForSourceChanges": false
+                },
+                "OutputArtifacts": [
+                  {
+                    "Name": "SourceOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "Build",
+            "Actions": [
+              {
+                "Name": "BuildAction",
+                "ActionTypeId": {
+                  "Category": "Build",
+                  "Owner": "AWS",
+                  "Provider": "CodeBuild",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ProjectName": {
+                    "Ref": "CodeBuildProject"
+                  }
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "SourceOutput"
+                  }
+                ],
+                "OutputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "DeployToStaging",
+            "Actions": [
+              {
+                "Name": "DeployToStagingAction",
+                "ActionTypeId": {
+                  "Category": "Deploy",
+                  "Owner": "AWS",
+                  "Provider": "CodeDeploy",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ApplicationName": {
+                    "Ref": "CodeDeployApplication"
+                  },
+                  "DeploymentGroupName": {
+                    "Ref": "StagingDeploymentGroup"
+                  }
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "ManualApproval",
+            "Actions": [
+              {
+                "Name": "ApprovalAction",
+                "ActionTypeId": {
+                  "Category": "Approval",
+                  "Owner": "AWS",
+                  "Provider": "Manual",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "NotificationArn": {
+                    "Ref": "PipelineSNSTopic"
+                  },
+                  "CustomData": "Please approve deployment to production environment"
+                }
+              }
+            ]
+          },
+          {
+            "Name": "DeployToProduction",
+            "Actions": [
+              {
+                "Name": "DeployToProductionAction",
+                "ActionTypeId": {
+                  "Category": "Deploy",
+                  "Owner": "AWS",
+                  "Provider": "CodeDeploy",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ApplicationName": {
+                    "Ref": "CodeDeployApplication"
+                  },
+                  "DeploymentGroupName": {
+                    "Ref": "ProductionDeploymentGroup"
+                  }
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PipelineEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "pipeline-trigger-${EnvironmentSuffix}"
+        },
+        "Description": "Trigger pipeline on CodeCommit repository changes",
+        "EventPattern": {
+          "source": ["aws.codecommit"],
+          "detail-type": ["CodeCommit Repository State Change"],
+          "detail": {
+            "event": ["referenceCreated", "referenceUpdated"],
+            "referenceType": ["branch"],
+            "referenceName": [
+              {
+                "Ref": "BranchName"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "Fn::GetAtt": ["CodeCommitRepository", "Arn"]
+            }
+          ]
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}"
+            },
+            "RoleArn": {
+              "Fn::GetAtt": ["PipelineEventRole", "Arn"]
+            },
+            "Id": "PipelineTarget"
+          }
+        ]
+      }
+    },
+    "PipelineEventRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "pipeline-event-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "StartPipelineExecutionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "codepipeline:StartPipelineExecution",
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PipelineStateChangeRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "pipeline-state-change-${EnvironmentSuffix}"
+        },
+        "Description": "Notify on pipeline state changes",
+        "EventPattern": {
+          "source": ["aws.codepipeline"],
+          "detail-type": ["CodePipeline Pipeline Execution State Change"],
+          "detail": {
+            "state": ["STARTED", "SUCCEEDED", "FAILED"],
+            "pipeline": [
+              {
+                "Ref": "Pipeline"
+              }
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "PipelineSNSTopic"
+            },
+            "Id": "SNSTarget"
+          }
+        ]
+      }
+    },
+    "BuildLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/codebuild/build-project-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    }
+  },
+  "Outputs": {
+    "PipelineArn": {
+      "Description": "ARN of the CodePipeline",
+      "Value": {
+        "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "PipelineArn-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "PipelineExecutionRoleArn": {
+      "Description": "ARN of the CodePipeline execution role",
+      "Value": {
+        "Fn::GetAtt": ["CodePipelineServiceRole", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "PipelineExecutionRoleArn-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "CodeCommitRepositoryCloneUrlHttp": {
+      "Description": "HTTP clone URL of the CodeCommit repository",
+      "Value": {
+        "Fn::GetAtt": ["CodeCommitRepository", "CloneUrlHttp"]
+      }
+    },
+    "ECRRepositoryUri": {
+      "Description": "URI of the ECR repository",
+      "Value": {
+        "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}"
+      }
+    },
+    "ArtifactBucketName": {
+      "Description": "Name of the S3 bucket for pipeline artifacts",
+      "Value": {
+        "Ref": "ArtifactBucket"
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "ARN of the SNS topic for pipeline notifications",
+      "Value": {
+        "Ref": "PipelineSNSTopic"
+      }
+    },
+    "CodeBuildProjectName": {
+      "Description": "Name of the CodeBuild project",
+      "Value": {
+        "Ref": "CodeBuildProject"
+      }
+    },
+    "CodeDeployApplicationName": {
+      "Description": "Name of the CodeDeploy application",
+      "Value": {
+        "Ref": "CodeDeployApplication"
+      }
+    }
+  }
+}
+```
+
+## Summary
+
+This CloudFormation JSON template creates a complete CI/CD pipeline infrastructure with the following components:
+
+### Resources Created
+
+1. **CodeCommit Repository**: Source code repository with environment-specific naming
+2. **ECR Repository**: Container registry with image scanning and lifecycle policies
+3. **S3 Artifact Bucket**: Encrypted storage for pipeline artifacts with versioning
+4. **IAM Roles**: Least-privilege roles for CodePipeline, CodeBuild, CodeDeploy, and CloudWatch Events
+5. **CodeBuild Project**: Docker image build with BUILD_GENERAL1_SMALL compute type
+6. **CodeDeploy Application**: Application deployment orchestration
+7. **Deployment Groups**: Separate groups for staging and production with rolling updates
+8. **CodePipeline**: Five-stage pipeline (Source → Build → Deploy Staging → Manual Approval → Deploy Production)
+9. **CloudWatch Events**: Automated pipeline triggering on code commits
+10. **SNS Topic**: Notifications for pipeline state changes
+11. **CloudWatch Logs**: Build logs with 7-day retention
+
+### Key Features
+
+- **environmentSuffix parameter** used in all resource names for uniqueness
+- **DeletionPolicy: Delete** set on all deletable resources
+- **AES256 encryption** for S3 artifacts and ECR images
+- **Manual approval stage** between staging and production deployments
+- **Least-privilege IAM policies** for all service roles
+- **Automated triggering** via CloudWatch Events on CodeCommit pushes
+- **SNS notifications** for pipeline state changes
+- **Rolling deployment** configuration via CodeDeploy
+- **Cross-account deployment** support with StagingAccountId and ProductionAccountId parameters
+- **Comprehensive outputs** including pipeline ARN and execution role ARN
+
+### Security Features
+
+- S3 bucket encryption with AES256
+- Public access blocked on artifact bucket
+- ECR image scanning enabled
+- Least-privilege IAM policies with resource-specific permissions
+- Versioning enabled on artifact bucket
+- CloudWatch Logs for audit trails
+
+### Deployment Considerations
+
+- All resources include environmentSuffix for parallel deployments
+- No Retain policies - all resources are destroyable
+- 7-day log retention for cost optimization
+- Lifecycle policies for artifact cleanup (30 days)
+- ECR lifecycle policy keeps last 10 images

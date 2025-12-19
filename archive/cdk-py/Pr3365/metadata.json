@@ -1,0 +1,21 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "CDK_PY_EXP_ZERO_TRUST_2g7h4i_5v6w9x3dMN",
+  "team": "5",
+  "startedAt": "2025-09-30T11:13:48.460Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "aws_services": "VPC, Transit Gateway, Network, Firewall, GuardDuty, Security Hub, VPC Flow Logs,IAM, SystemsManager,CloudTrail,Lambda",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}

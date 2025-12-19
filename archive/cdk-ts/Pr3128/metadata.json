@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "123456",
+  "team": "synth",
+  "startedAt": "2025-09-30T05:56:01+00:00",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "CDN Configuration",
+    "Static Website Hosting",
+    "DNS Management",
+    "Monitoring Setup",
+    "Performance Optimization",
+    "Access Control",
+    "Logging Infrastructure"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Route53",
+    "CloudWatch",
+    "CloudWatch RUM",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,45 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350167",
+  "team": "4",
+  "startedAt": "2025-11-20T18:30:07.182Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "Security Groups",
+    "EC2 Instance",
+    "Auto Scaling Group",
+    "Launch Template",
+    "Application Load Balancer",
+    "Target Group",
+    "Listener",
+    "RDS MySQL",
+    "Secrets Manager Secret",
+    "IAM Role",
+    "IAM Instance Profile",
+    "IAM Policies",
+    "S3 Bucket",
+    "Bucket Policy",
+    "CloudWatch Log Groups",
+    "CloudWatch Alarms",
+    "SNS Topic",
+    "SSM Parameter",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

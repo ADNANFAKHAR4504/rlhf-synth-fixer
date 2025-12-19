@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "348961",
+  "team": "5",
+  "startedAt": "2025-10-01T11:05:32.041Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "High-value training data demonstrating production-ready AWS infrastructure patterns. Shows clear progression from basic implementation to enterprise-ready solution with 8 documented improvements including multi-environment support, comprehensive tagging, stack outputs, inline IAM policies, enhanced user data with IMDSv2, public resource properties, token-safe naming, and modern AMI selection. Excellent training signal for CDK best practices, security improvements, and operational excellence. Not rated 9-10 due to relatively simple infrastructure scope (single EC2, basic VPC, S3) without complex networking or advanced service integration.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}

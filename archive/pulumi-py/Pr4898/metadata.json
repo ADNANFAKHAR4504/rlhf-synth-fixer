@@ -1,0 +1,38 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6504518772",
+  "team": "synth",
+  "startedAt": "2025-10-21T13:35:10.878Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "Kinesis",
+    "ECS",
+    "RDS",
+    "ElastiCache",
+    "Secrets Manager",
+    "API Gateway",
+    "EFS",
+    "CloudTrail",
+    "CloudWatch",
+    "KMS",
+    "Config",
+    "VPC",
+    "ALB"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

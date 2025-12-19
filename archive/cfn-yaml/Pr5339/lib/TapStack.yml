@@ -1,0 +1,1808 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Multi-Environment Infrastructure Template - Dev/Staging/Production'
+
+# =====================================
+# Parameters
+# =====================================
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment name
+    Default: dev
+
+  ProjectName:
+    Type: String
+    Description: Project name for tagging
+    Default: MyProject
+
+  OwnerName:
+    Type: String
+    Description: Owner name for tagging
+    Default: DevOpsTeam
+
+  SSHAllowedCIDR:
+    Type: String
+    Description: CIDR block allowed for SSH access
+    Default: 10.0.0.0/8
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/([0-9]|[1-2][0-9]|3[0-2])$'
+
+
+
+# =====================================
+# Mappings
+# =====================================
+Mappings:
+  EnvironmentConfig:
+    default:
+      InstanceType: t3.small
+      DBInstanceClass: db.t3.small
+      MultiAZ: true
+      ScheduleEnabled: false
+      MinSize: 1
+      MaxSize: 2
+      DesiredCapacity: 1
+    dev:
+      InstanceType: t3.small
+      DBInstanceClass: db.t3.small
+      MultiAZ: true
+      ScheduleEnabled: true
+      MinSize: 1
+      MaxSize: 2
+      DesiredCapacity: 1
+    staging:
+      InstanceType: t3.medium
+      DBInstanceClass: db.t3.medium
+      MultiAZ: true
+      ScheduleEnabled: true
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 2
+    production:
+      InstanceType: t3.large
+      DBInstanceClass: db.t3.large
+      MultiAZ: true
+      ScheduleEnabled: false
+      MinSize: 2
+      MaxSize: 6
+      DesiredCapacity: 2
+
+  # Using AWS Systems Manager Parameter Store for latest AMI IDs
+  # This eliminates hardcoded AMI IDs and ensures latest patches
+
+# =====================================
+# Conditions
+# =====================================
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentSuffix, 'production']
+  IsDev: !Equals [!Ref EnvironmentSuffix, 'dev']
+  IsStaging: !Equals [!Ref EnvironmentSuffix, 'staging']
+  EnableScheduling: !Or
+    - !And
+      - !Condition IsDev
+      - !Equals [!FindInMap [EnvironmentConfig, 'dev', ScheduleEnabled], true]
+    - !And
+      - !Condition IsStaging  
+      - !Equals [!FindInMap [EnvironmentConfig, 'staging', ScheduleEnabled], true]
+    - !And
+      - !Condition IsProduction
+      - !Equals [!FindInMap [EnvironmentConfig, 'production', ScheduleEnabled], true]
+
+# =====================================
+# Resources
+# =====================================
+Resources:
+
+  # =====================================
+  # KMS Key for Encryption
+  # =====================================
+  KMSKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Description: KMS key for encrypting EBS volumes and S3 buckets
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM policies
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow services to use the key
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+                - logs.amazonaws.com
+                - rds.amazonaws.com
+                - cloudtrail.amazonaws.com
+                - ec2.amazonaws.com
+                - autoscaling.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs for VPC Flow Logs
+            Effect: Allow
+            Principal:
+              Service: logs.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/*'
+          - Sid: Allow CloudWatch Logs for CloudTrail
+            Effect: Allow
+            Principal:
+              Service: logs.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/*'
+          - Sid: Allow EC2 and Auto Scaling to use the key via EC2
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - autoscaling.amazonaws.com
+            Action:
+              - 'kms:CreateGrant'
+              - 'kms:Decrypt'
+              - 'kms:DescribeKey'
+              - 'kms:Encrypt'
+              - 'kms:GenerateDataKey*'
+              - 'kms:ReEncrypt*'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
+          - Sid: Allow Auto Scaling to create grants for AWS resources
+            Effect: Allow
+            Principal:
+              Service: autoscaling.amazonaws.com
+            Action:
+              - 'kms:CreateGrant'
+              - 'kms:ListGrants'
+              - 'kms:RevokeGrant'
+            Resource: '*'
+            Condition:
+              Bool:
+                'kms:GrantIsForAWSResource': 'true'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${EnvironmentSuffix}-key'
+      TargetKeyId: !Ref KMSKey
+
+  # =====================================
+  # EC2 Key Pair
+  # =====================================
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Sub '${EnvironmentSuffix}-keypair'
+      KeyType: rsa
+      KeyFormat: pem
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-keypair'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  # =====================================
+  # Networking Resources
+  # =====================================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-VPC'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-IGW'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Public-Subnet-1'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Public-Subnet-2'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Private-Subnet-1'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Private-Subnet-2'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Public-RouteTable'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # NAT Gateways and Elastic IPs
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-NAT1-EIP'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  NATGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-NAT2-EIP'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-NAT-Gateway-1'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-NAT-Gateway-2'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  # Private Route Tables
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Private-RouteTable-1'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Private-RouteTable-2'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  # Default routes for private subnets
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway2
+
+  # Associate private subnets with route tables
+  PrivateSubnet1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateSubnet2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  # =====================================
+  # Security Groups
+  # =====================================
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-ALB-SG'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EC2 instances
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHAllowedCIDR
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-WebServer-SG'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-Database-SG'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  # =====================================
+  # IAM Roles
+  # =====================================
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentSuffix}-EC2-Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: SSMParameterAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParameterHistory
+                  - ssm:GetParametersByPath
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${EnvironmentSuffix}/*'
+        - PolicyName: LambdaInvokePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt RDSSnapshotLambda.Arn
+        - PolicyName: SecretsManagerReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Ref DbSecret
+        - PolicyName: KMSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:Encrypt
+                  - kms:GenerateDataKey
+                  - kms:GenerateDataKeyWithoutPlaintext
+                  - kms:ReEncrypt*
+                  - kms:CreateGrant
+                  - kms:DescribeKey
+                  - kms:GetKeyPolicy
+                  - kms:GetKeyRotationStatus
+                  - kms:ListGrants
+                  - kms:ListKeyPolicies
+                  - kms:ListResourceTags
+                  - kms:RetireGrant
+                  - kms:RevokeGrant
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentSuffix}-Lambda-Execution-Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RDSSnapshotPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds:CreateDBSnapshot
+                  - rds:DescribeDBSnapshots
+                  - rds:DeleteDBSnapshot
+                  - rds:AddTagsToResource
+                  - rds:ListTagsForResource
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  # =====================================
+  # Application Load Balancer
+  # =====================================
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-ALB'
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-ALB'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-TG'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref ALBTargetGroup
+                Weight: 100
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # =====================================
+  # Launch Template and Auto Scaling
+  # =====================================
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${EnvironmentSuffix}-LaunchTemplate'
+      LaunchTemplateData:
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        InstanceType: !If
+          - IsDev
+          - !FindInMap [EnvironmentConfig, 'dev', InstanceType]
+          - !If
+            - IsStaging
+            - !FindInMap [EnvironmentConfig, 'staging', InstanceType]
+            - !If
+              - IsProduction
+              - !FindInMap [EnvironmentConfig, 'production', InstanceType]
+              - !FindInMap [EnvironmentConfig, 'default', InstanceType]
+        KeyName: !Ref EC2KeyPair
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 30
+              VolumeType: gp3
+              Encrypted: true
+              DeleteOnTermination: true
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y python3 python3-pip mysql jq
+            pip3 install pymysql boto3 cryptography
+
+            # Get RDS endpoint and credentials
+            RDS_ENDPOINT="${RDSDatabase.Endpoint.Address}"
+            SECRET_ARN="${DbSecret}"
+            REGION="${AWS::Region}"
+            S3_BUCKET="${S3Bucket}"
+            LAMBDA_FUNCTION_NAME="${RDSSnapshotLambda}"
+
+            # Create Python server script
+            cat > /home/ec2-user/server.py << 'EOFPYTHON'
+            #!/usr/bin/env python3
+            import pymysql
+            import json
+            import boto3
+            from http.server import HTTPServer, BaseHTTPRequestHandler
+            import os
+            import time
+            from datetime import datetime
+
+            def test_rds_connection():
+                try:
+                    # Get credentials from Secrets Manager
+                    client = boto3.client('secretsmanager', region_name=os.environ.get('AWS_REGION'))
+                    secret_value = client.get_secret_value(SecretId=os.environ.get('SECRET_ARN'))
+                    secret = json.loads(secret_value['SecretString'])
+
+                    # Test connection
+                    connection = pymysql.connect(
+                        host=os.environ.get('RDS_ENDPOINT'),
+                        user=secret['username'],
+                        password=secret['password'],
+                        connect_timeout=5
+                    )
+
+                    # Get MySQL version
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT VERSION()")
+                        version = cursor.fetchone()[0]
+
+                    connection.close()
+
+                    return {
+                        'status': 'SUCCESS',
+                        'message': 'Connected to RDS successfully',
+                        'mysql_version': version,
+                        'endpoint': os.environ.get('RDS_ENDPOINT')
+                    }
+                except Exception as e:
+                    return {
+                        'status': 'FAILED',
+                        'message': str(e),
+                        'endpoint': os.environ.get('RDS_ENDPOINT')
+                    }
+
+            def test_s3_connection():
+                try:
+                    # Create S3 client
+                    s3_client = boto3.client('s3', region_name=os.environ.get('AWS_REGION'))
+                    
+                    # Test write - put a test object
+                    test_key = f"health-check-{int(time.time())}.txt"
+                    test_content = f"Connection test from EC2 at {datetime.utcnow().isoformat()}"
+                    
+                    s3_client.put_object(
+                        Bucket=os.environ.get('S3_BUCKET'),
+                        Key=test_key,
+                        Body=test_content.encode(),
+                        ContentType='text/plain'
+                    )
+
+                    # Test read - get the object back
+                    response = s3_client.get_object(
+                        Bucket=os.environ.get('S3_BUCKET'),
+                        Key=test_key
+                    )
+                    retrieved_content = response['Body'].read().decode()
+
+                    # Test delete - clean up test object
+                    s3_client.delete_object(
+                        Bucket=os.environ.get('S3_BUCKET'),
+                        Key=test_key
+                    )
+
+                    return {
+                        'status': 'SUCCESS',
+                        'message': 'Connected to S3 successfully - Write/Read/Delete operations completed',
+                        'bucket_name': os.environ.get('S3_BUCKET'),
+                        'test_key': test_key,
+                        'content_match': test_content == retrieved_content
+                    }
+                except Exception as e:
+                    return {
+                        'status': 'FAILED',
+                        'message': str(e),
+                        'bucket_name': os.environ.get('S3_BUCKET')
+                    }
+
+            def trigger_rds_snapshot():
+                try:
+                    # Create Lambda client
+                    lambda_client = boto3.client('lambda', region_name=os.environ.get('AWS_REGION'))
+                    
+                    # Invoke the snapshot Lambda function
+                    response = lambda_client.invoke(
+                        FunctionName=os.environ.get('LAMBDA_FUNCTION_NAME'),
+                        InvocationType='RequestResponse',  # Synchronous call
+                        Payload=json.dumps({
+                            'source': 'ec2-api-test',
+                            'timestamp': datetime.utcnow().isoformat()
+                        })
+                    )
+                    
+                    # Parse the response
+                    response_payload = json.loads(response['Payload'].read().decode())
+                    
+                    return {
+                        'status': 'SUCCESS' if response['StatusCode'] == 200 else 'FAILED',
+                        'message': 'RDS Snapshot Lambda invoked successfully',
+                        'lambda_response': response_payload,
+                        'status_code': response['StatusCode']
+                    }
+                except Exception as e:
+                    return {
+                        'status': 'FAILED',
+                        'message': str(e),
+                        'lambda_function': os.environ.get('LAMBDA_FUNCTION_NAME')
+                    }
+
+            class RequestHandler(BaseHTTPRequestHandler):
+                def do_GET(self):
+                    if self.path == '/':
+                        self.handle_home()
+                    elif self.path == '/snapshot':
+                        self.handle_snapshot()
+                    elif self.path == '/api/snapshot':
+                        self.handle_api_snapshot()
+                    else:
+                        self.send_response(404)
+                        self.send_header('Content-type', 'text/html')
+                        self.end_headers()
+                        self.wfile.write(b'<h1>404 - Not Found</h1>')
+
+                def handle_home(self):
+                    rds_result = test_rds_connection()
+                    s3_result = test_s3_connection()
+
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/html')
+                    self.end_headers()
+
+                    html = f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>${EnvironmentSuffix} Environment</title>
+                        <style>
+                            body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                            .success {{ color: green; font-weight: bold; }}
+                            .failed {{ color: red; font-weight: bold; }}
+                            .info {{ background: #f0f0f0; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
+                            .button {{ background: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 5px; }}
+                            .button:hover {{ background: #45a049; }}
+                        </style>
+                    </head>
+                    <body>
+                        <h1>${EnvironmentSuffix} Environment - Secure Instance</h1>
+
+                        <div class="info">
+                            <h3>Test APIs:</h3>
+                            <a href="/snapshot" class="button">Test RDS Snapshot (Web)</a>
+                            <a href="/api/snapshot" class="button">Test RDS Snapshot (JSON API)</a>
+                        </div>
+
+                        <h2>RDS Connection Test</h2>
+                        <div class="info">
+                            <p><strong>Status:</strong> <span class="{rds_result['status'].lower()}">{rds_result['status']}</span></p>
+                            <p><strong>Message:</strong> {rds_result['message']}</p>
+                            <p><strong>Endpoint:</strong> {rds_result.get('endpoint', 'N/A')}</p>
+                            {f"<p><strong>MySQL Version:</strong> {rds_result.get('mysql_version', 'N/A')}</p>" if rds_result['status'] == 'SUCCESS' else ''}
+                        </div>
+
+                        <h2>S3 Connection Test</h2>
+                        <div class="info">
+                            <p><strong>Status:</strong> <span class="{s3_result['status'].lower()}">{s3_result['status']}</span></p>
+                            <p><strong>Message:</strong> {s3_result['message']}</p>
+                            <p><strong>Bucket Name:</strong> {s3_result.get('bucket_name', 'N/A')}</p>
+                            {f"<p><strong>Test Key:</strong> {s3_result.get('test_key', 'N/A')}</p>" if s3_result['status'] == 'SUCCESS' else ''}
+                            {f"<p><strong>Content Match:</strong> {s3_result.get('content_match', 'N/A')}</p>" if s3_result['status'] == 'SUCCESS' else ''}
+                        </div>
+                    </body>
+                    </html>
+                    """
+                    
+                    self.wfile.write(html.encode())
+
+                def handle_snapshot(self):
+                    snapshot_result = trigger_rds_snapshot()
+
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/html')
+                    self.end_headers()
+
+                    html = f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>RDS Snapshot Test - ${EnvironmentSuffix}</title>
+                        <style>
+                            body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                            .success {{ color: green; font-weight: bold; }}
+                            .failed {{ color: red; font-weight: bold; }}
+                            .info {{ background: #f0f0f0; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
+                            .button {{ background: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; }}
+                        </style>
+                    </head>
+                    <body>
+                        <h1>RDS Snapshot Test Results</h1>
+                        
+                        <div class="info">
+                            <p><strong>Status:</strong> <span class="{snapshot_result['status'].lower()}">{snapshot_result['status']}</span></p>
+                            <p><strong>Message:</strong> {snapshot_result['message']}</p>
+                            <p><strong>Lambda Function:</strong> {os.environ.get('LAMBDA_FUNCTION_NAME', 'N/A')}</p>
+                            {f"<p><strong>Status Code:</strong> {snapshot_result.get('status_code', 'N/A')}</p>" if 'status_code' in snapshot_result else ''}
+                            {f"<p><strong>Lambda Response:</strong> <pre>{json.dumps(snapshot_result.get('lambda_response', {{}}), indent=2)}</pre></p>" if 'lambda_response' in snapshot_result else ''}
+                        </div>
+                        
+                        <a href="/" class="button">Back to Home</a>
+                    </body>
+                    </html>
+                    """
+                    
+                    self.wfile.write(html.encode())
+
+                def handle_api_snapshot(self):
+                    snapshot_result = trigger_rds_snapshot()
+                    
+                    self.send_response(200 if snapshot_result['status'] == 'SUCCESS' else 500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    
+                    response = {
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'environment': os.environ.get('AWS_REGION', 'unknown'),
+                        'snapshot_result': snapshot_result
+                    }
+                    
+                    self.wfile.write(json.dumps(response, indent=2).encode())
+                
+                def log_message(self, format, *args):
+                    pass
+            
+            if __name__ == '__main__':
+                server = HTTPServer(('0.0.0.0', 80), RequestHandler)
+                print('Server started on port 80')
+                server.serve_forever()
+            EOFPYTHON
+            
+            # Set environment variables and run server
+            export RDS_ENDPOINT="$RDS_ENDPOINT"
+            export SECRET_ARN="$SECRET_ARN"
+            export AWS_REGION="$REGION"
+            export S3_BUCKET="$S3_BUCKET"
+            export LAMBDA_FUNCTION_NAME="$LAMBDA_FUNCTION_NAME"
+
+            # Make script executable and run
+            chmod +x /home/ec2-user/server.py
+            nohup python3 /home/ec2-user/server.py > /var/log/server.log 2>&1 &
+            
+            # Install CloudWatch Agent
+            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+            rpm -U ./amazon-cloudwatch-agent.rpm
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${EnvironmentSuffix}-WebServer'
+              - Key: Environment
+                Value: !Ref EnvironmentSuffix
+              - Key: Project
+                Value: !Ref ProjectName
+              - Key: Owner
+                Value: !Ref OwnerName
+          - ResourceType: volume
+            Tags:
+              - Key: Name
+                Value: !Sub '${EnvironmentSuffix}-Volume'
+              - Key: Environment
+                Value: !Ref EnvironmentSuffix
+              - Key: Project
+                Value: !Ref ProjectName
+              - Key: Owner
+                Value: !Ref OwnerName
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${EnvironmentSuffix}-ASG'
+      MixedInstancesPolicy:
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate
+            Version: !GetAtt LaunchTemplate.LatestVersionNumber
+          Overrides:
+            - InstanceType: !If
+                - IsDev
+                - !FindInMap [EnvironmentConfig, 'dev', InstanceType]
+                - !If
+                  - IsStaging
+                  - !FindInMap [EnvironmentConfig, 'staging', InstanceType]
+                  - !If
+                    - IsProduction
+                    - !FindInMap [EnvironmentConfig, 'production', InstanceType]
+                    - !FindInMap [EnvironmentConfig, 'default', InstanceType]
+            - InstanceType: t3.medium  # Alternative instance type for better availability
+        InstancesDistribution:
+          OnDemandAllocationStrategy: prioritized
+          OnDemandBaseCapacity: 0
+          OnDemandPercentageAboveBaseCapacity: 100
+      MinSize: !If
+        - IsDev
+        - !FindInMap [EnvironmentConfig, 'dev', MinSize]
+        - !If
+          - IsStaging
+          - !FindInMap [EnvironmentConfig, 'staging', MinSize]
+          - !If
+            - IsProduction
+            - !FindInMap [EnvironmentConfig, 'production', MinSize]
+            - !FindInMap [EnvironmentConfig, 'default', MinSize]
+      MaxSize: !If
+        - IsDev
+        - !FindInMap [EnvironmentConfig, 'dev', MaxSize]
+        - !If
+          - IsStaging
+          - !FindInMap [EnvironmentConfig, 'staging', MaxSize]
+          - !If
+            - IsProduction
+            - !FindInMap [EnvironmentConfig, 'production', MaxSize]
+            - !FindInMap [EnvironmentConfig, 'default', MaxSize]
+      DesiredCapacity: !If
+        - IsDev
+        - !FindInMap [EnvironmentConfig, 'dev', DesiredCapacity]
+        - !If
+          - IsStaging
+          - !FindInMap [EnvironmentConfig, 'staging', DesiredCapacity]
+          - !If
+            - IsProduction
+            - !FindInMap [EnvironmentConfig, 'production', DesiredCapacity]
+            - !FindInMap [EnvironmentConfig, 'default', DesiredCapacity]
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+          PropagateAtLaunch: true
+        - Key: Project
+          Value: !Ref ProjectName
+          PropagateAtLaunch: true
+        - Key: Owner
+          Value: !Ref OwnerName
+          PropagateAtLaunch: true
+        - Key: CostOptimized
+          Value: 'true'
+          PropagateAtLaunch: true
+
+  # =====================================
+  # RDS Database
+  # =====================================
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-db-credentials-${AWS::AccountId}'
+      Description: RDS database credentials
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\\'
+        RequireEachIncludedType: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-db-secret'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  DbParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      DBParameterGroupName: !Sub '${EnvironmentSuffix}-db-params'
+      Description: Parameter group for MySQL database
+      Family: mysql8.0
+      Parameters:
+        innodb_buffer_pool_size: '{DBInstanceClassMemory*3/4}'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${EnvironmentSuffix}-db-subnet-group'
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  RDSDatabase:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DBInstanceIdentifier: !Sub '${EnvironmentSuffix}-database'
+      Engine: mysql
+      EngineVersion: '8.0.43'
+      DBInstanceClass: !If
+        - IsDev
+        - !FindInMap [EnvironmentConfig, 'dev', DBInstanceClass]
+        - !If
+          - IsStaging
+          - !FindInMap [EnvironmentConfig, 'staging', DBInstanceClass]
+          - !If
+            - IsProduction
+            - !FindInMap [EnvironmentConfig, 'production', DBInstanceClass]
+            - !FindInMap [EnvironmentConfig, 'default', DBInstanceClass]
+      AllocatedStorage: 20
+      MaxAllocatedStorage: 100
+      StorageType: gp3
+      StorageEncrypted: true
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      MultiAZ: !If
+        - IsDev
+        - !FindInMap [EnvironmentConfig, 'dev', MultiAZ]
+        - !If
+          - IsStaging
+          - !FindInMap [EnvironmentConfig, 'staging', MultiAZ]
+          - !If
+            - IsProduction
+            - !FindInMap [EnvironmentConfig, 'production', MultiAZ]
+            - !FindInMap [EnvironmentConfig, 'default', MultiAZ]
+      PubliclyAccessible: false
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBParameterGroupName: !Ref DbParameterGroup
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DbSecret, ':SecretString:username}}' ]]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DbSecret, ':SecretString:password}}' ]]
+      EnableIAMDatabaseAuthentication: true
+      MonitoringInterval: 0
+      EnablePerformanceInsights: false
+      DeletionProtection: false
+      DeleteAutomatedBackups: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  # =====================================
+  # S3 Buckets
+  # =====================================
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub '${EnvironmentSuffix}-${AWS::AccountId}-data'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  # S3 Access Policy for EC2 Role (created after S3 bucket to avoid circular dependency)
+  EC2S3AccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: EC2S3Access
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:ListBucket
+              - s3:DeleteObject
+            Resource:
+              - !Sub '${S3Bucket.Arn}'
+              - !Sub '${S3Bucket.Arn}/*'
+      Roles:
+        - !Ref EC2Role
+
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub '${EnvironmentSuffix}-${AWS::AccountId}-cloudtrail'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
+  # =====================================
+  # CloudTrail
+  # =====================================
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    DependsOn:
+      - CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub '${EnvironmentSuffix}-Trail'
+      S3BucketName: !Ref CloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  # =====================================
+  # CloudWatch Alarms
+  # =====================================
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentSuffix}-CPU-Utilization-High'
+      AlarmDescription: Alarm when CPU exceeds 75%
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 75
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  DatabaseCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentSuffix}-RDS-CPU-Utilization'
+      AlarmDescription: Alarm when RDS CPU exceeds 75%
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 75
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref RDSDatabase
+      AlarmActions:
+        - !Ref SNSTopic
+
+  # =====================================
+  # SNS Topic for Alarms
+  # =====================================
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${EnvironmentSuffix}-Alerts'
+      DisplayName: !Sub '${EnvironmentSuffix} Environment Alerts'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  # =====================================
+  # Lambda for RDS Snapshots
+  # =====================================
+  RDSSnapshotLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${EnvironmentSuffix}-RDS-Snapshot-Lambda'
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      Environment:
+        Variables:
+          DB_INSTANCE_ID: !Ref RDSDatabase
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          from datetime import datetime
+
+          def handler(event, context):
+              rds = boto3.client('rds')
+              db_instance_id = os.environ['DB_INSTANCE_ID']
+              environment = os.environ['ENVIRONMENT']
+              
+              timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+              snapshot_id = f"{db_instance_id}-snapshot-{timestamp}"
+              
+              try:
+                  response = rds.create_db_snapshot(
+                      DBSnapshotIdentifier=snapshot_id,
+                      DBInstanceIdentifier=db_instance_id,
+                      Tags=[
+                          {'Key': 'Environment', 'Value': environment},
+                          {'Key': 'Type', 'Value': 'Automated'}
+                      ]
+                  )
+                  print(f"Snapshot {snapshot_id} initiated successfully")
+                  return {
+                      'statusCode': 200,
+                      'body': f'Snapshot {snapshot_id} created'
+                  }
+              except Exception as e:
+                  print(f"Error creating snapshot: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': f'Error: {str(e)}'
+                  }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  # Schedule for Lambda
+  SnapshotScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-RDS-Snapshot-Schedule'
+      Description: Schedule for RDS snapshots
+      ScheduleExpression: 'rate(1 day)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RDSSnapshotLambda.Arn
+          Id: RDSSnapshotLambdaTarget
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RDSSnapshotLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt SnapshotScheduleRule.Arn
+
+  # =====================================
+  # Cost Optimization - Instance Scheduling
+  # =====================================
+  InstanceSchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentSuffix}-Instance-Scheduler-Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: InstanceSchedulerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - autoscaling:UpdateAutoScalingGroup
+                  - autoscaling:DescribeAutoScalingGroups
+                  - ec2:DescribeInstances
+                  - rds:DescribeDBInstances
+                  - rds:StopDBInstance
+                  - rds:StartDBInstance
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  StopInstancesLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${EnvironmentSuffix}-Stop-Instances'
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt InstanceSchedulerRole.Arn
+      Timeout: 300
+      Environment:
+        Variables:
+          ASG_NAME: !Ref AutoScalingGroup
+          DB_IDENTIFIER: !Ref RDSDatabase
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          
+          def handler(event, context):
+              asg_client = boto3.client('autoscaling')
+              rds_client = boto3.client('rds')
+              
+              asg_name = os.environ['ASG_NAME']
+              db_identifier = os.environ['DB_IDENTIFIER']
+              
+              try:
+                  # Scale down ASG to 0
+                  asg_client.update_auto_scaling_group(
+                      AutoScalingGroupName=asg_name,
+                      MinSize=0,
+                      DesiredCapacity=0
+                  )
+                  print(f"Scaled down ASG: {asg_name}")
+                  
+                  # Stop RDS instance (only for non-production)
+                  if not db_identifier.endswith('-production-database'):
+                      rds_client.stop_db_instance(
+                          DBInstanceIdentifier=db_identifier
+                      )
+                      print(f"Stopped RDS instance: {db_identifier}")
+                  
+                  return {'statusCode': 200, 'body': 'Resources stopped successfully'}
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {'statusCode': 500, 'body': f'Error: {str(e)}'}
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  StartInstancesLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${EnvironmentSuffix}-Start-Instances'
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt InstanceSchedulerRole.Arn
+      Timeout: 300
+      Environment:
+        Variables:
+          ASG_NAME: !Ref AutoScalingGroup
+          DB_IDENTIFIER: !Ref RDSDatabase
+          ENVIRONMENT: !Ref EnvironmentSuffix
+          MIN_SIZE: !If
+            - IsDev
+            - !FindInMap [EnvironmentConfig, 'dev', MinSize]
+            - !If
+              - IsStaging
+              - !FindInMap [EnvironmentConfig, 'staging', MinSize]
+              - !If
+                - IsProduction
+                - !FindInMap [EnvironmentConfig, 'production', MinSize]
+                - !FindInMap [EnvironmentConfig, 'default', MinSize]
+          DESIRED_CAPACITY: !If
+            - IsDev
+            - !FindInMap [EnvironmentConfig, 'dev', DesiredCapacity]
+            - !If
+              - IsStaging
+              - !FindInMap [EnvironmentConfig, 'staging', DesiredCapacity]
+              - !If
+                - IsProduction
+                - !FindInMap [EnvironmentConfig, 'production', DesiredCapacity]
+                - !FindInMap [EnvironmentConfig, 'default', DesiredCapacity]
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          
+          def handler(event, context):
+              asg_client = boto3.client('autoscaling')
+              rds_client = boto3.client('rds')
+              
+              asg_name = os.environ['ASG_NAME']
+              db_identifier = os.environ['DB_IDENTIFIER']
+              min_size = int(os.environ['MIN_SIZE'])
+              desired_capacity = int(os.environ['DESIRED_CAPACITY'])
+              
+              try:
+                  # Scale up ASG
+                  asg_client.update_auto_scaling_group(
+                      AutoScalingGroupName=asg_name,
+                      MinSize=min_size,
+                      DesiredCapacity=desired_capacity
+                  )
+                  print(f"Scaled up ASG: {asg_name}")
+                  
+                  # Start RDS instance (only for non-production)
+                  if not db_identifier.endswith('-production-database'):
+                      rds_client.start_db_instance(
+                          DBInstanceIdentifier=db_identifier
+                      )
+                      print(f"Started RDS instance: {db_identifier}")
+                  
+                  return {'statusCode': 200, 'body': 'Resources started successfully'}
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {'statusCode': 500, 'body': f'Error: {str(e)}'}
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  # Schedule to stop instances at 8 PM UTC (weekdays)
+  StopInstancesSchedule:
+    Type: AWS::Events::Rule
+    Condition: EnableScheduling
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-Stop-Instances-Schedule'
+      Description: Stop instances at 8 PM UTC on weekdays for cost optimization
+      ScheduleExpression: 'cron(0 20 ? * MON-FRI *)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt StopInstancesLambda.Arn
+          Id: StopInstancesTarget
+
+  # Schedule to start instances at 6 AM UTC (weekdays)
+  StartInstancesSchedule:
+    Type: AWS::Events::Rule
+    Condition: EnableScheduling
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-Start-Instances-Schedule'
+      Description: Start instances at 6 AM UTC on weekdays for cost optimization
+      ScheduleExpression: 'cron(0 6 ? * MON-FRI *)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt StartInstancesLambda.Arn
+          Id: StartInstancesTarget
+
+  StopLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Condition: EnableScheduling
+    Properties:
+      FunctionName: !Ref StopInstancesLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt StopInstancesSchedule.Arn
+
+  StartLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Condition: EnableScheduling
+    Properties:
+      FunctionName: !Ref StartInstancesLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt StartInstancesSchedule.Arn
+
+  # =====================================
+  # Systems Manager Parameter Store
+  # =====================================
+  AMIParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${EnvironmentSuffix}/ami-id'
+      Type: String
+      Value: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      Description: Latest Amazon Linux 2 AMI ID for EC2 instances
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Project: !Ref ProjectName
+        Owner: !Ref OwnerName
+
+  DBEndpointParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${EnvironmentSuffix}/db-endpoint'
+      Type: String
+      Value: !GetAtt RDSDatabase.Endpoint.Address
+      Description: RDS Database Endpoint
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Project: !Ref ProjectName
+        Owner: !Ref OwnerName
+
+  DBSecretParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${EnvironmentSuffix}/db-secret-arn'
+      Type: String
+      Value: !Ref DbSecret
+      Description: RDS Database Secret ARN
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Project: !Ref ProjectName
+        Owner: !Ref OwnerName
+
+# =====================================
+# Outputs
+# =====================================
+Outputs:
+  EC2KeyPairName:
+    Description: EC2 Key Pair Name for SSH access
+    Value: !Ref EC2KeyPair
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-KeyPair-Name'
+
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-VPC-ID'
+
+  ALBDNSName:
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-ALB-DNS'
+
+  RDSEndpoint:
+    Description: RDS Database Endpoint
+    Value: !GetAtt RDSDatabase.Endpoint.Address
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-RDS-Endpoint'
+
+  S3BucketName:
+    Description: S3 Bucket Name
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-S3-Bucket'
+
+  CloudTrailBucketName:
+    Description: CloudTrail Bucket Name
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-CloudTrail-Bucket'
+
+  Environment:
+    Description: Environment Name
+    Value: !Ref EnvironmentSuffix
+
+  ProjectName:
+    Description: Project Name
+    Value: !Ref ProjectName
+
+  DBSecretArn:
+    Description: Database Secret ARN
+    Value: !Ref DbSecret
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-DB-Secret-ARN'
+
+  KMSKeyId:
+    Description: KMS Key ID for encryption
+    Value: !Ref KMSKey
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-KMSKey'

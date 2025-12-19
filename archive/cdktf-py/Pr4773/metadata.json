@@ -1,0 +1,34 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-18T01:07:37+05:30",
+  "subtask": "Application Deployment",
+  "background": "Infrastructure task for CDKTF",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
+  ],
+  "po_id": "5404056206",
+  "aws_services": [
+    "iot",
+    "kinesis",
+    "lambda",
+    "s3",
+    "dynamodb",
+    "kms",
+    "cloudtrail",
+    "cloudwatch",
+    "iam"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9,
+  "turn_type": "single",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

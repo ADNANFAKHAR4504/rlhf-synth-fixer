@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "5318",
+  "team": "5",
+  "startedAt": "2025-10-28T06:46:41.807Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "This automation provisions a cloud infrastructure environment using Terraform. It sets up essential services including Amazon S3 for storage, AWS Lambda for serverless computing, Amazon DynamoDB for NoSQL database needs, and configures monitoring with Amazon CloudWatch. The automation also includes IAM roles and policies to ensure secure access management.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "[\"Amazon S3\", \"AWS Lambda\", \"Amazon DynamoDB\", \"Amazon CloudWatch\", \"AWS IAM\", \"S3 Event Notifications\"]",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,11 @@
+{
+  "name": "payment-validator",
+  "version": "1.0.0",
+  "description": "Payment validation Lambda function",
+  "main": "index.js",
+  "dependencies": {
+    "aws-xray-sdk-core": "^3.5.3",
+    "@aws-sdk/client-dynamodb": "^3.450.0",
+    "@aws-sdk/lib-dynamodb": "^3.450.0"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348798",
+  "team": "5",
+  "startedAt": "2025-08-29T06:37:32.575Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Monitoring Setup",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Systems Manager Parameter Store",
+    "Auto Scaling",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "Security Groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}

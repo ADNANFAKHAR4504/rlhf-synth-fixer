@@ -1,3 +1,30 @@
+# Terraform Infrastructure Code
+
+## provider.tf
+
+```hcl
+terraform {
+  required_version = ">= 1.4.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-east-2"
+}
+```
+
+## tap_stack.tf
+
+```hcl
 # Variables
 variable "environment_tag" {
   description = "Environment tag to be applied to all resources"
@@ -386,3 +413,4 @@ output "secure_data_bucket_name" {
   value       = aws_s3_bucket.secure_data.bucket
   sensitive   = true
 }
+```

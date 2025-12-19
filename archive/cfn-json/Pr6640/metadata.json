@@ -1,0 +1,32 @@
+{
+  "task_id": "101912417",
+  "po_id": "101912417",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T06:04:03Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "security-configuration-as-code"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "KMS",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

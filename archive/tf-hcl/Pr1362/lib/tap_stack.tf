@@ -171,35 +171,35 @@ resource "aws_kms_key" "general" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid      = "EnableIAMUserPermissions",
-        Effect   = "Allow",
+        Sid       = "EnableIAMUserPermissions",
+        Effect    = "Allow",
         Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" },
-        Action   = "kms:*",
-        Resource = "*"
+        Action    = "kms:*",
+        Resource  = "*"
       },
       {
-        Sid      = "AllowCloudWatchLogs",
-        Effect   = "Allow",
+        Sid       = "AllowCloudWatchLogs",
+        Effect    = "Allow",
         Principal = { Service = "logs.${var.aws_region}.amazonaws.com" },
-        Action   = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:CreateGrant","kms:DescribeKey"],
-        Resource = "*",
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:CreateGrant", "kms:DescribeKey"],
+        Resource  = "*",
         Condition = {
           ArnLike = { "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*" }
         }
       },
       {
-        Sid      = "AllowRDS",
-        Effect   = "Allow",
+        Sid       = "AllowRDS",
+        Effect    = "Allow",
         Principal = { Service = "rds.amazonaws.com" },
-        Action   = ["kms:Decrypt","kms:GenerateDataKey","kms:CreateGrant","kms:DescribeKey"],
-        Resource = "*"
+        Action    = ["kms:Decrypt", "kms:GenerateDataKey", "kms:CreateGrant", "kms:DescribeKey"],
+        Resource  = "*"
       },
       {
-        Sid      = "AllowSNS",
-        Effect   = "Allow",
+        Sid       = "AllowSNS",
+        Effect    = "Allow",
         Principal = { Service = "sns.amazonaws.com" },
-        Action   = ["kms:Decrypt","kms:GenerateDataKey*","kms:CreateGrant","kms:DescribeKey"],
-        Resource = "*",
+        Action    = ["kms:Decrypt", "kms:GenerateDataKey*", "kms:CreateGrant", "kms:DescribeKey"],
+        Resource  = "*",
         Condition = { StringEquals = { "aws:SourceAccount" = "${data.aws_caller_identity.current.account_id}" } }
       }
     ]
@@ -705,7 +705,7 @@ resource "aws_iam_role_policy" "ec2_app_inline" {
     Statement = [
       {
         Effect   = "Allow",
-        Action   = ["ssm:GetParameter","ssm:GetParameters","ssm:GetParametersByPath"],
+        Action   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"],
         Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/prod/*"
       },
       {
@@ -715,17 +715,17 @@ resource "aws_iam_role_policy" "ec2_app_inline" {
       },
       {
         Effect   = "Allow",
-        Action   = ["logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"],
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
         Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/prod/*"
       },
       {
         Effect   = "Allow",
-        Action   = ["s3:PutObject","s3:GetObject"],
+        Action   = ["s3:PutObject", "s3:GetObject"],
         Resource = "${aws_s3_bucket.logs.arn}/*"
       },
       {
         Effect   = "Allow",
-        Action   = ["kms:Decrypt","kms:GenerateDataKey"],
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey"],
         Resource = aws_kms_key.general.arn
       }
     ]
@@ -792,7 +792,7 @@ resource "aws_iam_role_policy" "lambda_security_inline" {
     Statement = [
       {
         Effect   = "Allow",
-        Action   = ["logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"],
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
         Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/prod-*"
       },
       {
@@ -802,7 +802,7 @@ resource "aws_iam_role_policy" "lambda_security_inline" {
       },
       {
         Effect   = "Allow",
-        Action   = ["ec2:DescribeSecurityGroups","ec2:DescribeNetworkAcls"],
+        Action   = ["ec2:DescribeSecurityGroups", "ec2:DescribeNetworkAcls"],
         Resource = "*"
       }
     ]
@@ -922,7 +922,7 @@ resource "aws_launch_template" "app" {
 
   tag_specifications {
     resource_type = "instance"
-    tags = merge(local.common_tags, { Name = "prod-app-instance-${local.env_suffix}" })
+    tags          = merge(local.common_tags, { Name = "prod-app-instance-${local.env_suffix}" })
   }
 
   tags = merge(local.common_tags, { Name = "prod-app-launch-template-${local.env_suffix}" })
@@ -1040,7 +1040,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   threshold           = 60
   alarm_description   = "This metric monitors ec2 cpu utilization"
 
-  dimensions = { AutoScalingGroupName = aws_autoscaling_group.app.name }
+  dimensions    = { AutoScalingGroupName = aws_autoscaling_group.app.name }
   alarm_actions = [aws_autoscaling_policy.scale_out.arn]
 
   tags = merge(local.common_tags, { Name = "prod-app-cpu-high-${local.env_suffix}" })
@@ -1057,7 +1057,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   threshold           = 30
   alarm_description   = "This metric monitors ec2 cpu utilization"
 
-  dimensions = { AutoScalingGroupName = aws_autoscaling_group.app.name }
+  dimensions    = { AutoScalingGroupName = aws_autoscaling_group.app.name }
   alarm_actions = [aws_autoscaling_policy.scale_in.arn]
 
   tags = merge(local.common_tags, { Name = "prod-app-cpu-low-${local.env_suffix}" })
@@ -1074,7 +1074,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_critical" {
   threshold           = 80
   alarm_description   = "Critical CPU utilization alarm"
 
-  dimensions = { AutoScalingGroupName = aws_autoscaling_group.app.name }
+  dimensions    = { AutoScalingGroupName = aws_autoscaling_group.app.name }
   alarm_actions = [aws_sns_topic.security_alerts.arn]
 
   tags = merge(local.common_tags, { Name = "prod-app-cpu-critical-${local.env_suffix}" })
@@ -1124,7 +1124,7 @@ resource "aws_cloudwatch_log_group" "security_events" {
 }
 
 resource "aws_cloudwatch_log_resource_policy" "events_to_logs" {
-  policy_name     = "prod-events-to-logs-${local.env_suffix}"
+  policy_name = "prod-events-to-logs-${local.env_suffix}"
   policy_document = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -1132,7 +1132,7 @@ resource "aws_cloudwatch_log_resource_policy" "events_to_logs" {
         Sid       = "AllowEventBridgeToPutLogs",
         Effect    = "Allow",
         Principal = { Service = "events.amazonaws.com" },
-        Action    = ["logs:CreateLogStream","logs:PutLogEvents"],
+        Action    = ["logs:CreateLogStream", "logs:PutLogEvents"],
         Resource  = "*"
       }
     ]

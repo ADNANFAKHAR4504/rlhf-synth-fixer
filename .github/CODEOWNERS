@@ -1,11 +1,18 @@
 # CODEOWNERS file
-# This file defines who owns and can approve changes to different parts of the repository
 
-# Global ownership: @hernanmog-turing has access to all files
-* @hernanmog-turing @PranavSTuring @olaoluwa-turing @Ashwin-DevAsh @abubakarTuring
+# Directories
+/lib/ @Ashwin-DevAsh @PranavSTuring @olaoluwa-turing @abubakarTuring @mohit-bairagi-turing @antny-turing @mayanksethi-turing @iamarpit-turing
+/test/ @Ashwin-DevAsh @PranavSTuring @olaoluwa-turing @abubakarTuring @mohit-bairagi-turing @antny-turing @mayanksethi-turing @iamarpit-turing
+/bin/ @Ashwin-DevAsh @PranavSTuring @olaoluwa-turing @abubakarTuring @mohit-bairagi-turing @antny-turing @mayanksethi-turing @iamarpit-turing
 
-# Allow anyone to approve changes in lib/ and test/ folders only
-# No owners specified = anyone can approve PRs affecting only these folders
-lib/
-test/
-bin/
+# Configuration Files
+/Pipfile                                   @deavyanshturing @hernanmog-turing
+/Pipfile.lock                              @deavyanshturing @hernanmog-turing
+/package.json                              @deavyanshturing @hernanmog-turing
+/package-lock.json                         @deavyanshturing @hernanmog-turing
+/.github/workflows/ci-cd.yml               @deavyanshturing @hernanmog-turing
+/build.gradle                              @deavyanshturing @hernanmog-turing
+/scripts/                                  @deavyanshturing @hernanmog-turing
+
+# Global ownership
+* @hernanmog-turing @deavyanshturing

@@ -1,0 +1,40 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr125-cdkpy",
+  "team": "synth",
+  "startedAt": "2025-08-22T21:28:31+05:30",
+  "subtask": "CI/CD Pipeline Infrastructure",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "ECS",
+    "Fargate",
+    "VPC",
+    "ALB",
+    "CloudWatch",
+    "IAM",
+    "SSM Parameter Store",
+    "EC2 Security Groups",
+    "Application Auto Scaling",
+    "SNS",
+    "CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

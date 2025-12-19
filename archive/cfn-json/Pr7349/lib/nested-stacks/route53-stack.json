@@ -1,0 +1,54 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Route 53 weighted routing for blue-green deployment",
+  "Parameters": {
+    "HostedZoneId": {
+      "Type": "String"
+    },
+    "DomainName": {
+      "Type": "String"
+    },
+    "ALBDNSName": {
+      "Type": "String"
+    },
+    "ALBHostedZoneId": {
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "Route53RecordSet": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "HostedZoneId"
+        },
+        "Name": {
+          "Ref": "DomainName"
+        },
+        "Type": "A",
+        "AliasTarget": {
+          "HostedZoneId": {
+            "Ref": "ALBHostedZoneId"
+          },
+          "DNSName": {
+            "Ref": "ALBDNSName"
+          },
+          "EvaluateTargetHealth": true
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "RecordSetName": {
+      "Description": "Route 53 Record Set Name",
+      "Value": {
+        "Ref": "DomainName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RecordSetName"
+        }
+      }
+    }
+  }
+}

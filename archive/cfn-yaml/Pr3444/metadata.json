@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "67521904",
+  "team": "synth",
+  "startedAt": "2025-10-03T13:50:36+05:30",
+  "subtask": "Static Website Hosting with Security",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Security, Compliance, and Governance"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "CloudWatch",
+    "WAF",
+    "Lambda",
+    "IAM",
+    "CertificateManager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

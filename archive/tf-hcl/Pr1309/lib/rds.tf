@@ -107,7 +107,7 @@ resource "aws_db_instance" "primary" {
 resource "aws_kms_key" "secondary_rds" {
   provider    = aws.secondary
   description = "KMS key for RDS encryption in secondary region"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-secondary-rds-key"
   })
@@ -134,7 +134,7 @@ resource "aws_db_instance" "secondary_replica" {
 
   # Encryption - must specify KMS key for cross-region replica
   storage_encrypted = true
-  kms_key_id       = aws_kms_key.secondary_rds.arn
+  kms_key_id        = aws_kms_key.secondary_rds.arn
 
   # Performance and Monitoring
   # Disabled for t3.micro - not supported

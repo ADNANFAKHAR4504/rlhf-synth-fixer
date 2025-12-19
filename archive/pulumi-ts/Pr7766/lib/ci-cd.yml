@@ -1,0 +1,276 @@
+name: Docker Build and Deploy Pipeline
+
+on:
+  push:
+    branches: [main, dev, staging]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: nodejs-app
+  NODE_VERSION: '18'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.image-tag.outputs.tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate image tag
+        id: image-tag
+        run: echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: ./scripts/build-docker.sh
+        env:
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
+
+      - name: Save Docker image
+        run: |
+          docker save ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-tag.outputs.tag }} \
+            -o nodejs-app-image.tar
+
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: nodejs-app-image.tar
+          retention-days: 7
+
+  scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: Load Docker image
+        run: docker load -i nodejs-app-image.tar
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ needs.build.outputs.image-tag }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Container scanning passed
+        run: echo "Container security scan completed successfully"
+
+  push:
+    name: Push to ECR
+    runs-on: ubuntu-latest
+    needs: [build, scan]
+
+    steps:
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Load and push Docker image
+        run: |
+          docker load -i nodejs-app-image.tar
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ needs.build.outputs.image-tag }}
+          docker tag ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ needs.build.outputs.image-tag }} \
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [build, push]
+    environment: dev
+    if: github.ref == 'refs/heads/dev' || github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to Dev environment
+        run: ./scripts/deploy.sh
+        env:
+          ENVIRONMENT: dev
+          IMAGE_TAG: ${{ needs.build.outputs.image-tag }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Run health checks
+        run: ./scripts/health-check.sh
+        env:
+          ENVIRONMENT: dev
+
+      - name: Notify deployment success
+        if: success()
+        run: ./scripts/notify.sh
+        env:
+          STATUS: success
+          ENVIRONMENT: dev
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build, push, deploy-dev]
+    environment: staging
+    if: github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to Staging environment
+        run: ./scripts/deploy.sh
+        env:
+          ENVIRONMENT: staging
+          IMAGE_TAG: ${{ needs.build.outputs.image-tag }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Run integration tests
+        run: ./scripts/integration-tests.sh
+        env:
+          ENVIRONMENT: staging
+
+      - name: Run health checks
+        run: ./scripts/health-check.sh
+        env:
+          ENVIRONMENT: staging
+
+      - name: Notify deployment success
+        if: success()
+        run: ./scripts/notify.sh
+        env:
+          STATUS: success
+          ENVIRONMENT: staging
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, push, deploy-staging]
+    environment: production
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to Production environment
+        run: ./scripts/deploy.sh
+        env:
+          ENVIRONMENT: production
+          IMAGE_TAG: ${{ needs.build.outputs.image-tag }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Run smoke tests
+        run: ./scripts/smoke-tests.sh
+        env:
+          ENVIRONMENT: production
+
+      - name: Run health checks
+        run: ./scripts/health-check.sh
+        env:
+          ENVIRONMENT: production
+
+      - name: Notify deployment success
+        if: success()
+        run: ./scripts/notify.sh
+        env:
+          STATUS: success
+          ENVIRONMENT: production
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Create deployment tag
+        run: ./scripts/create-release-tag.sh
+        env:
+          IMAGE_TAG: ${{ needs.build.outputs.image-tag }}
+
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [build, scan, push, deploy-dev, deploy-staging, deploy-production]
+    if: failure()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Send failure notification
+        run: ./scripts/notify.sh
+        env:
+          STATUS: failure
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

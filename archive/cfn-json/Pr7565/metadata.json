@@ -1,0 +1,44 @@
+{
+  "po_id": "101912939",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-01T05:50:00Z",
+  "subtask": "Multi-AZ High Availability Payment Processing Infrastructure",
+  "subject_labels": [
+    "multi-az",
+    "high-availability",
+    "disaster-recovery",
+    "rds",
+    "ecs",
+    "fargate"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Aurora",
+    "ECS",
+    "Fargate",
+    "ElasticLoadBalancing",
+    "ApplicationLoadBalancer",
+    "Route53",
+    "AutoScaling",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "IAM",
+    "SystemsManager",
+    "CloudFormation"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

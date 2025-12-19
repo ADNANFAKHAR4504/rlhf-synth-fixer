@@ -1,0 +1,39 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-02T03:50:00+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "po_id": "101000948",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Transit Gateway",
+    "RDS Aurora",
+    "Lambda",
+    "SQS",
+    "ALB",
+    "WAF",
+    "Route 53",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager",
+    "Systems Manager",
+    "IAM",
+    "KMS"
+  ],
+  "region": "eu-west-1",
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,724 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless web application with API Gateway, Lambda, and DynamoDB",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "EnableVPC": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Whether to deploy Lambda functions inside a VPC"
+    },
+    "VpcId": {
+      "Type": "String",
+      "Description": "VPC ID where Lambda functions will be deployed (required when EnableVPC is true)",
+      "Default": "vpc-00000000"
+    },
+    "PrivateSubnetIds": {
+      "Type": "CommaDelimitedList",
+      "Description": "List of private subnet IDs for Lambda deployment (required when EnableVPC is true)",
+      "Default": "subnet-00000000,subnet-00000001"
+    },
+    "ApplicationName": {
+      "Type": "String",
+      "Default": "serverless-web-app",
+      "Description": "Name of the application (used for resource naming)"
+    },
+    "DynamoDBTableName": {
+      "Type": "String",
+      "Default": "WebAppData",
+      "Description": "Name of the DynamoDB table"
+    }
+  },
+  "Conditions": {
+    "UseVPC": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableVPC"
+        },
+        "true"
+      ]
+    }
+  },
+  "Rules": {
+    "RequireVpcParametersWhenEnabled": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "EnableVPC"
+          },
+          "true"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "VpcId"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "VpcId must be provided when EnableVPC is true"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  {
+                    "Ref": "PrivateSubnetIds"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "PrivateSubnetIds must be provided when EnableVPC is true"
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "DynamoDBTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${DynamoDBTableName}-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "ApplicationName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-dynamodb"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Condition": "UseVPC",
+      "Properties": {
+        "GroupDescription": "Security group for Lambda functions",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTPS outbound for DynamoDB and AWS services"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTP outbound"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-lambda-sg"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "ApplicationName"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Scan",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "DynamoDBTable",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchLogs",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${ApplicationName}-${EnvironmentSuffix}-*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CreateFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-create"
+        },
+        "Runtime": "python3.12",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "VpcConfig": {
+          "Fn::If": [
+            "UseVPC",
+            {
+              "SecurityGroupIds": [
+                {
+                  "Ref": "LambdaSecurityGroup"
+                }
+              ],
+              "SubnetIds": {
+                "Ref": "PrivateSubnetIds"
+              }
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {
+              "Ref": "DynamoDBTable"
+            },
+            "REGION": "us-east-1"
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport uuid\nfrom datetime import datetime\n\ndynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])\ntable = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n\ndef lambda_handler(event, context):\n    try:\n        body = json.loads(event['body']) if event.get('body') else {}\n        \n        item = {\n            'id': str(uuid.uuid4()),\n            'created_at': datetime.utcnow().isoformat(),\n            **body\n        }\n        \n        table.put_item(Item=item)\n        \n        return {\n            'statusCode': 201,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(item)\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "ApplicationName"
+            }
+          }
+        ]
+      }
+    },
+    "ReadFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-read"
+        },
+        "Runtime": "python3.12",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "VpcConfig": {
+          "Fn::If": [
+            "UseVPC",
+            {
+              "SecurityGroupIds": [
+                {
+                  "Ref": "LambdaSecurityGroup"
+                }
+              ],
+              "SubnetIds": {
+                "Ref": "PrivateSubnetIds"
+              }
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {
+              "Ref": "DynamoDBTable"
+            },
+            "REGION": "us-east-1"
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom boto3.dynamodb.conditions import Key\n\ndynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])\ntable = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n\ndef lambda_handler(event, context):\n    try:\n        # Check if specific ID is requested\n        item_id = event.get('pathParameters', {}).get('id') if event.get('pathParameters') else None\n        \n        if item_id:\n            # Get specific item\n            response = table.get_item(Key={'id': item_id})\n            if 'Item' in response:\n                return {\n                    'statusCode': 200,\n                    'headers': {\n                        'Content-Type': 'application/json',\n                        'Access-Control-Allow-Origin': '*'\n                    },\n                    'body': json.dumps(response['Item'])\n                }\n            else:\n                return {\n                    'statusCode': 404,\n                    'headers': {\n                        'Content-Type': 'application/json',\n                        'Access-Control-Allow-Origin': '*'\n                    },\n                    'body': json.dumps({'error': 'Item not found'})\n                }\n        else:\n            # Get all items\n            response = table.scan()\n            return {\n                'statusCode': 200,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps(response['Items'])\n            }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "ApplicationName"
+            }
+          }
+        ]
+      }
+    },
+    "UpdateFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-update"
+        },
+        "Runtime": "python3.12",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "VpcConfig": {
+          "Fn::If": [
+            "UseVPC",
+            {
+              "SecurityGroupIds": [
+                {
+                  "Ref": "LambdaSecurityGroup"
+                }
+              ],
+              "SubnetIds": {
+                "Ref": "PrivateSubnetIds"
+              }
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {
+              "Ref": "DynamoDBTable"
+            },
+            "REGION": "us-east-1"
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ndynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])\ntable = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n\ndef lambda_handler(event, context):\n    try:\n        item_id = event.get('pathParameters', {}).get('id')\n        if not item_id:\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'ID is required'})\n            }\n        \n        body = json.loads(event['body']) if event.get('body') else {}\n        body['updated_at'] = datetime.utcnow().isoformat()\n        \n        # Check if item exists\n        response = table.get_item(Key={'id': item_id})\n        if 'Item' not in response:\n            return {\n                'statusCode': 404,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'Item not found'})\n            }\n        \n        # Update item\n        updated_item = {**response['Item'], **body}\n        table.put_item(Item=updated_item)\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(updated_item)\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "ApplicationName"
+            }
+          }
+        ]
+      }
+    },
+    "DeleteFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-delete"
+        },
+        "Runtime": "python3.12",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "VpcConfig": {
+          "Fn::If": [
+            "UseVPC",
+            {
+              "SecurityGroupIds": [
+                {
+                  "Ref": "LambdaSecurityGroup"
+                }
+              ],
+              "SubnetIds": {
+                "Ref": "PrivateSubnetIds"
+              }
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {
+              "Ref": "DynamoDBTable"
+            },
+            "REGION": "us-east-1"
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])\ntable = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n\ndef lambda_handler(event, context):\n    try:\n        item_id = event.get('pathParameters', {}).get('id')\n        if not item_id:\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'ID is required'})\n            }\n        \n        # Check if item exists\n        response = table.get_item(Key={'id': item_id})\n        if 'Item' not in response:\n            return {\n                'statusCode': 404,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'Item not found'})\n            }\n        \n        # Delete item\n        table.delete_item(Key={'id': item_id})\n        \n        return {\n            'statusCode': 204,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            }\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "ApplicationName"
+            }
+          }
+        ]
+      }
+    },
+    "ApiGateway": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-api"
+        },
+        "Description": "REST API for serverless web application",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    },
+    "ItemsResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "ApiGateway",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "items"
+      }
+    },
+    "ItemResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ParentId": {
+          "Ref": "ItemsResource"
+        },
+        "PathPart": "{id}"
+      }
+    },
+    "PostMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Ref": "ItemsResource"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${CreateFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "GetItemsMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Ref": "ItemsResource"
+        },
+        "HttpMethod": "GET",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${ReadFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "GetItemMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Ref": "ItemResource"
+        },
+        "HttpMethod": "GET",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${ReadFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "PutMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Ref": "ItemResource"
+        },
+        "HttpMethod": "PUT",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${UpdateFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "DeleteMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Ref": "ItemResource"
+        },
+        "HttpMethod": "DELETE",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${DeleteFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "CreateFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "CreateFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:us-east-1:${AWS::AccountId}:${ApiGateway}/*/*"
+        }
+      }
+    },
+    "ReadFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ReadFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:us-east-1:${AWS::AccountId}:${ApiGateway}/*/*"
+        }
+      }
+    },
+    "UpdateFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "UpdateFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:us-east-1:${AWS::AccountId}:${ApiGateway}/*/*"
+        }
+      }
+    },
+    "DeleteFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "DeleteFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:us-east-1:${AWS::AccountId}:${ApiGateway}/*/*"
+        }
+      }
+    },
+    "ApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": [
+        "PostMethod",
+        "GetItemsMethod",
+        "GetItemMethod",
+        "PutMethod",
+        "DeleteMethod"
+      ],
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "StageName": "prod"
+      }
+    }
+  },
+  "Outputs": {
+    "ApiGatewayUrl": {
+      "Description": "URL of the API Gateway",
+      "Value": {
+        "Fn::Sub": "https://${ApiGateway}.execute-api.us-east-1.amazonaws.com/prod"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApiGatewayUrl"
+        }
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "DynamoDBTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DynamoDBTableName"
+        }
+      }
+    },
+    "DynamoDBTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "DynamoDBTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DynamoDBTableArn"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "349401",
+  "team": "5",
+  "startedAt": "2025-09-03T10:02:51.211Z",
+  "subtask": "Serverless Infrastructure",
+  "subject_labels": [
+    "security",
+    "networking",
+    "rds",
+    "iam"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "ec2",
+    "rds",
+    "s3",
+    "dynamodb",
+    "cloudtrail",
+    "kms",
+    "iam",
+    "sns",
+    "cloudwatch",
+    "lambda",
+    "wafv2"
+  ],
+  "author": "Akorede28",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

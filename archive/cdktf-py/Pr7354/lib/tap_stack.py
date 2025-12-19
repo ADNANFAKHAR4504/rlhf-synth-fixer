@@ -1,0 +1,838 @@
+"""
+Multi-Region Payment Infrastructure using CDKTF with Python
+Expert-level implementation with 9 AWS services across 2 regions
+"""
+import json
+import os
+import zipfile
+
+from cdktf import Fn, S3Backend, TerraformOutput, TerraformStack
+from cdktf_cdktf_provider_aws.api_gateway_api_key import ApiGatewayApiKey
+from cdktf_cdktf_provider_aws.api_gateway_deployment import \
+    ApiGatewayDeployment
+from cdktf_cdktf_provider_aws.api_gateway_integration import \
+    ApiGatewayIntegration
+from cdktf_cdktf_provider_aws.api_gateway_method import ApiGatewayMethod
+from cdktf_cdktf_provider_aws.api_gateway_resource import ApiGatewayResource
+from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
+from cdktf_cdktf_provider_aws.api_gateway_stage import ApiGatewayStage
+from cdktf_cdktf_provider_aws.api_gateway_usage_plan import (
+    ApiGatewayUsagePlan, ApiGatewayUsagePlanApiStages)
+from cdktf_cdktf_provider_aws.api_gateway_usage_plan_key import \
+    ApiGatewayUsagePlanKey
+from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import (
+    CloudwatchMetricAlarm, CloudwatchMetricAlarmMetricQuery,
+    CloudwatchMetricAlarmMetricQueryMetric)
+from cdktf_cdktf_provider_aws.dynamodb_table import (
+    DynamodbTable, DynamodbTableAttribute, DynamodbTableGlobalSecondaryIndex,
+    DynamodbTablePointInTimeRecovery, DynamodbTableReplica,
+    DynamodbTableServerSideEncryption)
+from cdktf_cdktf_provider_aws.iam_role import IamRole
+from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
+from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
+from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
+from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.route53_health_check import (
+    Route53HealthCheck, Route53HealthCheckConfig)
+from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
+    S3BucketLifecycleConfiguration, S3BucketLifecycleConfigurationRule,
+    S3BucketLifecycleConfigurationRuleTransition)
+from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import \
+    S3BucketPublicAccessBlock
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
+    S3BucketVersioningA, S3BucketVersioningVersioningConfiguration)
+from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
+from cdktf_cdktf_provider_aws.sns_topic_subscription import \
+    SnsTopicSubscription
+from cdktf_cdktf_provider_aws.ssm_parameter import SsmParameter
+from constructs import Construct
+
+
+class PaymentInfrastructureStack(TerraformStack):
+    """
+    Multi-region payment processing infrastructure
+    Includes API Gateway, Lambda, DynamoDB Global Table, Route 53, S3, CloudWatch, IAM, KMS, SSM
+    """
+
+    def __init__(
+        self,
+        scope: Construct,
+        stack_id: str,
+        environment_suffix: str,
+        state_bucket: str = None,
+        state_bucket_region: str = "us-east-1",
+        primary_region: str = "us-east-1",
+        default_tags: dict = None,
+        **kwargs
+    ):
+        super().__init__(scope, stack_id)
+
+        # Store configuration
+        self.environment_suffix = environment_suffix
+        self.primary_region = primary_region
+        self.secondary_region = 'us-west-2'  # Keep secondary region as us-west-2 for multi-region setup
+
+        # Configure S3 backend for remote state (if state_bucket is provided)
+        if state_bucket:
+            S3Backend(
+                self,
+                bucket=state_bucket,
+                key=f'{environment_suffix}/terraform.tfstate',
+                region=state_bucket_region,
+                encrypt=True
+            )
+            print(f'✅ Configured S3 backend: s3://{state_bucket}/{environment_suffix}/terraform.tfstate')
+
+        # Common tags (merge with default_tags if provided)
+        self.common_tags = {
+            'Environment': environment_suffix,
+            'Project': 'payment-infrastructure',
+            'ManagedBy': 'cdktf',
+            'EnvironmentSuffix': self.environment_suffix
+        }
+        
+        # Merge with default_tags if provided
+        if default_tags and 'tags' in default_tags:
+            self.common_tags.update(default_tags['tags'])
+
+        # Configure AWS providers for multi-region with default tags
+        self.primary_provider = AwsProvider(
+            self,
+            'aws_primary',
+            region=self.primary_region,
+            alias='primary',
+            default_tags=[default_tags] if default_tags else None
+        )
+
+        self.secondary_provider = AwsProvider(
+            self,
+            'aws_secondary',
+            region=self.secondary_region,
+            alias='secondary',
+            default_tags=[default_tags] if default_tags else None
+        )
+
+        # Create KMS keys first (needed by other resources)
+        self.kms_key_dynamodb = self._create_kms_key(
+            'dynamodb',
+            'KMS key for DynamoDB encryption',
+            self.primary_provider
+        )
+        # Create KMS key in us-west-2 for DynamoDB replica
+        self.kms_key_dynamodb_replica = self._create_kms_key(
+            'dynamodb-replica',
+            'KMS key for DynamoDB encryption in us-west-2',
+            self.secondary_provider
+        )
+        self.kms_key_s3 = self._create_kms_key(
+            's3',
+            'KMS key for S3 encryption',
+            self.primary_provider
+        )
+        self.kms_key_lambda = self._create_kms_key(
+            'lambda',
+            'KMS key for Lambda environment variables',
+            self.primary_provider
+        )
+
+        # Create DynamoDB Global Table
+        self.dynamodb_table = self._create_dynamodb_global_table()
+
+        # Create S3 bucket for logs
+        self.s3_bucket = self._create_s3_bucket()
+
+        # Create IAM role for Lambda
+        self.lambda_role = self._create_lambda_role()
+
+        # Create Lambda deployment package (store absolute path)
+        self.lambda_zip_path = self._create_lambda_package()
+
+        # Create Lambda function
+        self.lambda_function = self._create_lambda_function()
+
+        # Create API Gateway
+        self.api_gateway = self._create_api_gateway()
+
+        # Create CloudWatch resources
+        self.sns_topic = self._create_sns_topic()
+        self._create_cloudwatch_alarms()
+
+        # Create Route 53 health check
+        self.health_check = self._create_route53_health_check()
+
+        # Create SSM parameters
+        self._create_ssm_parameters()
+
+        # Create outputs
+        self._create_outputs()
+
+    def _create_kms_key(self, resource_name: str, description: str, provider) -> KmsKey:
+        """
+        Create KMS key with automatic rotation
+
+        Args:
+            resource_name: Name identifier for the key
+            description: Key description
+            provider: AWS provider (primary or secondary)
+
+        Returns:
+            KmsKey instance
+        """
+        key = KmsKey(
+            self,
+            f'kms_{resource_name}',
+            description=f'{description} - {self.environment_suffix}',
+            enable_key_rotation=True,
+            deletion_window_in_days=10,
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-kms-{resource_name}'},
+            provider=provider
+        )
+
+        KmsAlias(
+            self,
+            f'kms_alias_{resource_name}',
+            name=f'alias/payment-{self.environment_suffix}-{resource_name}',
+            target_key_id=key.key_id,
+            provider=provider
+        )
+
+        return key
+
+    def _create_dynamodb_global_table(self) -> DynamodbTable:
+        """
+        Create DynamoDB Global Table with replica in secondary region
+
+        Returns:
+            DynamodbTable instance
+        """
+        table = DynamodbTable(
+            self,
+            'payments_table',
+            name=f'payment-{self.environment_suffix}-payments-v4',
+            billing_mode='PAY_PER_REQUEST',
+            hash_key='payment_id',
+            range_key='timestamp',
+            stream_enabled=True,
+            stream_view_type='NEW_AND_OLD_IMAGES',
+            attribute=[
+                DynamodbTableAttribute(name='payment_id', type='S'),
+                DynamodbTableAttribute(name='timestamp', type='N'),
+                DynamodbTableAttribute(name='status', type='S'),
+                DynamodbTableAttribute(name='customer_id', type='S')
+            ],
+            global_secondary_index=[
+                DynamodbTableGlobalSecondaryIndex(
+                    name='status-index',
+                    hash_key='status',
+                    range_key='timestamp',
+                    projection_type='ALL'
+                ),
+                DynamodbTableGlobalSecondaryIndex(
+                    name='customer-index',
+                    hash_key='customer_id',
+                    range_key='timestamp',
+                    projection_type='ALL'
+                )
+            ],
+            replica=[
+                DynamodbTableReplica(
+                    region_name=self.secondary_region,
+                    kms_key_arn=self.kms_key_dynamodb_replica.arn,
+                    point_in_time_recovery=True
+                )
+            ],
+            point_in_time_recovery=DynamodbTablePointInTimeRecovery(enabled=True),
+            server_side_encryption=DynamodbTableServerSideEncryption(
+                enabled=True,
+                kms_key_arn=self.kms_key_dynamodb.arn
+            ),
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-payments-v4'},
+            provider=self.primary_provider
+        )
+
+        return table
+
+    def _create_s3_bucket(self) -> S3Bucket:
+        """
+        Create S3 bucket with encryption and versioning
+
+        Returns:
+            S3Bucket instance
+        """
+        bucket = S3Bucket(
+            self,
+            's3_logs',
+            bucket=f'payment-{self.environment_suffix}-logs-{self.primary_provider.region}',
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-logs'},
+            provider=self.primary_provider
+        )
+
+        # Enable versioning
+        S3BucketVersioningA(
+            self,
+            's3_versioning',
+            bucket=bucket.id,
+            versioning_configuration=S3BucketVersioningVersioningConfiguration(status='Enabled'),
+            provider=self.primary_provider
+        )
+
+        # Enable encryption
+        S3BucketServerSideEncryptionConfigurationA(
+            self,
+            's3_encryption',
+            bucket=bucket.id,
+            rule=[
+                S3BucketServerSideEncryptionConfigurationRuleA(
+                    apply_server_side_encryption_by_default=(
+                        S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                            sse_algorithm='aws:kms',
+                            kms_master_key_id=self.kms_key_s3.arn
+                        )
+                    ),
+                    bucket_key_enabled=True
+                )
+            ],
+            provider=self.primary_provider
+        )
+
+        # Lifecycle policy
+        S3BucketLifecycleConfiguration(
+            self,
+            's3_lifecycle',
+            bucket=bucket.id,
+            rule=[
+                S3BucketLifecycleConfigurationRule(
+                    id='archive-old-logs',
+                    status='Enabled',
+                    transition=[
+                        S3BucketLifecycleConfigurationRuleTransition(
+                            days=30,
+                            storage_class='GLACIER'
+                        )
+                    ]
+                )
+            ],
+            provider=self.primary_provider
+        )
+
+        # Block public access
+        S3BucketPublicAccessBlock(
+            self,
+            's3_public_access_block',
+            bucket=bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            provider=self.primary_provider
+        )
+
+        return bucket
+
+    def _create_lambda_role(self) -> IamRole:
+        """
+        Create IAM role for Lambda function
+
+        Returns:
+            IamRole instance
+        """
+        assume_role_policy = {
+            'Version': '2012-10-17',
+            'Statement': [{
+                'Effect': 'Allow',
+                'Principal': {'Service': 'lambda.amazonaws.com'},
+                'Action': 'sts:AssumeRole'
+            }]
+        }
+
+        role = IamRole(
+            self,
+            'lambda_role',
+            name=f'payment-{self.environment_suffix}-lambda-role',
+            assume_role_policy=json.dumps(assume_role_policy),
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-lambda-role'},
+            provider=self.primary_provider
+        )
+
+        # Policy for Lambda execution, DynamoDB, S3, and KMS access
+        policy_document = {
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Effect': 'Allow',
+                    'Action': [
+                        'logs:CreateLogGroup',
+                        'logs:CreateLogStream',
+                        'logs:PutLogEvents'
+                    ],
+                    'Resource': 'arn:aws:logs:*:*:*'
+                },
+                {
+                    'Effect': 'Allow',
+                    'Action': [
+                        'dynamodb:PutItem',
+                        'dynamodb:GetItem',
+                        'dynamodb:Query',
+                        'dynamodb:Scan',
+                        'dynamodb:UpdateItem'
+                    ],
+                    'Resource': [
+                        self.dynamodb_table.arn,
+                        f'{self.dynamodb_table.arn}/index/*'
+                    ]
+                },
+                {
+                    'Effect': 'Allow',
+                    'Action': [
+                        's3:PutObject',
+                        's3:GetObject'
+                    ],
+                    'Resource': f'{self.s3_bucket.arn}/*'
+                },
+                {
+                    'Effect': 'Allow',
+                    'Action': [
+                        'kms:Decrypt',
+                        'kms:Encrypt',
+                        'kms:GenerateDataKey'
+                    ],
+                    'Resource': [
+                        self.kms_key_dynamodb.arn,
+                        self.kms_key_s3.arn,
+                        self.kms_key_lambda.arn
+                    ]
+                }
+            ]
+        }
+
+        IamRolePolicy(
+            self,
+            'lambda_policy',
+            name=f'payment-{self.environment_suffix}-lambda-policy',
+            role=role.id,
+            policy=json.dumps(policy_document),
+            provider=self.primary_provider
+        )
+
+        return role
+
+    def _create_lambda_package(self) -> str:
+        """
+        Create Lambda deployment package by zipping the handler code.
+        This runs during stack synthesis to prepare the Lambda ZIP file.
+        
+        Returns:
+            str: Absolute path to the created ZIP file
+        """
+        lib_dir = os.path.dirname(os.path.abspath(__file__))
+        lambda_source_dir = os.path.join(lib_dir, 'lambda', 'payment_processor')
+        handler_file = 'handler.py'
+        zip_file_name = 'payment_processor.zip'
+        target_zip_path = os.path.join(lib_dir, zip_file_name)
+        
+        # Only create if source exists
+        if not os.path.isdir(lambda_source_dir):
+            print(f"ℹ️ Lambda source directory not found at {lambda_source_dir}. Skipping package creation.")
+            return target_zip_path
+        
+        handler_path = os.path.join(lambda_source_dir, handler_file)
+        if not os.path.isfile(handler_path):
+            print(f"❌ Error: Lambda handler file not found at {handler_path}")
+            return target_zip_path
+
+        # Create ZIP file
+        with zipfile.ZipFile(target_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(handler_path, os.path.basename(handler_path))
+        
+        zip_size = os.path.getsize(target_zip_path)
+        print(f"✅ Created Lambda package: {target_zip_path} ({zip_size:,} bytes)")
+        
+        return target_zip_path
+
+    def _create_lambda_function(self) -> LambdaFunction:
+        """
+        Create Lambda function for payment processing
+
+        Returns:
+            LambdaFunction instance
+        """
+        # Create CloudWatch Log Group
+        log_group = CloudwatchLogGroup(
+            self,
+            'lambda_log_group',
+            name=f'/aws/lambda/payment-{self.environment_suffix}-processor',
+            retention_in_days=7,
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-lambda-logs'},
+            provider=self.primary_provider
+        )
+
+        lambda_function = LambdaFunction(
+            self,
+            'payment_processor',
+            function_name=f'payment-{self.environment_suffix}-processor',
+            runtime='python3.11',
+            handler='handler.lambda_handler',
+            filename=self.lambda_zip_path,  # Use absolute path
+            role=self.lambda_role.arn,
+            timeout=60,
+            memory_size=512,
+            environment={
+                'variables': {
+                    'TABLE_NAME': self.dynamodb_table.name,
+                    'BUCKET_NAME': self.s3_bucket.bucket,
+                    'KMS_KEY_ID': self.kms_key_s3.key_id,
+                    'ENVIRONMENT_SUFFIX': self.environment_suffix
+                }
+            },
+            kms_key_arn=self.kms_key_lambda.arn,
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-processor'},
+            depends_on=[log_group],
+            provider=self.primary_provider
+        )
+
+        return lambda_function
+
+    def _create_api_gateway(self) -> ApiGatewayRestApi:
+        """
+        Create API Gateway with Lambda integration
+
+        Returns:
+            ApiGatewayRestApi instance
+        """
+        # Create REST API
+        api = ApiGatewayRestApi(
+            self,
+            'payment_api',
+            name=f'payment-{self.environment_suffix}-api',
+            description='Payment processing API',
+            endpoint_configuration={'types': ['REGIONAL']},
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-api'},
+            provider=self.primary_provider
+        )
+
+        # Create resource
+        resource = ApiGatewayResource(
+            self,
+            'payment_resource',
+            rest_api_id=api.id,
+            parent_id=api.root_resource_id,
+            path_part='process',
+            provider=self.primary_provider
+        )
+
+        # Create POST method
+        method = ApiGatewayMethod(
+            self,
+            'payment_method',
+            rest_api_id=api.id,
+            resource_id=resource.id,
+            http_method='POST',
+            authorization='NONE',
+            api_key_required=True,
+            provider=self.primary_provider
+        )
+
+        # Create Lambda integration
+        integration = ApiGatewayIntegration(
+            self,
+            'payment_integration',
+            rest_api_id=api.id,
+            resource_id=resource.id,
+            http_method=method.http_method,
+            integration_http_method='POST',
+            type='AWS_PROXY',
+            uri=self.lambda_function.invoke_arn,
+            provider=self.primary_provider
+        )
+
+        # Create Lambda permission for API Gateway
+        LambdaPermission(
+            self,
+            'api_lambda_permission',
+            statement_id='AllowAPIGatewayInvoke',
+            action='lambda:InvokeFunction',
+            function_name=self.lambda_function.function_name,
+            principal='apigateway.amazonaws.com',
+            source_arn=f'{api.execution_arn}/*/*',
+            provider=self.primary_provider
+        )
+
+        # Create deployment
+        deployment = ApiGatewayDeployment(
+                self,
+            'api_deployment',
+            rest_api_id=api.id,
+            depends_on=[integration],
+            lifecycle={'create_before_destroy': True},
+            provider=self.primary_provider
+            )
+
+        # Create stage
+        stage = ApiGatewayStage(
+            self,
+            'api_stage',
+            deployment_id=deployment.id,
+            rest_api_id=api.id,
+            stage_name='prod',
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-api-stage'},
+            provider=self.primary_provider
+        )
+
+        # Create API key
+        api_key = ApiGatewayApiKey(
+            self,
+            'api_key',
+            name=f'payment-{self.environment_suffix}-api-key',
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-api-key'},
+            provider=self.primary_provider
+        )
+
+        # Create usage plan
+        usage_plan = ApiGatewayUsagePlan(
+                self,
+            'usage_plan',
+            name=f'payment-{self.environment_suffix}-usage-plan',
+            api_stages=[
+                ApiGatewayUsagePlanApiStages(
+                    api_id=api.id,
+                    stage=stage.stage_name
+                )
+            ],
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-usage-plan'},
+            provider=self.primary_provider
+            )
+
+        # Associate API key with usage plan
+        ApiGatewayUsagePlanKey(
+                self,
+            'usage_plan_key',
+            key_id=api_key.id,
+            key_type='API_KEY',
+            usage_plan_id=usage_plan.id,
+            provider=self.primary_provider
+        )
+
+        # Store API key and endpoint for outputs
+        self.api_key = api_key
+        self.api_stage = stage
+
+        return api
+
+    def _create_sns_topic(self) -> SnsTopic:
+        """
+        Create SNS topic for CloudWatch alarms
+
+        Returns:
+            SnsTopic instance
+        """
+        topic = SnsTopic(
+                self,
+            'alarm_topic',
+            name=f'payment-{self.environment_suffix}-alarms',
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-alarms'},
+            provider=self.primary_provider
+        )
+
+        return topic
+
+    def _create_cloudwatch_alarms(self):
+        """Create CloudWatch alarms for monitoring"""
+        # Lambda error alarm
+        CloudwatchMetricAlarm(
+                self,
+            'lambda_error_alarm',
+            alarm_name=f'payment-{self.environment_suffix}-lambda-errors',
+            comparison_operator='GreaterThanThreshold',
+            evaluation_periods=1,
+            metric_name='Errors',
+            namespace='AWS/Lambda',
+            period=300,
+            statistic='Sum',
+            threshold=5,
+            alarm_description='Alert when Lambda function has too many errors',
+            alarm_actions=[self.sns_topic.arn],
+            dimensions={'FunctionName': self.lambda_function.function_name},
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-lambda-errors'},
+            provider=self.primary_provider
+        )
+
+        # Lambda duration alarm
+        CloudwatchMetricAlarm(
+                self,
+            'lambda_duration_alarm',
+            alarm_name=f'payment-{self.environment_suffix}-lambda-duration',
+            comparison_operator='GreaterThanThreshold',
+            evaluation_periods=1,
+            metric_name='Duration',
+            namespace='AWS/Lambda',
+            period=300,
+            statistic='Average',
+            threshold=30000,
+            alarm_description='Alert when Lambda duration is too high',
+            alarm_actions=[self.sns_topic.arn],
+            dimensions={'FunctionName': self.lambda_function.function_name},
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-lambda-duration'},
+            provider=self.primary_provider
+        )
+
+        # DynamoDB throttle alarm
+        CloudwatchMetricAlarm(
+            self,
+            'dynamodb_throttle_alarm',
+            alarm_name=f'payment-{self.environment_suffix}-dynamodb-throttles',
+            comparison_operator='GreaterThanThreshold',
+            evaluation_periods=1,
+            metric_name='UserErrors',
+            namespace='AWS/DynamoDB',
+            period=300,
+            statistic='Sum',
+            threshold=10,
+            alarm_description='Alert when DynamoDB has throttling errors',
+            alarm_actions=[self.sns_topic.arn],
+            dimensions={'TableName': self.dynamodb_table.name},
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-dynamodb-throttles'},
+            provider=self.primary_provider
+        )
+
+    def _create_route53_health_check(self) -> Route53HealthCheck:
+        """
+        Create Route 53 health check for API Gateway
+
+        Returns:
+            Route53HealthCheck instance
+        """
+        health_check = Route53HealthCheck(
+            self,
+            'api_health_check',
+            type='HTTPS',
+            fqdn=f'{self.api_gateway.id}.execute-api.{self.primary_region}.amazonaws.com',
+            resource_path=f'/{self.api_stage.stage_name}/process',
+            port=443,  # HTTPS port
+            failure_threshold=3,
+            request_interval=30,
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-health-check'},
+            provider=self.primary_provider
+        )
+
+        return health_check
+
+    def _create_ssm_parameters(self):
+        """Create SSM parameters for configuration"""
+        # Store table name
+        SsmParameter(
+            self,
+            'ssm_table_name',
+            name=f'/payment/{self.environment_suffix}/table-name',
+            type='String',
+            value=self.dynamodb_table.name,
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-table-name'},
+            provider=self.primary_provider
+            )
+
+        # Store bucket name
+        SsmParameter(
+            self,
+            'ssm_bucket_name',
+            name=f'/payment/{self.environment_suffix}/bucket-name',
+            type='String',
+            value=self.s3_bucket.bucket,
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-bucket-name'},
+            provider=self.primary_provider
+        )
+
+        # Store API key (encrypted)
+        SsmParameter(
+            self,
+            'ssm_api_key',
+            name=f'/payment/{self.environment_suffix}/api-key',
+            type='SecureString',
+            value=self.api_key.value,
+            key_id=self.kms_key_lambda.key_id,
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-api-key'},
+            provider=self.primary_provider
+        )
+
+    def _create_outputs(self):
+        """Create Terraform outputs for integration testing"""
+        api_url = (
+            f'https://{self.api_gateway.id}.execute-api.{self.primary_region}.amazonaws.com/'
+            f'{self.api_stage.stage_name}/process'
+        )
+        TerraformOutput(
+            self,
+            'api_endpoint',
+            value=api_url,
+            description='API Gateway endpoint URL'
+        )
+
+        TerraformOutput(
+            self,
+            'api_key_id',
+            value=self.api_key.id,
+            description='API Gateway API key ID'
+        )
+
+        TerraformOutput(
+            self,
+            'api_key_value',
+            value=self.api_key.value,
+            sensitive=True,
+            description='API Gateway API key value'
+        )
+
+        TerraformOutput(
+            self,
+            'dynamodb_table_name',
+            value=self.dynamodb_table.name,
+            description='DynamoDB table name'
+        )
+
+        TerraformOutput(
+            self,
+            'dynamodb_table_arn',
+            value=self.dynamodb_table.arn,
+            description='DynamoDB table ARN'
+        )
+
+        TerraformOutput(
+            self,
+            's3_bucket_name',
+            value=self.s3_bucket.bucket,
+            description='S3 bucket name'
+        )
+
+        TerraformOutput(
+            self,
+            'lambda_function_arn',
+            value=self.lambda_function.arn,
+            description='Lambda function ARN'
+        )
+
+        TerraformOutput(
+            self,
+            'lambda_function_name',
+            value=self.lambda_function.function_name,
+            description='Lambda function name'
+        )
+
+        TerraformOutput(
+            self,
+            'kms_key_id',
+            value=self.kms_key_dynamodb.key_id,
+            description='KMS key ID for DynamoDB'
+        )
+
+        TerraformOutput(
+            self,
+            'sns_topic_arn',
+            value=self.sns_topic.arn,
+            description='SNS topic ARN for alarms'
+        )

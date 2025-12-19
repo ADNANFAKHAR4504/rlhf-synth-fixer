@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "po_id": "trainr302",
+  "team": "infrastructure",
+  "startedAt": "2024-01-15T10:00:00Z",
+  "subtask": "Multi-Environment Consistency & Replication",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Resource Scaling",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "IAM",
+    "CloudFormation"
+  ],
+  "author": "Ashwin-DevAsh",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

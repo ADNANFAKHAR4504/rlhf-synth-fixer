@@ -1,0 +1,27 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-30T10:23:00-07:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+   "Cloud Environment Setup"
+  ],
+  "po_id": "1maext",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM"
+  ],
+  "region": "eu-central-1",
+  "turn_type": "single",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

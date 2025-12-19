@@ -1,0 +1,42 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "9588050321",
+  "team": "synth",
+  "startedAt": "2025-10-22T06:32:26.063507",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "IaC Optimization",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 9,
+  "aws_region": "eu-west-2",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Security Group",
+    "KMS",
+    "Secrets Manager",
+    "Kinesis Data Streams",
+    "S3",
+    "RDS Aurora PostgreSQL Serverless v2",
+    "ElastiCache Redis",
+    "EFS",
+    "ECS Fargate",
+    "API Gateway",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

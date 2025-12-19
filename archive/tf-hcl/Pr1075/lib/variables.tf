@@ -2,7 +2,7 @@ variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
   default     = "us-west-2"
-  
+
   validation {
     condition     = var.aws_region == "us-west-2"
     error_message = "Region must be us-west-2 only as per PROMPT requirements."

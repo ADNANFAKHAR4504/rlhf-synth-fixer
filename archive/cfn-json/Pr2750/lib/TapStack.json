@@ -1,0 +1,247 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "TAP Stack - Task Assignment Platform CloudFormation Template",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {}
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "EnableKMSEncryption": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": ["true", "false"],
+      "Description": "Enable KMS encryption for DynamoDB table"
+    }
+  },
+  "Conditions": {
+    "EnableKMSEncryptionCondition": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableKMSEncryption"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "TAPKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Condition": "EnableKMSEncryptionCondition",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for TAP DynamoDB encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow DynamoDB Service",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "dynamodb.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      },
+      "Metadata": {
+        "SecurityJustification": "KMS key with automatic rotation enabled for encryption at rest, following security best practices"
+      }
+    },
+    "TAPKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Condition": "EnableKMSEncryptionCondition",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/tap-dynamodb-key-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "TAPKMSKey"
+        }
+      }
+    },
+    "TurnAroundPromptTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false,
+        "SSESpecification": {
+          "Fn::If": [
+            "EnableKMSEncryptionCondition",
+            {
+              "SSEEnabled": true,
+              "KMSMasterKeyId": {
+                "Ref": "TAPKMSKey"
+              }
+            },
+            {
+              "SSEEnabled": true
+            }
+          ]
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        }
+      },
+      "Metadata": {
+        "SecurityJustification": "DynamoDB table with encryption at rest using customer-managed KMS key when enabled, point-in-time recovery for data protection"
+      }
+    },
+    "TAPCloudWatchLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/dynamodb/tap-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::If": [
+            "EnableKMSEncryptionCondition",
+            {
+              "Fn::GetAtt": [
+                "TAPKMSKey",
+                "Arn"
+              ]
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        }
+      },
+      "Metadata": {
+        "SecurityJustification": "CloudWatch log group for monitoring with KMS encryption and appropriate retention period"
+      }
+    }
+  },
+  "Outputs": {
+    "TurnAroundPromptTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "TurnAroundPromptTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+        }
+      }
+    },
+    "TurnAroundPromptTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TurnAroundPromptTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+        }
+      }
+    },
+    "KMSKeyArn": {
+      "Condition": "EnableKMSEncryptionCondition",
+      "Description": "ARN of the KMS key used for encryption",
+      "Value": {
+        "Fn::GetAtt": [
+          "TAPKMSKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyArn"
+        }
+      }
+    },
+    "KMSKeyAlias": {
+      "Condition": "EnableKMSEncryptionCondition",
+      "Description": "Alias of the KMS key used for encryption",
+      "Value": {
+        "Ref": "TAPKMSKeyAlias"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyAlias"
+        }
+      }
+    },
+    "CloudWatchLogGroupName": {
+      "Description": "Name of the CloudWatch log group",
+      "Value": {
+        "Ref": "TAPCloudWatchLogGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CloudWatchLogGroupName"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}

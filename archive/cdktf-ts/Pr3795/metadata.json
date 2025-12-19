@@ -1,0 +1,37 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349523",
+  "team": "6",
+  "startedAt": "2025-10-07T11:25:26.609Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "Elastic IP",
+    "EC2",
+    "Security Groups",
+    "Network ACLs",
+    "RDS",
+    "CloudWatch Logs",
+    "VPC Flow Logs",
+    "S3",
+    "IAM",
+    "SSM Parameter Store"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

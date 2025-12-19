@@ -1,0 +1,629 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Serverless Fitness Workout Logging API - A cost-effective, scalable solution for handling 2,000 daily workout logs with comprehensive monitoring and security'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment identifier to append to resource names (e.g., dev, staging, prod)
+    Default: prod
+
+  ApiStageName:
+    Type: String
+    Description: API Gateway deployment stage name
+    Default: v1
+    AllowedValues:
+      - v1
+      - v2
+      - prod
+      - dev
+
+Resources:
+  # DynamoDB Table for storing workout logs with on-demand billing (auto-scaling)
+  WorkoutLogsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'workoutlogs-${AWS::Region}-${EnvironmentSuffix}'
+      BillingMode: PAY_PER_REQUEST # On-demand billing mode (auto-scaling)
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: workoutTimestamp
+          AttributeType: N
+        - AttributeName: workoutType
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: workoutTimestamp
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: WorkoutTypeIndex
+          KeySchema:
+            - AttributeName: workoutType
+              KeyType: HASH
+            - AttributeName: workoutTimestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: FitnessWorkoutAPI
+
+  # IAM Role for Lambda functions
+  WorkoutApiLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub 'workoutapi-dynamodb-policy-${AWS::Region}-${EnvironmentSuffix}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource:
+                  - !GetAtt WorkoutLogsTable.Arn
+                  - !Sub '${WorkoutLogsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fitness-app/${EnvironmentSuffix}/*'
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda function to create workout logs
+  CreateWorkoutLogFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'create-workout-log-${AWS::Region}-${EnvironmentSuffix}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt WorkoutApiLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref WorkoutLogsTable
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          from decimal import Decimal
+
+          dynamodb = boto3.resource('dynamodb')
+          cloudwatch = boto3.client('cloudwatch')
+          table = dynamodb.Table(os.environ['TABLE_NAME'])
+
+          def lambda_handler(event, context):
+              try:
+                  body = json.loads(event['body'])
+                  
+                  # Validate required fields
+                  required_fields = ['userId', 'workoutType', 'duration', 'calories']
+                  for field in required_fields:
+                      if field not in body:
+                          return {
+                              'statusCode': 400,
+                              'headers': {'Content-Type': 'application/json'},
+                              'body': json.dumps({'error': f'Missing required field: {field}'})
+                          }
+                  
+                  # Prepare workout log item
+                  workout_log = {
+                      'userId': body['userId'],
+                      'workoutTimestamp': int(datetime.now().timestamp()),
+                      'workoutType': body['workoutType'],
+                      'duration': Decimal(str(body['duration'])),
+                      'calories': Decimal(str(body['calories'])),
+                      'distance': Decimal(str(body.get('distance', 0))),
+                      'heartRate': body.get('heartRate', 0),
+                      'notes': body.get('notes', ''),
+                      'createdAt': datetime.now().isoformat()
+                  }
+                  
+                  # Store in DynamoDB
+                  table.put_item(Item=workout_log)
+                  
+                  # Send custom metric to CloudWatch
+                  cloudwatch.put_metric_data(
+                      Namespace='FitnessApp/Workouts',
+                      MetricData=[
+                          {
+                              'MetricName': 'WorkoutLogsCreated',
+                              'Value': 1,
+                              'Unit': 'Count',
+                              'Dimensions': [
+                                  {'Name': 'WorkoutType', 'Value': body['workoutType']},
+                                  {'Name': 'Environment', 'Value': os.environ['ENVIRONMENT']}
+                              ]
+                          }
+                      ]
+                  )
+                  
+                  return {
+                      'statusCode': 201,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({
+                          'message': 'Workout log created successfully',
+                          'workoutId': f"{body['userId']}#{workout_log['workoutTimestamp']}"
+                      })
+                  }
+              
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': 'Internal server error'})
+                  }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda function to retrieve workout logs
+  GetWorkoutLogsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'get-workoutlogs-${AWS::Region}-${EnvironmentSuffix}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt WorkoutApiLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref WorkoutLogsTable
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from boto3.dynamodb.conditions import Key
+          from decimal import Decimal
+
+          dynamodb = boto3.resource('dynamodb')
+          table = dynamodb.Table(os.environ['TABLE_NAME'])
+
+          class DecimalEncoder(json.JSONEncoder):
+              def default(self, obj):
+                  if isinstance(obj, Decimal):
+                      return float(obj)
+                  return super(DecimalEncoder, self).default(obj)
+
+          def lambda_handler(event, context):
+              try:
+                  user_id = event['queryStringParameters'].get('userId')
+                  workout_type = event['queryStringParameters'].get('workoutType')
+                  
+                  if not user_id:
+                      return {
+                          'statusCode': 400,
+                          'headers': {'Content-Type': 'application/json'},
+                          'body': json.dumps({'error': 'userId parameter is required'})
+                      }
+                  
+                  # Query workouts by userId
+                  response = table.query(
+                      KeyConditionExpression=Key('userId').eq(user_id),
+                      ScanIndexForward=False,
+                      Limit=50
+                  )
+                  
+                  workouts = response.get('Items', [])
+                  
+                  # Filter by workout type if provided
+                  if workout_type:
+                      workouts = [w for w in workouts if w.get('workoutType') == workout_type]
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({
+                          'count': len(workouts),
+                          'workouts': workouts
+                      }, cls=DecimalEncoder)
+                  }
+              
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': 'Internal server error'})
+                  }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda function to get workout statistics
+  GetWorkoutStatsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'get-workout-stats-${AWS::Region}-${EnvironmentSuffix}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt WorkoutApiLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref WorkoutLogsTable
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from boto3.dynamodb.conditions import Key
+          from decimal import Decimal
+          from datetime import datetime, timedelta
+
+          dynamodb = boto3.resource('dynamodb')
+          table = dynamodb.Table(os.environ['TABLE_NAME'])
+
+          class DecimalEncoder(json.JSONEncoder):
+              def default(self, obj):
+                  if isinstance(obj, Decimal):
+                      return float(obj)
+                  return super(DecimalEncoder, self).default(obj)
+
+          def lambda_handler(event, context):
+              try:
+                  user_id = event['queryStringParameters'].get('userId')
+                  days = int(event['queryStringParameters'].get('days', 30))
+                  
+                  if not user_id:
+                      return {
+                          'statusCode': 400,
+                          'headers': {'Content-Type': 'application/json'},
+                          'body': json.dumps({'error': 'userId parameter is required'})
+                      }
+                  
+                  # Calculate timestamp for the start of the period
+                  start_timestamp = int((datetime.now() - timedelta(days=days)).timestamp())
+                  
+                  # Query workouts within the time period
+                  response = table.query(
+                      KeyConditionExpression=Key('userId').eq(user_id) & Key('workoutTimestamp').gte(start_timestamp)
+                  )
+                  
+                  workouts = response.get('Items', [])
+                  
+                  # Calculate statistics
+                  total_workouts = len(workouts)
+                  total_duration = sum(float(w.get('duration', 0)) for w in workouts)
+                  total_calories = sum(float(w.get('calories', 0)) for w in workouts)
+                  total_distance = sum(float(w.get('distance', 0)) for w in workouts)
+                  
+                  workout_types = {}
+                  for workout in workouts:
+                      wtype = workout.get('workoutType', 'Unknown')
+                      workout_types[wtype] = workout_types.get(wtype, 0) + 1
+                  
+                  stats = {
+                      'userId': user_id,
+                      'period': f'Last {days} days',
+                      'totalWorkouts': total_workouts,
+                      'totalDuration': round(total_duration, 2),
+                      'totalCalories': round(total_calories, 2),
+                      'totalDistance': round(total_distance, 2),
+                      'averageCaloriesPerWorkout': round(total_calories / total_workouts, 2) if total_workouts > 0 else 0,
+                      'workoutTypeBreakdown': workout_types
+                  }
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps(stats, cls=DecimalEncoder)
+                  }
+              
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': 'Internal server error'})
+                  }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # API Gateway REST API
+  WorkoutApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'workoutapi-${AWS::Region}-${EnvironmentSuffix}'
+      Description: Serverless API for fitness workout logging with comprehensive metrics
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # API Gateway Resources and Methods
+  WorkoutLogsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref WorkoutApi
+      ParentId: !GetAtt WorkoutApi.RootResourceId
+      PathPart: workouts
+
+  StatsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref WorkoutApi
+      ParentId: !GetAtt WorkoutApi.RootResourceId
+      PathPart: stats
+
+  # POST /workouts - Create workout log
+  CreateWorkoutMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref WorkoutApi
+      ResourceId: !Ref WorkoutLogsResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateWorkoutLogFunction.Arn}/invocations'
+
+  # GET /workouts - Retrieve workout logs
+  GetWorkoutsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref WorkoutApi
+      ResourceId: !Ref WorkoutLogsResource
+      HttpMethod: GET
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetWorkoutLogsFunction.Arn}/invocations'
+
+  # GET /stats - Retrieve workout statistics
+  GetStatsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref WorkoutApi
+      ResourceId: !Ref StatsResource
+      HttpMethod: GET
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetWorkoutStatsFunction.Arn}/invocations'
+
+  # Lambda permissions for API Gateway
+  CreateWorkoutLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CreateWorkoutLogFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WorkoutApi}/*/*/*'
+
+  GetWorkoutsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetWorkoutLogsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WorkoutApi}/*/*/*'
+
+  GetStatsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetWorkoutStatsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WorkoutApi}/*/*/*'
+
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - CreateWorkoutMethod
+      - GetWorkoutsMethod
+      - GetStatsMethod
+    Properties:
+      RestApiId: !Ref WorkoutApi
+      StageName: !Ref ApiStageName
+      StageDescription:
+        MetricsEnabled: true
+        LoggingLevel: INFO
+        DataTraceEnabled: true
+        ThrottlingBurstLimit: 100
+        ThrottlingRateLimit: 50
+
+  # CloudWatch Log Group for API Gateway
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/workoutapi-${AWS::Region}-${EnvironmentSuffix}'
+      RetentionInDays: 30
+
+  # CloudWatch Dashboard for monitoring
+  WorkoutApiDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'workoutapi-metrics-${AWS::Region}-${EnvironmentSuffix}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Total Invocations"}],
+                  [".", "Errors", {"stat": "Sum", "label": "Errors"}],
+                  [".", "Duration", {"stat": "Average", "label": "Avg Duration"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Lambda Performance Metrics",
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", {"stat": "Sum"}],
+                  [".", "ConsumedWriteCapacityUnits", {"stat": "Sum"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Capacity Usage",
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["FitnessApp/Workouts", "WorkoutLogsCreated", {"stat": "Sum"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Workout Logs Created",
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/ApiGateway", "Count", {"stat": "Sum", "label": "API Requests"}],
+                  [".", "4XXError", {"stat": "Sum", "label": "Client Errors"}],
+                  [".", "5XXError", {"stat": "Sum", "label": "Server Errors"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "API Gateway Metrics",
+                "yAxis": {"left": {"min": 0}}
+              }
+            }
+          ]
+        }
+
+  # SSM Parameters for configuration
+  ApiEndpointParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/fitness-app/${EnvironmentSuffix}/api-endpoint'
+      Type: String
+      Value: !Sub 'https://${WorkoutApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}'
+      Description: API Gateway endpoint URL for the workout logging API
+
+  TableNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/fitness-app/${EnvironmentSuffix}/table-name'
+      Type: String
+      Value: !Ref WorkoutLogsTable
+      Description: DynamoDB table name for workout logs
+
+  # CloudWatch Alarm for API errors
+  ApiErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'workoutapi-errors-${AWS::Region}-${EnvironmentSuffix}'
+      AlarmDescription: Alert when API error rate exceeds threshold
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub 'workoutapi-${AWS::Region}-${EnvironmentSuffix}'
+
+  # CloudWatch Alarm for DynamoDB throttling
+  DynamoDBThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'workout-dynamodb-throttle-${AWS::Region}-${EnvironmentSuffix}'
+      AlarmDescription: Alert when DynamoDB requests are throttled
+      MetricName: UserErrors
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref WorkoutLogsTable
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL for the workout logging API
+    Value: !Sub 'https://${WorkoutApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}'
+    Export:
+      Name: !Sub 'workoutapi-endpoint-${AWS::Region}-${EnvironmentSuffix}'
+
+  DynamoDBTableName:
+    Description: Name of the DynamoDB table storing workout logs
+    Value: !Ref WorkoutLogsTable
+    Export:
+      Name: !Sub 'workout-table-name-${AWS::Region}-${EnvironmentSuffix}'
+
+  DashboardURL:
+    Description: CloudWatch Dashboard URL for monitoring API metrics
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=workoutapi-metrics-${AWS::Region}-${EnvironmentSuffix}'
+
+  CreateWorkoutEndpoint:
+    Description: Endpoint to create new workout logs
+    Value: !Sub 'https://${WorkoutApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}/workouts'
+
+  GetWorkoutsEndpoint:
+    Description: Endpoint to retrieve workout logs
+    Value: !Sub 'https://${WorkoutApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}/workouts?userId=USER_ID'
+
+  GetStatsEndpoint:
+    Description: Endpoint to retrieve workout statistics
+    Value: !Sub 'https://${WorkoutApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}/stats?userId=USER_ID&days=30'
+
+  LambdaFunctionNames:
+    Description: Names of the Lambda functions created
+    Value: !Sub 'create-workout-log-${AWS::Region}-${EnvironmentSuffix}, get-workoutlogs-${AWS::Region}-${EnvironmentSuffix}, get-workout-stats-${AWS::Region}-${EnvironmentSuffix}'

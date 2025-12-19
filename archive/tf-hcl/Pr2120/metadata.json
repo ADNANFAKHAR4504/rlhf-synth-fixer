@@ -1,0 +1,49 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291686",
+  "team": "5",
+  "startedAt": "2025-08-23T15:49:44.972Z",
+  "subtask": "Multi-region production-ready AWS infrastructure with blue-green deployment, comprehensive security controls, and CIS compliance",
+  "subject_labels": [
+    "terraform",
+    "aws",
+    "multi-region",
+    "blue-green-deployment",
+    "security",
+    "compliance",
+    "vpc",
+    "auto-scaling",
+    "load-balancer",
+    "cloudfront",
+    "route53",
+    "kms",
+    "cloudtrail",
+    "secrets-manager",
+    "vpc-peering"
+  ],
+  "training_quality": "high",
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "elb",
+    "autoscaling",
+    "route53",
+    "cloudfront",
+    "kms",
+    "secrets-manager",
+    "cloudtrail",
+    "waf",
+    "s3",
+    "dynamodb",
+    "iam"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sadaf-jamal-au27",
+  "dockerS3Location": ""
+}

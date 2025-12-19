@@ -1,0 +1,102 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Lambda nested stack with environment-specific memory allocation and VPC integration",
+  "Parameters": {
+    "Environment": {"Type": "String", "Description": "Environment name"},
+    "EnvironmentSuffix": {"Type": "String", "Description": "Unique suffix for resource naming"},
+    "ProjectName": {"Type": "String", "Description": "Project name for tagging"},
+    "CostCenter": {"Type": "String", "Description": "Cost center for billing"},
+    "PrivateSubnet1": {"Type": "String", "Description": "Private Subnet 1 ID"},
+    "PrivateSubnet2": {"Type": "String", "Description": "Private Subnet 2 ID"},
+    "LambdaSecurityGroup": {"Type": "String", "Description": "Lambda Security Group ID"},
+    "LambdaMemory": {"Type": "Number", "Description": "Lambda memory allocation in MB"},
+    "DBEndpoint": {"Type": "String", "Description": "Database cluster endpoint"}
+  },
+  "Resources": {
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "lambda-execution-role-${Environment}-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {"Service": "lambda.amazonaws.com"},
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "LambdaS3Access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+        ]
+      }
+    },
+    "DataProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {"Fn::Sub": "data-processor-${Environment}-${EnvironmentSuffix}"},
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
+        "MemorySize": {"Ref": "LambdaMemory"},
+        "Timeout": 300,
+        "VpcConfig": {
+          "SecurityGroupIds": [{"Ref": "LambdaSecurityGroup"}],
+          "SubnetIds": [{"Ref": "PrivateSubnet1"}, {"Ref": "PrivateSubnet2"}]
+        },
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {"Ref": "Environment"},
+            "DB_ENDPOINT": {"Ref": "DBEndpoint"},
+            "LOG_LEVEL": "INFO"
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))\n\ndef lambda_handler(event, context):\n    logger.info(f\"Processing event in {os.environ.get('ENVIRONMENT', 'unknown')} environment\")\n    logger.info(f\"Database endpoint: {os.environ.get('DB_ENDPOINT', 'not set')}\")\n    \n    try:\n        result = {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Data processed successfully',\n                'environment': os.environ.get('ENVIRONMENT'),\n                'requestId': context.request_id\n            })\n        }\n        return result\n    except Exception as e:\n        logger.error(f\"Error processing data: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)})\n        }\n"
+        },
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "data-processor-${Environment}-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "DataProcessorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {"Fn::Sub": "/aws/lambda/data-processor-${Environment}-${EnvironmentSuffix}"},
+        "RetentionInDays": 7
+      },
+      "DeletionPolicy": "Delete"
+    }
+  },
+  "Outputs": {
+    "DataProcessorFunctionArn": {"Description": "Data Processor Lambda Function ARN", "Value": {"Fn::GetAtt": ["DataProcessorFunction", "Arn"]}},
+    "DataProcessorFunctionName": {"Description": "Data Processor Lambda Function Name", "Value": {"Ref": "DataProcessorFunction"}},
+    "LambdaExecutionRoleArn": {"Description": "Lambda Execution Role ARN", "Value": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]}}
+  }
+}

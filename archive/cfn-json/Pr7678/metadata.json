@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-02T07:22:37.050621Z",
+  "subtask": "Environment Migration",
+  "subject_labels": [
+    "rds",
+    "aurora",
+    "mysql",
+    "database-migration",
+    "kms",
+    "encryption",
+    "high-availability",
+    "multi-az"
+  ],
+  "aws_services": [
+    "ec2",
+    "kms",
+    "rds",
+    "vpc"
+  ],
+  "po_id": "101000921",
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

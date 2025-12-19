@@ -1,0 +1,29 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "32168794",
+  "team": "synth",
+  "startedAt": "2025-10-02T11:16:40+05:30",
+  "subtask": "Serverless Infrastructure",
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "EventBridge",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM",
+    "SQS",
+    "X-Ray",
+    "CloudWatch Logs",
+    "EventBridge Scheduler"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,1592 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Document Management System Migration Infrastructure - DMS, DataSync, RDS Aurora, EFS, CloudWatch, SNS",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource names to support parallel deployments",
+      "Default": "prod",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "VpcCIDR": {
+      "Type": "String",
+      "Description": "CIDR block for VPC",
+      "Default": "10.0.0.0/16"
+    },
+    "PublicSubnetCIDR": {
+      "Type": "String",
+      "Description": "CIDR block for public subnet",
+      "Default": "10.0.1.0/24"
+    },
+    "PrivateSubnet1CIDR": {
+      "Type": "String",
+      "Description": "CIDR block for first private subnet",
+      "Default": "10.0.11.0/24"
+    },
+    "PrivateSubnet2CIDR": {
+      "Type": "String",
+      "Description": "CIDR block for second private subnet (required for DMS)",
+      "Default": "10.0.12.0/24"
+    },
+    "DBMasterUsername": {
+      "Type": "String",
+      "Description": "Master username for RDS Aurora MySQL",
+      "Default": "admin",
+      "NoEcho": true
+    },
+    "SourceDatabaseEndpoint": {
+      "Type": "String",
+      "Description": "Source database endpoint for DMS",
+      "Default": "test-source-db.example.com"
+    },
+    "SourceDatabasePort": {
+      "Type": "String",
+      "Description": "Source database port",
+      "Default": "3306"
+    },
+    "SourceDatabaseName": {
+      "Type": "String",
+      "Description": "Source database name",
+      "Default": "testdb"
+    },
+    "SourceDatabaseUsername": {
+      "Type": "String",
+      "Description": "Source database username",
+      "Default": "testuser",
+      "NoEcho": true
+    },
+    "SourceDatabasePassword": {
+      "Type": "String",
+      "Description": "Source database password",
+      "Default": "TestPassword123!",
+      "NoEcho": true
+    },
+    "AlertEmailAddress": {
+      "Type": "String",
+      "Description": "Email address for migration alerts",
+      "Default": "test@example.com",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    }
+  },
+  "Resources": {
+    "DBMasterPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "rds-master-password-${EnvironmentSuffix}"
+        },
+        "Description": "Master password for RDS Aurora MySQL cluster",
+        "SecretString": {
+          "Fn::Sub": "{\n  \"username\": \"${DBMasterUsername}\",\n  \"password\": \"TestDbPassword123!\"\n}\n"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-master-password-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VpcCIDR"
+        },
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "MigrationPhase",
+            "Value": "infrastructure"
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "sensitive"
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-igw-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnetCIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-public-subnet-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet1CIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-private-subnet-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet2CIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-private-subnet-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "NATGatewayEIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-nat-eip-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NATGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATGatewayEIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-nat-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-public-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DefaultPublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnetRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet"
+        }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-private-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DefaultPrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NATGateway"
+        }
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        }
+      }
+    },
+    "RDSEncryptionKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for RDS Aurora encryption - ${EnvironmentSuffix}"
+        },
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow RDS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "rds.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-encryption-key-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "RDSEncryptionKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/rds-migration-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "RDSEncryptionKey"
+        }
+      }
+    },
+    "EFSEncryptionKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for EFS encryption - ${EnvironmentSuffix}"
+        },
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow EFS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "elasticfilesystem.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "efs-encryption-key-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "EFSEncryptionKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/efs-migration-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "EFSEncryptionKey"
+        }
+      }
+    },
+    "RDSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "rds-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for RDS Aurora MySQL cluster",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "DMSSecurityGroup"
+            },
+            "Description": "Allow MySQL access from DMS"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "MigrationPhase",
+            "Value": "database"
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "sensitive"
+          }
+        ]
+      }
+    },
+    "DMSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "dms-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for DMS replication instance",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow outbound MySQL connections"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "dms-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "MigrationPhase",
+            "Value": "replication"
+          }
+        ]
+      }
+    },
+    "EFSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "efs-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for EFS mount targets",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 2049,
+            "ToPort": 2049,
+            "SourceSecurityGroupId": {
+              "Ref": "DataSyncSecurityGroup"
+            },
+            "Description": "Allow NFS access from DataSync"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "efs-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "MigrationPhase",
+            "Value": "storage"
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "sensitive"
+          }
+        ]
+      }
+    },
+    "DataSyncSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "datasync-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for DataSync agents",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 2049,
+            "ToPort": 2049,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow outbound NFS connections"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTPS for DataSync service"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "datasync-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "MigrationPhase",
+            "Value": "file-transfer"
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "aurora-subnet-group-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for Aurora MySQL cluster",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-subnet-group-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "MasterUsername": {
+          "Ref": "DBMasterUsername"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}"
+        },
+        "DatabaseName": "documents",
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "RDSSecurityGroup"
+          }
+        ],
+        "StorageEncrypted": true,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "RDSEncryptionKey",
+            "Arn"
+          ]
+        },
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "general",
+          "slowquery"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "MigrationPhase",
+            "Value": "database"
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "sensitive"
+          }
+        ]
+      }
+    },
+    "AuroraInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "Engine": "aurora-mysql",
+        "DBInstanceClass": "db.r5.large",
+        "PubliclyAccessible": false,
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "Engine": "aurora-mysql",
+        "DBInstanceClass": "db.r5.large",
+        "PubliclyAccessible": false,
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "FileSystem": {
+      "Type": "AWS::EFS::FileSystem",
+      "Properties": {
+        "Encrypted": true,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "EFSEncryptionKey",
+            "Arn"
+          ]
+        },
+        "LifecyclePolicies": [
+          {
+            "TransitionToIA": "AFTER_30_DAYS"
+          }
+        ],
+        "PerformanceMode": "generalPurpose",
+        "ThroughputMode": "bursting",
+        "FileSystemTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-efs-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "MigrationPhase",
+            "Value": "storage"
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "sensitive"
+          }
+        ]
+      }
+    },
+    "MountTarget1": {
+      "Type": "AWS::EFS::MountTarget",
+      "Properties": {
+        "FileSystemId": {
+          "Ref": "FileSystem"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "EFSSecurityGroup"
+          }
+        ]
+      }
+    },
+    "MountTarget2": {
+      "Type": "AWS::EFS::MountTarget",
+      "Properties": {
+        "FileSystemId": {
+          "Ref": "FileSystem"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "EFSSecurityGroup"
+          }
+        ]
+      }
+    },
+    "DMSSubnetGroup": {
+      "Type": "AWS::DMS::ReplicationSubnetGroup",
+      "Properties": {
+        "ReplicationSubnetGroupIdentifier": {
+          "Fn::Sub": "dms-subnet-group-${EnvironmentSuffix}"
+        },
+        "ReplicationSubnetGroupDescription": "Subnet group for DMS replication instance",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "dms-subnet-group-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DMSReplicationInstance": {
+      "Type": "AWS::DMS::ReplicationInstance",
+      "Properties": {
+        "ReplicationInstanceIdentifier": {
+          "Fn::Sub": "dms-instance-${EnvironmentSuffix}"
+        },
+        "ReplicationInstanceClass": "dms.r5.large",
+        "AllocatedStorage": 100,
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DMSSecurityGroup"
+          }
+        ],
+        "ReplicationSubnetGroupIdentifier": {
+          "Ref": "DMSSubnetGroup"
+        },
+        "MultiAZ": false,
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "dms-instance-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "MigrationPhase",
+            "Value": "replication"
+          }
+        ]
+      }
+    },
+    "DMSSourceEndpoint": {
+      "Type": "AWS::DMS::Endpoint",
+      "Properties": {
+        "EndpointIdentifier": {
+          "Fn::Sub": "dms-source-${EnvironmentSuffix}"
+        },
+        "EndpointType": "source",
+        "EngineName": "mysql",
+        "ServerName": {
+          "Ref": "SourceDatabaseEndpoint"
+        },
+        "Port": {
+          "Ref": "SourceDatabasePort"
+        },
+        "DatabaseName": {
+          "Ref": "SourceDatabaseName"
+        },
+        "Username": {
+          "Ref": "SourceDatabaseUsername"
+        },
+        "Password": {
+          "Ref": "SourceDatabasePassword"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "dms-source-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DMSTargetEndpoint": {
+      "Type": "AWS::DMS::Endpoint",
+      "Properties": {
+        "EndpointIdentifier": {
+          "Fn::Sub": "dms-target-${EnvironmentSuffix}"
+        },
+        "EndpointType": "target",
+        "EngineName": "aurora",
+        "ServerName": {
+          "Fn::GetAtt": [
+            "AuroraCluster",
+            "Endpoint.Address"
+          ]
+        },
+        "Port": {
+          "Fn::GetAtt": [
+            "AuroraCluster",
+            "Endpoint.Port"
+          ]
+        },
+        "DatabaseName": "documents",
+        "Username": {
+          "Ref": "DBMasterUsername"
+        },
+        "Password": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "dms-target-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DMSReplicationTask": {
+      "Type": "AWS::DMS::ReplicationTask",
+      "Properties": {
+        "ReplicationTaskIdentifier": {
+          "Fn::Sub": "dms-task-${EnvironmentSuffix}"
+        },
+        "SourceEndpointArn": {
+          "Ref": "DMSSourceEndpoint"
+        },
+        "TargetEndpointArn": {
+          "Ref": "DMSTargetEndpoint"
+        },
+        "ReplicationInstanceArn": {
+          "Ref": "DMSReplicationInstance"
+        },
+        "MigrationType": "full-load-and-cdc",
+        "TableMappings": "{\n  \"rules\": [\n    {\n      \"rule-type\": \"selection\",\n      \"rule-id\": \"1\",\n      \"rule-name\": \"1\",\n      \"object-locator\": {\n        \"schema-name\": \"%\",\n        \"table-name\": \"%\"\n      },\n      \"rule-action\": \"include\"\n    }\n  ]\n}\n",
+        "ReplicationTaskSettings": "{\n  \"TargetMetadata\": {\n    \"SupportLobs\": true,\n    \"FullLobMode\": false,\n    \"LobChunkSize\": 64,\n    \"LimitedSizeLobMode\": true,\n    \"LobMaxSize\": 32\n  },\n  \"FullLoadSettings\": {\n    \"TargetTablePrepMode\": \"DROP_AND_CREATE\",\n    \"CreatePkAfterFullLoad\": false,\n    \"StopTaskCachedChangesApplied\": false,\n    \"StopTaskCachedChangesNotApplied\": false,\n    \"MaxFullLoadSubTasks\": 8,\n    \"TransactionConsistencyTimeout\": 600,\n    \"CommitRate\": 10000\n  },\n  \"Logging\": {\n    \"EnableLogging\": true,\n    \"LogComponents\": [\n      {\n        \"Id\": \"SOURCE_UNLOAD\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"TARGET_LOAD\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"SOURCE_CAPTURE\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"TARGET_APPLY\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      }\n    ]\n  },\n  \"ChangeProcessingDdlHandlingPolicy\": {\n    \"HandleSourceTableDropped\": true,\n    \"HandleSourceTableTruncated\": true,\n    \"HandleSourceTableAltered\": true\n  },\n  \"ChangeProcessingTuning\": {\n    \"BatchApplyPreserveTransaction\": true,\n    \"BatchApplyTimeoutMin\": 1,\n    \"BatchApplyTimeoutMax\": 30,\n    \"BatchApplyMemoryLimit\": 500,\n    \"BatchSplitSize\": 0,\n    \"MinTransactionSize\": 1000,\n    \"CommitTimeout\": 1,\n    \"MemoryLimitTotal\": 1024,\n    \"MemoryKeepTime\": 60,\n    \"StatementCacheSize\": 50\n  }\n}\n",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "dms-task-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "MigrationPhase",
+            "Value": "replication"
+          }
+        ]
+      }
+    },
+    "DataSyncRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "datasync-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "datasync.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AWSDataSyncFullAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "EFSAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "elasticfilesystem:ClientMount",
+                    "elasticfilesystem:ClientWrite",
+                    "elasticfilesystem:DescribeFileSystems",
+                    "elasticfilesystem:DescribeMountTargets"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:file-system/${FileSystem}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:DescribeSubnets",
+                    "ec2:DescribeSecurityGroups"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "datasync-role-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "MigrationAlertTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "migration-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Migration Alerts",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-alerts-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "MigrationPhase",
+            "Value": "monitoring"
+          }
+        ]
+      }
+    },
+    "MigrationAlertSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Protocol": "email",
+        "TopicArn": {
+          "Ref": "MigrationAlertTopic"
+        },
+        "Endpoint": {
+          "Ref": "AlertEmailAddress"
+        }
+      }
+    },
+    "DMSReplicationLagAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "dms-replication-lag-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when DMS replication lag exceeds threshold",
+        "MetricName": "CDCLatencySource",
+        "Namespace": "AWS/DMS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 300,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ReplicationInstanceIdentifier",
+            "Value": {
+              "Ref": "DMSReplicationInstance"
+            }
+          },
+          {
+            "Name": "ReplicationTaskIdentifier",
+            "Value": {
+              "Ref": "DMSReplicationTask"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "MigrationAlertTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "AuroraClusterCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "aurora-cpu-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Aurora cluster CPU exceeds threshold",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": {
+              "Ref": "AuroraCluster"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "MigrationAlertTopic"
+          }
+        ]
+      }
+    },
+    "EFSBurstCreditBalanceAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "efs-burst-credit-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when EFS burst credit balance is low",
+        "MetricName": "BurstCreditBalance",
+        "Namespace": "AWS/EFS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 1000000000000,
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FileSystemId",
+            "Value": {
+              "Ref": "FileSystem"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "MigrationAlertTopic"
+          }
+        ]
+      }
+    },
+    "SSMRDSEndpoint": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/migration/${EnvironmentSuffix}/rds/endpoint"
+        },
+        "Type": "String",
+        "Value": {
+          "Fn::GetAtt": [
+            "AuroraCluster",
+            "Endpoint.Address"
+          ]
+        },
+        "Description": "Aurora cluster endpoint",
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "MigrationPhase": "database"
+        }
+      }
+    },
+    "SSMRDSPort": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/migration/${EnvironmentSuffix}/rds/port"
+        },
+        "Type": "String",
+        "Value": {
+          "Fn::GetAtt": [
+            "AuroraCluster",
+            "Endpoint.Port"
+          ]
+        },
+        "Description": "Aurora cluster port",
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    },
+    "SSMRDSUsername": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/migration/${EnvironmentSuffix}/rds/username"
+        },
+        "Type": "String",
+        "Value": {
+          "Ref": "DBMasterUsername"
+        },
+        "Description": "Aurora master username",
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "DataClassification": "sensitive"
+        }
+      }
+    },
+    "SSMEFSId": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/migration/${EnvironmentSuffix}/efs/filesystem-id"
+        },
+        "Type": "String",
+        "Value": {
+          "Ref": "FileSystem"
+        },
+        "Description": "EFS file system ID",
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    },
+    "SSMDMSInstanceArn": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/migration/${EnvironmentSuffix}/dms/instance-arn"
+        },
+        "Type": "String",
+        "Value": {
+          "Ref": "DMSReplicationInstance"
+        },
+        "Description": "DMS replication instance ARN",
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    },
+    "SSMMigrationStatus": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/migration/${EnvironmentSuffix}/status"
+        },
+        "Type": "String",
+        "Value": "initialized",
+        "Description": "Current migration status",
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "MigrationPhase": "tracking"
+        }
+      }
+    },
+    "MigrationDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "migration-dashboard-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DMS\", \"CDCLatencySource\", {\"stat\": \"Average\", \"label\": \"CDC Latency (seconds)\"}],\n          [\".\", \"CDCLatencyTarget\", {\"stat\": \"Average\", \"label\": \"Target Latency (seconds)\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DMS Replication Lag\",\n        \"period\": 300,\n        \"yAxis\": {\n          \"left\": {\n            \"label\": \"Seconds\"\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DMS\", \"FullLoadThroughputRowsSource\", {\"stat\": \"Sum\", \"label\": \"Rows Loaded\"}],\n          [\".\", \"FullLoadThroughputBandwidthSource\", {\"stat\": \"Sum\", \"label\": \"Bandwidth (KB)\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DMS Full Load Progress\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/RDS\", \"CPUUtilization\", {\"stat\": \"Average\", \"label\": \"CPU Utilization\"}],\n          [\".\", \"DatabaseConnections\", {\"stat\": \"Average\", \"label\": \"Connections\"}],\n          [\".\", \"FreeableMemory\", {\"stat\": \"Average\", \"label\": \"Freeable Memory\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"RDS Aurora Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/EFS\", \"ClientConnections\", {\"stat\": \"Sum\", \"label\": \"Client Connections\"}],\n          [\".\", \"DataReadIOBytes\", {\"stat\": \"Sum\", \"label\": \"Read IO Bytes\"}],\n          [\".\", \"DataWriteIOBytes\", {\"stat\": \"Sum\", \"label\": \"Write IO Bytes\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"EFS Activity\",\n        \"period\": 300\n      }\n    }\n  ]\n}\n"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPC-ID"
+        }
+      }
+    },
+    "PrivateSubnetIds": {
+      "Description": "Private subnet IDs",
+      "Value": {
+        "Fn::Join": [
+          ",",
+          [
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            }
+          ]
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-Private-Subnets"
+        }
+      }
+    },
+    "PublicSubnetId": {
+      "Description": "Public subnet ID",
+      "Value": {
+        "Ref": "PublicSubnet"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-Public-Subnet"
+        }
+      }
+    },
+    "AuroraClusterEndpoint": {
+      "Description": "Aurora cluster endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-Aurora-Endpoint"
+        }
+      }
+    },
+    "AuroraClusterPort": {
+      "Description": "Aurora cluster port",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Port"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-Aurora-Port"
+        }
+      }
+    },
+    "EFSFileSystemId": {
+      "Description": "EFS file system ID",
+      "Value": {
+        "Ref": "FileSystem"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EFS-ID"
+        }
+      }
+    },
+    "DMSReplicationInstanceArn": {
+      "Description": "DMS replication instance ARN",
+      "Value": {
+        "Ref": "DMSReplicationInstance"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DMS-Instance-ARN"
+        }
+      }
+    },
+    "DMSReplicationTaskArn": {
+      "Description": "DMS replication task ARN",
+      "Value": {
+        "Ref": "DMSReplicationTask"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DMS-Task-ARN"
+        }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "SNS topic ARN for migration alerts",
+      "Value": {
+        "Ref": "MigrationAlertTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNS-Topic-ARN"
+        }
+      }
+    },
+    "CloudWatchDashboardURL": {
+      "Description": "CloudWatch dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=migration-dashboard-${EnvironmentSuffix}"
+      }
+    },
+    "RDSEncryptionKeyId": {
+      "Description": "KMS key ID for RDS encryption",
+      "Value": {
+        "Fn::GetAtt": [
+          "RDSEncryptionKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDS-KMS-Key"
+        }
+      }
+    },
+    "EFSEncryptionKeyId": {
+      "Description": "KMS key ID for EFS encryption",
+      "Value": {
+        "Fn::GetAtt": [
+          "EFSEncryptionKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EFS-KMS-Key"
+        }
+      }
+    }
+  }
+}

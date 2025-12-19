@@ -1,0 +1,39 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "4634",
+  "team": "5",
+  "startedAt": "2025-10-16T18:59:59.528Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Lambda",
+    "Lambda@Edge",
+    "WAF v2",
+    "Route53",
+    "ACM",
+    "KMS",
+    "DynamoDB",
+    "SNS",
+    "IAM",
+    "Secrets Manager",
+    "Glue",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "EventBridge"
+  ],
+  "training_quality": 9,
+  "background": "Deploy a production-ready CloudFront CDN for e-book distribution with Lambda@Edge authentication, WAF security, signed URLs, comprehensive logging, and monitoring. Fixes include S3 ACL canonical user ID resolution and Lambda@Edge environment variable restriction compliance.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}

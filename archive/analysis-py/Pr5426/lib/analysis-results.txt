@@ -1,0 +1,47 @@
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:41: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  StartTime=datetime.utcnow() - timedelta(days=days),
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:42: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  EndTime=datetime.utcnow(),
+Warning: Error analyzing bucket finops-test-versioning-bucket: <botocore.errorfactory.S3Exceptions object at 0x7fe6fc81a6c0> object has no attribute NoSuchTagSet. Valid exceptions are: BucketAlreadyExists, BucketAlreadyOwnedByYou, EncryptionTypeMismatch, IdempotencyParameterMismatch, InvalidObjectState, InvalidRequest, InvalidWriteOffset, NoSuchBucket, NoSuchKey, NoSuchUpload, ObjectAlreadyInActiveTierError, ObjectNotInActiveTierError, TooManyParts
+Warning: Error analyzing bucket finops-test-large-bucket: <botocore.errorfactory.S3Exceptions object at 0x7fe6fc81a6c0> object has no attribute NoSuchTagSet. Valid exceptions are: BucketAlreadyExists, BucketAlreadyOwnedByYou, EncryptionTypeMismatch, IdempotencyParameterMismatch, InvalidObjectState, InvalidRequest, InvalidWriteOffset, NoSuchBucket, NoSuchKey, NoSuchUpload, ObjectAlreadyInActiveTierError, ObjectNotInActiveTierError, TooManyParts
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:357: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'report_date': datetime.utcnow().isoformat(),
+Starting FinOps analysis for us-east-1...
+Analyzing ALBs...
+Analyzing NAT Gateways...
+Analyzing S3 buckets...
+Analyzing Elastic IPs...
+
+================================================================================
+FinOps Waste Analysis Report
+================================================================================
++-------------------------------------------------------+------------------------------+------------------------+---------------------------------------------+
+| Resource ID                                           | Waste Type                   | Est. Monthly Savings   | Details                                     |
++=======================================================+==============================+========================+=============================================+
+| nat-3037258ae0464221f                                 | UnderutilizedNATGateway      | $32.40                 | BytesProcessed: 0.00 MB in 30 days          |
++-------------------------------------------------------+------------------------------+------------------------+---------------------------------------------+
+| nat-36ccba9efa9af66b4                                 | UnderutilizedNATGateway      | $32.40                 | BytesProcessed: 0.00 MB in 30 days          |
++-------------------------------------------------------+------------------------------+------------------------+---------------------------------------------+
+| arn:aws:elasticloadbalancing:us-east-1:12345678901... | IdleALB                      | $18.40                 | RequestCount: 0 in 14 days                  |
++-------------------------------------------------------+------------------------------+------------------------+---------------------------------------------+
+| eipalloc-19b2611de19ddb739                            | UnassociatedEIP              | $3.60                  | Elastic IP not associated with any insta... |
++-------------------------------------------------------+------------------------------+------------------------+---------------------------------------------+
+| eipalloc-0721c596655f3d7f1                            | UnassociatedEIP              | $3.60                  | Elastic IP not associated with any insta... |
++-------------------------------------------------------+------------------------------+------------------------+---------------------------------------------+
+| eipalloc-f8ad20df99db900f9                            | UnassociatedEIP              | $3.60                  | Elastic IP not associated with any insta... |
++-------------------------------------------------------+------------------------------+------------------------+---------------------------------------------+
+| eipalloc-ffe2d2357500349a8                            | EIPAttachedToStoppedInstance | $3.60                  | Attached to stopped instance: i-0b3d52f9... |
++-------------------------------------------------------+------------------------------+------------------------+---------------------------------------------+
+| eipalloc-91587066eec706efe                            | UnassociatedEIP              | $3.60                  | Elastic IP not associated with any insta... |
++-------------------------------------------------------+------------------------------+------------------------+---------------------------------------------+
+| eipalloc-db2dc6d6cf83348a1                            | UnassociatedEIP              | $3.60                  | Elastic IP not associated with any insta... |
++-------------------------------------------------------+------------------------------+------------------------+---------------------------------------------+
+| eipalloc-73f0c85430cd8ddc3                            | UnassociatedEIP              | $3.60                  | Elastic IP not associated with any insta... |
++-------------------------------------------------------+------------------------------+------------------------+---------------------------------------------+
+| eipalloc-954cd88e96c50aa29                            | EIPAttachedToStoppedInstance | $3.60                  | Attached to stopped instance: i-7c460f90... |
++-------------------------------------------------------+------------------------------+------------------------+---------------------------------------------+
+
+Total Estimated Monthly Savings: $112.00
+Total Estimated Annual Savings: $1344.00
+
+Detailed report saved to: finops_report.json

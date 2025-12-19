@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291929",
+  "team": "4",
+  "startedAt": "2025-08-25T00:53:09.405Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "CloudTrail",
+    "Config",
+    "GuardDuty",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "S3",
+    "KMS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sudhakar01",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-25T00:00:00+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "l4i5t4v5",
+  "aws_services": [
+    "RDS",
+    "Aurora",
+    "EC2",
+    "Auto Scaling",
+    "ELB",
+    "ALB",
+    "Route 53",
+    "CloudWatch",
+    "KMS",
+    "Secrets Manager",
+    "VPC",
+    "IAM",
+    "SNS"
+  ],
+  "region": "us-east-1",
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

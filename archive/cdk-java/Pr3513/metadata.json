@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "83057192",
+  "team": "synth",
+  "startedAt": "2025-10-03T21:12:33+05:30",
+  "training_quality": 9,
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "X-Ray",
+    "WAF",
+    "EventBridge",
+    "Step Functions",
+    "SNS"
+  ],
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

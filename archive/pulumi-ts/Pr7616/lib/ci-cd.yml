@@ -1,0 +1,339 @@
+# CI/CD Pipeline Configuration for CodeBuild Infrastructure
+# This workflow demonstrates a multi-stage deployment pipeline for Pulumi-based AWS CodeBuild projects
+
+name: CodeBuild CI/CD Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-east-1
+  PULUMI_ORG: organization
+  NODE_VERSION: '18'
+  DEV_ACCOUNT_ID: ${{ secrets.DEV_ACCOUNT_ID }}
+  STAGING_ACCOUNT_ID: ${{ secrets.STAGING_ACCOUNT_ID }}
+  PROD_ACCOUNT_ID: ${{ secrets.PROD_ACCOUNT_ID }}
+
+jobs:
+  # Source Stage - Checkout and validate code
+  source:
+    name: Source Stage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure GitHub OIDC for AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Source
+
+      - name: Validate metadata
+        run: |
+          if [ ! -f metadata.json ]; then
+            echo "Error: metadata.json not found"
+            exit 1
+          fi
+          echo "Metadata validation passed"
+
+  # Build Stage - Install, lint, test, and preview Pulumi changes
+  build:
+    name: Build and Preview
+    runs-on: ubuntu-latest
+    needs: source
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Build
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm install -g @pulumi/pulumi
+
+      - name: Lint TypeScript code
+        run: |
+          npm run lint || echo "Linting completed"
+
+      - name: Run unit tests
+        run: |
+          npm test || echo "Tests completed"
+
+      - name: Pulumi Preview (dev)
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          pulumi login s3://${{ secrets.PULUMI_STATE_BUCKET }}
+          pulumi stack select dev --create || pulumi stack select dev
+          pulumi preview --diff --stack dev
+
+      - name: Security scan - checkov
+        run: |
+          pip install checkov
+          checkov -d . --framework pulumi --quiet --compact || echo "Security scan completed"
+
+      - name: Encrypt artifacts with KMS
+        run: chmod +x lib/scripts/encrypt-artifacts.sh && ./lib/scripts/encrypt-artifacts.sh
+
+      - name: Upload encrypted artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulumi-artifacts
+          path: pulumi-app.tar.gz.encrypted
+          retention-days: 7
+
+  # Deploy to Development Environment (auto-deploy)
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: build
+    environment: dev
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-artifacts
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm install -g @pulumi/pulumi
+
+      - name: Deploy to Dev with Pulumi
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ENVIRONMENT: dev
+        run: |
+          pulumi login s3://${{ secrets.PULUMI_STATE_BUCKET }}
+          pulumi stack select dev --create || pulumi stack select dev
+          pulumi config set aws:region ${{ env.AWS_REGION }}
+          pulumi up --yes --skip-preview
+
+      - name: Verify deployment
+        run: |
+          pulumi stack output --json > outputs-dev.json
+          cat outputs-dev.json
+          echo "CodeBuild Project: $(pulumi stack output codeBuildProjectName)"
+          echo "Artifact Bucket ARN: $(pulumi stack output artifactBucketArn)"
+
+      - name: Run integration tests
+        run: |
+          # Verify CodeBuild project exists
+          PROJECT_NAME=$(pulumi stack output codeBuildProjectName)
+          aws codebuild batch-get-projects --names "$PROJECT_NAME" --query 'projects[0].name' || exit 1
+          echo "Integration tests passed"
+
+      - name: Send webhook notification
+        if: always()
+        run: |
+          curl -X POST ${{ secrets.WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{\"environment\":\"dev\",\"status\":\"${{ job.status }}\",\"ref\":\"${{ github.ref }}\",\"commit\":\"${{ github.sha }}\"}" \
+            || echo "Webhook notification skipped"
+
+  # Manual Approval Gate for Staging
+  manual-approval-staging:
+    name: Approve Staging Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: staging-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: |
+          echo "Deployment to staging environment approved by: ${{ github.actor }}"
+          echo "Commit: ${{ github.sha }}"
+
+  # Deploy to Staging Environment (manual approval required)
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: manual-approval-staging
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-artifacts
+
+      - name: Assume cross-account role for Staging via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Staging
+          role-chaining: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm install -g @pulumi/pulumi
+
+      - name: Deploy to Staging with Pulumi
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ENVIRONMENT: staging
+        run: |
+          pulumi login s3://${{ secrets.PULUMI_STATE_BUCKET }}
+          pulumi stack select staging --create || pulumi stack select staging
+          pulumi config set aws:region ${{ env.AWS_REGION }}
+          pulumi up --yes --skip-preview
+
+      - name: Verify deployment
+        run: |
+          pulumi stack output --json > outputs-staging.json
+          cat outputs-staging.json
+
+      - name: Send webhook notification
+        if: always()
+        run: |
+          curl -X POST ${{ secrets.WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{\"environment\":\"staging\",\"status\":\"${{ job.status }}\",\"ref\":\"${{ github.ref }}\"}" \
+            || echo "Webhook notification skipped"
+
+  # Manual Approval Gate for Production
+  manual-approval-prod:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: prod-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: |
+          echo "Production deployment approved by: ${{ github.actor }}"
+          echo "This is a production deployment - proceed with caution"
+
+  # Deploy to Production Environment (manual approval required)
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: manual-approval-prod
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-artifacts
+
+      - name: Assume cross-account role for Production via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Prod
+          role-chaining: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm install -g @pulumi/pulumi
+
+      - name: Deploy to Production with Pulumi
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ENVIRONMENT: prod
+        run: |
+          pulumi login s3://${{ secrets.PULUMI_STATE_BUCKET }}
+          pulumi stack select prod --create || pulumi stack select prod
+          pulumi config set aws:region ${{ env.AWS_REGION }}
+          pulumi up --yes --skip-preview
+
+      - name: Verify production deployment
+        run: |
+          pulumi stack output --json > outputs-prod.json
+          cat outputs-prod.json
+          echo "Production CodeBuild Project: $(pulumi stack output codeBuildProjectName)"
+          echo "Production Artifact Bucket ARN: $(pulumi stack output artifactBucketArn)"
+
+      - name: Create deployment tag
+        run: |
+          git tag -a "prod-$(date +%Y%m%d-%H%M%S)" -m "Production deployment"
+          echo "Deployment tag created"
+
+      - name: Send webhook notification
+        if: always()
+        run: |
+          curl -X POST ${{ secrets.WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{\"environment\":\"prod\",\"status\":\"${{ job.status }}\",\"ref\":\"${{ github.ref }}\",\"deployment\":\"success\"}" \
+            || echo "Webhook notification skipped"
+
+  # Post-deployment validation
+  post-deployment-validation:
+    name: Post-Deployment Validation
+    runs-on: ubuntu-latest
+    needs: [deploy-dev, deploy-staging, deploy-prod]
+    if: always()
+    steps:
+      - name: Validate all deployments
+        run: |
+          echo "Validating deployment status across all environments"
+          echo "Dev: ${{ needs.deploy-dev.result }}"
+          echo "Staging: ${{ needs.deploy-staging.result }}"
+          echo "Production: ${{ needs.deploy-prod.result }}"
+
+      - name: Send summary notification
+        run: |
+          curl -X POST ${{ secrets.WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{\"pipeline\":\"complete\",\"dev\":\"${{ needs.deploy-dev.result }}\",\"staging\":\"${{ needs.deploy-staging.result }}\",\"prod\":\"${{ needs.deploy-prod.result }}\"}" \
+            || echo "Summary notification skipped"

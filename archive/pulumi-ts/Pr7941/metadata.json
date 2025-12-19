@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "m3k1j6t7",
+  "team": "synth",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "startedAt": "2025-12-05T00:00:00.000Z",
+  "aws_services": [
+    "CloudWatch Logs",
+    "CloudWatch Metrics",
+    "CloudWatch Dashboards",
+    "CloudWatch Alarms",
+    "CloudWatch Metric Filters",
+    "X-Ray Sampling Rules",
+    "SNS FIFO Topics",
+    "KMS",
+    "Lambda",
+    "EventBridge",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

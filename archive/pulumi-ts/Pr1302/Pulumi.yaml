@@ -1,5 +1,0 @@
-name: TapStack
-runtime:
-  name: nodejs
-description: Secure AWS infrastructure with Pulumi TypeScript
-main: lib

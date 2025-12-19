@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "6899",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-11-20T19:51:00Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "KMS",
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "Secrets Manager",
+    "IAM",
+    "VPC",
+    "CloudWatch",
+    "EC2"
+  ],
+  "region": "us-east-2",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

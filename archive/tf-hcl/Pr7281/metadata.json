@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350114",
+  "team": "4",
+  "startedAt": "2025-11-25T14:02:06.116Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "training_quality": 9,
+  "background": "Production-grade multi-tier AWS infrastructure with comprehensive security, monitoring, and multi-environment support. Includes VPC with public/private subnets, Auto Scaling EC2 instances behind ALB, encrypted RDS database, S3 storage, KMS encryption, CloudWatch monitoring, and SNS alerting. All resources properly tagged and configured for dev/staging/prod environments using Terraform variables and tfvars files.",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager"
+  ],
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

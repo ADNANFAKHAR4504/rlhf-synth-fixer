@@ -1,0 +1,36 @@
+{
+  "task_id": "101912542",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "po_id": "101912542",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "training_quality": 10,
+  "turn_type": "single",
+  "startedAt": "2025-11-20T09:11:00+00:00",
+  "subject_labels": [
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "RDS",
+    "Config",
+    "EC2",
+    "ElastiCache",
+    "IAM",
+    "Lambda",
+    "S3",
+    "CloudTrail",
+    "SecretsManager",
+    "WAFv2",
+    "ApplicationInsights",
+    "Backup"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

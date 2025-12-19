@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "348753",
+  "team": "1",
+  "startedAt": "2025-08-27T20:10:25.603Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Security Configuration",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling Groups",
+    "Application Load Balancer",
+    "Security Groups",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager",
+    "Systems Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "blacree",
+  "dockerS3Location": ""
+}

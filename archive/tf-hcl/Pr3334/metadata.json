@@ -1,0 +1,43 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348813",
+  "team": "4",
+  "startedAt": "2025-10-02T10:41:59.361Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "Launch Template",
+    "RDS MySQL",
+    "KMS",
+    "Secrets Manager",
+    "Systems Manager Parameter Store",
+    "IAM Role",
+    "IAM Policy",
+    "Security Group",
+    "CloudWatch Alarms",
+    "CloudWatch Log Group",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 6,
+  "training_quality_justification": "The model demonstrated good understanding of complex multi-service AWS infrastructure with proper architecture design, security features (KMS, Secrets Manager, VPC Flow Logs), and Multi-AZ RDS. However, it made a critical Terraform syntax error using 'log_destination_arn' instead of 'log_destination' for VPC Flow Log configuration, preventing deployment. This represents a valuable training example showing a common mistake with specific resource argument names, making it moderately valuable (6/10) for improving the model's knowledge of Terraform AWS provider syntax and argument naming conventions.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

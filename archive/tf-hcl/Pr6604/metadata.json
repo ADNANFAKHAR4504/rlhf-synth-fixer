@@ -1,0 +1,43 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912187",
+  "team": "4",
+  "startedAt": "2025-11-16T12:51:04.897Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ALB",
+    "Lambda",
+    "S3",
+    "Secrets Manager",
+    "CloudWatch",
+    "IAM",
+    "ACM",
+    "DynamoDB",
+    "Route Tables",
+    "Security Groups",
+    "NAT Gateway",
+    "Internet Gateway",
+    "VPC Endpoints"
+  ],
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "training_quality": 9,
+  "background": "Financial services payment processing infrastructure requiring identical, secure deployments across dev, staging, and production environments with comprehensive monitoring, secrets management, and multi-AZ high availability.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

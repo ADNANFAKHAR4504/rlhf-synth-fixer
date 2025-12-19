@@ -1,0 +1,37 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-30T09:46:26+05:30",
+  "subtask": "Environment Migration",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "migration",
+    "vpc",
+    "database"
+  ],
+  "po_id": "1gtk5t",
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "rds",
+    "s3",
+    "iam",
+    "nat-gateway",
+    "internet-gateway",
+    "vpc-endpoint",
+    "security-groups",
+    "route-tables"
+  ],
+  "region": "us-east-1",
+  "turn_type": "single",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

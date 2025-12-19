@@ -1,0 +1,59 @@
+# Example variable values - copy to terraform.tfvars and customize
+
+environment_suffix = "prod-001"
+aws_region         = "us-east-1"
+
+# ECS Configuration
+ecs_cluster_name = "payment-processing-cluster"
+
+# RDS Configuration
+rds_cluster_identifier = "payment-db-cluster"
+
+# ALB Configuration
+alb_arn_suffix = "app/payment-alb/1234567890abcdef"
+
+# Log Configuration
+log_group_names = [
+  "/aws/ecs/payment-service",
+  "/aws/ecs/transaction-service"
+]
+log_retention_days = 30
+
+# Cross-account sharing (optional)
+security_account_id = "123456789012"
+
+# Alert Endpoints
+critical_email_endpoints = [
+  "oncall@company.com",
+  "devops-lead@company.com"
+]
+
+critical_sms_endpoints = [
+  "+1234567890"
+]
+
+warning_email_endpoints = [
+  "devops-team@company.com"
+]
+
+info_email_endpoints = [
+  "monitoring@company.com"
+]
+
+# Monitoring Configuration
+api_endpoint_url              = "https://api.payments.company.com/health"
+canary_check_interval         = 5
+cpu_alarm_threshold           = 80
+memory_alarm_threshold        = 80
+enable_container_insights     = true
+enable_xray                   = false
+enable_eventbridge_enrichment = false
+
+# Tags
+tags = {
+  Project     = "PaymentProcessing"
+  Environment = "Production"
+  ManagedBy   = "Terraform"
+  Team        = "DevOps"
+  CostCenter  = "Engineering"
+}

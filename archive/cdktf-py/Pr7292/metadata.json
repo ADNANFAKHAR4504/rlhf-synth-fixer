@@ -1,0 +1,32 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-25T23:24:00-08:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "g6w0n7s5",
+  "aws_services": [
+    "AWS Config",
+    "AWS IAM",
+    "AWS KMS",
+    "AWS Lambda",
+    "AWS Security Hub",
+    "Amazon CloudWatch",
+    "Amazon EventBridge",
+    "Amazon S3",
+    "Amazon SNS"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

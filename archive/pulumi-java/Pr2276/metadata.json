@@ -1,0 +1,15 @@
+{
+  "platform": "pulumi",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "285207",
+  "team": "6",
+  "startedAt": "2025-08-26T11:48:40.110Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "antny-turing",
+  "dockerS3Location": ""
+}

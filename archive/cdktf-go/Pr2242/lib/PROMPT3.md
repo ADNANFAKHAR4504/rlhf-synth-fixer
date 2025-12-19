@@ -1,0 +1,3 @@
+I tried building the code again and I’m still getting errors. The compiler says that several things are undefined, like NewS3BucketServerSideEncryptionConfiguration, S3BucketServerSideEncryptionConfigurationConfig, S3BucketServerSideEncryptionConfigurationRule, and also S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault.
+On top of that, I also got a warning about a variable called azs being declared but never used, and another error where I passed a string "80" but the struct was expecting a float.
+So basically, all the references to the S3 bucket server-side encryption configuration look like they just don’t exist in the provider, and the other smaller issues are breaking the build as well. Can you fix this please?

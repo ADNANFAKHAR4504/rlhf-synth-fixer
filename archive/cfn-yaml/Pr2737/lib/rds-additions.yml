@@ -1,0 +1,43 @@
+# RDS Instance with enhanced security
+RDSInstance:
+  Type: AWS::RDS::DBInstance
+  Properties:
+    Engine: mysql
+    EngineVersion: 8.0
+    DBInstanceClass: db.t3.micro
+    AllocatedStorage: 20
+    StorageType: gp2
+    StorageEncrypted: true
+    KmsKeyId: !GetAtt KMSKey.Arn
+    MultiAZ: true
+    PubliclyAccessible: false
+    DBName: tapdb
+    MasterUsername: admin
+    MasterUserPassword: !Ref DBPassword
+    VPCSecurityGroups:
+      - !Ref DBSecurityGroup
+    DBSubnetGroupName: !Ref DBSubnetGroup
+    DBParameterGroupName: !Ref RDSParameterGroup
+    BackupRetentionPeriod: 7
+    DeletionProtection: true
+    AutoMinorVersionUpgrade: true
+    EnableIAMDatabaseAuthentication: true
+    EnablePerformanceInsights: true
+    PerformanceInsightsKMSKeyId: !GetAtt KMSKey.Arn
+    MonitoringInterval: 60
+    CopyTagsToSnapshot: true
+    Tags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-rds"
+
+# RDS Subnet Group
+DBSubnetGroup:
+  Type: AWS::RDS::DBSubnetGroup
+  Properties:
+    DBSubnetGroupDescription: Subnet group for RDS instance
+    SubnetIds:
+      - !Ref PrivateSubnet1
+      - !Ref PrivateSubnet2
+    Tags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-db-subnet-group"

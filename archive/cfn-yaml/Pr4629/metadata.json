@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350104",
+  "team": "2",
+  "startedAt": "2025-10-16T12:48:28.410Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "ASG",
+    "EC2",
+    "S3",
+    "VPC",
+    "CloudWatch",
+    "IAM",
+    "RDS",
+    "ELB",
+    "KMS",
+    "Secrets Manager",
+    "CloudTrail",
+    "DynamoDB",
+    "Lambda",
+    "EventBridge",
+    "WAF",
+    "ACM",
+    "NAT Gateway"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "training_quality": 9,
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
+}

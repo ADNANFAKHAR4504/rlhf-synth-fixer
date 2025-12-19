@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "78029461",
+  "team": "synth",
+  "startedAt": "2025-10-03T19:21:22+05:30",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security Configuration as Code",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Access Control",
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "Security Hub",
+    "GuardDuty",
+    "CloudTrail",
+    "CloudWatch Logs",
+    "EventBridge",
+    "Lambda",
+    "SNS",
+    "S3",
+    "Glacier",
+    "KMS",
+    "IAM"
+  ],
+  "training_quality": 8.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

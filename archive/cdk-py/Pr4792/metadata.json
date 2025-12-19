@@ -1,0 +1,22 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349684",
+  "team": "synth",
+  "startedAt": "2025-10-18T12:50:02.351Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": "lambda, api-gateway, dynamodb, cloudwatch",
+  "background": "Complete serverless setup on AWS using AWS CDK with Python for API that retrieves information from DynamoDB",
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}

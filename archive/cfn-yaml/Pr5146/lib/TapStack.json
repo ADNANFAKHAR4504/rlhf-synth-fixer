@@ -1,0 +1,1205 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "HIPAA-Compliant Event Processing Pipeline for MedTech Solutions GmbH",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Unique suffix for resource naming to avoid conflicts",
+            "MinLength": 1,
+            "MaxLength": 20
+        },
+        "VpcCIDR": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for VPC"
+        },
+        "PublicSubnet1CIDR": {
+            "Type": "String",
+            "Default": "10.0.1.0/24",
+            "Description": "CIDR block for public subnet in AZ1"
+        },
+        "PublicSubnet2CIDR": {
+            "Type": "String",
+            "Default": "10.0.2.0/24",
+            "Description": "CIDR block for public subnet in AZ2"
+        },
+        "PrivateSubnet1CIDR": {
+            "Type": "String",
+            "Default": "10.0.10.0/24",
+            "Description": "CIDR block for private subnet in AZ1"
+        },
+        "PrivateSubnet2CIDR": {
+            "Type": "String",
+            "Default": "10.0.11.0/24",
+            "Description": "CIDR block for private subnet in AZ2"
+        }
+    },
+    "Resources": {
+        "DataEncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for encrypting data at rest - ${EnvironmentSuffix}"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow services to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "kinesis.amazonaws.com",
+                                    "rds.amazonaws.com",
+                                    "elasticache.amazonaws.com",
+                                    "secretsmanager.amazonaws.com",
+                                    "logs.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:Encrypt",
+                                "kms:GenerateDataKey",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "DataEncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/medtech-data-key-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "DataEncryptionKey"
+                }
+            }
+        },
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCIDR"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-vpc-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-igw-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet1CIDR"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-public-subnet-1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet2CIDR"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-public-subnet-2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet1CIDR"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet2CIDR"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-public-rt-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-private-rt-1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-private-rt-2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                }
+            }
+        },
+        "ECSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for ECS Fargate tasks",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS for AWS API calls"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-ecs-sg-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for RDS Aurora cluster",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 5432,
+                        "ToPort": 5432,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ECSSecurityGroup"
+                        },
+                        "Description": "PostgreSQL access from ECS tasks"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-rds-sg-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "RedisSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for ElastiCache Redis cluster",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 6379,
+                        "ToPort": 6379,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ECSSecurityGroup"
+                        },
+                        "Description": "Redis access from ECS tasks"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-redis-sg-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "VitalSignsStream": {
+            "Type": "AWS::Kinesis::Stream",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "vital-signs-stream-${EnvironmentSuffix}"
+                },
+                "ShardCount": 2,
+                "RetentionPeriodHours": 24,
+                "StreamEncryption": {
+                    "EncryptionType": "KMS",
+                    "KeyId": {
+                        "Ref": "DataEncryptionKey"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "vital-signs-stream-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ecs/medtech-processor-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "DataEncryptionKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "ECSTaskExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "SecretsAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "DBSecret"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DataEncryptionKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSTaskRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "KinesisAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kinesis:DescribeStream",
+                                        "kinesis:GetShardIterator",
+                                        "kinesis:GetRecords",
+                                        "kinesis:ListShards"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "VitalSignsStream",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SecretsAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "DBSecret"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CloudWatchLogs",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ECSLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "KMSAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DataEncryptionKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "medtech-db-credentials-${EnvironmentSuffix}"
+                },
+                "Description": "Database credentials for Aurora cluster",
+                "KmsKeyId": {
+                    "Ref": "DataEncryptionKey"
+                },
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                }
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "medtech-db-subnet-group-${EnvironmentSuffix}"
+                },
+                "DBSubnetGroupDescription": "Subnet group for Aurora cluster",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-db-subnet-group-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "AuroraCluster": {
+            "Type": "AWS::RDS::DBCluster",
+            "Properties": {
+                "DBClusterIdentifier": {
+                    "Fn::Sub": "medtech-aurora-cluster-${EnvironmentSuffix}"
+                },
+                "Engine": "aurora-postgresql",
+                "EngineVersion": "15.6",
+                "EngineMode": "provisioned",
+                "DatabaseName": "medtech",
+                "MasterUsername": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "VpcSecurityGroupIds": [
+                    {
+                        "Ref": "RDSSecurityGroup"
+                    }
+                ],
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "DataEncryptionKey"
+                },
+                "BackupRetentionPeriod": 1,
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "EnableCloudwatchLogsExports": [
+                    "postgresql"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-aurora-cluster-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "AuroraInstance1": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "medtech-aurora-instance-1-${EnvironmentSuffix}"
+                },
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraCluster"
+                },
+                "Engine": "aurora-postgresql",
+                "DBInstanceClass": "db.t3.medium",
+                "PubliclyAccessible": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-aurora-instance-1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "AuroraInstance2": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "medtech-aurora-instance-2-${EnvironmentSuffix}"
+                },
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraCluster"
+                },
+                "Engine": "aurora-postgresql",
+                "DBInstanceClass": "db.t3.medium",
+                "PubliclyAccessible": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-aurora-instance-2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecretRDSInstanceAttachment": {
+            "Type": "AWS::SecretsManager::SecretTargetAttachment",
+            "Properties": {
+                "SecretId": {
+                    "Ref": "DBSecret"
+                },
+                "TargetId": {
+                    "Ref": "AuroraCluster"
+                },
+                "TargetType": "AWS::RDS::DBCluster"
+            }
+        },
+        "RedisSubnetGroup": {
+            "Type": "AWS::ElastiCache::SubnetGroup",
+            "Properties": {
+                "CacheSubnetGroupName": {
+                    "Fn::Sub": "medtech-redis-subnet-group-${EnvironmentSuffix}"
+                },
+                "Description": "Subnet group for Redis cluster",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ]
+            }
+        },
+        "RedisReplicationGroup": {
+            "Type": "AWS::ElastiCache::ReplicationGroup",
+            "Properties": {
+                "ReplicationGroupId": {
+                    "Fn::Sub": "medtech-redis-${EnvironmentSuffix}"
+                },
+                "ReplicationGroupDescription": "Redis cluster for caching vital signs data",
+                "Engine": "redis",
+                "EngineVersion": "7.0",
+                "CacheNodeType": "cache.t3.micro",
+                "NumCacheClusters": 2,
+                "AutomaticFailoverEnabled": true,
+                "MultiAZEnabled": true,
+                "CacheSubnetGroupName": {
+                    "Ref": "RedisSubnetGroup"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "RedisSecurityGroup"
+                    }
+                ],
+                "AtRestEncryptionEnabled": true,
+                "TransitEncryptionEnabled": true,
+                "KmsKeyId": {
+                    "Ref": "DataEncryptionKey"
+                },
+                "Port": 6379,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-redis-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSCluster": {
+            "Type": "AWS::ECS::Cluster",
+            "Properties": {
+                "ClusterName": {
+                    "Fn::Sub": "medtech-processor-cluster-${EnvironmentSuffix}"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-processor-cluster-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProcessorTaskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Properties": {
+                "Family": {
+                    "Fn::Sub": "medtech-processor-${EnvironmentSuffix}"
+                },
+                "NetworkMode": "awsvpc",
+                "RequiresCompatibilities": [
+                    "FARGATE"
+                ],
+                "Cpu": "512",
+                "Memory": "1024",
+                "ExecutionRoleArn": {
+                    "Fn::GetAtt": [
+                        "ECSTaskExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "TaskRoleArn": {
+                    "Fn::GetAtt": [
+                        "ECSTaskRole",
+                        "Arn"
+                    ]
+                },
+                "ContainerDefinitions": [
+                    {
+                        "Name": "processor",
+                        "Image": "public.ecr.aws/docker/library/nginx:latest",
+                        "Essential": true,
+                        "LogConfiguration": {
+                            "LogDriver": "awslogs",
+                            "Options": {
+                                "awslogs-group": {
+                                    "Ref": "ECSLogGroup"
+                                },
+                                "awslogs-region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "awslogs-stream-prefix": "processor"
+                            }
+                        },
+                        "Environment": [
+                            {
+                                "Name": "KINESIS_STREAM_NAME",
+                                "Value": {
+                                    "Ref": "VitalSignsStream"
+                                }
+                            },
+                            {
+                                "Name": "REDIS_ENDPOINT",
+                                "Value": {
+                                    "Fn::GetAtt": [
+                                        "RedisReplicationGroup",
+                                        "PrimaryEndPoint.Address"
+                                    ]
+                                }
+                            },
+                            {
+                                "Name": "REDIS_PORT",
+                                "Value": {
+                                    "Fn::GetAtt": [
+                                        "RedisReplicationGroup",
+                                        "PrimaryEndPoint.Port"
+                                    ]
+                                }
+                            },
+                            {
+                                "Name": "AWS_REGION",
+                                "Value": {
+                                    "Ref": "AWS::Region"
+                                }
+                            }
+                        ],
+                        "Secrets": [
+                            {
+                                "Name": "DB_SECRET",
+                                "ValueFrom": {
+                                    "Ref": "DBSecret"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "ECSService": {
+            "Type": "AWS::ECS::Service",
+            "Properties": {
+                "ServiceName": {
+                    "Fn::Sub": "medtech-processor-service-${EnvironmentSuffix}"
+                },
+                "Cluster": {
+                    "Ref": "ECSCluster"
+                },
+                "TaskDefinition": {
+                    "Ref": "ProcessorTaskDefinition"
+                },
+                "DesiredCount": 2,
+                "LaunchType": "FARGATE",
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "AssignPublicIp": "ENABLED",
+                        "Subnets": [
+                            {
+                                "Ref": "PublicSubnet1"
+                            },
+                            {
+                                "Ref": "PublicSubnet2"
+                            }
+                        ],
+                        "SecurityGroups": [
+                            {
+                                "Ref": "ECSSecurityGroup"
+                            }
+                        ]
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "medtech-processor-service-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "RestAPI": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "medtech-api-${EnvironmentSuffix}"
+                },
+                "Description": "API Gateway for accessing processed vital signs data",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "APIResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestAPI"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "RestAPI",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "vitals"
+            }
+        },
+        "APIMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestAPI"
+                },
+                "ResourceId": {
+                    "Ref": "APIResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "AWS_IAM",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseTemplates": {
+                                "application/json": "{\"message\": \"API endpoint ready for integration\"}"
+                            }
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    }
+                ]
+            }
+        },
+        "APIDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": "APIMethod",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestAPI"
+                },
+                "StageName": "prod"
+            }
+        },
+        "APILogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/apigateway/medtech-api-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "DataEncryptionKey",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCId"
+                }
+            }
+        },
+        "KinesisStreamName": {
+            "Description": "Kinesis Data Stream name for vital signs ingestion",
+            "Value": {
+                "Ref": "VitalSignsStream"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KinesisStreamName"
+                }
+            }
+        },
+        "KinesisStreamArn": {
+            "Description": "Kinesis Data Stream ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "VitalSignsStream",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KinesisStreamArn"
+                }
+            }
+        },
+        "ECSClusterArn": {
+            "Description": "ECS Fargate cluster ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ECSCluster",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ECSClusterArn"
+                }
+            }
+        },
+        "ECSClusterName": {
+            "Description": "ECS Fargate cluster name",
+            "Value": {
+                "Ref": "ECSCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ECSClusterName"
+                }
+            }
+        },
+        "AuroraClusterEndpoint": {
+            "Description": "Aurora cluster endpoint for database connections",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraCluster",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AuroraEndpoint"
+                }
+            }
+        },
+        "AuroraClusterPort": {
+            "Description": "Aurora cluster port",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraCluster",
+                    "Endpoint.Port"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AuroraPort"
+                }
+            }
+        },
+        "RedisEndpoint": {
+            "Description": "ElastiCache Redis primary endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RedisReplicationGroup",
+                    "PrimaryEndPoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RedisEndpoint"
+                }
+            }
+        },
+        "RedisPort": {
+            "Description": "ElastiCache Redis port",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RedisReplicationGroup",
+                    "PrimaryEndPoint.Port"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RedisPort"
+                }
+            }
+        },
+        "DBSecretArn": {
+            "Description": "Secrets Manager secret ARN for database credentials",
+            "Value": {
+                "Ref": "DBSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DBSecretArn"
+                }
+            }
+        },
+        "APIEndpoint": {
+            "Description": "API Gateway endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/prod/vitals"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-APIEndpoint"
+                }
+            }
+        },
+        "DataEncryptionKeyId": {
+            "Description": "KMS key ID for data encryption",
+            "Value": {
+                "Ref": "DataEncryptionKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+                }
+            }
+        }
+    }
+}

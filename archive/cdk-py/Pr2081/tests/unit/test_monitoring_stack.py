@@ -1,0 +1,171 @@
+"""Unit tests for MonitoringStack"""
+
+import unittest
+import aws_cdk as cdk
+from aws_cdk import aws_ec2 as ec2, aws_elasticloadbalancingv2 as elbv2, aws_autoscaling as autoscaling
+from aws_cdk.assertions import Template
+from pytest import mark
+
+from lib.monitoring_stack import MonitoringStack
+
+
+@mark.describe("MonitoringStack")
+class TestMonitoringStack(unittest.TestCase):
+    """Test cases for the MonitoringStack"""
+
+    def setUp(self):
+        """Set up a fresh CDK app for each test"""
+        self.app = cdk.App()
+        self.stack = cdk.Stack(self.app, "TestStack")
+
+        # Create mock resources for testing
+        vpc = ec2.Vpc(self.stack, "TestVPC")
+        self.alb = elbv2.ApplicationLoadBalancer(self.stack, "TestALB",
+                                                 vpc=vpc,
+                                                 internet_facing=True)
+        self.asg = autoscaling.AutoScalingGroup(self.stack, "TestASG",
+                                               vpc=vpc,
+                                               instance_type=ec2.InstanceType.of(
+                                                   ec2.InstanceClass.T3,
+                                                   ec2.InstanceSize.MICRO
+                                               ),
+                                               machine_image=ec2.AmazonLinuxImage())
+
+    @mark.it("creates SNS topic for alerts")
+    def test_creates_sns_topic(self):
+        # ARRANGE
+        env_suffix = "test"
+        monitoring = MonitoringStack(self.stack, "TestMonitoring",
+                                   load_balancer=self.alb,
+                                   auto_scaling_group=self.asg,
+                                   environment_suffix=env_suffix)
+        template = Template.from_stack(monitoring)
+
+        # ASSERT
+        template.resource_count_is("AWS::SNS::Topic", 1)
+        template.has_resource_properties("AWS::SNS::Topic", {
+            "TopicName": f"prod-alerts-{env_suffix}",
+            "DisplayName": f"Production Alerts - {env_suffix}"
+        })
+
+    @mark.it("creates CloudWatch alarms")
+    def test_creates_cloudwatch_alarms(self):
+        # ARRANGE
+        env_suffix = "test"
+        monitoring = MonitoringStack(self.stack, "TestMonitoring",
+                                   load_balancer=self.alb,
+                                   auto_scaling_group=self.asg,
+                                   environment_suffix=env_suffix)
+        template = Template.from_stack(monitoring)
+
+        # ASSERT - Should have 3 alarms: 5xx errors, CPU, Response Time
+        template.resource_count_is("AWS::CloudWatch::Alarm", 3)
+
+    @mark.it("creates 5xx error alarm")
+    def test_creates_5xx_error_alarm(self):
+        # ARRANGE
+        env_suffix = "test"
+        monitoring = MonitoringStack(self.stack, "TestMonitoring",
+                                   load_balancer=self.alb,
+                                   auto_scaling_group=self.asg,
+                                   environment_suffix=env_suffix)
+        template = Template.from_stack(monitoring)
+
+        # ASSERT
+        template.has_resource_properties("AWS::CloudWatch::Alarm", {
+            "AlarmName": f"prod-5xx-errors-{env_suffix}",
+            "AlarmDescription": "Alert when 5xx errors exceed threshold",
+            "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+            "EvaluationPeriods": 2,
+            "Threshold": 5,
+            "TreatMissingData": "notBreaching"
+        })
+
+    @mark.it("creates CPU utilization alarm")
+    def test_creates_cpu_alarm(self):
+        # ARRANGE
+        env_suffix = "test"
+        monitoring = MonitoringStack(self.stack, "TestMonitoring",
+                                   load_balancer=self.alb,
+                                   auto_scaling_group=self.asg,
+                                   environment_suffix=env_suffix)
+        template = Template.from_stack(monitoring)
+
+        # ASSERT
+        template.has_resource_properties("AWS::CloudWatch::Alarm", {
+            "AlarmName": f"prod-high-cpu-{env_suffix}",
+            "AlarmDescription": "Alert when CPU utilization is high",
+            "ComparisonOperator": "GreaterThanThreshold",
+            "EvaluationPeriods": 3,
+            "Threshold": 80,
+            "TreatMissingData": "missing"
+        })
+
+    @mark.it("creates response time alarm")
+    def test_creates_response_time_alarm(self):
+        # ARRANGE
+        env_suffix = "test"
+        monitoring = MonitoringStack(self.stack, "TestMonitoring",
+                                   load_balancer=self.alb,
+                                   auto_scaling_group=self.asg,
+                                   environment_suffix=env_suffix)
+        template = Template.from_stack(monitoring)
+
+        # ASSERT
+        template.has_resource_properties("AWS::CloudWatch::Alarm", {
+            "AlarmName": f"prod-response-time-{env_suffix}",
+            "AlarmDescription": "Alert when response time is high",
+            "ComparisonOperator": "GreaterThanThreshold",
+            "EvaluationPeriods": 2,
+            "Threshold": 2,
+            "TreatMissingData": "notBreaching"
+        })
+
+    @mark.it("creates CloudWatch dashboard")
+    def test_creates_dashboard(self):
+        # ARRANGE
+        env_suffix = "test"
+        monitoring = MonitoringStack(self.stack, "TestMonitoring",
+                                   load_balancer=self.alb,
+                                   auto_scaling_group=self.asg,
+                                   environment_suffix=env_suffix)
+        template = Template.from_stack(monitoring)
+
+        # ASSERT
+        template.resource_count_is("AWS::CloudWatch::Dashboard", 1)
+        template.has_resource_properties("AWS::CloudWatch::Dashboard", {
+            "DashboardName": f"prod-dashboard-{env_suffix}"
+        })
+
+    @mark.it("adds email subscription to SNS topic")
+    def test_adds_email_subscription(self):
+        # ARRANGE
+        env_suffix = "test"
+        monitoring = MonitoringStack(self.stack, "TestMonitoring",
+                                   load_balancer=self.alb,
+                                   auto_scaling_group=self.asg,
+                                   environment_suffix=env_suffix)
+        template = Template.from_stack(monitoring)
+
+        # ASSERT
+        template.resource_count_is("AWS::SNS::Subscription", 1)
+        template.has_resource_properties("AWS::SNS::Subscription", {
+            "Protocol": "email",
+            "Endpoint": "admin@example.com"
+        })
+
+    @mark.it("exposes alert topic and alarms")
+    def test_exposes_resources(self):
+        # ARRANGE
+        env_suffix = "test"
+        monitoring = MonitoringStack(self.stack, "TestMonitoring",
+                                   load_balancer=self.alb,
+                                   auto_scaling_group=self.asg,
+                                   environment_suffix=env_suffix)
+
+        # ASSERT
+        assert monitoring.alert_topic is not None
+        assert monitoring.error_5xx_alarm is not None
+        assert monitoring.cpu_alarm is not None
+        assert monitoring.response_time_alarm is not None
+        assert monitoring.dashboard is not None

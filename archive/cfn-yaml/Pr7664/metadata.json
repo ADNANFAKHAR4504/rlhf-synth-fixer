@@ -1,0 +1,50 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349147",
+  "team": "3",
+  "startedAt": "2025-12-02T06:26:38.060Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "LambdaFunction",
+    "LambdaExecutionRole",
+    "LambdaExecutionRolePolicy",
+    "LambdaLogGroup",
+    "LogBucket",
+    "LogBucketPolicy",
+    "DynamoTable",
+    "DdbReadScalableTarget",
+    "DdbReadScalingPolicy",
+    "DdbWriteScalableTarget",
+    "DdbWriteScalingPolicy",
+    "RestApi",
+    "ApiResource",
+    "ApiMethodAny",
+    "ApiDeployment",
+    "ApiStage",
+    "ApiApiKey",
+    "ApiUsagePlan",
+    "ApiUsagePlanKey",
+    "ApiAccessLogGroup",
+    "SecretsManagerSecret",
+    "AlarmTopic",
+    "AlarmSubscription",
+    "Api4xxAlarm",
+    "Api5xxAlarm",
+    "LambdaErrorsAlarm",
+    "LambdaThrottlesAlarm",
+    "DynamoThrottlesAlarm",
+    "ApiSecurityGroup"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

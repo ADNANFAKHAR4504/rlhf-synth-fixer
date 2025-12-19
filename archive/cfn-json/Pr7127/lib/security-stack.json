@@ -1,0 +1,298 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Security nested stack with IAM roles and policies following least-privilege principles",
+  "Parameters": {
+    "EnvironmentType": {
+      "Type": "String",
+      "Description": "Environment type for conditional permissions",
+      "AllowedValues": ["development", "staging", "production"]
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Suffix for resource names"
+    }
+  },
+  "Resources": {
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "analytics-lambda-execution-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3Access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::analytics-data-${EnvironmentSuffix}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::analytics-data-${EnvironmentSuffix}"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/analytics-metadata-${EnvironmentSuffix}"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "ParameterStoreAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/analytics/${EnvironmentType}/*"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchLogs",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/analytics-*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "CustomResourceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "analytics-custom-resource-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3BucketPolicyValidation",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketPolicy",
+                    "s3:GetBucketPolicyStatus"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::analytics-data-${EnvironmentSuffix}"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "SNSPublish",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:policy-compliance-${EnvironmentSuffix}"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "MacroExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "analytics-macro-execution-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "CloudFormationReadAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudformation:DescribeStacks",
+                    "cloudformation:DescribeStackResources"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "ConfigRecorderRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "analytics-config-recorder-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "LambdaExecutionRoleArn": {
+      "Description": "ARN of Lambda execution role",
+      "Value": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-LambdaExecutionRoleArn"}
+      }
+    },
+    "CustomResourceRoleArn": {
+      "Description": "ARN of Custom Resource Lambda role",
+      "Value": {"Fn::GetAtt": ["CustomResourceRole", "Arn"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-CustomResourceRoleArn"}
+      }
+    },
+    "MacroExecutionRoleArn": {
+      "Description": "ARN of CloudFormation Macro execution role",
+      "Value": {"Fn::GetAtt": ["MacroExecutionRole", "Arn"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-MacroExecutionRoleArn"}
+      }
+    },
+    "ConfigRecorderRoleArn": {
+      "Description": "ARN of AWS Config recorder role",
+      "Value": {"Fn::GetAtt": ["ConfigRecorderRole", "Arn"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-ConfigRecorderRoleArn"}
+      }
+    }
+  }
+}

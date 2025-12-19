@@ -1,0 +1,49 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291242",
+  "team": "4",
+  "startedAt": "2025-08-25T14:13:26.232Z",
+  "subtask": "Infrastructure Migration",
+  "subject_labels": [
+    "Multi-Region Infrastructure",
+    "VPC Deployment",
+    "Terraform Configuration"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Internet Gateway",
+    "Subnets",
+    "Route Tables",
+    "Security Groups",
+    "Availability Zones"
+  ],
+  "testDependencies": [
+    {
+      "name": "@aws-sdk/client-ec2",
+      "version": "^3.848.0"
+    },
+    {
+      "name": "jest",
+      "version": "^29.7.0"
+    },
+    {
+      "name": "typescript",
+      "version": "^5.9.2"
+    },
+    {
+      "name": "ts-jest",
+      "version": "^29.4.1"
+    }
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-davinci",
+  "dockerS3Location": ""
+}

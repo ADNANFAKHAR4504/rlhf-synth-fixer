@@ -1,0 +1,1265 @@
+```yml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-ready network infrastructure for FinTech payment processing platform with three-tier architecture across three availability zones'
+
+# ==================== METADATA ====================
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - VPCCIDRBlock
+          - EnableDNSHostnames
+          - EnableDNSResolution
+      - Label:
+          default: "Subnet Configuration"
+        Parameters:
+          - PublicSubnet1CIDR
+          - PublicSubnet2CIDR
+          - PublicSubnet3CIDR
+          - PrivateSubnet1CIDR
+          - PrivateSubnet2CIDR
+          - PrivateSubnet3CIDR
+      - Label:
+          default: "Tagging Configuration"
+        Parameters:
+          - EnvironmentTag
+          - ProjectTag
+          - CostCenter
+    ParameterLabels:
+      VPCCIDRBlock:
+        default: "VPC CIDR Block"
+      EnableDNSHostnames:
+        default: "Enable DNS Hostnames"
+      EnableDNSResolution:
+        default: "Enable DNS Resolution"
+      EnvironmentTag:
+        default: "Environment Tag Value"
+      ProjectTag:
+        default: "Project Tag Value"
+      CostCenter:
+        default: "Cost Center for Billing"
+
+# ==================== PARAMETERS ====================
+Parameters:
+  VPCCIDRBlock:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for the VPC
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: Must be a valid CIDR range
+
+  PublicSubnet1CIDR:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for public subnet in AZ1
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: Must be a valid CIDR range
+
+  PublicSubnet2CIDR:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for public subnet in AZ2
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: Must be a valid CIDR range
+
+  PublicSubnet3CIDR:
+    Type: String
+    Default: 10.0.3.0/24
+    Description: CIDR block for public subnet in AZ3
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: Must be a valid CIDR range
+
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: 10.0.11.0/24
+    Description: CIDR block for private subnet in AZ1
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: Must be a valid CIDR range
+
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: 10.0.12.0/24
+    Description: CIDR block for private subnet in AZ2
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: Must be a valid CIDR range
+
+  PrivateSubnet3CIDR:
+    Type: String
+    Default: 10.0.13.0/24
+    Description: CIDR block for private subnet in AZ3
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: Must be a valid CIDR range
+
+  EnableDNSHostnames:
+    Type: String
+    Default: true
+    AllowedValues: [true, false]
+    Description: Enable DNS hostnames in the VPC
+
+  EnableDNSResolution:
+    Type: String
+    Default: true
+    AllowedValues: [true, false]
+    Description: Enable DNS resolution in the VPC
+
+  EnvironmentTag:
+    Type: String
+    Default: Production
+    AllowedValues: [Production, Staging, Development]
+    Description: Environment designation for tagging
+
+  ProjectTag:
+    Type: String
+    Default: FinTech
+    AllowedPattern: ^[a-zA-Z][a-zA-Z0-9-]*$
+    Description: Project name for tagging
+
+  CostCenter:
+    Type: String
+    Default: Infrastructure
+    Description: Cost center for billing allocation
+
+# ==================== MAPPINGS ====================
+Mappings:
+  AZRegionMap:
+    us-east-1:
+      AZ1: us-east-1a
+      AZ2: us-east-1b
+      AZ3: us-east-1c
+    us-east-2:
+      AZ1: us-east-2a
+      AZ2: us-east-2b
+      AZ3: us-east-2c
+    us-west-1:
+      AZ1: us-west-1a
+      AZ2: us-west-1b
+      AZ3: us-west-1c
+    us-west-2:
+      AZ1: us-west-2a
+      AZ2: us-west-2b
+      AZ3: us-west-2c
+    eu-west-1:
+      AZ1: eu-west-1a
+      AZ2: eu-west-1b
+      AZ3: eu-west-1c
+    eu-central-1:
+      AZ1: eu-central-1a
+      AZ2: eu-central-1b
+      AZ3: eu-central-1c
+    ap-southeast-1:
+      AZ1: ap-southeast-1a
+      AZ2: ap-southeast-1b
+      AZ3: ap-southeast-1c
+    ap-southeast-2:
+      AZ1: ap-southeast-2a
+      AZ2: ap-southeast-2b
+      AZ3: ap-southeast-2c
+    ap-northeast-1:
+      AZ1: ap-northeast-1a
+      AZ2: ap-northeast-1c
+      AZ3: ap-northeast-1d
+    ap-south-1:
+      AZ1: ap-south-1a
+      AZ2: ap-south-1b
+      AZ3: ap-south-1c
+    ap-east-1:
+      AZ1: ap-east-1a
+      AZ2: ap-east-1b
+      AZ3: ap-east-1c
+    sa-east-1:
+      AZ1: sa-east-1a
+      AZ2: sa-east-1b
+      AZ3: sa-east-1c
+    af-south-1:
+      AZ1: af-south-1a
+      AZ2: af-south-1b
+      AZ3: af-south-1c
+    ca-central-1:
+      AZ1: ca-central-1a
+      AZ2: ca-central-1b
+      AZ3: ca-central-1d
+
+# ==================== RESOURCES ====================
+Resources:
+  # ==================== VPC Configuration ====================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCIDRBlock
+      EnableDnsHostnames: !Ref EnableDNSHostnames
+      EnableDnsSupport: !Ref EnableDNSResolution
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: true
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ==================== VPC Flow Logs ====================
+  VPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPCFlowLogRole
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  VPCFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/vpc/${AWS::StackName}
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPCFlowLogGroup
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId: !Ref VPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref VPCFlowLogGroup
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPCFlowLog
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  # ==================== Internet Gateway ====================
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-IGW
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # ==================== Public Subnets ====================
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ1]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Subnet-AZ1
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Public
+        - Key: AvailabilityZone
+          Value: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ1]
+        - Key: iac-rlhf-amazon
+          Value: true
+        - Key: kubernetes.io/role/elb
+          Value: 1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ2]
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Subnet-AZ2
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Public
+        - Key: AvailabilityZone
+          Value: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ2]
+        - Key: iac-rlhf-amazon
+          Value: true
+        - Key: kubernetes.io/role/elb
+          Value: 1
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ3]
+      CidrBlock: !Ref PublicSubnet3CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Subnet-AZ3
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Public
+        - Key: AvailabilityZone
+          Value: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ3]
+        - Key: iac-rlhf-amazon
+          Value: true
+        - Key: kubernetes.io/role/elb
+          Value: 1
+
+  # ==================== Private Subnets ====================
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ1]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-Subnet-AZ1
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Private
+        - Key: AvailabilityZone
+          Value: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ1]
+        - Key: iac-rlhf-amazon
+          Value: true
+        - Key: kubernetes.io/role/internal-elb
+          Value: 1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ2]
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-Subnet-AZ2
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Private
+        - Key: AvailabilityZone
+          Value: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ2]
+        - Key: iac-rlhf-amazon
+          Value: true
+        - Key: kubernetes.io/role/internal-elb
+          Value: 1
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ3]
+      CidrBlock: !Ref PrivateSubnet3CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-Subnet-AZ3
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Private
+        - Key: AvailabilityZone
+          Value: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ3]
+        - Key: iac-rlhf-amazon
+          Value: true
+        - Key: kubernetes.io/role/internal-elb
+          Value: 1
+
+  # ==================== Elastic IPs for NAT Gateways ====================
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 
+            - ${AWS::StackName}-NATGateway-EIP-${AZ}
+            - AZ: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ1]
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 
+            - ${AWS::StackName}-NATGateway-EIP-${AZ}
+            - AZ: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ2]
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  NatGateway3EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 
+            - ${AWS::StackName}-NATGateway-EIP-${AZ}
+            - AZ: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ3]
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  # ==================== NAT Gateways ====================
+  # COST OPTIMIZATION NOTE:
+  # This template deploys 3 NAT Gateways (one per availability zone) for maximum high availability.
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub 
+            - ${AWS::StackName}-NATGateway-${AZ}
+            - AZ: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ1]
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: AvailabilityZone
+          Value: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ1]
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 
+            - ${AWS::StackName}-NATGateway-${AZ}
+            - AZ: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ2]
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: AvailabilityZone
+          Value: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ2]
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  NatGateway3:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway3EIP.AllocationId
+      SubnetId: !Ref PublicSubnet3
+      Tags:
+        - Key: Name
+          Value: !Sub 
+            - ${AWS::StackName}-NATGateway-${AZ}
+            - AZ: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ3]
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: AvailabilityZone
+          Value: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ3]
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  # ==================== Public Route Table ====================
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Routes
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Public
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet3
+
+  # ==================== Private Route Tables ====================
+  # Each private subnet has its own route table for zone-specific NAT routing
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 
+            - ${AWS::StackName}-Private-Routes-${AZ}
+            - AZ: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ1]
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Private
+        - Key: AvailabilityZone
+          Value: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ1]
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 
+            - ${AWS::StackName}-Private-Routes-${AZ}
+            - AZ: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ2]
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Private
+        - Key: AvailabilityZone
+          Value: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ2]
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  PrivateRouteTable3:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 
+            - ${AWS::StackName}-Private-Routes-${AZ}
+            - AZ: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ3]
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Private
+        - Key: AvailabilityZone
+          Value: !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ3]
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  DefaultPrivateRoute3:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable3
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway3
+
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable3
+      SubnetId: !Ref PrivateSubnet3
+
+  # ==================== Security Groups ====================
+  WebTierSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-WebTier-SG
+      GroupDescription: Security group for web tier allowing HTTPS traffic from anywhere
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS from anywhere
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-WebTier-SG
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Web
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  DatabaseTierSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-DatabaseTier-SG
+      GroupDescription: Security group for database tier allowing MySQL traffic from VPC CIDR range only
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: !Ref VPCCIDRBlock
+          Description: Allow MySQL from VPC CIDR range
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-DatabaseTier-SG
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Database
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  # ==================== Application Tier Security Group (Additional) ====================
+  ApplicationTierSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-ApplicationTier-SG
+      GroupDescription: Security group for application tier with inter-tier communication
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-ApplicationTier-SG
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Application
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  # Allow ingress from Web Tier to Application Tier
+  ApplicationTierIngressFromWeb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ApplicationTierSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      SourceSecurityGroupId: !Ref WebTierSecurityGroup
+      Description: Allow application traffic from web tier
+
+  ApplicationTierEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref ApplicationTierSecurityGroup
+      IpProtocol: -1
+      CidrIp: 0.0.0.0/0
+      Description: Allow all outbound traffic
+
+  # ==================== VPC Endpoints (Cost Optimization) ====================
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
+        - !Ref PrivateRouteTable3
+      VpcEndpointType: Gateway
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource: '*'
+
+  DynamoDBEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.dynamodb
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
+        - !Ref PrivateRouteTable3
+      VpcEndpointType: Gateway
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - dynamodb:*
+            Resource: '*'
+
+  # ==================== Network ACLs (Defense in Depth) ====================
+  PublicNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-NACL
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Public
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  # Inbound rules for Public NACL
+  PublicNetworkAclEntryInboundHTTPS:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: allow
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 443
+        To: 443
+
+  PublicNetworkAclEntryInboundEphemeral:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: 200
+      Protocol: 6
+      RuleAction: allow
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 1024
+        To: 65535
+
+  # Outbound rules for Public NACL
+  PublicNetworkAclEntryOutbound:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      Egress: true
+      RuleAction: allow
+      CidrBlock: 0.0.0.0/0
+
+  PublicSubnetNetworkAclAssociation1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      NetworkAclId: !Ref PublicNetworkAcl
+
+  PublicSubnetNetworkAclAssociation2:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      NetworkAclId: !Ref PublicNetworkAcl
+
+  PublicSubnetNetworkAclAssociation3:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      NetworkAclId: !Ref PublicNetworkAcl
+
+  # Private Network ACL
+  PrivateNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-NACL
+        - Key: Environment
+          Value: !Ref EnvironmentTag
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref AWS::StackName
+        - Key: Tier
+          Value: Private
+        - Key: iac-rlhf-amazon
+          Value: true
+
+  PrivateNetworkAclEntryInbound:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      CidrBlock: !Ref VPCCIDRBlock
+
+  PrivateNetworkAclEntryOutbound:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      Egress: true
+      RuleAction: allow
+      CidrBlock: 0.0.0.0/0
+
+  PrivateSubnetNetworkAclAssociation1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      NetworkAclId: !Ref PrivateNetworkAcl
+
+  PrivateSubnetNetworkAclAssociation2:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      NetworkAclId: !Ref PrivateNetworkAcl
+
+  PrivateSubnetNetworkAclAssociation3:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      NetworkAclId: !Ref PrivateNetworkAcl
+
+# ==================== OUTPUTS ====================
+Outputs:
+  # VPC Outputs
+  VPCId:
+    Description: VPC ID for cross-stack references
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${AWS::StackName}-VPC-ID
+
+  VPCCidr:
+    Description: VPC CIDR Block for network planning
+    Value: !GetAtt VPC.CidrBlock
+    Export:
+      Name: !Sub ${AWS::StackName}-VPC-CIDR
+
+  VPCDefaultSecurityGroup:
+    Description: Default security group for the VPC
+    Value: !GetAtt VPC.DefaultSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-VPC-DefaultSG
+
+  # Internet Gateway Output
+  InternetGatewayId:
+    Description: Internet Gateway ID for public routing
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub ${AWS::StackName}-IGW-ID
+
+  # Public Subnet Outputs
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID in AZ1
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnet1-ID
+
+  PublicSubnet1AZ:
+    Description: Availability Zone for Public Subnet 1
+    Value: !GetAtt PublicSubnet1.AvailabilityZone
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnet1-AZ
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID in AZ2
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnet2-ID
+
+  PublicSubnet2AZ:
+    Description: Availability Zone for Public Subnet 2
+    Value: !GetAtt PublicSubnet2.AvailabilityZone
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnet2-AZ
+
+  PublicSubnet3Id:
+    Description: Public Subnet 3 ID in AZ3
+    Value: !Ref PublicSubnet3
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnet3-ID
+
+  PublicSubnet3AZ:
+    Description: Availability Zone for Public Subnet 3
+    Value: !GetAtt PublicSubnet3.AvailabilityZone
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnet3-AZ
+
+  # Private Subnet Outputs
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID in AZ1
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnet1-ID
+
+  PrivateSubnet1AZ:
+    Description: Availability Zone for Private Subnet 1
+    Value: !GetAtt PrivateSubnet1.AvailabilityZone
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnet1-AZ
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID in AZ2
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnet2-ID
+
+  PrivateSubnet2AZ:
+    Description: Availability Zone for Private Subnet 2
+    Value: !GetAtt PrivateSubnet2.AvailabilityZone
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnet2-AZ
+
+  PrivateSubnet3Id:
+    Description: Private Subnet 3 ID in AZ3
+    Value: !Ref PrivateSubnet3
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnet3-ID
+
+  PrivateSubnet3AZ:
+    Description: Availability Zone for Private Subnet 3
+    Value: !GetAtt PrivateSubnet3.AvailabilityZone
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnet3-AZ
+
+  # Aggregated Subnet Lists
+  PublicSubnets:
+    Description: Comma-delimited list of all public subnet IDs
+    Value: !Join 
+      - ','
+      - - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnets
+
+  PrivateSubnets:
+    Description: Comma-delimited list of all private subnet IDs
+    Value: !Join 
+      - ','
+      - - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnets
+
+  # NAT Gateway Outputs
+  NatGateway1Id:
+    Description: NAT Gateway 1 ID for AZ1
+    Value: !Ref NatGateway1
+    Export:
+      Name: !Sub ${AWS::StackName}-NATGateway1-ID
+
+  NatGateway1EIPAddress:
+    Description: Elastic IP address for NAT Gateway 1
+    Value: !Ref NatGateway1EIP
+    Export:
+      Name: !Sub ${AWS::StackName}-NATGateway1-EIP
+
+  NatGateway2Id:
+    Description: NAT Gateway 2 ID for AZ2
+    Value: !Ref NatGateway2
+    Export:
+      Name: !Sub ${AWS::StackName}-NATGateway2-ID
+
+  NatGateway2EIPAddress:
+    Description: Elastic IP address for NAT Gateway 2
+    Value: !Ref NatGateway2EIP
+    Export:
+      Name: !Sub ${AWS::StackName}-NATGateway2-EIP
+
+  NatGateway3Id:
+    Description: NAT Gateway 3 ID for AZ3
+    Value: !Ref NatGateway3
+    Export:
+      Name: !Sub ${AWS::StackName}-NATGateway3-ID
+
+  NatGateway3EIPAddress:
+    Description: Elastic IP address for NAT Gateway 3
+    Value: !Ref NatGateway3EIP
+    Export:
+      Name: !Sub ${AWS::StackName}-NATGateway3-EIP
+
+  # Security Group Outputs
+  WebTierSecurityGroupId:
+    Description: Security Group ID for Web Tier (HTTPS)
+    Value: !Ref WebTierSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-WebTier-SG-ID
+
+  DatabaseTierSecurityGroupId:
+    Description: Security Group ID for Database Tier (MySQL)
+    Value: !Ref DatabaseTierSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseTier-SG-ID
+
+  ApplicationTierSecurityGroupId:
+    Description: Security Group ID for Application Tier
+    Value: !Ref ApplicationTierSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-ApplicationTier-SG-ID
+
+  # Route Table Outputs
+  PublicRouteTableId:
+    Description: Public Route Table ID
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicRouteTable-ID
+
+  PrivateRouteTable1Id:
+    Description: Private Route Table ID for AZ1
+    Value: !Ref PrivateRouteTable1
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateRouteTable1-ID
+
+  PrivateRouteTable2Id:
+    Description: Private Route Table ID for AZ2
+    Value: !Ref PrivateRouteTable2
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateRouteTable2-ID
+
+  PrivateRouteTable3Id:
+    Description: Private Route Table ID for AZ3
+    Value: !Ref PrivateRouteTable3
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateRouteTable3-ID
+
+  # VPC Endpoint Outputs
+  S3EndpointId:
+    Description: S3 VPC Endpoint ID for cost optimization
+    Value: !Ref S3Endpoint
+    Export:
+      Name: !Sub ${AWS::StackName}-S3Endpoint-ID
+
+  DynamoDBEndpointId:
+    Description: DynamoDB VPC Endpoint ID for cost optimization
+    Value: !Ref DynamoDBEndpoint
+    Export:
+      Name: !Sub ${AWS::StackName}-DynamoDBEndpoint-ID
+
+  # Network ACL Outputs
+  PublicNetworkAclId:
+    Description: Public Network ACL ID
+    Value: !Ref PublicNetworkAcl
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicNACL-ID
+
+  PrivateNetworkAclId:
+    Description: Private Network ACL ID
+    Value: !Ref PrivateNetworkAcl
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateNACL-ID
+
+  # Stack Information
+  StackName:
+    Description: Stack name for reference
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub ${AWS::StackName}-StackName
+
+  Region:
+    Description: AWS Region where stack is deployed
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub ${AWS::StackName}-Region
+
+  AccountId:
+    Description: AWS Account ID
+    Value: !Ref AWS::AccountId
+    Export:
+      Name: !Sub ${AWS::StackName}-AccountId
+
+  # Availability Zone Information
+  AvailabilityZones:
+    Description: List of Availability Zones used
+    Value: !Join
+      - ','
+      - - !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ1]
+        - !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ2]
+        - !FindInMap [AZRegionMap, !Ref 'AWS::Region', AZ3]
+    Export:
+      Name: !Sub ${AWS::StackName}-AvailabilityZones
+```

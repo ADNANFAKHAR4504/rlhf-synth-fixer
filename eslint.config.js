@@ -87,7 +87,13 @@ module.exports = [
       'import/prefer-default-export': 'off',
       'import/no-extraneous-dependencies': [
         'error',
-        { devDependencies: ['**/*.test.ts', 'test/**/*.ts'] },
+        {
+          devDependencies: [
+            '**/*.test.ts',
+            'test/**/*.ts',
+            'lib/lambda/**/*.ts',
+          ],
+        },
       ],
 
       // General rules
@@ -110,10 +116,15 @@ module.exports = [
       'cdk.out/**',
       'coverage/**',
       'archive/**',
+      'archive-localstack/**', // Exclude archive-localstack from linting 
+      'subcategory-references/**', // Exclude reference files from linting
+      'lambda/**', // Exclude lambda folder from linting
+      'cli/**', // Exclude CLI tooling scripts from linting
+      'bin/**', // Exclude bin folder from linting (excluded from tsconfig.json)
       '**/*.js',
       '**/*.d.ts',
       '**/*.test.ts', // Exclude test files from linting
-      '.gen/**'
+      '.gen/**',
     ],
   },
 ];

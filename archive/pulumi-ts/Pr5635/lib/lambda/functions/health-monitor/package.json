@@ -1,0 +1,10 @@
+{
+  "name": "health-monitor",
+  "version": "1.0.0",
+  "description": "Lambda function for AWS Health monitoring",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-health": "^3.901.0",
+    "@aws-sdk/client-sns": "^3.855.0"
+  }
+}

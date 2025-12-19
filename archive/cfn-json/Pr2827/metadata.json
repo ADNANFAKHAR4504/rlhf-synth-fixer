@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348941",
+  "team": "4",
+  "startedAt": "2025-09-06T14:12:05.883Z",
+  "author": "manoj-tur",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Serverless Architecture Implementation",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Access Control",
+    "Database Management",
+    "Network Configuration"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "SNS",
+    "CloudWatch Events",
+    "IAM",
+    "VPC"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,681 @@
+Summary
+
+This document describes the ideal assistant response for the “TapStack” CloudFormation request: produce a single, deployable template that creates a brand-new, highly available VPC with public/private subnets, Internet/NAT gateways, routing, IAM (EC2→S3), two EC2 instances in private subnets with secure defaults, and an encrypted/versioned S3 bucket with lifecycle policies—StackSet-ready and parameterized for multi-account rollout.
+
+What “ideal” includes (at a glance)
+
+A single TapStack.yml template that:
+
+Is self-contained (no external references) and account/region agnostic.
+
+Uses intrinsic functions wherever useful (Ref, Sub, GetAtt, Select, GetAZs, If, Equals, Join).
+
+Does not hardcode AZ names; spreads subnets across AZ indices.
+
+IMDSv2 enforced for EC2; EBS encrypted; instances launched in private subnets only.
+
+Optional KeyName parameter (string) guarded by a condition so deployment succeeds if it’s blank.
+
+S3 bucket: Block Public Access, SSE (KMS optional), Versioning, Lifecycle (IA → Glacier, expiration), and sane non-current cleanup.
+
+IAM role/policy scoped least-privilege to the created bucket (ListBucket on bucket ARN, Get/PutObject on bucket/*).
+
+Toggle for NAT per AZ vs single NAT (cost control).
+
+Clear parameters and outputs (see tables below).
+
+Concrete deployment and validation steps, including StackSets workflow.
+
+Networking
+
+VPC exists with CIDR 10.0.0.0/16.
+
+Public subnets map public IPs; private subnets do not.
+
+Public RT has 0.0.0.0/0 → IGW.
+
+Private RTs have 0.0.0.0/0 → NAT (per-AZ or shared).
+
+Compute
+
+Two EC2 instances are in private subnets.
+
+IMDSv2 required; EBS volumes encrypted gp3.
+
+Instance profile attached; role ARN matches output.
+
+Security Groups
+
+Inbound SSH only from AllowedSSHRange.
+
+Egress open for updates (NAT handles routing).
+
+S3
+
+Bucket is versioned, encrypted, public access blocked.
+
+Lifecycle shows IA and Glacier transitions and expiration.
+
+IAM
+
+Role policy allows ListBucket on bucket ARN and Get/PutObject on bucket/* only.
+
+Operations and Cost Notes
+
+NAT per AZ improves resilience; single NAT lowers cost.
+
+Use SSM Session Manager for instance access (no public IPs).
+
+Bucket name includes account + region for uniqueness.
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TapStack - Complete infrastructure with VPC, EC2, S3, and IAM for multi-account deployment'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Project Configuration"
+        Parameters:
+          - ProjectName
+          - EnvironmentName
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - AllowedSSHRange
+          - EnableNatPerAz
+      - Label:
+          default: "EC2 Configuration"
+        Parameters:
+          - InstanceType
+          - KeyName
+      - Label:
+          default: "S3 Configuration"
+        Parameters:
+          - S3TransitionDaysIA
+          - S3TransitionDaysGlacier
+          - S3ExpireDays
+          - KmsKeyArn
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: tapstack
+    Description: Project name used for resource naming and tagging (lowercase; DNS-safe)
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*$'
+    ConstraintDescription: 'Must be lowercase alphanumeric and hyphens; start/end with alphanumeric.'
+
+  EnvironmentName:
+    Type: String
+    Default: prod
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name for resource tagging and naming
+
+  AllowedSSHRange:
+    Type: String
+    Default: 10.0.0.0/24
+    Description: CIDR block allowed for SSH access to EC2 instances
+    AllowedPattern: ^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$
+    ConstraintDescription: Must be a valid CIDR range (e.g., 10.0.0.0/24)
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+      - m5.large
+      - m5.xlarge
+    Description: EC2 instance type
+
+  KeyName:
+    Type: String
+    Description: (Optional) Existing EC2 Key Pair name for SSH; leave empty to skip and still launch instances in private subnets
+    Default: ''
+    AllowedPattern: '^$|^[A-Za-z0-9._-]{1,255}$'
+    ConstraintDescription: 'Key pair name may be empty or contain letters, numbers, dot, underscore, and hyphen.'
+
+  EnableNatPerAz:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Create one NAT Gateway per AZ (true) or single NAT Gateway (false)
+
+  S3TransitionDaysIA:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 365
+    Description: Days after which objects transition to Infrequent Access
+
+  S3TransitionDaysGlacier:
+    Type: Number
+    Default: 90
+    MinValue: 1
+    MaxValue: 365
+    Description: Days after which objects transition to Glacier
+
+  S3ExpireDays:
+    Type: Number
+    Default: 365
+    MinValue: 1
+    MaxValue: 3650
+    Description: Days after which current object versions expire
+
+  KmsKeyArn:
+    Type: String
+    Default: ''
+    Description: KMS Key ARN for S3 encryption (leave empty for SSE-S3)
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, '']]
+  CreateNatPerAz: !Equals [!Ref EnableNatPerAz, 'true']
+  UseKmsEncryption: !Not [!Equals [!Ref KmsKeyArn, '']]
+
+Resources:
+  # VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-vpc'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-igw'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-public-subnet-1'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-public-subnet-2'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.11.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-private-subnet-1'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.12.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-private-subnet-2'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # NAT Gateway EIPs
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-nat-eip-1'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    Condition: CreateNatPerAz
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-nat-eip-2'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # NAT Gateways
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-nat-gw-1'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateNatPerAz
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-nat-gw-2'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-public-rt'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # Private Route Tables
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-private-rt-1'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-private-rt-2'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !If [CreateNatPerAz, !Ref NatGateway2, !Ref NatGateway1]
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  # S3 Bucket (DNS-safe name; includes account & region for uniqueness)
+  AppBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${EnvironmentName}-app-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: !If [UseKmsEncryption, 'aws:kms', 'AES256']
+              KMSMasterKeyID: !If [UseKmsEncryption, !Ref KmsKeyArn, !Ref 'AWS::NoValue']
+            BucketKeyEnabled: !If [UseKmsEncryption, true, !Ref 'AWS::NoValue']
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionAndExpire
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: !Ref S3TransitionDaysIA
+                StorageClass: STANDARD_IA
+              - TransitionInDays: !Ref S3TransitionDaysGlacier
+                StorageClass: GLACIER
+            ExpirationInDays: !Ref S3ExpireDays
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-app-bucket'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # IAM Role for EC2 with least-privilege S3 access to the bucket above
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-${EnvironmentName}-ec2-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub '${AppBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt AppBucket.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-ec2-role'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${ProjectName}-${EnvironmentName}-ec2-profile'
+      Roles:
+        - !Ref EC2Role
+
+  # Security Group
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-${EnvironmentName}-ec2-sg'
+      GroupDescription: Security group for EC2 instances
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedSSHRange
+          Description: SSH access from allowed range
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: All outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-ec2-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # EC2 Instances in private subnets (no public IPs), IMDSv2 required, encrypted EBS
+  EC2Instance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
+      InstanceType: !Ref InstanceType
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      SubnetId: !Ref PrivateSubnet1
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 2
+        HttpEndpoint: enabled
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum update -y
+          yum install -y aws-cli
+          systemctl enable amazon-ssm-agent
+          systemctl start amazon-ssm-agent
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-ec2-1'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  EC2Instance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
+      InstanceType: !Ref InstanceType
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      SubnetId: !Ref PrivateSubnet2
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 2
+        HttpEndpoint: enabled
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum update -y
+          yum install -y aws-cli
+          systemctl enable amazon-ssm-agent
+          systemctl start amazon-ssm-agent
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentName}-ec2-2'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-vpc-id'
+
+  PublicSubnetIds:
+    Description: Public subnet IDs
+    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-public-subnet-ids'
+
+  PrivateSubnetIds:
+    Description: Private subnet IDs
+    Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-private-subnet-ids'
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-igw-id'
+
+  NatGatewayIds:
+    Description: NAT Gateway IDs
+    Value: !If
+      - CreateNatPerAz
+      - !Join [',', [!Ref NatGateway1, !Ref NatGateway2]]
+      - !Ref NatGateway1
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-nat-gateway-ids'
+
+  PublicRouteTableIds:
+    Description: Public route table IDs
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-public-rt-ids'
+
+  PrivateRouteTableIds:
+    Description: Private route table IDs
+    Value: !Join [',', [!Ref PrivateRouteTable1, !Ref PrivateRouteTable2]]
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-private-rt-ids'
+
+  InstanceProfileName:
+    Description: EC2 instance profile name
+    Value: !Ref EC2InstanceProfile
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-instance-profile-name'
+
+  Ec2RoleArn:
+    Description: EC2 IAM role ARN
+    Value: !GetAtt EC2Role.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-ec2-role-arn'
+
+  AppBucketName:
+    Description: Application S3 bucket name
+    Value: !Ref AppBucket
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-app-bucket-name'
+
+  AppBucketArn:
+    Description: Application S3 bucket ARN
+    Value: !GetAtt AppBucket.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-app-bucket-arn'
+
+  PrivateEc2InstanceIds:
+    Description: Private EC2 instance IDs
+    Value: !Join [',', [!Ref EC2Instance1, !Ref EC2Instance2]]
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-private-ec2-instance-ids'
+
+  Region:
+    Description: AWS Region
+    Value: !Ref 'AWS::Region'
+
+  AccountId:
+    Description: AWS Account ID
+    Value: !Ref 'AWS::AccountId'
+```

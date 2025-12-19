@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-25T23:23:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "u8o0j5r3",
+  "aws_services": [
+    "Aurora PostgreSQL",
+    "ECS",
+    "Secrets Manager",
+    "VPC",
+    "CloudWatch",
+    "IAM",
+    "Lambda",
+    "Application Load Balancer",
+    "NAT Gateway",
+    "RDS"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

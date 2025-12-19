@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349680",
+  "team": "6",
+  "startedAt": "2025-10-29T06:56:16.290Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": "CodePipeline, S3, CodeBuild, IAM Roles, Parameter Store",
+  "training_quality": 10,
+  "aws_services_implemented": [
+    "CodePipeline",
+    "S3",
+    "CodeBuild",
+    "IAM",
+    "Parameter Store",
+    "Lambda",
+    "API Gateway",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "SQS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshit-at-turing",
+  "dockerS3Location": ""
+}

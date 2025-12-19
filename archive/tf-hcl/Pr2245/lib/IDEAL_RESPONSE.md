@@ -1,0 +1,315 @@
+```hcl
+
+# Simplified multi-region Terraform configuration
+
+# Variables
+variable "regions" {
+  description = "List of AWS regions for deployment"
+  type        = list(string)
+  default     = ["us-east-1", "us-west-2"]
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "production"
+}
+
+variable "application_name" {
+  description = "Name of the application"
+  type        = string
+  default     = "webapp"
+}
+
+variable "instance_type" {
+  description = "EC2 instance type"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "min_size" {
+  description = "Minimum number of instances in ASG"
+  type        = number
+  default     = 2
+}
+
+variable "max_size" {
+  description = "Maximum number of instances in ASG"
+  type        = number
+  default     = 10
+}
+
+variable "desired_capacity" {
+  description = "Desired number of instances in ASG"
+  type        = number
+  default     = 2
+}
+
+variable "db_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "db_username" {
+  description = "Database master username"
+  type        = string
+  default     = "admin"
+  sensitive   = true
+}
+
+variable "db_password" {
+  description = "Database master password"
+  type        = string
+  default     = "SecurePassword123!"
+  sensitive   = true
+}
+
+# Provider configurations
+provider "aws" {
+  alias  = "primary"
+  region = var.regions[0]
+}
+
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+}
+
+provider "aws" {
+  alias  = "us_west_2"
+  region = "us-west-2"
+}
+
+# Data sources for us-east-1
+data "aws_availability_zones" "available_us_east_1" {
+  provider = aws.us_east_1
+  state    = "available"
+}
+
+data "aws_ami" "amazon_linux_us_east_1" {
+  provider    = aws.us_east_1
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+# Data sources for us-west-2
+data "aws_availability_zones" "available_us_west_2" {
+  provider = aws.us_west_2
+  state    = "available"
+}
+
+data "aws_ami" "amazon_linux_us_west_2" {
+  provider    = aws.us_west_2
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+# VPC for us-east-1
+resource "aws_vpc" "main_us_east_1" {
+  provider             = aws.us_east_1
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    Name        = "${var.application_name}-vpc-us-east-1"
+    Environment = var.environment
+    Region      = "us-east-1"
+  }
+}
+
+# VPC for us-west-2
+resource "aws_vpc" "main_us_west_2" {
+  provider             = aws.us_west_2
+  cidr_block           = "10.1.0.0/16"
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    Name        = "${var.application_name}-vpc-us-west-2"
+    Environment = var.environment
+    Region      = "us-west-2"
+  }
+}
+
+# Internet Gateway for us-east-1
+resource "aws_internet_gateway" "main_us_east_1" {
+  provider = aws.us_east_1
+  vpc_id   = aws_vpc.main_us_east_1.id
+
+  tags = {
+    Name        = "${var.application_name}-igw-us-east-1"
+    Environment = var.environment
+  }
+}
+
+# Internet Gateway for us-west-2
+resource "aws_internet_gateway" "main_us_west_2" {
+  provider = aws.us_west_2
+  vpc_id   = aws_vpc.main_us_west_2.id
+
+  tags = {
+    Name        = "${var.application_name}-igw-us-west-2"
+    Environment = var.environment
+  }
+}
+
+# Public Subnet for us-east-1
+resource "aws_subnet" "public_us_east_1" {
+  provider                = aws.us_east_1
+  vpc_id                  = aws_vpc.main_us_east_1.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = data.aws_availability_zones.available_us_east_1.names[0]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name        = "${var.application_name}-public-us-east-1"
+    Environment = var.environment
+    Type        = "Public"
+  }
+}
+
+# Public Subnet for us-west-2
+resource "aws_subnet" "public_us_west_2" {
+  provider                = aws.us_west_2
+  vpc_id                  = aws_vpc.main_us_west_2.id
+  cidr_block              = "10.1.1.0/24"
+  availability_zone       = data.aws_availability_zones.available_us_west_2.names[0]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name        = "${var.application_name}-public-us-west-2"
+    Environment = var.environment
+    Type        = "Public"
+  }
+}
+
+# Route Table for us-east-1
+resource "aws_route_table" "public_us_east_1" {
+  provider = aws.us_east_1
+  vpc_id   = aws_vpc.main_us_east_1.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main_us_east_1.id
+  }
+
+  tags = {
+    Name        = "${var.application_name}-public-rt-us-east-1"
+    Environment = var.environment
+  }
+}
+
+# Route Table for us-west-2
+resource "aws_route_table" "public_us_west_2" {
+  provider = aws.us_west_2
+  vpc_id   = aws_vpc.main_us_west_2.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main_us_west_2.id
+  }
+
+  tags = {
+    Name        = "${var.application_name}-public-rt-us-west-2"
+    Environment = var.environment
+  }
+}
+
+# Route Table Association for us-east-1
+resource "aws_route_table_association" "public_us_east_1" {
+  provider       = aws.us_east_1
+  subnet_id      = aws_subnet.public_us_east_1.id
+  route_table_id = aws_route_table.public_us_east_1.id
+}
+
+# Route Table Association for us-west-2
+resource "aws_route_table_association" "public_us_west_2" {
+  provider       = aws.us_west_2
+  subnet_id      = aws_subnet.public_us_west_2.id
+  route_table_id = aws_route_table.public_us_west_2.id
+}
+
+# Security Group for ALB us-east-1
+resource "aws_security_group" "alb_us_east_1" {
+  provider    = aws.us_east_1
+  name        = "${var.application_name}-alb-sg-us-east-1"
+  description = "Security group for ALB"
+  vpc_id      = aws_vpc.main_us_east_1.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "${var.application_name}-alb-sg-us-east-1"
+    Environment = var.environment
+  }
+}
+
+# Security Group for ALB us-west-2
+resource "aws_security_group" "alb_us_west_2" {
+  provider    = aws.us_west_2
+  name        = "${var.application_name}-alb-sg-us-west-2"
+  description = "Security group for ALB"
+  vpc_id      = aws_vpc.main_us_west_2.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "${var.application_name}-alb-sg-us-west-2"
+    Environment = var.environment
+  }
+}
+
+# Outputs
+output "vpc_ids" {
+  description = "VPC IDs for each region"
+  value = {
+    "us-east-1" = aws_vpc.main_us_east_1.id
+    "us-west-2" = aws_vpc.main_us_west_2.id
+  }
+}
+
+output "subnet_ids" {
+  description = "Subnet IDs for each region"
+  value = {
+    "us-east-1" = aws_subnet.public_us_east_1.id
+    "us-west-2" = aws_subnet.public_us_west_2.id
+  }
+}
+
+```

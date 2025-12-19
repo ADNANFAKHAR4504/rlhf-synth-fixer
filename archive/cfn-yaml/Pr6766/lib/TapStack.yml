@@ -1,0 +1,819 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Self-contained CloudFormation template for multi-environment infrastructure
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Unique suffix for environment resources
+    Default: dev
+  Environment:
+    Type: String
+    Description: Environment name
+    AllowedValues:
+    - dev
+    - staging
+    - prod
+    Default: dev
+  Owner:
+    Type: String
+    Description: Owner of the resources for cost allocation
+    Default: DevOps
+  Project:
+    Type: String
+    Description: Project name for cost allocation
+    Default: Infrastructure
+Conditions:
+  IsProduction:
+    Fn::Equals:
+    - Ref: Environment
+    - prod
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-vpc-${EnvironmentSuffix}
+      - Key: Environment
+        Value:
+          Ref: Environment
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-igw-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: InternetGateway
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: ''
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-public-subnet-1-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone:
+        Fn::Select:
+        - 1
+        - Fn::GetAZs: ''
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-public-subnet-2-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: ''
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-private-subnet-1-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone:
+        Fn::Select:
+        - 1
+        - Fn::GetAZs: ''
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-private-subnet-2-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-public-rt-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnet1
+      RouteTableId:
+        Ref: PublicRouteTable
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnet2
+      RouteTableId:
+        Ref: PublicRouteTable
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-nat-eip-1-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  NATGateway2EIP:
+    Type: AWS::EC2::EIP
+    Condition: IsProduction
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-nat-eip-2-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - NATGateway1EIP
+        - AllocationId
+      SubnetId:
+        Ref: PublicSubnet1
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-nat-gateway-1-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    Condition: IsProduction
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - NATGateway2EIP
+        - AllocationId
+      SubnetId:
+        Ref: PublicSubnet2
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-nat-gateway-2-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-private-rt-1-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway1
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet1
+      RouteTableId:
+        Ref: PrivateRouteTable1
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Condition: IsProduction
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-private-rt-2-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Condition: IsProduction
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway2
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet2
+      RouteTableId:
+        Fn::If:
+        - IsProduction
+        - Ref: PrivateRouteTable2
+        - Ref: PrivateRouteTable1
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS database
+      VpcId:
+        Ref: VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 5432
+        ToPort: 5432
+        SourceSecurityGroupId:
+          Ref: ApplicationSecurityGroup
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-db-sg-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  ApplicationSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for application
+      VpcId:
+        Ref: VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-app-sg-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+      - Ref: PrivateSubnet1
+      - Ref: PrivateSubnet2
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-db-subnet-group-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Delete
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: '15.8'
+      MasterUsername: dbadmin
+      MasterUserPassword:
+        Fn::Sub: '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+      DatabaseName: appdb
+      DBSubnetGroupName:
+        Ref: DBSubnetGroup
+      VpcSecurityGroupIds:
+      - Ref: DatabaseSecurityGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: 03:00-04:00
+      PreferredMaintenanceWindow: sun:04:00-sun:05:00
+      EnableCloudwatchLogsExports:
+      - postgresql
+      StorageEncrypted: true
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-aurora-cluster-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  AuroraInstance1:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      DBInstanceClass: db.t3.medium
+      DBClusterIdentifier:
+        Ref: AuroraCluster
+      Engine: aurora-postgresql
+      PubliclyAccessible: false
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-aurora-instance-1-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name:
+        Fn::Sub: ${Environment}-db-password-${EnvironmentSuffix}
+      Description: Database master password
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: ${Environment}-transactions-${EnvironmentSuffix}
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      - AttributeName: timestamp
+        AttributeType: N
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      - AttributeName: timestamp
+        KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-dynamodb-${EnvironmentSuffix}
+      - Key: Environment
+        Value:
+          Ref: Environment
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: ${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+        - Id: DeleteOldVersions
+          Status: Enabled
+          NoncurrentVersionExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-s3-bucket-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName:
+        Fn::Sub: ${Environment}-ecs-cluster-${EnvironmentSuffix}
+      ClusterSettings:
+      - Name: containerInsights
+        Value: enabled
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-ecs-cluster-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: ecs-tasks.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-ecs-execution-role-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: ecs-tasks.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: TaskPolicy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:PutObject
+            Resource:
+              Fn::Sub: ${S3Bucket.Arn}/*
+          - Effect: Allow
+            Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            Resource:
+              Fn::GetAtt:
+              - DynamoDBTable
+              - Arn
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-ecs-task-role-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        Fn::Sub: ${Environment}-alerts-${EnvironmentSuffix}
+      DisplayName:
+        Fn::Sub: ${Environment} Environment Alerts
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-sns-topic-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  SNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn:
+        Ref: SNSTopic
+      Endpoint: devops@example.com
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/ecs/${Environment}-${EnvironmentSuffix}
+      RetentionInDays: 30
+  TransitGateway:
+    Type: AWS::EC2::TransitGateway
+    Condition: IsProduction
+    Properties:
+      AmazonSideAsn: 64512
+      Description:
+        Fn::Sub: ${Environment} Transit Gateway for ${EnvironmentSuffix}
+      DefaultRouteTableAssociation: enable
+      DefaultRouteTablePropagation: enable
+      DnsSupport: enable
+      VpnEcmpSupport: enable
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-tgw-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  TransitGatewayAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Condition: IsProduction
+    Properties:
+      TransitGatewayId:
+        Ref: TransitGateway
+      VpcId:
+        Ref: VPC
+      SubnetIds:
+      - Ref: PrivateSubnet1
+      - Ref: PrivateSubnet2
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-tgw-attachment-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  TransitGatewayRouteTable:
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Condition: IsProduction
+    Properties:
+      TransitGatewayId:
+        Ref: TransitGateway
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${Environment}-tgw-rt-${EnvironmentSuffix}
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: Project
+  TransitGatewayRouteTableAssociation:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    Condition: IsProduction
+    Properties:
+      TransitGatewayAttachmentId:
+        Ref: TransitGatewayAttachment
+      TransitGatewayRouteTableId:
+        Ref: TransitGatewayRouteTable
+  TransitGatewayRouteTablePropagation:
+    Type: AWS::EC2::TransitGatewayRouteTablePropagation
+    Condition: IsProduction
+    Properties:
+      TransitGatewayAttachmentId:
+        Ref: TransitGatewayAttachment
+      TransitGatewayRouteTableId:
+        Ref: TransitGatewayRouteTable
+  TransitGatewayRoute:
+    Type: AWS::EC2::TransitGatewayRoute
+    Condition: IsProduction
+    Properties:
+      TransitGatewayRouteTableId:
+        Ref: TransitGatewayRouteTable
+      DestinationCidrBlock: 10.0.0.0/16
+      TransitGatewayAttachmentId:
+        Ref: TransitGatewayAttachment
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value:
+      Ref: VPC
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-vpc-id
+  PublicSubnetIds:
+    Description: Public subnet IDs
+    Value:
+      Fn::Join:
+      - ','
+      - - Ref: PublicSubnet1
+        - Ref: PublicSubnet2
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-public-subnet-ids
+  PrivateSubnetIds:
+    Description: Private subnet IDs
+    Value:
+      Fn::Join:
+      - ','
+      - - Ref: PrivateSubnet1
+        - Ref: PrivateSubnet2
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-private-subnet-ids
+  AuroraClusterEndpoint:
+    Description: Aurora cluster endpoint
+    Value:
+      Fn::GetAtt:
+      - AuroraCluster
+      - Endpoint.Address
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-aurora-endpoint
+  AuroraClusterReadEndpoint:
+    Description: Aurora cluster read endpoint
+    Value:
+      Fn::GetAtt:
+      - AuroraCluster
+      - ReadEndpoint.Address
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-aurora-read-endpoint
+  DynamoDBTableName:
+    Description: DynamoDB table name
+    Value:
+      Ref: DynamoDBTable
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-dynamodb-table
+  DynamoDBStreamArn:
+    Description: DynamoDB stream ARN
+    Value:
+      Fn::GetAtt:
+      - DynamoDBTable
+      - StreamArn
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-dynamodb-stream-arn
+  S3BucketName:
+    Description: S3 bucket name
+    Value:
+      Ref: S3Bucket
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-s3-bucket
+  ECSClusterName:
+    Description: ECS cluster name
+    Value:
+      Ref: ECSCluster
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-ecs-cluster
+  SNSTopicArn:
+    Description: SNS topic ARN
+    Value:
+      Ref: SNSTopic
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-sns-topic
+  DatabaseSecurityGroupId:
+    Description: Database security group ID
+    Value:
+      Ref: DatabaseSecurityGroup
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-db-sg-id
+  ApplicationSecurityGroupId:
+    Description: Application security group ID
+    Value:
+      Ref: ApplicationSecurityGroup
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-app-sg-id
+  TransitGatewayId:
+    Description: Transit Gateway ID
+    Condition: IsProduction
+    Value:
+      Ref: TransitGateway
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-tgw-id
+  TransitGatewayRouteTableId:
+    Description: Transit Gateway Route Table ID
+    Condition: IsProduction
+    Value:
+      Ref: TransitGatewayRouteTable
+    Export:
+      Name:
+        Fn::Sub: ${EnvironmentSuffix}-tgw-rt-id

@@ -1,0 +1,27 @@
+2025-12-05 16:43:38,581 - INFO - ============================================================
+2025-12-05 16:43:38,582 - INFO - Infrastructure Analysis Module - Compliance Report
+2025-12-05 16:43:38,582 - INFO - ============================================================
+2025-12-05 16:43:38,582 - INFO - Region: us-east-1
+2025-12-05 16:43:38,582 - INFO - Environment Suffix: pr7973
+2025-12-05 16:43:38,582 - INFO - Endpoint URL: http://127.0.0.1:5001
+2025-12-05 16:43:38,582 - INFO - ============================================================
+2025-12-05 16:43:38,590 - INFO - Found credentials in environment variables.
+2025-12-05 16:43:38,729 - INFO - Generating infrastructure analysis report for environment: pr7973
+2025-12-05 16:43:38,729 - INFO - Analyzing EC2 instances...
+2025-12-05 16:43:39,626 - INFO - Analyzing RDS databases...
+2025-12-05 16:43:39,839 - INFO - Analyzing S3 buckets...
+2025-12-05 16:43:39,845 - INFO - Analyzing security groups...
+2025-12-05 16:43:39,851 - INFO - Analyzing tagging compliance...
+2025-12-05 16:43:39,851 - INFO - Analysis report saved to: analysis-results.txt
+2025-12-05 16:43:39,851 - INFO - ============================================================
+2025-12-05 16:43:39,851 - INFO - Analysis Summary
+2025-12-05 16:43:39,851 - INFO - ============================================================
+2025-12-05 16:43:39,852 - INFO - EC2 Instances: 0 (PASS)
+2025-12-05 16:43:39,852 - INFO - RDS Databases: 0 (PASS)
+2025-12-05 16:43:39,852 - INFO - S3 Buckets: 0 (PASS)
+2025-12-05 16:43:39,852 - INFO - Security Groups: 0 (PASS)
+2025-12-05 16:43:39,852 - INFO - Tagging Compliance: 0%
+2025-12-05 16:43:39,852 - INFO - Total Violations: 0
+2025-12-05 16:43:39,852 - INFO - Overall Status: PASS
+2025-12-05 16:43:39,852 - INFO - ============================================================
+2025-12-05 16:43:39,852 - INFO - Analysis complete!

@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000187",
+  "team": "2",
+  "startedAt": "2025-10-30T14:09:14.843Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "ECS Fargate",
+    "RDS Aurora MySQL",
+    "CloudFront",
+    "S3",
+    "Route53",
+    "Application Load Balancer",
+    "VPC",
+    "NAT Gateway",
+    "Secrets Manager",
+    "CloudWatch",
+    "IAM",
+    "ACM"
+  ],
+  "training_quality": "9",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

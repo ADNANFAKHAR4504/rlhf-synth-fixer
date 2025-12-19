@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7009",
+  "team": "2",
+  "startedAt": "2025-12-03T11:15:37.425Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "ElastiCache",
+    "Aurora PostgreSQL",
+    "SNS",
+    "SQS",
+    "Step Functions",
+    "EventBridge",
+    "S3",
+    "CloudWatch",
+    "VPC",
+    "IAM",
+    "Secrets Manager",
+    "KMS"
+  ],
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

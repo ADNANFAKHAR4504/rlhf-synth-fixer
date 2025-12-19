@@ -1,0 +1,23 @@
+{
+  "aggregationLambdaArn": "arn:aws:lambda:us-east-1:342597974367:function:compliance-aggregation-lambda-97e2b2f",
+  "aggregationLambdaName": "compliance-aggregation-lambda-97e2b2f",
+  "bucketArn": "arn:aws:s3:::compliance-reports-342597974367",
+  "bucketName": "compliance-reports-342597974367",
+  "configAggregatorName": "compliance-aggregator",
+  "configRoleArn": "arn:aws:iam::342597974367:role/config-service-role-82c89d9",
+  "configRuleNames": [
+    "ec2-approved-instance-types",
+    "s3-bucket-encryption-enabled",
+    "rds-backup-retention-enabled",
+    "ebs-volumes-encrypted"
+  ],
+  "dashboardName": "ComplianceMonitoring",
+  "kmsKeyArn": "arn:aws:kms:us-east-1:342597974367:key/8d25fae7-af3b-497f-a5e3-c696a58ec0b3",
+  "kmsKeyId": "8d25fae7-af3b-497f-a5e3-c696a58ec0b3",
+  "lambdaRoleArn": "arn:aws:iam::342597974367:role/compliance-lambda-role-9f4c70d",
+  "processingLambdaArn": "arn:aws:lambda:us-east-1:342597974367:function:compliance-processing-lambda-b00e62b",
+  "processingLambdaName": "compliance-processing-lambda-b00e62b",
+  "remediationLambdaArn": "arn:aws:lambda:us-east-1:342597974367:function:compliance-remediation-lambda-bfa4a36",
+  "remediationLambdaName": "compliance-remediation-lambda-bfa4a36",
+  "snsTopicArn": "arn:aws:sns:us-east-1:342597974367:compliance-notifications-topic-bb604f7"
+}

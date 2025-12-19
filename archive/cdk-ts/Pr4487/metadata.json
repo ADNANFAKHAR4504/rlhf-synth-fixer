@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "EF2940",
+  "team": "1",
+  "startedAt": "2025-10-15T05:56:34.534Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "Aurora",
+    "VPC",
+    "Route53",
+    "CloudWatch",
+    "EventBridge",
+    "Lambda",
+    "IAM",
+    "SNS",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 9,
+  "training_quality_justification": "HIGH VALUE training example. Model made a critical architectural mistake by implementing multi-region Aurora Global Database (us-east-1 + eu-west-1) instead of the required same-region multi-VPC setup (both in us-east-1). This represents a fundamental requirements comprehension failure. The IDEAL_RESPONSE correctly implements the same-region architecture with two independent Aurora clusters in separate VPCs within us-east-1. Key learning: distinction between 'same-region, multi-VPC' vs 'multi-region' disaster recovery patterns. The fix required complete architectural redesign including removal of Global Database, Route53 ARC, and cross-region components. All requirements are met in IDEAL_RESPONSE with proper VPC configuration, Aurora clusters, Lambda functions, monitoring, alerting, and comprehensive testing. Score: 9/10 (excellent training value due to significant architectural correction).",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "446A94",
+  "team": "3",
+  "startedAt": "2025-09-24T12:37:00.565Z",
+  "subtask": "Container Orchestration Setup",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Performance Optimization",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "NAT Gateway",
+    "CloudWatch",
+    "Cloud Map",
+    "Service Discovery"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}

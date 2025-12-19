@@ -1,0 +1,43 @@
+name: TapStack
+description: Self-managed CI/CD pipeline for deploying Pulumi stacks
+runtime: nodejs
+main: bin/index.ts
+
+config:
+  githubOwner:
+    description: GitHub repository owner
+    type: string
+    default: example-owner
+  githubRepo:
+    description: GitHub repository name
+    type: string
+    default: example-repo
+  githubBranch:
+    description: GitHub branch to track
+    type: string
+    default: main
+  githubToken:
+    description: GitHub personal access token
+    type: string
+    secret: true
+    default: placeholder-token-configure-before-use
+  ecrImageUri:
+    description: ECR image URI containing Pulumi CLI
+    type: string
+    default: public.ecr.aws/pulumi/pulumi:latest
+  devAccountId:
+    description: AWS account ID for dev environment
+    type: string
+    default: '123456789012'
+  stagingAccountId:
+    description: AWS account ID for staging environment
+    type: string
+    default: '234567890123'
+  prodAccountId:
+    description: AWS account ID for prod environment
+    type: string
+    default: '345678901234'
+  environmentSuffix:
+    description: Environment suffix for resource naming
+    type: string
+    default: test

@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912751",
+  "team": "synth",
+  "startedAt": "2025-11-27T07:40:00.000Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "CloudWatch Logs",
+    "CloudWatch Metrics",
+    "X-Ray",
+    "SNS",
+    "CloudWatch Synthetics",
+    "Parameter Store",
+    "CloudWatch Alarms",
+    "CloudWatch Dashboard"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

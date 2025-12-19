@@ -1,0 +1,131 @@
+# Synth Trainer Configuration
+# Central configuration for iac-synth-trainer agent
+# Version: 1.0.0
+
+# Iteration settings
+iteration:
+  max_iterations: 10           # Maximum fix iterations before escalation
+  max_deployment_attempts: 5   # Maximum deployment attempts per iteration
+
+# Timeout settings (in seconds)
+timeouts:
+  github_processing_delay: 10  # Wait for GitHub to process changes
+  cicd_wait_default: 600       # Default CI/CD wait (10 minutes)
+  cicd_wait_long: 900          # Long CI/CD wait for complex deployments (15 minutes)
+  cicd_poll_interval: 30       # How often to poll CI/CD status
+  retry_delay_base: 5          # Base delay for retries (exponential backoff)
+
+# Quality gate thresholds
+quality_gates:
+  min_training_quality: 8      # Minimum training quality score for PR approval
+  target_training_quality: 9   # Target score to aim for
+  required_test_coverage: 100  # Required test coverage percentage
+  required_integration_pass_rate: 100  # Required integration test pass rate
+
+# Exit codes
+exit_codes:
+  success: 0                   # Production ready
+  error: 1                     # Unrecoverable error (can retry)
+  blocked: 2                   # Manual intervention required
+
+# Retry configuration
+retry:
+  max_retries: 3               # Maximum retry attempts
+  backoff_multiplier: 2        # Exponential backoff multiplier
+
+# Task type configurations
+task_types:
+  standard:
+    skip_synth: false
+    skip_deploy: false
+    skip_integration_tests: false
+    required_files: []
+    
+  cicd:
+    skip_synth: true
+    skip_deploy: true
+    skip_integration_tests: true
+    required_files:
+      - lib/ci-cd.yml
+    detection:
+      subject_labels:
+        - "CI/CD Pipeline"
+        
+  analysis:
+    skip_synth: true
+    skip_deploy: true
+    skip_integration_tests: true
+    required_files:
+      - lib/analyse.py
+      - lib/analyse.sh  # Either file is acceptable
+    detection:
+      subtask: "Infrastructure QA and Management"
+      platform: "analysis"
+      
+  optimization:
+    skip_synth: false
+    skip_deploy: false
+    skip_integration_tests: false
+    required_files:
+      - lib/optimize.py
+    detection:
+      subject_labels:
+        - "IaC Optimization"
+
+# Logging configuration
+logging:
+  level: INFO                  # DEBUG, INFO, WARN, ERROR
+  format: json                 # json or text
+  include_timestamps: true
+  log_to_file: true
+  log_directory: /tmp/synth-trainer-logs
+
+# File location restrictions
+allowed_directories:
+  - lib/
+  - bin/
+  - test/
+  - tests/
+
+allowed_root_files:
+  - metadata.json
+  - package.json
+  - package-lock.json
+  - cdk.json
+  - cdktf.json
+  - Pulumi.yaml
+  - tap.py
+  - tap.go
+  - setup.js
+  - Pipfile
+  - Pipfile.lock
+  - requirements.txt
+  - build.gradle
+  - pom.xml
+  - go.mod
+  - go.sum
+
+forbidden_directories:
+  - .github/
+  - .claude/
+  - scripts/
+  - docs/
+  - templates/
+  - archive/
+
+# PR comment templates
+pr_comments:
+  max_comment_length: 65536    # GitHub comment limit
+  include_emoji: true
+  post_iteration_status: true
+  post_final_summary: true
+
+# Worktree settings
+worktree:
+  base_path: worktree
+  naming_pattern: "synth-{task_id}"
+  auto_cleanup: true
+  sync_with_main: true
+  auto_resolve_conflicts: true
+  conflict_resolution_strategy: "ours"  # Accept main's version
+

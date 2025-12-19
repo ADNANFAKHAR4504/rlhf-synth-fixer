@@ -1,0 +1,30 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912721",
+  "team": "synth",
+  "startedAt": "2025-11-26T16:30:00-05:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Multi-Account Management",
+    "Identity and Access Management",
+    "Data Encryption and Key Management"
+  ],
+  "aws_services": [
+    "Organizations",
+    "IAM",
+    "KMS",
+    "CloudWatch Logs",
+    "AWS Config"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

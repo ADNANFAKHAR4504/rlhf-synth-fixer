@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291967",
+  "team": "2",
+  "startedAt": "2025-08-20T06:38:17.150Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Access Control",
+    "Monitoring Setup",
+    "Network Configuration",
+    "Database Management"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "S3",
+    "RDS",
+    "IAM",
+    "CloudTrail",
+    "CloudWatch",
+    "Config",
+    "Secrets Manager",
+    "Lambda"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

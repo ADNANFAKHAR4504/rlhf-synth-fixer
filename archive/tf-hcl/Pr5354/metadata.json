@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "5346",
+  "team": "5",
+  "startedAt": "2025-10-29T17:13:16.188Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "CodeCommit",
+    "S3",
+    "DynamoDB",
+    "ECR",
+    "CodeBuild",
+    "CodePipeline",
+    "IAM",
+    "SNS",
+    "CloudWatch",
+    "EventBridge"
+  ],
+  "background": "This implementation creates a production-ready CI/CD pipeline for automated Terraform infrastructure deployments. The architecture follows AWS best practices with separation of concerns: separate IAM roles for plan (read-only) vs apply (full access), manual approval gates for production deployments, encrypted state storage in S3 with DynamoDB locking, and comprehensive monitoring via CloudWatch Alarms and SNS notifications. The implementation uses a single-file architecture (tap_stack.tf) with environment suffix pattern for unique resource naming, enabling multiple concurrent deployments. CodeCommit is optional to support accounts without CodeCommit service enabled. The solution includes 160 unit tests and 62 integration tests validating end-to-end workflows including state management, notification flows, and multi-environment deployment strategies. Key features include: automated pipeline triggering via EventBridge, multi-environment support (dev/staging/prod) with branch-based deployment, encrypted artifacts and state files, least-privilege IAM policies with region restrictions, and comprehensive architecture documentation with ASCII diagrams.",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}

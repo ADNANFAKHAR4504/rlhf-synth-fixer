@@ -1,0 +1,22 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "4823",
+  "team": "5",
+  "startedAt": "2025-10-20T05:06:47.305Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "CloudFront, Lambda@Edge, S3, DynamoDB, CloudWatch, Route 53, IAM",
+  "background": "A news platform requires personalized content delivery infrastructure to serve 60,000 daily readers with low-latency access and accurate engagement tracking. The system needs global content distribution via CloudFront with Lambda@Edge for dynamic personalization, S3 for versioned content storage, DynamoDB for user preferences and engagement analytics, and comprehensive CloudWatch monitoring for system health and performance metrics.",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}

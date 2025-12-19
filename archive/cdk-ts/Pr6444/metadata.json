@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "intermediate",
+  "turn_type": "single",
+  "po_id": "6z0im3",
+  "team": "synth",
+  "startedAt": "2025-11-12T21:34:21+00:00",
+  "subtask": "Trading Platform Single Region",
+  "subject_labels": [
+    "Microservices Architecture",
+    "Event-Driven Systems"
+  ],
+  "aws_services": [
+    "RDS",
+    "DynamoDB",
+    "Lambda",
+    "SQS",
+    "APIGateway",
+    "S3",
+    "CloudWatch",
+    "EventBridge",
+    "SystemsManager",
+    "VPC"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

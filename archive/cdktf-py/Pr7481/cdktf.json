@@ -1,0 +1,14 @@
+{
+  "language": "python",
+  "app": "pipenv run python bin/main.py",
+  "projectId": "f1s1t7p1-transaction-api",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}

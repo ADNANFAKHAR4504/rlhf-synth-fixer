@@ -1,0 +1,36 @@
+{
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "292022",
+  "team": "2",
+  "startedAt": "2025-08-23T12:57:58.824Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "Infrastructure tooling QA",
+    "network config",
+    "scaling",
+    "access control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "ASG",
+    "IGW",
+    "Route Tables",
+    "Security Groups",
+    "Subnets",
+    "Launch Templates",
+    "S3",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

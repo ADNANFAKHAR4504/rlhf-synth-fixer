@@ -1,0 +1,11 @@
+{
+  "AlarmTopicArn": "arn:aws:sns:us-east-1:000000000000:topic-3932dac1",
+  "DynamoTableArn": "arn:aws:dynamodb:us-east-1:000000000000:table/tap-stack-localstack-DynamoTable-de33b83b",
+  "DynamoTableName": "tap-stack-localstack-DynamoTable-de33b83b",
+  "EnvironmentSuffixOut": "dev-us",
+  "LambdaLogGroupArn": "arn:aws:logs:us-east-1:000000000000:log-group:tap-stack-localstack-LambdaLogGroup-2ed53077:*",
+  "LogBucketArn": "arn:aws:s3:::tap-stack-localstack-logbucket-5cb1a884",
+  "LogBucketName": "tap-stack-localstack-logbucket-5cb1a884",
+  "Project": "tapstack",
+  "SecretArn": "arn:aws:secretsmanager:us-east-1:000000000000:secret:tap-stack-localstack-SecretsManagerSecret-4f751c17-NeGbHj"
+}

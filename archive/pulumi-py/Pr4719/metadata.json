@@ -1,0 +1,22 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349268",
+  "team": "6",
+  "startedAt": "2025-10-17T09:40:30.234Z",
+  "subtask": "Application Deployment",
+  "background": "In modern cloud architectures, serverless computing allows developers to build applications without managing servers. AWS Lambda, in conjunction with API Gateway, serves as a potent combination for creating such backend infrastructures. This task revolves around creating such an architecture with specific AWS services, ensuring high security and availability while maximizing deployment flexibility.",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": "Lambda, API Gateway, S3 Bucket, SSM Parameter Store, IAM Role, CloudWatch LogGroup, CloudWatch Metric Alarm",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

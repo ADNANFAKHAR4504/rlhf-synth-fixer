@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-31T06:57:13+00:00",
+  "subtask": "Multi-Environment Consistency & Replication",
+  "subject_labels": [
+    "multi-environment",
+    "consistency",
+    "replication",
+    "infrastructure",
+    "aws"
+  ],
+  "po_id": "101000779",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ECS",
+    "ELB",
+    "S3",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "SNS",
+    "Logs",
+    "Application Auto Scaling"
+  ],
+  "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-21T07:07:01+00:00",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "ECS",
+    "Fargate",
+    "Cost Optimization",
+    "Auto-scaling",
+    "Performance"
+  ],
+  "po_id": "101912615",
+  "aws_services": [
+    "ECS",
+    "Fargate",
+    "VPC",
+    "ALB",
+    "CloudWatch",
+    "IAM",
+    "SecurityGroups",
+    "SNS",
+    "AutoScaling"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,46 @@
+# Example Terraform variables file
+# Copy this to terraform.tfvars and fill in your values
+
+aws_region         = "us-east-1"
+environment_suffix = "prod-001"
+environment        = "production"
+migration_phase    = "setup"
+cost_center        = "engineering"
+
+# VPC Configuration
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+
+# Aurora Configuration
+aurora_engine_version              = "13.12"
+aurora_instance_class              = "db.r6g.xlarge"
+aurora_instance_count              = 2
+aurora_database_name               = "inventory"
+aurora_backup_retention_period     = 30
+aurora_preferred_backup_window     = "03:00-04:00"
+aurora_preferred_maintenance_window = "sun:04:00-sun:05:00"
+
+# Sensitive values - DO NOT commit these to version control
+# aurora_master_username = "postgres"
+# aurora_master_password = "CHANGE_ME_STRONG_PASSWORD"
+
+# DMS Configuration
+dms_replication_instance_class = "dms.c5.2xlarge"
+dms_allocated_storage          = 500
+dms_source_endpoint_host       = "192.168.1.100"
+dms_source_endpoint_port       = 5432
+dms_source_database_name       = "inventory"
+
+# Sensitive values - DO NOT commit these to version control
+# dms_source_username = "replication_user"
+# dms_source_password = "CHANGE_ME_STRONG_PASSWORD"
+
+# S3 Lifecycle
+s3_lifecycle_ia_transition_days     = 90
+s3_lifecycle_glacier_transition_days = 180
+s3_lifecycle_expiration_days        = 365
+
+# CloudWatch Alarms
+alarm_replication_lag_threshold = 300
+alarm_cpu_threshold             = 80
+alarm_email_endpoints           = ["ops-team@example.com", "dba-team@example.com"]

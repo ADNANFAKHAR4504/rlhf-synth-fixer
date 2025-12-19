@@ -1,0 +1,699 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  TapStack.yml — Multi-tier VPC (public/private/database across three AZs) with
+  IGW, per-AZ NAT Gateways, custom route tables, gateway VPC endpoints (S3/DynamoDB),
+  VPC Flow Logs to CloudWatch Logs (1-minute), and NACL hardening for database tier.
+  All resources are created from scratch and tagged for a development environment.
+
+Metadata:
+  Version: "1.0"
+  Owner: "SAARZ Int."
+  Purpose: "Trading platform development VPC for containerized and VM workloads"
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Lowercase short suffix used in all Name tags and resource names (e.g., dev, qa, prod)
+    AllowedPattern: "^[a-z0-9-]+$"
+    Default: "dev"
+  TeamTag:
+    Type: String
+    Description: Owning team tag value
+    Default: "Platform"
+  CostCenterTag:
+    Type: String
+    Description: Cost center tag value
+    Default: "CC-1001"
+  VpcCidr:
+    Type: String
+    Description: CIDR for the VPC
+    Default: "10.0.0.0/16"
+  PublicSubnetCidrs:
+    Type: List<String>
+    Description: Public subnet CIDRs for AZ-a,b,c (load balancers, NAT)
+    Default: "10.0.1.0/24,10.0.2.0/24,10.0.3.0/24"
+  PrivateSubnetCidrs:
+    Type: List<String>
+    Description: Private subnet CIDRs for AZ-a,b,c (application workloads)
+    Default: "10.0.11.0/24,10.0.12.0/24,10.0.13.0/24"
+  DatabaseSubnetCidrs:
+    Type: List<String>
+    Description: Database subnet CIDRs for AZ-a,b,c (no Internet routing)
+    Default: "10.0.21.0/24,10.0.22.0/24,10.0.23.0/24"
+  FlowLogsRetentionDays:
+    Type: Number
+    Description: CloudWatch Logs retention (days) for VPC Flow Logs
+    Default: 30
+    AllowedValues: [1,3,5,7,14,30,60,90,120,150,180,365,400,545,731,1096,1827,2192,2557,2922,3288,3653,4018,4383,4748,5113,5479,5844,6210,6575]
+  LogGroupKmsKeyArn:
+    Type: String
+    Description: (Optional) KMS CMK ARN for encrypting the Flow Logs log group. Leave blank to skip.
+    Default: ""
+
+Conditions:
+  UseKmsForLogs: !Not [!Equals [!Ref LogGroupKmsKeyArn, ""]]
+
+Mappings: {}
+
+Resources:
+
+  ############################################
+  # VPC & Internet Connectivity
+  ############################################
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - { Key: Name, Value: !Sub "vpc-${EnvironmentSuffix}" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - { Key: Name, Value: !Sub "igw-${EnvironmentSuffix}" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref Vpc
+
+  ############################################
+  # Subnets (3x per tier across AZs)
+  ############################################
+  # Public Subnets
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Select [0, !Ref PublicSubnetCidrs]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Sub "public-a-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "public" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Select [1, !Ref PublicSubnetCidrs]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Sub "public-b-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "public" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  PublicSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      CidrBlock: !Select [2, !Ref PublicSubnetCidrs]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Sub "public-c-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "public" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  # Private Subnets
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Select [0, !Ref PrivateSubnetCidrs]
+      Tags:
+        - { Key: Name, Value: !Sub "private-a-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "private" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Select [1, !Ref PrivateSubnetCidrs]
+      Tags:
+        - { Key: Name, Value: !Sub "private-b-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "private" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  PrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      CidrBlock: !Select [2, !Ref PrivateSubnetCidrs]
+      Tags:
+        - { Key: Name, Value: !Sub "private-c-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "private" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  # Database Subnets
+  DbSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Select [0, !Ref DatabaseSubnetCidrs]
+      Tags:
+        - { Key: Name, Value: !Sub "db-a-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "database" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  DbSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Select [1, !Ref DatabaseSubnetCidrs]
+      Tags:
+        - { Key: Name, Value: !Sub "db-b-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "database" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  DbSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      CidrBlock: !Select [2, !Ref DatabaseSubnetCidrs]
+      Tags:
+        - { Key: Name, Value: !Sub "db-c-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "database" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  ############################################
+  # NAT Gateways (1 per AZ) + EIPs
+  ############################################
+  NatEipA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - { Key: Name, Value: !Sub "eip-nat-a-${EnvironmentSuffix}" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  NatEipB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - { Key: Name, Value: !Sub "eip-nat-b-${EnvironmentSuffix}" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  NatEipC:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - { Key: Name, Value: !Sub "eip-nat-c-${EnvironmentSuffix}" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  NatGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipA.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - { Key: Name, Value: !Sub "nat-a-${EnvironmentSuffix}" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+    DependsOn: VpcGatewayAttachment
+
+  NatGatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipB.AllocationId
+      SubnetId: !Ref PublicSubnetB
+      Tags:
+        - { Key: Name, Value: !Sub "nat-b-${EnvironmentSuffix}" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+    DependsOn: VpcGatewayAttachment
+
+  NatGatewayC:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipC.AllocationId
+      SubnetId: !Ref PublicSubnetC
+      Tags:
+        - { Key: Name, Value: !Sub "nat-c-${EnvironmentSuffix}" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+    DependsOn: VpcGatewayAttachment
+
+  ############################################
+  # Route Tables & Associations (explicit)
+  ############################################
+  # Public RTs
+  PublicRTA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub "rtb-public-a-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "public" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+  PublicRouteA0:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRTA
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+    DependsOn: VpcGatewayAttachment
+  PublicAtoSubnetA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRTA
+      SubnetId: !Ref PublicSubnetA
+
+  PublicRTB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub "rtb-public-b-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "public" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+  PublicRouteB0:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRTB
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+    DependsOn: VpcGatewayAttachment
+  PublicBtoSubnetB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRTB
+      SubnetId: !Ref PublicSubnetB
+
+  PublicRTC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub "rtb-public-c-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "public" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+  PublicRouteC0:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRTC
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+    DependsOn: VpcGatewayAttachment
+  PublicCtoSubnetC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRTC
+      SubnetId: !Ref PublicSubnetC
+
+  # Private RTs (each to its local NAT)
+  PrivateRTA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub "rtb-private-a-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "private" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+  PrivateRouteA0:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRTA
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGatewayA
+  PrivateAtoSubnetA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRTA
+      SubnetId: !Ref PrivateSubnetA
+
+  PrivateRTB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub "rtb-private-b-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "private" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+  PrivateRouteB0:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRTB
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGatewayB
+  PrivateBtoSubnetB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRTB
+      SubnetId: !Ref PrivateSubnetB
+
+  PrivateRTC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub "rtb-private-c-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "private" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+  PrivateRouteC0:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRTC
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGatewayC
+  PrivateCtoSubnetC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRTC
+      SubnetId: !Ref PrivateSubnetC
+
+  # Database RTs (no Internet routes)
+  DbRTA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub "rtb-db-a-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "database" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+  DbAtoSubnetA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DbRTA
+      SubnetId: !Ref DbSubnetA
+
+  DbRTB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub "rtb-db-b-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "database" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+  DbBtoSubnetB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DbRTB
+      SubnetId: !Ref DbSubnetB
+
+  DbRTC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub "rtb-db-c-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "database" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+  DbCtoSubnetC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DbRTC
+      SubnetId: !Ref DbSubnetC
+
+  ############################################
+  # NACLs — explicit deny SSH(22) from public -> database
+  ############################################
+  DbNacl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub "nacl-db-${EnvironmentSuffix}" }
+        - { Key: Tier, Value: "database" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  DbNaclInDenySshPubA:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref DbNacl
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: deny
+      Egress: false
+      CidrBlock: !Select [0, !Ref PublicSubnetCidrs]
+      PortRange: { From: 22, To: 22 }
+
+  DbNaclInDenySshPubB:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref DbNacl
+      RuleNumber: 110
+      Protocol: 6
+      RuleAction: deny
+      Egress: false
+      CidrBlock: !Select [1, !Ref PublicSubnetCidrs]
+      PortRange: { From: 22, To: 22 }
+
+  DbNaclInDenySshPubC:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref DbNacl
+      RuleNumber: 120
+      Protocol: 6
+      RuleAction: deny
+      Egress: false
+      CidrBlock: !Select [2, !Ref PublicSubnetCidrs]
+      PortRange: { From: 22, To: 22 }
+
+  DbNaclInAllowVpcAll:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref DbNacl
+      RuleNumber: 200
+      Protocol: -1
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref VpcCidr
+
+  DbNaclOutAllowVpcAll:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref DbNacl
+      RuleNumber: 200
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: !Ref VpcCidr
+
+  DbNaclAssocA:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      NetworkAclId: !Ref DbNacl
+      SubnetId: !Ref DbSubnetA
+
+  DbNaclAssocB:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      NetworkAclId: !Ref DbNacl
+      SubnetId: !Ref DbSubnetB
+
+  DbNaclAssocC:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      NetworkAclId: !Ref DbNacl
+      SubnetId: !Ref DbSubnetC
+
+  ############################################
+  # VPC Gateway Endpoints (S3 & DynamoDB) — attach to Private + DB RTs
+  ############################################
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRTA
+        - !Ref PrivateRTB
+        - !Ref PrivateRTC
+        - !Ref DbRTA
+        - !Ref DbRTB
+        - !Ref DbRTC
+      Tags:
+        - { Key: Name, Value: !Sub "vpce-s3-${EnvironmentSuffix}" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  DynamoDbEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.dynamodb"
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRTA
+        - !Ref PrivateRTB
+        - !Ref PrivateRTC
+        - !Ref DbRTA
+        - !Ref DbRTB
+        - !Ref DbRTC
+      Tags:
+        - { Key: Name, Value: !Sub "vpce-dynamodb-${EnvironmentSuffix}" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  ############################################
+  # CloudWatch Log Group + IAM Role for VPC Flow Logs
+  ############################################
+  FlowLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/vpc/flow-logs/${EnvironmentSuffix}"
+      RetentionInDays: !Ref FlowLogsRetentionDays
+      KmsKeyId: !If [UseKmsForLogs, !Ref LogGroupKmsKeyArn, !Ref "AWS::NoValue"]
+
+  FlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "vpc-flowlogs-role-${EnvironmentSuffix}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: [vpc-flow-logs.amazonaws.com] }
+            Action: ["sts:AssumeRole"]
+      Path: "/"
+      Policies:
+        - PolicyName: !Sub "vpc-flowlogs-policy-${EnvironmentSuffix}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Resource: "*"
+      Tags:
+        - { Key: Name, Value: !Sub "vpc-flowlogs-role-${EnvironmentSuffix}" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+  VpcFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt FlowLogsRole.Arn
+      LogGroupName: !Ref FlowLogsLogGroup
+      ResourceId: !Ref Vpc
+      ResourceType: VPC
+      TrafficType: ALL
+      MaxAggregationInterval: 60
+      Tags:
+        - { Key: Name, Value: !Sub "vpc-flowlogs-${EnvironmentSuffix}" }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Team, Value: !Ref TeamTag }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref Vpc
+    Export:
+      Name: !Sub "vpc-id-${EnvironmentSuffix}"
+
+  # Subnets
+  PublicSubnetAId: { Value: !Ref PublicSubnetA }
+  PublicSubnetBId: { Value: !Ref PublicSubnetB }
+  PublicSubnetCId: { Value: !Ref PublicSubnetC }
+  PrivateSubnetAId: { Value: !Ref PrivateSubnetA }
+  PrivateSubnetBId: { Value: !Ref PrivateSubnetB }
+  PrivateSubnetCId: { Value: !Ref PrivateSubnetC }
+  DbSubnetAId: { Value: !Ref DbSubnetA }
+  DbSubnetBId: { Value: !Ref DbSubnetB }
+  DbSubnetCId: { Value: !Ref DbSubnetC }
+
+  # Route Tables
+  PublicRTAId: { Value: !Ref PublicRTA }
+  PublicRTBId: { Value: !Ref PublicRTB }
+  PublicRTCId: { Value: !Ref PublicRTC }
+  PrivateRTAId: { Value: !Ref PrivateRTA }
+  PrivateRTBId: { Value: !Ref PrivateRTB }
+  PrivateRTCId: { Value: !Ref PrivateRTC }
+  DbRTAId: { Value: !Ref DbRTA }
+  DbRTBId: { Value: !Ref DbRTB }
+  DbRTCId: { Value: !Ref DbRTC }
+
+  # NAT & IGW
+  InternetGatewayId: { Value: !Ref InternetGateway }
+  NatGatewayAId: { Value: !Ref NatGatewayA }
+  NatGatewayBId: { Value: !Ref NatGatewayB }
+  NatGatewayCId: { Value: !Ref NatGatewayC }
+  NatEipAAllocationId: { Value: !GetAtt NatEipA.AllocationId }
+  NatEipBAllocationId: { Value: !GetAtt NatEipB.AllocationId }
+  NatEipCAllocationId: { Value: !GetAtt NatEipC.AllocationId }
+
+  # VPC Endpoints
+  S3EndpointId: { Value: !Ref S3Endpoint }
+  DynamoDbEndpointId: { Value: !Ref DynamoDbEndpoint }
+
+  # Flow Logs
+  FlowLogsLogGroupName: { Value: !Ref FlowLogsLogGroup }
+  FlowLogsRoleArn: { Value: !GetAtt FlowLogsRole.Arn }

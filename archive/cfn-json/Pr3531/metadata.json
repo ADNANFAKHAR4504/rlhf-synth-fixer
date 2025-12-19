@@ -1,0 +1,48 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "36052197",
+  "team": "synth",
+  "startedAt": "2025-10-03T23:06:50+05:30",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Provisioning of mobile backend"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "High training value (8/10): This implementation demonstrates critical CloudFormation deployment issues and their resolutions. The conversation captured valuable lessons about IAM capabilities (CAPABILITY_NAMED_IAM vs CAPABILITY_IAM), Lambda concurrency limits, regional S3 compatibility, and versioned S3 cleanup procedures. The MODEL_FAILURES.md documents 10 distinct failure modes with clear root causes and resolutions. However, the final solution removes Pinpoint resources that were in the original requirements, reducing completeness. The comprehensive test coverage (37 unit tests, 14 integration tests) and detailed error handling patterns make this excellent training data for improving model understanding of AWS service constraints and CloudFormation deployment best practices.",
+  "aws_services": [
+    "DynamoDB",
+    "S3",
+    "SNS",
+    "SQS",
+    "Lambda",
+    "IAM",
+    "CloudWatch Alarms",
+    "CloudWatch Logs",
+    "EventBridge Scheduler",
+    "EventBridge Pipes"
+  ],
+  "review_date": "2025-10-07",
+  "compliance_percentage": 75,
+  "test_coverage": {
+    "unit_tests": 37,
+    "integration_tests": 14,
+    "e2e_tests": 1
+  },
+  "critical_issues": [
+    "IDEAL_RESPONSE.md contains QA process references (unit/integration test results)",
+    "IDEAL_RESPONSE.md has unformatted bash commands (lines 24-35)",
+    "Missing Pinpoint resources from original requirements",
+    "IAM roles removed RoleName property for CAPABILITY_IAM compatibility"
+  ],
+  "security_compliance": "PASSED",
+  "best_practices_compliance": "PASSED",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

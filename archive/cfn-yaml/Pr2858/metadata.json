@@ -1,0 +1,52 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348919",
+  "team": "5",
+  "startedAt": "2025-09-08T05:10:24.750Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Access Control",
+    "Monitoring Setup"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "AWS::KMS::Key",
+    "AWS::KMS::Alias",
+    "AWS::S3::Bucket",
+    "AWS::S3::BucketPolicy",
+    "AWS::EC2::VPC",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::EIP",
+    "AWS::EC2::NatGateway",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::VPCEndpoint",
+    "AWS::EC2::SecurityGroup",
+    "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    "AWS::ElasticLoadBalancingV2::TargetGroup",
+    "AWS::ElasticLoadBalancingV2::Listener",
+    "AWS::WAFv2::WebACL",
+    "AWS::WAFv2::WebACLAssociation",
+    "AWS::IAM::Role",
+    "AWS::IAM::InstanceProfile",
+    "AWS::EC2::LaunchTemplate",
+    "AWS::AutoScaling::AutoScalingGroup",
+    "AWS::Lambda::Function",
+    "AWS::Logs::LogGroup",
+    "AWS::CloudTrail::Trail",
+    "AWS::GuardDuty::Detector"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "waqara-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "98543621",
+  "team": "synth",
+  "startedAt": "2025-10-08T05:41:54+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "CloudFront",
+    "Lambda@Edge",
+    "S3",
+    "DynamoDB",
+    "WAF",
+    "Route53",
+    "CloudWatch",
+    "IAM"
+  ],
+  "review_status": "completed",
+  "review_date": "2025-10-09",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

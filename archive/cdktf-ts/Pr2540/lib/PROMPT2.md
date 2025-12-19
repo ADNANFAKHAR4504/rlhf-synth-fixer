@@ -1,0 +1,12 @@
+### deployment of the above code failed. this is the error:
+- TapStackpr2384 ╷
+- │ Error: creating Security Group (tap-project-pr2384-sg): operation error EC2: CreateSecurityGroup, https response error - StatusCode: 400, RequestID: f1f738e5-aa2d-478d-ab8b-07f79161b92b, api error InvalidVpcId.Malformed: The vpc ID'vpc-default' is malformed
+- │
+- │ with aws_security_group.security-group_7A44B4EA (security-group/security-group),
+- │ on cdk.tf.json line 254, in resource.aws_security_group.security-group_7A44B4EA (security-group/security-group):
+- │ 254: }
+- │
+- ╵
+- TapStackpr2384 ::error::Terraform exited with code 1.
+- 0 Stacks deploying 1 Stack done 0 Stacks waiting
+- Invoking Terraform CLI failed with exit code 1

@@ -1,0 +1,43 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "46210837",
+  "team": "synth",
+  "startedAt": "2025-10-03T13:41:36+05:30",
+  "training_quality": 8.5,
+  "aws_services": [
+    "SNS",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "SES",
+    "IAM",
+    "KMS",
+    "CloudWatch Logs",
+    "CloudFormation"
+  ],
+  "subtask": "healthcare-appointment-reminder-system",
+  "subject_labels": [
+    "healthcare",
+    "appointment-reminders",
+    "sms-notifications",
+    "serverless-architecture",
+    "lambda-functions",
+    "dynamodb-logging",
+    "sns-messaging",
+    "ses-email-fallback",
+    "cloudwatch-monitoring",
+    "retry-logic",
+    "delivery-tracking",
+    "notification-system"
+  ],
+  "subtask_category": "serverless-infrastructure",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

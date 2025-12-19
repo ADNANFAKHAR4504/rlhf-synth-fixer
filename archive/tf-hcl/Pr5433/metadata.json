@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-30T11:56:33+00:00",
+  "po_id": "101000770",
+  "subtask": "Environment Migration",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "author": "iamarpit-turing",
+  "aws_services": [
+    "ALB",
+    "DataSync",
+    "DynamoDB",
+    "EBS",
+    "EC2",
+    "IAM",
+    "RDS",
+    "Route53",
+    "S3",
+    "VPC"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

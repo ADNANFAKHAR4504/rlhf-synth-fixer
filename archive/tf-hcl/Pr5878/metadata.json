@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-05T22:15:38+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "2jdat",
+  "aws_services": [
+    "Auto Scaling",
+    "CloudFront",
+    "CloudWatch",
+    "EC2",
+    "ELB",
+    "IAM",
+    "Internet Gateway",
+    "KMS",
+    "NAT Gateway",
+    "RDS",
+    "S3",
+    "Security Groups",
+    "VPC"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

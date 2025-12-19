@@ -1,0 +1,45 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6CBBC4",
+  "team": "1",
+  "startedAt": "2025-10-12T14:04:20.353Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "Aurora",
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "Route 53",
+    "DynamoDB",
+    "KMS",
+    "CloudWatch",
+    "Lambda",
+    "S3",
+    "CloudTrail",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "SNS",
+    "EventBridge",
+    "Step Functions",
+    "Auto Scaling",
+    "AWS Backup",
+    "Elastic Load Balancing"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

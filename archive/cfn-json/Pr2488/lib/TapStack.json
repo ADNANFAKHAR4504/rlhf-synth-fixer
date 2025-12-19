@@ -1,0 +1,744 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Production-grade web application infrastructure with VPC, EC2, RDS, and security configurations - Final working version",
+  "Metadata": {
+    "LastUpdated": "2025-09-01",
+    "Version": "1.0.3"
+  },
+
+  "Parameters": {
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64",
+      "Description": "Latest Amazon Linux 2023 AMI ID from Systems Manager Parameter Store"
+    },
+    "KeyPairName": {
+      "Type": "String",
+      "Description": "Name of an existing EC2 KeyPair (leave empty to create instance without key pair)",
+      "Default": "",
+      "AllowedPattern": "^$|^[a-zA-Z0-9][a-zA-Z0-9_-]*$",
+      "ConstraintDescription": "Must be empty or a valid EC2 KeyPair name."
+    }
+  },
+
+  "Conditions": {
+    "HasKeyPair": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "KeyPairName"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+
+  "Resources": {
+    "ProductionVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Production-VPC"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "PublicSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ProductionVPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Public-Subnet"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "PrivateSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ProductionVPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Private-Subnet"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "PrivateSubnetSecondAZ": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ProductionVPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Private-Subnet-AZ2"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Production-IGW"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ProductionVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+
+    "NATGatewayEIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+
+    "NATGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATGatewayEIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Production-NAT-Gateway"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ProductionVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Public-Route-Table"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+
+    "PublicSubnetRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ProductionVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Private-Route-Table"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NATGateway"
+        }
+      }
+    },
+
+    "PrivateSubnetRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+
+    "PrivateSubnetSecondAZRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnetSecondAZ"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+
+    "WebServerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for web server allowing HTTP and HTTPS traffic",
+        "VpcId": {
+          "Ref": "ProductionVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTP traffic from anywhere"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTPS traffic from anywhere"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "WebServer-SecurityGroup"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for database allowing MySQL access from web server only",
+        "VpcId": {
+          "Ref": "ProductionVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "WebServerSecurityGroup"
+            },
+            "Description": "Allow MySQL access from web server security group"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Database-SecurityGroup"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "EC2Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "CloudWatchLogsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+
+    "EC2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "EC2Role"
+          }
+        ]
+      }
+    },
+
+    "WebServerInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "LatestAmiId"
+        },
+        "InstanceType": "t3.micro",
+        "KeyName": {
+          "Fn::If": [
+            "HasKeyPair",
+            {
+              "Ref": "KeyPairName"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "WebServerSecurityGroup"
+          }
+        ],
+        "IamInstanceProfile": {
+          "Ref": "EC2InstanceProfile"
+        },
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "yum update -y\n",
+                "yum install -y httpd\n",
+                "systemctl start httpd\n",
+                "systemctl enable httpd\n",
+                "echo '<h1>Production Web Server - Project XYZ</h1>' > /var/www/html/index.html\n",
+                "echo '<p>Server started at: '$(date)'</p>' >> /var/www/html/index.html\n",
+                "echo '<p>Instance ID: '$(curl -s http://169.254.169.254/latest/meta-data/instance-id)'</p>' >> /var/www/html/index.html\n"
+              ]
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Production-WebServer"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "WebServerEIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "InstanceId": {
+          "Ref": "WebServerInstance"
+        },
+        "Domain": "vpc"
+      }
+    },
+
+    "DBPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Description": "RDS MySQL Database Password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": " \"@/\\\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Production-DB-Password"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "DBPasswordSecretAttachment": {
+      "Type": "AWS::SecretsManager::SecretTargetAttachment",
+      "Properties": {
+        "SecretId": {
+          "Ref": "DBPasswordSecret"
+        },
+        "TargetId": {
+          "Ref": "ProductionDatabase"
+        },
+        "TargetType": "AWS::RDS::DBInstance"
+      }
+    },
+
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnet group for RDS database spanning multiple AZs",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet"
+          },
+          {
+            "Ref": "PrivateSubnetSecondAZ"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Production-DB-SubnetGroup"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "ProductionDatabase": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "production-mysql-db-${AWS::StackName}"
+        },
+        "DBInstanceClass": "db.t3.micro",
+        "Engine": "mysql",
+        "EngineVersion": "8.0.39",
+        "AllocatedStorage": "20",
+        "StorageType": "gp2",
+        "DBName": "productiondb",
+        "MasterUsername": {
+          "Fn::Join": [
+            "",
+            [
+              "{{resolve:secretsmanager:",
+              {
+                "Ref": "DBPasswordSecret"
+              },
+              ":SecretString:username}}"
+            ]
+          ]
+        },
+        "MasterUserPassword": {
+          "Fn::Join": [
+            "",
+            [
+              "{{resolve:secretsmanager:",
+              {
+                "Ref": "DBPasswordSecret"
+              },
+              ":SecretString:password}}"
+            ]
+          ]
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "BackupRetentionPeriod": 7,
+        "MultiAZ": false,
+        "PubliclyAccessible": false,
+        "StorageEncrypted": true,
+        "DeletionProtection": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Production-MySQL-Database"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      },
+      "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot"
+    }
+  },
+
+  "Outputs": {
+    "WebServerPublicIP": {
+      "Description": "Public IP address of the web server",
+      "Value": {
+        "Ref": "WebServerEIP"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-WebServerPublicIP"
+        }
+      }
+    },
+    "DatabaseEndpoint": {
+      "Description": "RDS MySQL database endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "ProductionDatabase",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabaseEndpoint"
+        }
+      }
+    },
+    "VPCId": {
+      "Description": "ID of the created VPC",
+      "Value": {
+        "Ref": "ProductionVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPC-ID"
+        }
+      }
+    },
+    "WebServerURL": {
+      "Description": "URL of the web server",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "http://",
+            {
+              "Ref": "WebServerEIP"
+            }
+          ]
+        ]
+      }
+    },
+    "SSMSessionManagerURL": {
+      "Description": "AWS Console URL for Systems Manager Session Manager access",
+      "Value": {
+        "Fn::Sub": "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${WebServerInstance}?region=${AWS::Region}"
+      }
+    }
+  }
+}

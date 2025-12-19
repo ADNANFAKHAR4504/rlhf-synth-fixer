@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-25T18:08:03+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "x4g8r0z9",
+  "aws_services": [
+    "Config",
+    "Lambda",
+    "S3",
+    "EventBridge",
+    "SNS",
+    "IAM",
+    "CloudWatch",
+    "SSM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "author": "mayanksethi-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

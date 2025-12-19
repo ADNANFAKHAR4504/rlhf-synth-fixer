@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912119",
+  "team": "4",
+  "startedAt": "2025-11-26T12:50:28.955Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "RDS",
+    "VPC",
+    "EC2",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch",
+    "SNS",
+    "Route53",
+    "Secrets Manager",
+    "KMS",
+    "FIS",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,10 @@
+{
+  "name": "vendor-notifier",
+  "version": "1.0.0",
+  "description": "Lambda function to notify vendors via SNS",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-sns": "^3.0.0",
+    "@aws-sdk/util-dynamodb": "^3.0.0"
+  }
+}

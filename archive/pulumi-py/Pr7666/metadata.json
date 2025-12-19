@@ -1,0 +1,34 @@
+{
+  "task_id": "101000955",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-02T06:14:17+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "CloudFront",
+    "CloudWatch",
+    "ECS",
+    "ELB",
+    "IAM",
+    "NAT",
+    "RDS",
+    "S3",
+    "SecretsManager",
+    "VPC"
+  ],
+  "po_id": "101000955",
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

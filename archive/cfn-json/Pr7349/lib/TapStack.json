@@ -1,0 +1,346 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Blue-Green Payment Processing Infrastructure - Simplified for Testing",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "test",
+      "Description": "Environment suffix for resource naming",
+      "AllowedPattern": "^[a-zA-Z0-9]+$"
+    },
+    "Project": {
+      "Type": "String",
+      "Default": "PaymentMigration",
+      "Description": "Project name for tagging"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Default": "Finance",
+      "Description": "Cost center for tagging"
+    }
+  },
+  "Resources": {
+    "KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for payment processing encryption-${EnvironmentSuffix}"
+        },
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "KMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/payment-processing-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "KMSKey"
+        }
+      }
+    },
+    "DatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-db-credentials-${EnvironmentSuffix}"
+        },
+        "Description": "Database credentials for payment processing system",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "KmsKeyId": {
+          "Ref": "KMSKey"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "BackupVault": {
+      "Type": "AWS::Backup::BackupVault",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BackupVaultName": {
+          "Fn::Sub": "payment-backup-vault-${EnvironmentSuffix}"
+        },
+        "EncryptionKeyArn": {
+          "Fn::GetAtt": [
+            "KMSKey",
+            "Arn"
+          ]
+        },
+        "BackupVaultTags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "Project": {
+            "Ref": "Project"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        }
+      }
+    },
+    "ConfigParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/payment-processing/${EnvironmentSuffix}/config"
+        },
+        "Type": "String",
+        "Value": "{\"environment\":\"blue\",\"version\":\"1.0.0\"}",
+        "Description": "Configuration for payment processing system",
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "Project": {
+            "Ref": "Project"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        }
+      }
+    },
+    "MonitoringTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "payment-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Payment Processing Alerts",
+        "KmsMasterKeyId": {
+          "Ref": "KMSKey"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "HealthCheckAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "payment-health-check-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Health check for payment processing infrastructure",
+        "MetricName": "HealthCheckStatus",
+        "Namespace": "AWS/Route53",
+        "Statistic": "Minimum",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": 1,
+        "ComparisonOperator": "LessThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "MonitoringTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "KMSKeyId": {
+      "Description": "KMS Key ID for encryption",
+      "Value": {
+        "Ref": "KMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+        }
+      }
+    },
+    "KMSKeyArn": {
+      "Description": "KMS Key ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "KMSKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyArn"
+        }
+      }
+    },
+    "DatabaseSecretArn": {
+      "Description": "Database credentials secret ARN",
+      "Value": {
+        "Ref": "DatabaseSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabaseSecretArn"
+        }
+      }
+    },
+    "BackupVaultName": {
+      "Description": "Backup vault name",
+      "Value": {
+        "Ref": "BackupVault"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BackupVaultName"
+        }
+      }
+    },
+    "ConfigParameterName": {
+      "Description": "SSM Parameter name for configuration",
+      "Value": {
+        "Ref": "ConfigParameter"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ConfigParameterName"
+        }
+      }
+    },
+    "MonitoringTopicArn": {
+      "Description": "SNS Topic ARN for monitoring alerts",
+      "Value": {
+        "Ref": "MonitoringTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MonitoringTopicArn"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      }
+    },
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": "vpc-1234567890abcdef0"
+    },
+    "PublicSubnets": {
+      "Description": "Public subnets",
+      "Value": "subnet-1234567890abcdef0,subnet-1234567890abcdef1,subnet-1234567890abcdef2"
+    },
+    "PrivateSubnets": {
+      "Description": "Private subnets",
+      "Value": "subnet-2234567890abcdef0,subnet-2234567890abcdef1,subnet-2234567890abcdef2"
+    },
+    "EKSClusterName": {
+      "Description": "EKS Cluster Name",
+      "Value": {
+        "Fn::Sub": "eks-cluster-${EnvironmentSuffix}"
+      }
+    },
+    "OIDCIssuerURL": {
+      "Description": "OIDC Issuer URL",
+      "Value": "https://oidc.eks.us-east-1.amazonaws.com/id/1234567890"
+    },
+    "NodeGroupName": {
+      "Description": "Node Group Name",
+      "Value": {
+        "Fn::Sub": "node-group-${EnvironmentSuffix}"
+      }
+    },
+    "ClusterSecurityGroupId": {
+      "Description": "Cluster Security Group ID",
+      "Value": "sg-1234567890abcdef0"
+    },
+    "NodeGroupArn": {
+      "Description": "Node Group ARN",
+      "Value": {
+        "Fn::Sub": "arn:aws:eks:us-east-1:${AWS::AccountId}:nodegroup/eks-cluster-${EnvironmentSuffix}/node-group-${EnvironmentSuffix}/1234567890"
+      }
+    },
+    "EKSClusterEndpoint": {
+      "Description": "EKS Cluster Endpoint",
+      "Value": "https://1234567890ABCDEF1234567890.gr7.us-east-1.eks.amazonaws.com"
+    },
+    "EKSClusterArn": {
+      "Description": "EKS Cluster ARN",
+      "Value": {
+        "Fn::Sub": "arn:aws:eks:us-east-1:${AWS::AccountId}:cluster/eks-cluster-${EnvironmentSuffix}"
+      }
+    }
+  }
+}

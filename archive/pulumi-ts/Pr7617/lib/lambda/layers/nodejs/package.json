@@ -1,0 +1,8 @@
+{
+  "name": "nodejs-shared-layer",
+  "version": "1.0.0",
+  "description": "Shared Node.js dependencies for image processing Lambda functions",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.450.0"
+  }
+}

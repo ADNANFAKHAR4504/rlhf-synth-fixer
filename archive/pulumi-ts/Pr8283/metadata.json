@@ -1,0 +1,26 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "b8c0d6t5",
+  "team": "synth-2",
+  "startedAt": "2025-12-03T00:00:00-08:00",
+  "subtask": "IaC Program Optimization",
+  "provider": "localstack",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

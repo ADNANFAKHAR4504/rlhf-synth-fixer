@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "l9r9o5",
+  "team": "synth",
+  "startedAt": "2025-11-20T09:41:58Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Application Deployment",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "StepFunctions",
+    "EventBridge",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

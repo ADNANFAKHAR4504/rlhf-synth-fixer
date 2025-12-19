@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: python
+description: AWS CI/CD Pipeline Infrastructure for containerized Node.js applications
+main: tap.py

@@ -1,0 +1,478 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  TapStack - Secure Multi-Tier AWS Infrastructure
+  Final version with strict CloudTrail bucket policy,
+  KMS permissions for CloudTrail, safe AZ handling,
+  GuardDuty optional, and Config optional via EnableConfig.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    Description: Environment name (dev, stage, prod)
+
+  VpcACidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR for VPC A
+
+  VpcBCidr:
+    Type: String
+    Default: 10.1.0.0/16
+    Description: CIDR for VPC B
+
+  KmsKeyAlias:
+    Type: String
+    Default: alias/tap_stack-key
+    Description: Alias for KMS CMK used for encryption
+
+  EnableGuardDuty:
+    Type: String
+    AllowedValues: [true, false]
+    Default: false
+    Description: Set to true to create GuardDuty detector. Must be false if one already exists.
+
+  EnableConfig:
+    Type: String
+    AllowedValues: [true, false]
+    Default: false
+    Description: Set to true to create AWS Config recorder. Must be false if one already exists.
+
+  Az1Name:
+    Type: String
+    Default: us-east-1a
+    Description: Primary AZ for subnets (must be a valid AZ in your region)
+
+  Az2Name:
+    Type: String
+    Default: ""
+    Description: Optional second AZ. Leave blank if not available.
+
+  Az3Name:
+    Type: String
+    Default: ""
+    Description: Optional third AZ. Leave blank if not available.
+
+Conditions:
+  CreateGuardDuty: !Equals [!Ref EnableGuardDuty, true]
+  CreateConfig: !Equals [!Ref EnableConfig, true]
+  UseAz2: !Not [!Equals [!Ref Az2Name, ""]]
+  UseAz3: !Not [!Equals [!Ref Az3Name, ""]]
+
+Resources:
+
+  ########################################
+  # KMS Key and Alias
+  ########################################
+  KmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: CMK for encrypting TapStack resources
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowRootAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: AllowCloudTrail
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:Decrypt
+            Resource: "*"
+
+  KmsAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Ref KmsKeyAlias
+      TargetKeyId: !Ref KmsKey
+
+  ########################################
+  # VPC A with Subnets
+  ########################################
+  VpcA:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcACidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc-a
+
+  VpcAPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcA
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Ref Az1Name
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc-a-public-1
+
+  VpcAPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcA
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Ref Az1Name
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc-a-private-1
+
+  VpcAPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: UseAz2
+    Properties:
+      VpcId: !Ref VpcA
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Ref Az2Name
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc-a-private-2
+
+  VpcAPrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Condition: UseAz3
+    Properties:
+      VpcId: !Ref VpcA
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Ref Az3Name
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc-a-private-3
+
+  ########################################
+  # VPC B with Subnets
+  ########################################
+  VpcB:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcBCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc-b
+
+  VpcBPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcB
+      CidrBlock: 10.1.1.0/24
+      AvailabilityZone: !Ref Az1Name
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc-b-public-1
+
+  VpcBPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcB
+      CidrBlock: 10.1.2.0/24
+      AvailabilityZone: !Ref Az1Name
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc-b-private-1
+
+  VpcBPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: UseAz2
+    Properties:
+      VpcId: !Ref VpcB
+      CidrBlock: 10.1.3.0/24
+      AvailabilityZone: !Ref Az2Name
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc-b-private-2
+
+  VpcBPrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Condition: UseAz3
+    Properties:
+      VpcId: !Ref VpcB
+      CidrBlock: 10.1.4.0/24
+      AvailabilityZone: !Ref Az3Name
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc-b-private-3
+
+  ########################################
+  # VPC Peering
+  ########################################
+  VpcPeering:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      VpcId: !Ref VpcA
+      PeerVpcId: !Ref VpcB
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc-peering
+
+  ########################################
+  # Bastion Security Group
+  ########################################
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH from limited IPs
+      VpcId: !Ref VpcA
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 203.0.113.0/24
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-bastion-sg
+
+  ########################################
+  # CloudTrail with Strict Policy & KMS Trust
+  ########################################
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KmsKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-cloudtrail-logs
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub ${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
+    Properties:
+      S3BucketName: !Ref CloudTrailBucket
+      IsLogging: true
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      KMSKeyId: !Ref KmsKey
+
+  ########################################
+  # AWS Config (Optional via EnableConfig)
+  ########################################
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateConfig
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KmsKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: CreateConfig
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSConfigAclCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt ConfigBucket.Arn
+          - Sid: AWSConfigWrite
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub ${ConfigBucket.Arn}/AWSLogs/${AWS::AccountId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Condition: CreateConfig
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ConfigPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketAcl
+                  - s3:PutObject
+                Resource:
+                  - !GetAtt ConfigBucket.Arn
+                  - !Sub ${ConfigBucket.Arn}/AWSLogs/${AWS::AccountId}/*
+
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Condition: CreateConfig
+    Properties:
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ########################################
+  # GuardDuty (Optional)
+  ########################################
+  GuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Condition: CreateGuardDuty
+    Properties:
+      Enable: true
+
+  ########################################
+  # Secrets Manager Example Secret
+  ########################################
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${EnvironmentName}/db/credentials
+      Description: Database credentials for TapStack
+      KmsKeyId: !Ref KmsKey
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludePunctuation: true
+
+Outputs:
+  ########################################
+  # Core Networking
+  ########################################
+  VpcAId:
+    Value: !Ref VpcA
+  VpcBId:
+    Value: !Ref VpcB
+  VpcPeeringId:
+    Value: !Ref VpcPeering
+
+  ########################################
+  # VPC A Subnets
+  ########################################
+  VpcAPublicSubnet1Id:
+    Value: !Ref VpcAPublicSubnet1
+  VpcAPrivateSubnet1Id:
+    Value: !Ref VpcAPrivateSubnet1
+  VpcAPrivateSubnet2Id:
+    Condition: UseAz2
+    Value: !Ref VpcAPrivateSubnet2
+  VpcAPrivateSubnet3Id:
+    Condition: UseAz3
+    Value: !Ref VpcAPrivateSubnet3
+
+  ########################################
+  # VPC B Subnets
+  ########################################
+  VpcBPublicSubnet1Id:
+    Value: !Ref VpcBPublicSubnet1
+  VpcBPrivateSubnet1Id:
+    Value: !Ref VpcBPrivateSubnet1
+  VpcBPrivateSubnet2Id:
+    Condition: UseAz2
+    Value: !Ref VpcBPrivateSubnet2
+  VpcBPrivateSubnet3Id:
+    Condition: UseAz3
+    Value: !Ref VpcBPrivateSubnet3
+
+  ########################################
+  # Security
+  ########################################
+  BastionSecurityGroupId:
+    Value: !Ref BastionSecurityGroup
+
+  ########################################
+  # CloudTrail
+  ########################################
+  CloudTrailBucketArn:
+    Value: !GetAtt CloudTrailBucket.Arn
+  CloudTrailTrailArn:
+    Value: !Ref CloudTrail
+
+  ########################################
+  # AWS Config (Optional)
+  ########################################
+  ConfigBucketArn:
+    Condition: CreateConfig
+    Value: !GetAtt ConfigBucket.Arn
+  ConfigRoleArn:
+    Condition: CreateConfig
+    Value: !GetAtt ConfigRole.Arn
+
+  ########################################
+  # GuardDuty (Optional)
+  ########################################
+  GuardDutyDetectorId:
+    Condition: CreateGuardDuty
+    Value: !Ref GuardDutyDetector
+
+  ########################################
+  # KMS and Secrets
+  ########################################
+  KmsKeyArn:
+    Value: !GetAtt KmsKey.Arn
+  KmsAliasName:
+    Value: !Ref KmsKeyAlias
+  DbSecretArn:
+    Value: !Ref DbSecret
+  DbSecretName:
+    Value: !Sub ${EnvironmentName}/db/credentials

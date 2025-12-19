@@ -1,0 +1,21 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349259",
+  "team": "6",
+  "startedAt": "2025-10-22T09:44:21.618Z",
+  "subtask": "Application Deployment",
+  "background": "Serverless computing in AWS allows for efficient resource management and scaling based on demand. By combining AWS Lambda with S3, SNS, and API Gateway, one can create a robust system to handle file processing workflows.",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": "S3 Bucket, Lambda, SNS Topic, API Gateway, CloudWatch Logs, CloudWatch Alarms, IAM Roles, IAM Policies",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,819 @@
+# CI/CD Pipeline Integration - Implementation
+
+This implementation creates a complete CI/CD pipeline for automated Docker container builds and deployments using AWS CodePipeline, CodeBuild, ECR, and Lambda.
+
+## Architecture Overview
+
+The solution implements a three-stage pipeline:
+1. **Source Stage**: Monitors GitHub repository for code changes
+2. **Build Stage**: Builds Docker images using CodeBuild and pushes to ECR
+3. **Deploy Stage**: Tags successful builds as 'production' using Lambda
+
+## Implementation Details
+
+### Component Structure
+
+The implementation is organized in `lib/tap-stack.ts` as a Pulumi ComponentResource that creates all necessary AWS resources with proper dependencies and IAM permissions.
+
+## File: lib/tap-stack.ts
+
+```typescript
+/**
+ * tap-stack.ts
+ *
+ * CI/CD Pipeline Integration for Container Deployments
+ *
+ * This stack creates a complete CI/CD pipeline using AWS CodePipeline, CodeBuild,
+ * ECR, and Lambda to automate Docker image builds and deployments from GitHub.
+ */
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+import { ResourceOptions } from '@pulumi/pulumi';
+
+/**
+ * TapStackArgs defines the input arguments for the TapStack Pulumi component.
+ */
+export interface TapStackArgs {
+  /**
+   * An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+   * Defaults to 'dev' if not provided.
+   */
+  environmentSuffix?: string;
+
+  /**
+   * Optional default tags to apply to resources.
+   */
+  tags?: pulumi.Input<{ [key: string]: string }>;
+
+  /**
+   * GitHub repository owner
+   */
+  githubOwner?: string;
+
+  /**
+   * GitHub repository name
+   */
+  githubRepo?: string;
+
+  /**
+   * GitHub branch to monitor (default: main)
+   */
+  githubBranch?: string;
+
+  /**
+   * GitHub OAuth token stored in Secrets Manager secret name
+   */
+  githubTokenSecretName?: string;
+}
+
+/**
+ * CI/CD Pipeline Stack Component
+ */
+export class TapStack extends pulumi.ComponentResource {
+  public readonly artifactBucketName: pulumi.Output<string>;
+  public readonly ecrRepositoryUrl: pulumi.Output<string>;
+  public readonly pipelineName: pulumi.Output<string>;
+
+  constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
+    super('tap:stack:TapStack', name, args, opts);
+
+    const environmentSuffix = args.environmentSuffix || 'dev';
+
+    // Merge default tags with provided tags
+    const defaultTags = {
+      Environment: 'production',
+      Team: 'devops',
+      ...(args.tags || {}),
+    };
+
+    // GitHub configuration with defaults
+    const githubOwner = args.githubOwner || 'default-owner';
+    const githubRepo = args.githubRepo || 'default-repo';
+    const githubBranch = args.githubBranch || 'main';
+    const githubTokenSecretName = args.githubTokenSecretName || 'github-token';
+
+    // ====================================================================
+    // 1. S3 Bucket for Pipeline Artifacts
+    // ====================================================================
+
+    const artifactBucket = new aws.s3.Bucket(
+      `pipeline-artifacts-${environmentSuffix}`,
+      {
+        bucket: `pipeline-artifacts-${environmentSuffix}`,
+        versioning: {
+          enabled: true,
+        },
+        serverSideEncryptionConfiguration: {
+          rule: {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+          },
+        },
+        lifecycleRules: [
+          {
+            enabled: true,
+            expiration: {
+              days: 30,
+            },
+          },
+        ],
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
+
+    this.artifactBucketName = artifactBucket.bucket;
+
+    // ====================================================================
+    // 2. ECR Repository for Docker Images
+    // ====================================================================
+
+    const ecrRepository = new aws.ecr.Repository(
+      `container-repo-${environmentSuffix}`,
+      {
+        name: `container-repo-${environmentSuffix}`,
+        imageScanningConfiguration: {
+          scanOnPush: true,
+        },
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
+
+    this.ecrRepositoryUrl = ecrRepository.repositoryUrl;
+
+    // ECR Lifecycle Policy to keep only last 10 images
+    new aws.ecr.LifecyclePolicy(
+      `ecr-lifecycle-${environmentSuffix}`,
+      {
+        repository: ecrRepository.name,
+        policy: JSON.stringify({
+          rules: [
+            {
+              rulePriority: 1,
+              description: 'Keep only last 10 images',
+              selection: {
+                tagStatus: 'any',
+                countType: 'imageCountMoreThan',
+                countNumber: 10,
+              },
+              action: {
+                type: 'expire',
+              },
+            },
+          ],
+        }),
+      },
+      { parent: this }
+    );
+
+    // ====================================================================
+    // 3. CloudWatch Log Group for CodeBuild
+    // ====================================================================
+
+    const codeBuildLogGroup = new aws.cloudwatch.LogGroup(
+      `codebuild-logs-${environmentSuffix}`,
+      {
+        name: `/aws/codebuild/container-build-${environmentSuffix}`,
+        retentionInDays: 7,
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
+
+    // ====================================================================
+    // 4. IAM Role for CodeBuild
+    // ====================================================================
+
+    const codeBuildRole = new aws.iam.Role(
+      `codebuild-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'codebuild.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
+
+    // CodeBuild Policy
+    const codeBuildPolicy = new aws.iam.RolePolicy(
+      `codebuild-policy-${environmentSuffix}`,
+      {
+        role: codeBuildRole.id,
+        policy: pulumi.all([artifactBucket.arn, ecrRepository.arn]).apply(([bucketArn, repoArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                ],
+                Resource: `arn:aws:logs:ap-southeast-1:*:log-group:/aws/codebuild/*`,
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  's3:GetObject',
+                  's3:PutObject',
+                ],
+                Resource: `${bucketArn}/*`,
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'ecr:GetAuthorizationToken',
+                ],
+                Resource: '*',
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'ecr:BatchCheckLayerAvailability',
+                  'ecr:GetDownloadUrlForLayer',
+                  'ecr:BatchGetImage',
+                  'ecr:PutImage',
+                  'ecr:InitiateLayerUpload',
+                  'ecr:UploadLayerPart',
+                  'ecr:CompleteLayerUpload',
+                ],
+                Resource: repoArn,
+              },
+            ],
+          })
+        ),
+      },
+      { parent: this }
+    );
+
+    // ====================================================================
+    // 5. CodeBuild Project
+    // ====================================================================
+
+    const codeBuildProject = new aws.codebuild.Project(
+      `container-build-${environmentSuffix}`,
+      {
+        name: `container-build-${environmentSuffix}`,
+        serviceRole: codeBuildRole.arn,
+        artifacts: {
+          type: 'CODEPIPELINE',
+        },
+        environment: {
+          computeType: 'BUILD_GENERAL1_SMALL',
+          image: 'aws/codebuild/standard:5.0',
+          type: 'LINUX_CONTAINER',
+          privilegedMode: true,
+          environmentVariables: [
+            {
+              name: 'AWS_DEFAULT_REGION',
+              value: 'ap-southeast-1',
+            },
+            {
+              name: 'AWS_ACCOUNT_ID',
+              value: aws.getCallerIdentityOutput().accountId,
+            },
+            {
+              name: 'IMAGE_REPO_NAME',
+              value: ecrRepository.name,
+            },
+            {
+              name: 'IMAGE_TAG',
+              value: 'latest',
+            },
+          ],
+        },
+        source: {
+          type: 'CODEPIPELINE',
+          buildspec: pulumi.interpolate`version: 0.2
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin ${ecrRepository.repositoryUrl}
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=\${COMMIT_HASH:=latest}
+  build:
+    commands:
+      - echo Build started on \`date\`
+      - echo Building the Docker image...
+      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
+      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG ${ecrRepository.repositoryUrl}:$IMAGE_TAG
+      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG ${ecrRepository.repositoryUrl}:latest
+  post_build:
+    commands:
+      - echo Build completed on \`date\`
+      - echo Pushing the Docker images...
+      - docker push ${ecrRepository.repositoryUrl}:$IMAGE_TAG
+      - docker push ${ecrRepository.repositoryUrl}:latest
+      - echo Writing image definitions file...
+      - printf '[{"name":"app","imageUri":"%s"}]' ${ecrRepository.repositoryUrl}:$IMAGE_TAG > imagedefinitions.json
+artifacts:
+  files:
+    - imagedefinitions.json
+`,
+        },
+        logsConfig: {
+          cloudwatchLogs: {
+            groupName: codeBuildLogGroup.name,
+            status: 'ENABLED',
+          },
+        },
+        tags: defaultTags,
+      },
+      { parent: this, dependsOn: [codeBuildPolicy] }
+    );
+
+    // ====================================================================
+    // 6. IAM Role for Lambda Function
+    // ====================================================================
+
+    const lambdaRole = new aws.iam.Role(
+      `lambda-ecr-tagger-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
+
+    // Lambda Policy for ECR tagging
+    const lambdaPolicy = new aws.iam.RolePolicy(
+      `lambda-ecr-policy-${environmentSuffix}`,
+      {
+        role: lambdaRole.id,
+        policy: ecrRepository.arn.apply((repoArn) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                ],
+                Resource: 'arn:aws:logs:*:*:*',
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'ecr:DescribeImages',
+                  'ecr:PutImage',
+                  'ecr:BatchGetImage',
+                  'ecr:GetDownloadUrlForLayer',
+                ],
+                Resource: repoArn,
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'ecr:GetAuthorizationToken',
+                ],
+                Resource: '*',
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'codepipeline:PutJobSuccessResult',
+                  'codepipeline:PutJobFailureResult',
+                ],
+                Resource: '*',
+              },
+            ],
+          })
+        ),
+      },
+      { parent: this }
+    );
+
+    // ====================================================================
+    // 7. Lambda Function for ECR Image Tagging
+    // ====================================================================
+
+    const ecrTaggerLambda = new aws.lambda.Function(
+      `ecr-tagger-${environmentSuffix}`,
+      {
+        name: `ecr-tagger-${environmentSuffix}`,
+        role: lambdaRole.arn,
+        handler: 'index.handler',
+        runtime: 'python3.9',
+        timeout: 60,
+        environment: {
+          variables: {
+            ECR_REPOSITORY_NAME: ecrRepository.name,
+          },
+        },
+        code: new pulumi.asset.AssetArchive({
+          'index.py': new pulumi.asset.StringAsset(`import json
+import boto3
+import os
+
+ecr_client = boto3.client('ecr')
+codepipeline_client = boto3.client('codepipeline')
+
+def handler(event, context):
+    job_id = event['CodePipeline.job']['id']
+    repository_name = os.environ['ECR_REPOSITORY_NAME']
+
+    try:
+        # Get the latest image
+        response = ecr_client.describe_images(
+            repositoryName=repository_name,
+            filter={'tagStatus': 'TAGGED'}
+        )
+
+        if not response['imageDetails']:
+            raise Exception('No images found in repository')
+
+        # Sort by pushed date and get the latest
+        sorted_images = sorted(
+            response['imageDetails'],
+            key=lambda x: x['imagePushedAt'],
+            reverse=True
+        )
+
+        latest_image = sorted_images[0]
+        image_digest = latest_image['imageDigest']
+
+        # Tag the latest image as 'production'
+        ecr_client.put_image(
+            repositoryName=repository_name,
+            imageManifest=json.dumps(latest_image.get('imageManifest', {})) if 'imageManifest' in latest_image else '',
+            imageTag='production',
+            imageDigest=image_digest
+        )
+
+        print(f'Successfully tagged image {image_digest} as production')
+
+        # Report success to CodePipeline
+        codepipeline_client.put_job_success_result(jobId=job_id)
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps('Image tagged successfully')
+        }
+
+    except Exception as e:
+        print(f'Error: {str(e)}')
+        codepipeline_client.put_job_failure_result(
+            jobId=job_id,
+            failureDetails={
+                'message': str(e),
+                'type': 'JobFailed'
+            }
+        )
+        raise e
+`),
+        }),
+        tags: defaultTags,
+      },
+      { parent: this, dependsOn: [lambdaPolicy] }
+    );
+
+    // ====================================================================
+    // 8. IAM Role for CodePipeline
+    // ====================================================================
+
+    const pipelineRole = new aws.iam.Role(
+      `pipeline-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'codepipeline.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
+
+    // Pipeline Policy
+    const pipelinePolicy = new aws.iam.RolePolicy(
+      `pipeline-policy-${environmentSuffix}`,
+      {
+        role: pipelineRole.id,
+        policy: pulumi
+          .all([
+            artifactBucket.arn,
+            codeBuildProject.arn,
+            ecrTaggerLambda.arn,
+          ])
+          .apply(([bucketArn, buildArn, lambdaArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    's3:GetObject',
+                    's3:GetObjectVersion',
+                    's3:PutObject',
+                    's3:GetBucketLocation',
+                    's3:ListBucket',
+                  ],
+                  Resource: [bucketArn, `${bucketArn}/*`],
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'codebuild:BatchGetBuilds',
+                    'codebuild:StartBuild',
+                  ],
+                  Resource: buildArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['lambda:InvokeFunction'],
+                  Resource: lambdaArn,
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
+
+    // ====================================================================
+    // 9. CodePipeline
+    // ====================================================================
+
+    const pipeline = new aws.codepipeline.Pipeline(
+      `container-pipeline-${environmentSuffix}`,
+      {
+        name: `container-pipeline-${environmentSuffix}`,
+        roleArn: pipelineRole.arn,
+        artifactStore: {
+          location: artifactBucket.bucket,
+          type: 'S3',
+        },
+        stages: [
+          // Stage 1: Source from GitHub
+          {
+            name: 'Source',
+            actions: [
+              {
+                name: 'Source',
+                category: 'Source',
+                owner: 'ThirdParty',
+                provider: 'GitHub',
+                version: '1',
+                outputArtifacts: ['source_output'],
+                configuration: {
+                  Owner: githubOwner,
+                  Repo: githubRepo,
+                  Branch: githubBranch,
+                  OAuthToken: pulumi.secret(githubTokenSecretName),
+                },
+              },
+            ],
+          },
+          // Stage 2: Build with CodeBuild
+          {
+            name: 'Build',
+            actions: [
+              {
+                name: 'Build',
+                category: 'Build',
+                owner: 'AWS',
+                provider: 'CodeBuild',
+                version: '1',
+                inputArtifacts: ['source_output'],
+                outputArtifacts: ['build_output'],
+                configuration: {
+                  ProjectName: codeBuildProject.name,
+                },
+              },
+            ],
+          },
+          // Stage 3: Deploy (Lambda tagging)
+          {
+            name: 'Deploy',
+            actions: [
+              {
+                name: 'TagImage',
+                category: 'Invoke',
+                owner: 'AWS',
+                provider: 'Lambda',
+                version: '1',
+                inputArtifacts: ['build_output'],
+                configuration: {
+                  FunctionName: ecrTaggerLambda.name,
+                },
+              },
+            ],
+          },
+        ],
+        tags: defaultTags,
+      },
+      { parent: this, dependsOn: [pipelinePolicy] }
+    );
+
+    this.pipelineName = pipeline.name;
+
+    // ====================================================================
+    // 10. CloudWatch Event Rule for GitHub Push
+    // ====================================================================
+
+    const pipelineEventRole = new aws.iam.Role(
+      `pipeline-event-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'events.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
+
+    const pipelineEventPolicy = new aws.iam.RolePolicy(
+      `pipeline-event-policy-${environmentSuffix}`,
+      {
+        role: pipelineEventRole.id,
+        policy: pipeline.arn.apply((pipelineArn) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: 'codepipeline:StartPipelineExecution',
+                Resource: pipelineArn,
+              },
+            ],
+          })
+        ),
+      },
+      { parent: this }
+    );
+
+    const pipelineEventRule = new aws.cloudwatch.EventRule(
+      `pipeline-trigger-${environmentSuffix}`,
+      {
+        name: `pipeline-trigger-${environmentSuffix}`,
+        description: 'Trigger pipeline on CodePipeline state changes',
+        eventPattern: pipeline.name.apply((name) =>
+          JSON.stringify({
+            source: ['aws.codepipeline'],
+            'detail-type': ['CodePipeline Pipeline Execution State Change'],
+            detail: {
+              pipeline: [name],
+            },
+          })
+        ),
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
+
+    new aws.cloudwatch.EventTarget(
+      `pipeline-event-target-${environmentSuffix}`,
+      {
+        rule: pipelineEventRule.name,
+        arn: pipeline.arn,
+        roleArn: pipelineEventRole.arn,
+      },
+      { parent: this, dependsOn: [pipelineEventPolicy] }
+    );
+
+    // ====================================================================
+    // Register Outputs
+    // ====================================================================
+
+    this.registerOutputs({
+      artifactBucketName: this.artifactBucketName,
+      ecrRepositoryUrl: this.ecrRepositoryUrl,
+      pipelineName: this.pipelineName,
+      codeBuildProjectName: codeBuildProject.name,
+      lambdaFunctionName: ecrTaggerLambda.name,
+    });
+  }
+}
+```
+
+## Key Features
+
+### 1. S3 Artifact Storage
+- Versioning enabled for artifact tracking
+- AWS managed encryption (AES256)
+- 30-day lifecycle policy for cost optimization
+- Dedicated bucket separate from application storage
+
+### 2. ECR Repository
+- Image scanning enabled on push for security
+- Lifecycle policy maintains only last 10 images
+- Proper tagging for image management
+
+### 3. CodeBuild Project
+- BUILD_GENERAL1_SMALL compute for cost efficiency
+- Docker-enabled Linux environment
+- Automated ECR login and image pushing
+- CloudWatch Logs integration with 7-day retention
+
+### 4. Lambda Function
+- Inline Python code as required
+- Tags successful builds as 'production'
+- Proper error handling and CodePipeline integration
+- Least privilege IAM permissions
+
+### 5. CodePipeline
+- Three-stage workflow: Source, Build, Deploy
+- GitHub integration for source control
+- CodeBuild for building Docker images
+- Lambda invocation for tagging
+
+### 6. IAM Security
+- Separate roles for CodeBuild, Lambda, Pipeline, and Events
+- Least privilege policies for each service
+- Proper trust relationships
+
+### 7. CloudWatch Events
+- Monitors pipeline state changes
+- Automatic pipeline triggering
+
+### 8. Resource Naming
+- All resources use environmentSuffix for multi-environment support
+- Consistent naming pattern across all resources
+
+### 9. Tagging
+- Environment='production' and Team='devops' applied to all resources
+- Additional custom tags supported
+
+### 10. Destroyability
+- No Retain policies on any resources
+- All resources can be cleanly destroyed
+
+## Deployment
+
+The stack is instantiated in `bin/tap.ts` with environment-specific configuration:
+
+```typescript
+new TapStack('pulumi-infra', {
+  environmentSuffix: environmentSuffix,
+  tags: defaultTags,
+});
+```
+
+## Outputs
+
+The stack exports the following outputs:
+- `artifactBucketName`: Name of the S3 artifacts bucket
+- `ecrRepositoryUrl`: URL of the ECR repository
+- `pipelineName`: Name of the CodePipeline
+- `codeBuildProjectName`: Name of the CodeBuild project
+- `lambdaFunctionName`: Name of the Lambda function
+
+## Security Considerations
+
+1. GitHub OAuth token should be stored in AWS Secrets Manager
+2. All IAM roles follow least privilege principle
+3. S3 bucket encryption enabled
+4. ECR image scanning enabled
+5. CloudWatch logging for audit trails
+6. No hardcoded credentials in code
+
+## Cost Optimization
+
+1. BUILD_GENERAL1_SMALL compute type
+2. Serverless Lambda for tagging
+3. S3 lifecycle policy (30-day expiration)
+4. ECR lifecycle policy (keep 10 images)
+5. CloudWatch Logs 7-day retention

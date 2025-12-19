@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "po_id": "101912750",
+  "team": "synth",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "startedAt": "2025-11-27T06:31:05+00:00",
+  "aws_services": [
+    "CloudWatch",
+    "SNS",
+    "CloudWatch Logs",
+    "CloudWatch Synthetics",
+    "KMS",
+    "S3",
+    "IAM",
+    "Lambda"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

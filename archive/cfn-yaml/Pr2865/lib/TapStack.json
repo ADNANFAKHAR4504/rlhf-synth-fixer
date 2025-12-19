@@ -1,0 +1,597 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Robust S3 Cross-Region Replication System with monitoring, security, and cost optimization. This template creates the source bucket infrastructure in us-east-1. The destination bucket in us-west-2 needs to be created separately (see README section).\n",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "staging",
+            "AllowedValues": [
+                "staging",
+                "production"
+            ],
+            "Description": "Environment name for resource tagging"
+        },
+        "CostCenter": {
+            "Type": "String",
+            "Default": "IT-Infrastructure",
+            "Description": "Cost center for resource tagging and billing"
+        },
+        "ProjectName": {
+            "Type": "String",
+            "Default": "disaster-recovery-replication",
+            "Description": "Project name for resource naming and tagging"
+        },
+        "DestinationBucketName": {
+            "Type": "String",
+            "Default": "my-dr-destination-bucket",
+            "Description": "Name of the destination bucket in us-west-2.  This bucket must be created before deploying this template.\n"
+        },
+        "VpcId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "VPC ID for S3 Gateway Endpoint (optional).  Leave empty to skip VPC endpoint creation.\n"
+        },
+        "RouteTableIds": {
+            "Type": "CommaDelimitedList",
+            "Default": "",
+            "Description": "Comma-delimited list of route table IDs for S3 Gateway Endpoint (optional). Only used if VpcId is provided.\n"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Default": "admin@example.com",
+            "Description": "Email address for replication notifications and alerts"
+        }
+    },
+    "Conditions": {
+        "CreateVpcEndpoint": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "VpcId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "SourceBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ProjectName}-source-${Environment}-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": "alias/aws/s3"
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "NonCurrentVersionTransition",
+                            "Status": "Enabled",
+                            "NoncurrentVersionTransitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                }
+                            ],
+                            "NoncurrentVersionExpirationInDays": 365
+                        }
+                    ]
+                },
+                "ReplicationConfiguration": {
+                    "Role": {
+                        "Fn::GetAtt": [
+                            "ReplicationRole",
+                            "Arn"
+                        ]
+                    },
+                    "Rules": [
+                        {
+                            "Id": "DisasterRecoveryReplication",
+                            "Status": "Enabled",
+                            "Priority": 1,
+                            "Filter": {
+                                "Prefix": ""
+                            },
+                            "Destination": {
+                                "Bucket": {
+                                    "Fn::Sub": "arn:aws:s3:::${DestinationBucketName}"
+                                },
+                                "StorageClass": "STANDARD",
+                                "ReplicationTime": {
+                                    "Status": "Enabled",
+                                    "Time": {
+                                        "Minutes": 15
+                                    }
+                                },
+                                "Metrics": {
+                                    "Status": "Enabled",
+                                    "EventThreshold": {
+                                        "Minutes": 15
+                                    }
+                                }
+                            },
+                            "DeleteMarkerReplication": {
+                                "Status": "Enabled"
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Source bucket for cross-region replication"
+                    }
+                ]
+            }
+        },
+        "ReplicationRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-replication-role-${Environment}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "S3ReplicationPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObjectVersion",
+                                        "s3:GetObjectVersionAcl",
+                                        "s3:GetObjectVersionTagging"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${ProjectName}-source-${Environment}-${AWS::AccountId}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${ProjectName}-source-${Environment}-${AWS::AccountId}"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ReplicateObject",
+                                        "s3:ReplicateDelete",
+                                        "s3:ReplicateTags"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${DestinationBucketName}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:kms:us-east-1:${AWS::AccountId}:key/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:kms:us-west-2:${AWS::AccountId}:key/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ReplicationLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/s3/replication/${ProjectName}-${Environment}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ReplicationNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${ProjectName}-replication-notifications-${Environment}"
+                },
+                "DisplayName": "S3 Replication Notifications",
+                "Subscription": [
+                    {
+                        "Protocol": "email",
+                        "Endpoint": {
+                            "Ref": "NotificationEmail"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ReplicationLatencyAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-replication-latency-${Environment}"
+                },
+                "AlarmDescription": "Alert when S3 replication latency exceeds 15 minutes",
+                "MetricName": "ReplicationLatency",
+                "Namespace": "AWS/S3",
+                "Statistic": "Maximum",
+                "Period": 300,
+                "EvaluationPeriods": 3,
+                "Threshold": 900,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "SourceBucket",
+                        "Value": {
+                            "Ref": "SourceBucket"
+                        }
+                    },
+                    {
+                        "Name": "DestinationBucket",
+                        "Value": {
+                            "Ref": "DestinationBucketName"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ReplicationNotificationTopic"
+                    }
+                ],
+                "OKActions": [
+                    {
+                        "Ref": "ReplicationNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "SecurityAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-security-access-denied-${Environment}"
+                },
+                "AlarmDescription": "Alert on spike in S3 access denied errors",
+                "MetricName": "4xxErrors",
+                "Namespace": "AWS/S3",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "BucketName",
+                        "Value": {
+                            "Ref": "SourceBucket"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ReplicationNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ReplicationSuccessAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-replication-success-${Environment}"
+                },
+                "AlarmDescription": "Monitor successful S3 replications",
+                "MetricName": "BytesReplicated",
+                "Namespace": "AWS/S3",
+                "Statistic": "Sum",
+                "Period": 900,
+                "EvaluationPeriods": 1,
+                "Threshold": 0,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "SourceBucket",
+                        "Value": {
+                            "Ref": "SourceBucket"
+                        }
+                    },
+                    {
+                        "Name": "DestinationBucket",
+                        "Value": {
+                            "Ref": "DestinationBucketName"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ReplicationNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ReplicationMetadataTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${ProjectName}-replication-metadata-${Environment}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "ObjectKey",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "ObjectKey",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Track S3 replication job metadata"
+                    }
+                ]
+            }
+        },
+        "S3VpcEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Condition": "CreateVpcEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VpcId"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": {
+                    "Ref": "RouteTableIds"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "${SourceBucket}/*"
+                                },
+                                {
+                                    "Ref": "SourceBucket"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${DestinationBucketName}/*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${DestinationBucketName}"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "SourceBucketName": {
+            "Description": "Name of the source S3 bucket",
+            "Value": {
+                "Ref": "SourceBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SourceBucket"
+                }
+            }
+        },
+        "SourceBucketArn": {
+            "Description": "ARN of the source S3 bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SourceBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SourceBucketArn"
+                }
+            }
+        },
+        "ReplicationRoleArn": {
+            "Description": "ARN of the replication IAM role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ReplicationRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ReplicationRoleArn"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "ARN of the SNS topic for notifications",
+            "Value": {
+                "Ref": "ReplicationNotificationTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SNSTopic"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "Name of the DynamoDB table for metadata",
+            "Value": {
+                "Ref": "ReplicationMetadataTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBTable"
+                }
+            }
+        }
+    }
+}

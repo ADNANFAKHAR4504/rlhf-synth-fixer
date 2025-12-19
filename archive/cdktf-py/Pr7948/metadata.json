@@ -1,0 +1,37 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-05T03:36:15.678852",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "po_id": "64457522",
+  "aws_services": [
+    "acm",
+    "apigateway",
+    "backup",
+    "cloudwatch",
+    "dynamodb",
+    "eventbridge",
+    "globalaccelerator",
+    "lambda",
+    "rds",
+    "route53",
+    "s3",
+    "sns",
+    "vpc"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

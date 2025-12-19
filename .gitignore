@@ -1,5 +1,4 @@
 # Compiled JavaScript files (but keep config files)
-./bin/*.js
 /bin/*.js
 ./lib/*.js
 /lib/*.js
@@ -7,6 +6,7 @@
 /cli/*.js
 *.d.ts
 !/test/setup.js
+/lib/.terraform.lock.hcl
 
 # Dependencies
 node_modules/
@@ -14,6 +14,7 @@ node_modules/
 # CDK
 .cdk.staging
 cdk.out/
+cdk.out.test/
 
 # Environment files
 .env
@@ -57,7 +58,7 @@ coverage/
 # Temporary folders
 tmp/
 temp/
-
+test/provider-local.tf
 # Python virtual environments and packages
 python/
 __pycache__/
@@ -91,16 +92,68 @@ cdktf.log
 bin/.terraform.lock.hcl
 .genpackage-lock.json
 .gen/providers/*
-
-__pycache__/
+src/main/java/imports/
+src/main/resources/imports/
+src/main/resources/
 .pulumi/
 
 tasks-status.md
 worktree/
-bin/.terraform.lock.hcl
 bin/tfplan
 
 build
-tasks.csv
+.claude/tasks.csv
+.claude/tasks.csv.backup
+.claude/tasks.csv.backup.*
+.claude/*.csv.backup
+.claude/*.csv.backup.*
+.claude/tasks.csv.lock/
+.claude/open_pr_status.json
+.claude/synth_pr_status.json
+.claude/synth_pr_status.json.backup
+.claude/synth_pr_status.json.lock/
+.claude/reports/
 .sherlock/data
 .sherlock/reports
+
+# Java/Gradle
+.gradle/
+build/
+gradle-app.setting
+.gradletasknamecache
+
+# Keep Gradle wrapper files (these should be committed)
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+!gradlew
+!gradlew.bat
+
+# Java compiled files
+*.class
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# Java JAR files (but keep Gradle wrapper)
+*.jar
+
+# Java test reports
+build/reports/
+build/test-results/
+
+# Turing IaC Review App
+turing-iac-review-app/turing-iac-tasks-processor*
+turing-iac-review-app/tasks.json
+turing-iac-review-app/aws-nuke-config-runtime.yaml
+turing-iac-review-app/task_reports.csv
+turing-iac-review-app/aws-nuke-report-batch*tasks.csv.lock/
+lib/.terraform/
+**/.terraform/
+
+# Synth Files
+tasks.csv
+ci_checks.json
+# Root reports folder (use .claude/reports/ instead)
+reports/

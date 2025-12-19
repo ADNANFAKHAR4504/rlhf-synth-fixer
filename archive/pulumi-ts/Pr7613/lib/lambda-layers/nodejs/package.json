@@ -1,0 +1,8 @@
+{
+  "name": "shared-dependencies",
+  "version": "1.0.0",
+  "description": "Shared dependencies for Lambda functions",
+  "dependencies": {
+    "date-fns": "^2.30.0"
+  }
+}

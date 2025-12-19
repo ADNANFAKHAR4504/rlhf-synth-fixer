@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7049",
+  "team": "2",
+  "startedAt": "2025-11-24T13:25:25.268Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "RDS PostgreSQL",
+    "EC2",
+    "Auto Scaling",
+    "Network Load Balancer",
+    "ElastiCache Redis",
+    "Lambda",
+    "VPC",
+    "NAT Gateway",
+    "VPC Endpoints",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "DynamoDB",
+    "S3",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

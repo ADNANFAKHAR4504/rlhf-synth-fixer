@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-06T19:03:35+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security, Compliance, and Governance"
+  ],
+  "po_id": "mwm52",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "KMS",
+    "GuardDuty",
+    "SNS",
+    "CloudWatch",
+    "SecretsManager",
+    "IAM",
+    "EventBridge"
+  ],
+  "author": "mayanksethi-turing",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-11-26T10:30:00-08:00",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "po_id": "f6n9q4d2",
+  "aws_services": [
+    "Aurora",
+    "Lambda",
+    "Route 53",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "VPC",
+    "RDS",
+    "CloudWatch Logs",
+    "EC2"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

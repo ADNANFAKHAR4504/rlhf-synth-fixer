@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-30T18:07:53+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)",
+    "Web Application Deployment",
+    "Cloud Environment Setup"
+  ],
+  "po_id": "ib04x",
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "S3",
+    "CloudWatch",
+    "EventBridge",
+    "IAM"
+  ],
+  "region": "ap-southeast-2",
+  "training_quality": 8,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

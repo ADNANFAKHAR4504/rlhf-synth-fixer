@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "5216302822",
+  "team": "synth",
+  "startedAt": "2025-10-18T00:00:00Z",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "FinTech SaaS startup needs to build a PCI-DSS compliant infrastructure for processing credit card transactions",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "API Gateway",
+    "ECS Fargate",
+    "RDS Aurora",
+    "ElastiCache Redis",
+    "Kinesis Data Streams",
+    "Secrets Manager",
+    "EFS",
+    "KMS",
+    "VPC",
+    "CloudWatch",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

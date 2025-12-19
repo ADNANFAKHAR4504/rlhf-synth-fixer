@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "wm2am",
+  "team": "synth",
+  "startedAt": "2025-11-07T23:44:47+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "SQS",
+    "API Gateway",
+    "IAM",
+    "CloudWatch Logs",
+    "EventBridge",
+    "SNS",
+    "KMS",
+    "VPC"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

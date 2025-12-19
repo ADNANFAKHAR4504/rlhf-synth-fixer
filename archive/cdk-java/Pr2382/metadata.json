@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "348096",
+  "team": "5",
+  "startedAt": "2025-08-27T14:04:43.648Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "security",
+    "compliance",
+    "infrastructure",
+    "cdk"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "IAM",
+    "KMS",
+    "S3",
+    "CloudTrail",
+    "EC2"
+  ],
+  "author": "Akorede28",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

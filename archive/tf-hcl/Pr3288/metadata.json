@@ -1,0 +1,42 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "400250",
+  "team": "1",
+  "startedAt": "2025-10-02T00:08:09.157Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "AWS Batch",
+    "Lambda",
+    "S3",
+    "DynamoDB",
+    "CloudWatch",
+    "EventBridge",
+    "KMS",
+    "SNS",
+    "SQS",
+    "IAM",
+    "VPC",
+    "EC2",
+    "VPC Endpoints",
+    "VPC Flow Logs",
+    "GuardDuty",
+    "CloudTrail",
+    "AWS Config",
+    "X-Ray",
+    "ECR",
+    "ECS"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}

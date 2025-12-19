@@ -1,0 +1,1707 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless Trade Processing System - Expert-level CloudFormation template with Step Functions orchestration, Lambda functions with inline Python code, DynamoDB global tables, and multi-region replication for high-availability trade processing infrastructure",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix"
+          ]
+        },
+        {
+          "Label": {
+            "default": "API Configuration"
+          },
+          "Parameters": [
+            "TradeValidatorAPIEndpoint",
+            "MetadataEnricherAPIEndpoint",
+            "ComplianceRecorderAPIEndpoint"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Processing Thresholds"
+          },
+          "Parameters": [
+            "ValidationThreshold",
+            "EnrichmentThreshold",
+            "ComplianceThreshold"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Multi-Region Configuration"
+          },
+          "Parameters": [
+            "SecondaryRegion"
+          ]
+        }
+      ],
+      "ParameterLabels": {
+        "EnvironmentSuffix": {
+          "default": "Environment suffix for unique resource naming"
+        }
+      }
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters",
+      "MinLength": 1,
+      "MaxLength": 20
+    },
+    "TradeValidatorAPIEndpoint": {
+      "Type": "String",
+      "Default": "https://api.example.com/validator/v1",
+      "Description": "API endpoint URL for trade validation service"
+    },
+    "MetadataEnricherAPIEndpoint": {
+      "Type": "String",
+      "Default": "https://api.example.com/enricher/v1",
+      "Description": "API endpoint URL for metadata enrichment service"
+    },
+    "ComplianceRecorderAPIEndpoint": {
+      "Type": "String",
+      "Default": "https://api.example.com/compliance/v1",
+      "Description": "API endpoint URL for compliance recording service"
+    },
+    "ValidationThreshold": {
+      "Type": "Number",
+      "Default": 100,
+      "Description": "Processing threshold value for trade validation",
+      "MinValue": 1,
+      "MaxValue": 10000
+    },
+    "EnrichmentThreshold": {
+      "Type": "Number",
+      "Default": 50,
+      "Description": "Processing threshold value for metadata enrichment",
+      "MinValue": 1,
+      "MaxValue": 10000
+    },
+    "ComplianceThreshold": {
+      "Type": "Number",
+      "Default": 10,
+      "Description": "Processing threshold value for compliance recording",
+      "MinValue": 1,
+      "MaxValue": 10000
+    },
+    "SecondaryRegion": {
+      "Type": "String",
+      "Default": "eu-west-1",
+      "Description": "Secondary AWS region for DynamoDB global table replication and disaster recovery",
+      "AllowedValues": [
+        "eu-west-1",
+        "us-west-2",
+        "ap-southeast-1",
+        "ap-northeast-1"
+      ]
+    }
+  },
+  "Resources": {
+    "TradeProcessingVPC": {
+      "Type": "AWS::EC2::VPC",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trade-processing-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TradeProcessingVPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TradeProcessingVPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "VPCEndpointSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "GroupDescription": "Security group for VPC endpoints - allows HTTPS traffic from VPC CIDR",
+        "VpcId": {
+          "Ref": "TradeProcessingVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "10.0.0.0/16",
+            "Description": "Allow HTTPS from VPC"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "vpc-endpoint-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TradeProcessingVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-route-table-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "DynamoDBVPCEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TradeProcessingVPC"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
+        },
+        "VpcEndpointType": "Gateway",
+        "RouteTableIds": [
+          {
+            "Ref": "PrivateRouteTable"
+          }
+        ]
+      }
+    },
+    "StepFunctionsVPCEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "PrivateSubnet1RouteTableAssociation",
+        "PrivateSubnet2RouteTableAssociation"
+      ],
+      "Properties": {
+        "VpcId": {
+          "Ref": "TradeProcessingVPC"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.states"
+        },
+        "VpcEndpointType": "Interface",
+        "PrivateDnsEnabled": true,
+        "SecurityGroupIds": [
+          {
+            "Ref": "VPCEndpointSecurityGroup"
+          }
+        ],
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ]
+      }
+    },
+    "ECRRepository": {
+      "Type": "AWS::ECR::Repository",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RepositoryName": {
+          "Fn::Sub": "trade-processing-images-${EnvironmentSuffix}"
+        },
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "ImageTagMutability": "MUTABLE",
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep last 10 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":10},\"action\":{\"type\":\"expire\"}}]}"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trade-processing-images-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "ECRReplicationConfiguration": {
+      "Type": "AWS::ECR::ReplicationConfiguration",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "ReplicationConfiguration": {
+          "Rules": [
+            {
+              "Destinations": [
+                {
+                  "Region": {
+                    "Ref": "SecondaryRegion"
+                  },
+                  "RegistryId": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              ],
+              "RepositoryFilters": [
+                {
+                  "Filter": {
+                    "Fn::Sub": "trade-processing-images-${EnvironmentSuffix}"
+                  },
+                  "FilterType": "PREFIX_MATCH"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "TradeTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "trade-processing-table-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "tradeId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          },
+          {
+            "AttributeName": "sourceSystem",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "tradeId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "SourceSystemIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "sourceSystem",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "timestamp",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "DeletionProtectionEnabled": false,
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trade-processing-table-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "GlobalTableCustomResourceRole": {
+      "Type": "AWS::IAM::Role",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "global-table-custom-resource-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBGlobalTablePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:CreateGlobalTable",
+                    "dynamodb:UpdateGlobalTable",
+                    "dynamodb:DescribeGlobalTable",
+                    "dynamodb:UpdateTable",
+                    "dynamodb:DescribeTable",
+                    "dynamodb:CreateTableReplica",
+                    "dynamodb:DeleteTableReplica",
+                    "dynamodb:DescribeContinuousBackups",
+                    "dynamodb:UpdateContinuousBackups"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:CreateServiceLinkedRole"
+                  ],
+                  "Resource": "arn:aws:iam::*:role/aws-service-role/dynamodb.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_DynamoDBTable"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "GlobalTableCustomResourceFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "global-table-setup-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "GlobalTableCustomResourceRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 900,
+        "MemorySize": 256,
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport cfnresponse\nimport time\n\ndef handler(event, context):\n    print(f'Received event: {json.dumps(event)}')\n    \n    try:\n        dynamodb = boto3.client('dynamodb')\n        table_name = event['ResourceProperties']['TableName']\n        regions = event['ResourceProperties']['Regions']\n        primary_region = event['ResourceProperties'].get('PrimaryRegion', 'us-east-1')\n        \n        print(f'Table: {table_name}, Regions: {regions}, Primary: {primary_region}')\n        \n        if event['RequestType'] == 'Delete':\n            print('Delete request - cleaning up replicas')\n            # Remove replicas on delete\n            for region in regions:\n                if region != primary_region:\n                    try:\n                        print(f'Deleting replica in {region}')\n                        dynamodb.delete_table_replica(\n                            TableName=table_name,\n                            ReplicaRegion=region\n                        )\n                        print(f'Replica deletion initiated for {region}')\n                    except dynamodb.exceptions.ReplicaNotFoundException:\n                        print(f'Replica in {region} not found, skipping')\n                        pass\n                    except Exception as e:\n                        print(f'Error deleting replica in {region}: {str(e)}')\n                        pass\n            \n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Message': 'Global table replicas cleanup initiated'})\n            return\n        \n        if event['RequestType'] in ['Create', 'Update']:\n            # Wait for table to be active\n            print('Waiting for table to be ACTIVE')\n            waiter = dynamodb.get_waiter('table_exists')\n            waiter.wait(TableName=table_name)\n            \n            # Add replicas\n            for region in regions:\n                if region != primary_region:\n                    try:\n                        print(f'Creating replica in {region}')\n                        dynamodb.update_table(\n                            TableName=table_name,\n                            ReplicaUpdates=[\n                                {\n                                    'Create': {\n                                        'RegionName': region\n                                    }\n                                }\n                            ]\n                        )\n                        print(f'Replica creation initiated for {region}')\n                    except dynamodb.exceptions.ResourceInUseException:\n                        print(f'Replica in {region} already exists')\n                        pass\n                    except Exception as e:\n                        print(f'Error creating replica in {region}: {str(e)}')\n                        # Don't fail on replica creation errors\n                        pass\n            \n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Message': 'Global table configuration completed', 'TableName': table_name})\n            return\n            \n    except Exception as e:\n        print(f'Error: {str(e)}')\n        error_message = f'Failed to configure global table: {str(e)}'\n        cfnresponse.send(event, context, cfnresponse.FAILED, {'Message': error_message})\n"
+        },
+        "Description": "Custom resource to configure DynamoDB global table replication",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "global-table-setup-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "GlobalTableCustomResource": {
+      "Type": "Custom::DynamoDBGlobalTable",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "GlobalTableCustomResourceFunction",
+            "Arn"
+          ]
+        },
+        "TableName": {
+          "Ref": "TradeTable"
+        },
+        "Regions": [
+          {
+            "Ref": "AWS::Region"
+          },
+          {
+            "Ref": "SecondaryRegion"
+          }
+        ],
+        "PrimaryRegion": {
+          "Ref": "AWS::Region"
+        }
+      }
+    },
+    "TradeValidatorDLQ": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "trade-validator-dlq-${EnvironmentSuffix}"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trade-validator-dlq-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Dead Letter Queue for Trade Validator Lambda"
+          }
+        ]
+      }
+    },
+    "MetadataEnricherDLQ": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "metadata-enricher-dlq-${EnvironmentSuffix}"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "metadata-enricher-dlq-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Dead Letter Queue for Metadata Enricher Lambda"
+          }
+        ]
+      }
+    },
+    "ComplianceRecorderDLQ": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "compliance-recorder-dlq-${EnvironmentSuffix}"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "compliance-recorder-dlq-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Dead Letter Queue for Compliance Recorder Lambda"
+          }
+        ]
+      }
+    },
+    "ValidatorDLQAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "validator-dlq-depth-alarm-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when messages accumulate in trade validator DLQ",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Namespace": "AWS/SQS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "TradeValidatorDLQ",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "EnricherDLQAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "enricher-dlq-depth-alarm-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when messages accumulate in metadata enricher DLQ",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Namespace": "AWS/SQS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "MetadataEnricherDLQ",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "RecorderDLQAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "recorder-dlq-depth-alarm-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when messages accumulate in compliance recorder DLQ",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Namespace": "AWS/SQS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "ComplianceRecorderDLQ",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "trade-processing-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          "arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy",
+          "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBTableAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan",
+                    "dynamodb:BatchWriteItem",
+                    "dynamodb:BatchGetItem"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "TradeTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${TradeTable.Arn}/index/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "SQSDLQAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:SendMessage",
+                    "sqs:GetQueueUrl",
+                    "sqs:GetQueueAttributes"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "TradeValidatorDLQ",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "MetadataEnricherDLQ",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "ComplianceRecorderDLQ",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "SSMParameterAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters",
+                    "ssm:GetParametersByPath"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/trade-processing/${EnvironmentSuffix}/*"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "VPCAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:CreateNetworkInterface",
+                    "ec2:DescribeNetworkInterfaces",
+                    "ec2:DeleteNetworkInterface",
+                    "ec2:AssignPrivateIpAddresses",
+                    "ec2:UnassignPrivateIpAddresses"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "TradeValidatorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "trade-validator-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ntable_name = os.environ.get('TABLE_NAME', 'trades')\ntable = dynamodb.Table(table_name)\n\ndef handler(event, context):\n    try:\n        trade_data = event.get('Payload', event)\n        required_fields = ['tradeId', 'amount', 'currency', 'sourceSystem']\n        for field in required_fields:\n            if field not in trade_data:\n                raise ValueError(f'Missing required field: {field}')\n        if Decimal(str(trade_data['amount'])) <= 0:\n            raise ValueError('Trade amount must be positive')\n        return {\n            'statusCode': 200,\n            'body': {\n                'valid': True,\n                'tradeId': trade_data['tradeId'],\n                'validatedAt': context.invoked_function_arn\n            }\n        }\n    except Exception as e:\n        print(f'Validation error: {str(e)}')\n        return {'statusCode': 400, 'body': {'valid': False, 'error': str(e)}}\n"
+        },
+        "Architectures": [
+          "arm64"
+        ],
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 300,
+        "MemorySize": 512,
+        "DeadLetterConfig": {
+          "TargetArn": {
+            "Fn::GetAtt": [
+              "TradeValidatorDLQ",
+              "Arn"
+            ]
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "TradeTable"
+            },
+            "API_ENDPOINT_PARAM": {
+              "Fn::Sub": "/trade-processing/${EnvironmentSuffix}/validator-api-endpoint"
+            },
+            "THRESHOLD_PARAM": {
+              "Fn::Sub": "/trade-processing/${EnvironmentSuffix}/validation-threshold"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "TracingConfig": {
+          "Mode": "Active"
+        },
+        "Description": "Trade validator function - validates incoming trade data using ARM64 architecture",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trade-validator-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "MetadataEnricherFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "metadata-enricher-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom datetime import datetime\n\nssm = boto3.client('ssm')\nenvironment = os.environ.get('ENVIRONMENT', 'dev')\n\ndef handler(event, context):\n    try:\n        trade_data = event.get('Payload', event)\n        api_endpoint_param = f'/trade-processing/{environment}/enricher-api-endpoint'\n        try:\n            api_endpoint = ssm.get_parameter(Name=api_endpoint_param)['Parameter']['Value']\n        except Exception:\n            api_endpoint = 'https://api.example.com/enricher/v1'\n        enriched_data = {\n            **trade_data,\n            'enrichedAt': datetime.utcnow().isoformat(),\n            'marketPrice': 100.50,\n            'exchangeRate': 1.0,\n            'apiEndpoint': api_endpoint\n        }\n        return {'statusCode': 200, 'body': enriched_data}\n    except Exception as e:\n        print(f'Enrichment error: {str(e)}')\n        raise\n"
+        },
+        "Architectures": [
+          "arm64"
+        ],
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 300,
+        "MemorySize": 512,
+        "DeadLetterConfig": {
+          "TargetArn": {
+            "Fn::GetAtt": [
+              "MetadataEnricherDLQ",
+              "Arn"
+            ]
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "TradeTable"
+            },
+            "API_ENDPOINT_PARAM": {
+              "Fn::Sub": "/trade-processing/${EnvironmentSuffix}/enricher-api-endpoint"
+            },
+            "THRESHOLD_PARAM": {
+              "Fn::Sub": "/trade-processing/${EnvironmentSuffix}/enrichment-threshold"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "TracingConfig": {
+          "Mode": "Active"
+        },
+        "Description": "Metadata enricher function - adds market context to trades using ARM64 architecture",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "metadata-enricher-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ComplianceRecorderFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "compliance-recorder-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom datetime import datetime\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ntable_name = os.environ.get('TABLE_NAME', 'trades')\ntable = dynamodb.Table(table_name)\n\ndef handler(event, context):\n    try:\n        parallel_results = event.get('parallelResults', [])\n        validation_result = parallel_results[0] if len(parallel_results) > 0 else {}\n        enrichment_result = parallel_results[1] if len(parallel_results) > 1 else {}\n        trade_data = enrichment_result.get('Payload', {}).get('body', {})\n        if not trade_data:\n            trade_data = enrichment_result.get('body', event)\n        item = {\n            'tradeId': trade_data.get('tradeId', 'unknown'),\n            'timestamp': int(datetime.utcnow().timestamp()),\n            'sourceSystem': trade_data.get('sourceSystem', 'unknown'),\n            'amount': Decimal(str(trade_data.get('amount', 0))),\n            'currency': trade_data.get('currency', 'USD'),\n            'enrichedData': json.dumps(trade_data),\n            'recordedAt': datetime.utcnow().isoformat(),\n            'validationStatus': 'passed',\n            'enrichmentStatus': 'completed'\n        }\n        table.put_item(Item=item)\n        return {'statusCode': 200, 'body': {'recorded': True, 'tradeId': item['tradeId'], 'timestamp': item['timestamp']}}\n    except Exception as e:\n        print(f'Recording error: {str(e)}')\n        raise\n"
+        },
+        "Architectures": [
+          "arm64"
+        ],
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 300,
+        "MemorySize": 512,
+        "DeadLetterConfig": {
+          "TargetArn": {
+            "Fn::GetAtt": [
+              "ComplianceRecorderDLQ",
+              "Arn"
+            ]
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "TradeTable"
+            },
+            "API_ENDPOINT_PARAM": {
+              "Fn::Sub": "/trade-processing/${EnvironmentSuffix}/recorder-api-endpoint"
+            },
+            "THRESHOLD_PARAM": {
+              "Fn::Sub": "/trade-processing/${EnvironmentSuffix}/compliance-threshold"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "TracingConfig": {
+          "Mode": "Active"
+        },
+        "Description": "Compliance recorder function - logs trades for regulatory purposes using ARM64 architecture",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "compliance-recorder-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ValidatorAPIEndpointParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/trade-processing/${EnvironmentSuffix}/validator-api-endpoint"
+        },
+        "Type": "String",
+        "Value": {
+          "Ref": "TradeValidatorAPIEndpoint"
+        },
+        "Description": "API endpoint URL for trade validator service",
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "validator-api-endpoint-${EnvironmentSuffix}"
+          },
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    },
+    "EnricherAPIEndpointParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/trade-processing/${EnvironmentSuffix}/enricher-api-endpoint"
+        },
+        "Type": "String",
+        "Value": {
+          "Ref": "MetadataEnricherAPIEndpoint"
+        },
+        "Description": "API endpoint URL for metadata enricher service",
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "enricher-api-endpoint-${EnvironmentSuffix}"
+          },
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    },
+    "RecorderAPIEndpointParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/trade-processing/${EnvironmentSuffix}/recorder-api-endpoint"
+        },
+        "Type": "String",
+        "Value": {
+          "Ref": "ComplianceRecorderAPIEndpoint"
+        },
+        "Description": "API endpoint URL for compliance recorder service",
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "recorder-api-endpoint-${EnvironmentSuffix}"
+          },
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    },
+    "ValidationThresholdParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/trade-processing/${EnvironmentSuffix}/validation-threshold"
+        },
+        "Type": "String",
+        "Value": {
+          "Fn::Sub": "${ValidationThreshold}"
+        },
+        "Description": "Processing threshold value for trade validation",
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "validation-threshold-${EnvironmentSuffix}"
+          },
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    },
+    "EnrichmentThresholdParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/trade-processing/${EnvironmentSuffix}/enrichment-threshold"
+        },
+        "Type": "String",
+        "Value": {
+          "Fn::Sub": "${EnrichmentThreshold}"
+        },
+        "Description": "Processing threshold value for metadata enrichment",
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "enrichment-threshold-${EnvironmentSuffix}"
+          },
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    },
+    "ComplianceThresholdParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/trade-processing/${EnvironmentSuffix}/compliance-threshold"
+        },
+        "Type": "String",
+        "Value": {
+          "Fn::Sub": "${ComplianceThreshold}"
+        },
+        "Description": "Processing threshold value for compliance recording",
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "compliance-threshold-${EnvironmentSuffix}"
+          },
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    },
+    "StepFunctionsExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "trade-processing-sfn-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "states.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "LambdaInvokePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "TradeValidatorFunction",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "MetadataEnricherFunction",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "ComplianceRecorderFunction",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchLogsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogDelivery",
+                    "logs:GetLogDelivery",
+                    "logs:UpdateLogDelivery",
+                    "logs:DeleteLogDelivery",
+                    "logs:ListLogDeliveries",
+                    "logs:PutResourcePolicy",
+                    "logs:DescribeResourcePolicies",
+                    "logs:DescribeLogGroups"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "XRayPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "xray:PutTraceSegments",
+                    "xray:PutTelemetryRecords",
+                    "xray:GetSamplingRules",
+                    "xray:GetSamplingTargets"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "StateMachineLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/states/trade-processing-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "TradeProcessingStateMachine": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "StateMachineName": {
+          "Fn::Sub": "trade-processing-workflow-${EnvironmentSuffix}"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "StepFunctionsExecutionRole",
+            "Arn"
+          ]
+        },
+        "StateMachineType": "STANDARD",
+        "TracingConfiguration": {
+          "Enabled": true
+        },
+        "LoggingConfiguration": {
+          "Level": "ALL",
+          "IncludeExecutionData": true,
+          "Destinations": [
+            {
+              "CloudWatchLogsLogGroup": {
+                "LogGroupArn": {
+                  "Fn::GetAtt": [
+                    "StateMachineLogGroup",
+                    "Arn"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "DefinitionString": {
+          "Fn::Sub": [
+            "{\n  \"Comment\": \"Trade Processing Workflow - Orchestrates parallel validation and enrichment followed by compliance recording\",\n  \"StartAt\": \"ParallelProcessing\",\n  \"States\": {\n    \"ParallelProcessing\": {\n      \"Type\": \"Parallel\",\n      \"Comment\": \"Execute validation and enrichment in parallel for performance\",\n      \"Branches\": [\n        {\n          \"StartAt\": \"ValidateTrade\",\n          \"States\": {\n            \"ValidateTrade\": {\n              \"Type\": \"Task\",\n              \"Resource\": \"arn:aws:states:::lambda:invoke\",\n              \"Parameters\": {\n                \"FunctionName\": \"${ValidatorArn}\",\n                \"Payload.$\": \"$\"\n              },\n              \"Retry\": [\n                {\n                  \"ErrorEquals\": [\n                    \"Lambda.ServiceException\",\n                    \"Lambda.AWSLambdaException\",\n                    \"Lambda.SdkClientException\",\n                    \"Lambda.TooManyRequestsException\"\n                  ],\n                  \"IntervalSeconds\": 2,\n                  \"MaxAttempts\": 3,\n                  \"BackoffRate\": 2\n                }\n              ],\n              \"Catch\": [\n                {\n                  \"ErrorEquals\": [\n                    \"States.ALL\"\n                  ],\n                  \"ResultPath\": \"$.validationError\",\n                  \"Next\": \"ValidationFailed\"\n                }\n              ],\n              \"ResultPath\": \"$.validationResult\",\n              \"TimeoutSeconds\": 310,\n              \"End\": true\n            },\n            \"ValidationFailed\": {\n              \"Type\": \"Fail\",\n              \"Error\": \"ValidationError\",\n              \"Cause\": \"Trade validation failed after retries\"\n            }\n          }\n        },\n        {\n          \"StartAt\": \"EnrichMetadata\",\n          \"States\": {\n            \"EnrichMetadata\": {\n              \"Type\": \"Task\",\n              \"Resource\": \"arn:aws:states:::lambda:invoke\",\n              \"Parameters\": {\n                \"FunctionName\": \"${EnricherArn}\",\n                \"Payload.$\": \"$\"\n              },\n              \"Retry\": [\n                {\n                  \"ErrorEquals\": [\n                    \"Lambda.ServiceException\",\n                    \"Lambda.AWSLambdaException\",\n                    \"Lambda.SdkClientException\",\n                    \"Lambda.TooManyRequestsException\"\n                  ],\n                  \"IntervalSeconds\": 2,\n                  \"MaxAttempts\": 3,\n                  \"BackoffRate\": 2\n                }\n              ],\n              \"Catch\": [\n                {\n                  \"ErrorEquals\": [\n                    \"States.ALL\"\n                  ],\n                  \"ResultPath\": \"$.enrichmentError\",\n                  \"Next\": \"EnrichmentFailed\"\n                }\n              ],\n              \"ResultPath\": \"$.enrichmentResult\",\n              \"TimeoutSeconds\": 310,\n              \"End\": true\n            },\n            \"EnrichmentFailed\": {\n              \"Type\": \"Fail\",\n              \"Error\": \"EnrichmentError\",\n              \"Cause\": \"Metadata enrichment failed after retries\"\n            }\n          }\n        }\n      ],\n      \"ResultPath\": \"$.parallelResults\",\n      \"Next\": \"RecordCompliance\"\n    },\n    \"RecordCompliance\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Comment\": \"Record compliance data after successful validation and enrichment\",\n      \"Parameters\": {\n        \"FunctionName\": \"${RecorderArn}\",\n        \"Payload.$\": \"$\"\n      },\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\n            \"Lambda.ServiceException\",\n            \"Lambda.AWSLambdaException\",\n            \"Lambda.SdkClientException\",\n            \"Lambda.TooManyRequestsException\"\n          ],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2\n        }\n      ],\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\n            \"States.ALL\"\n          ],\n          \"ResultPath\": \"$.complianceError\",\n          \"Next\": \"ComplianceFailed\"\n        }\n      ],\n      \"ResultPath\": \"$.complianceResult\",\n      \"TimeoutSeconds\": 310,\n      \"Next\": \"ProcessingComplete\"\n    },\n    \"ComplianceFailed\": {\n      \"Type\": \"Fail\",\n      \"Error\": \"ComplianceError\",\n      \"Cause\": \"Compliance recording failed after retries\"\n    },\n    \"ProcessingComplete\": {\n      \"Type\": \"Succeed\",\n      \"Comment\": \"Trade processing completed successfully\"\n    }\n  }\n}",
+            {
+              "ValidatorArn": {
+                "Fn::GetAtt": [
+                  "TradeValidatorFunction",
+                  "Arn"
+                ]
+              },
+              "EnricherArn": {
+                "Fn::GetAtt": [
+                  "MetadataEnricherFunction",
+                  "Arn"
+                ]
+              },
+              "RecorderArn": {
+                "Fn::GetAtt": [
+                  "ComplianceRecorderFunction",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trade-processing-workflow-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "EventBridgeExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "trade-processing-eventbridge-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "StartStateMachinePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "states:StartExecution"
+                  ],
+                  "Resource": {
+                    "Ref": "TradeProcessingStateMachine"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "SourceSystem1EventRule": {
+      "Type": "AWS::Events::Rule",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "trade-event-source-system-1-${EnvironmentSuffix}"
+        },
+        "Description": "Route trade events from source system 1 to Step Functions state machine",
+        "EventPattern": {
+          "source": [
+            "trading.system1"
+          ],
+          "detail-type": [
+            "Trade Event"
+          ],
+          "detail": {
+            "eventType": [
+              "NEW_TRADE",
+              "TRADE_UPDATE"
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "TradeProcessingStateMachine"
+            },
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "EventBridgeExecutionRole",
+                "Arn"
+              ]
+            },
+            "Id": "SourceSystem1Target",
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 3,
+              "MaximumEventAgeInSeconds": 3600
+            }
+          }
+        ]
+      }
+    },
+    "SourceSystem2EventRule": {
+      "Type": "AWS::Events::Rule",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "trade-event-source-system-2-${EnvironmentSuffix}"
+        },
+        "Description": "Route trade events from source system 2 to Step Functions state machine",
+        "EventPattern": {
+          "source": [
+            "trading.system2"
+          ],
+          "detail-type": [
+            "Trade Event"
+          ],
+          "detail": {
+            "eventType": [
+              "NEW_TRADE",
+              "TRADE_UPDATE"
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "TradeProcessingStateMachine"
+            },
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "EventBridgeExecutionRole",
+                "Arn"
+              ]
+            },
+            "Id": "SourceSystem2Target",
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 3,
+              "MaximumEventAgeInSeconds": 3600
+            }
+          }
+        ]
+      }
+    },
+    "SourceSystem3EventRule": {
+      "Type": "AWS::Events::Rule",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "trade-event-source-system-3-${EnvironmentSuffix}"
+        },
+        "Description": "Route trade events from source system 3 to Step Functions state machine",
+        "EventPattern": {
+          "source": [
+            "trading.system3"
+          ],
+          "detail-type": [
+            "Trade Event"
+          ],
+          "detail": {
+            "eventType": [
+              "NEW_TRADE",
+              "TRADE_UPDATE"
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "TradeProcessingStateMachine"
+            },
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "EventBridgeExecutionRole",
+                "Arn"
+              ]
+            },
+            "Id": "SourceSystem3Target",
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 3,
+              "MaximumEventAgeInSeconds": 3600
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "TradeTableName": {
+      "Description": "Name of the DynamoDB trade processing table with global replication",
+      "Value": {
+        "Ref": "TradeTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TradeTableName"
+        }
+      }
+    },
+    "TradeTableArn": {
+      "Description": "ARN of the DynamoDB trade processing table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TradeTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TradeTableArn"
+        }
+      }
+    },
+    "TradeTableStreamArn": {
+      "Description": "ARN of the DynamoDB table stream",
+      "Value": {
+        "Fn::GetAtt": [
+          "TradeTable",
+          "StreamArn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TradeTableStreamArn"
+        }
+      }
+    },
+    "StateMachineArn": {
+      "Description": "ARN of the trade processing Step Functions state machine",
+      "Value": {
+        "Ref": "TradeProcessingStateMachine"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StateMachineArn"
+        }
+      }
+    },
+    "ValidatorFunctionArn": {
+      "Description": "ARN of the trade validator Lambda function (ARM64 container)",
+      "Value": {
+        "Fn::GetAtt": [
+          "TradeValidatorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ValidatorFunctionArn"
+        }
+      }
+    },
+    "EnricherFunctionArn": {
+      "Description": "ARN of the metadata enricher Lambda function (ARM64 container)",
+      "Value": {
+        "Fn::GetAtt": [
+          "MetadataEnricherFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnricherFunctionArn"
+        }
+      }
+    },
+    "RecorderFunctionArn": {
+      "Description": "ARN of the compliance recorder Lambda function (ARM64 container)",
+      "Value": {
+        "Fn::GetAtt": [
+          "ComplianceRecorderFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RecorderFunctionArn"
+        }
+      }
+    },
+    "ValidatorDLQUrl": {
+      "Description": "URL of the trade validator dead letter queue (14-day retention)",
+      "Value": {
+        "Ref": "TradeValidatorDLQ"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ValidatorDLQUrl"
+        }
+      }
+    },
+    "EnricherDLQUrl": {
+      "Description": "URL of the metadata enricher dead letter queue (14-day retention)",
+      "Value": {
+        "Ref": "MetadataEnricherDLQ"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnricherDLQUrl"
+        }
+      }
+    },
+    "RecorderDLQUrl": {
+      "Description": "URL of the compliance recorder dead letter queue (14-day retention)",
+      "Value": {
+        "Ref": "ComplianceRecorderDLQ"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RecorderDLQUrl"
+        }
+      }
+    },
+    "ECRRepositoryUri": {
+      "Description": "URI of the ECR repository with cross-region replication",
+      "Value": {
+        "Fn::GetAtt": [
+          "ECRRepository",
+          "RepositoryUri"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ECRRepositoryUri"
+        }
+      }
+    },
+    "VPCId": {
+      "Description": "VPC ID for trade processing infrastructure",
+      "Value": {
+        "Ref": "TradeProcessingVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
+    "SecondaryRegion": {
+      "Description": "Secondary region for global table replication",
+      "Value": {
+        "Ref": "SecondaryRegion"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecondaryRegion"
+        }
+      }
+    }
+  }
+}

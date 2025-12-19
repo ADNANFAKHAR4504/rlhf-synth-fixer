@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-17T12:47:42+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "po_id": "4h7y2u",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ElastiCache",
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "Lambda",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS",
+    "Route 53",
+    "Secrets Manager"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

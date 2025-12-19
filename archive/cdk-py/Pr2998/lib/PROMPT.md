@@ -1,0 +1,5 @@
+Hey there! We need to set up a serverless infrastructure using AWS CDK with Python (main.py - single stack). The goal is to deploy a Lambda function (using Python 3 runtime) that gets triggered by an API Gateway REST endpoint. The Lambda function should interact with a DynamoDB table to store data, and the table must have a primary key with provisioned throughput of 5 read and 5 write capacity units.
+
+We also need to make sure that CloudWatch Logs are set up to monitor the Lambda function's execution. The API Gateway should support CORS so that client-side applications can interact with it seamlessly. Additionally, all resources should be tagged with `Environment: EnvironmentSuffix` and deployed in the `us-west-2` AWS region.
+
+IAM roles and policies are critical here. The Lambda function must have the necessary permissions to interact with DynamoDB and log to CloudWatch. Finally, the CloudFormation stack should include a description summarizing its purpose, and we need to output the Lambda function's ARN and the API Gateway's URL after deployment.

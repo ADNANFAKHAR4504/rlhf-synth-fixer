@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "333559",
+  "team": "3",
+  "startedAt": "2025-10-01T07:31:40.567Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "ALB",
+    "WAF",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "NAT Gateway",
+    "Internet Gateway",
+    "VPC Flow Logs",
+    "EBS"
+  ],
+  "training_quality": 7,
+  "training_quality_justification": "This task demonstrates substantial training value (7/10) for several reasons: (1) It required fixing multiple critical infrastructure issues including Vault provider removal, encryption configuration, KMS policy corrections, and service account handling; (2) The MODEL_FAILURES.md documents 7 major categories of fixes with 15+ specific corrections, showing significant deviation between initial response and working solution; (3) The task covers complex real-world scenarios like HIPAA compliance, proper secrets management fallbacks, and AWS service integration nuances; (4) The fixes address both common mistakes (hardcoded AMIs, missing data sources) and subtle issues (ELB service account permissions, KMS encryption contexts); (5) However, it's not a 9-10 because the task itself is relatively standard infrastructure setup - the learning value comes more from fixing mistakes than from novel architectural patterns.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
+}

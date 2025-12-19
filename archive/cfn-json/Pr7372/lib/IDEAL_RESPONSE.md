@@ -1,0 +1,671 @@
+# CloudFormation Infrastructure for Product Catalog API
+
+This document contains the complete, corrected CloudFormation JSON template for deploying a high-availability product catalog API infrastructure.
+
+## Implementation: lib/TapStack.json
+
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "High-availability infrastructure for Product Catalog API with ALB, Auto Scaling, and CloudWatch monitoring",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to avoid conflicts",
+      "MinLength": 3,
+      "MaxLength": 20
+    },
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id",
+      "Description": "VPC ID where resources will be deployed"
+    },
+    "PublicSubnetIds": {
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Description": "List of public subnet IDs for ALB (must span 3 AZs)"
+    },
+    "PrivateSubnetIds": {
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Description": "List of private subnet IDs for EC2 instances (must span 3 AZs)"
+    },
+    "CertificateArn": {
+      "Type": "String",
+      "Description": "ARN of ACM certificate for HTTPS termination on ALB"
+    },
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+      "Description": "Latest Amazon Linux 2 AMI ID from SSM Parameter Store"
+    }
+  },
+  "Resources": {
+    "ALBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for Application Load Balancer allowing HTTPS from internet",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTPS traffic from internet"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Application",
+            "Value": "ProductCatalogAPI"
+          }
+        ]
+      }
+    },
+    "InstanceSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "instance-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for EC2 instances allowing HTTP from ALB only",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "instance-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Application",
+            "Value": "ProductCatalogAPI"
+          }
+        ]
+      }
+    },
+    "ALBToInstanceEgress": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "ALBSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 80,
+        "ToPort": 80,
+        "DestinationSecurityGroupId": {
+          "Ref": "InstanceSecurityGroup"
+        },
+        "Description": "Allow HTTP traffic to instances"
+      }
+    },
+    "InstanceFromALBIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "InstanceSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 80,
+        "ToPort": 80,
+        "SourceSecurityGroupId": {
+          "Ref": "ALBSecurityGroup"
+        },
+        "Description": "Allow HTTP traffic from ALB"
+      }
+    },
+    "InstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "product-catalog-instance-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ParameterStoreAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters",
+                    "ssm:GetParametersByPath"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/product-catalog/*"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchLogsAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/product-catalog-${EnvironmentSuffix}:*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Application",
+            "Value": "ProductCatalogAPI"
+          }
+        ]
+      }
+    },
+    "InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName": {
+          "Fn::Sub": "product-catalog-instance-profile-${EnvironmentSuffix}"
+        },
+        "Roles": [
+          {
+            "Ref": "InstanceRole"
+          }
+        ]
+      }
+    },
+    "ApplicationLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "product-catalog-alb-${EnvironmentSuffix}"
+        },
+        "Type": "application",
+        "Scheme": "internet-facing",
+        "IpAddressType": "ipv4",
+        "Subnets": {
+          "Ref": "PublicSubnetIds"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "ALBSecurityGroup"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "product-catalog-alb-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Application",
+            "Value": "ProductCatalogAPI"
+          }
+        ]
+      }
+    },
+    "TargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "product-catalog-tg-${EnvironmentSuffix}"
+        },
+        "Port": 80,
+        "Protocol": "HTTP",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "HealthCheckEnabled": true,
+        "HealthCheckPath": "/api/v1/health",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 3,
+        "TargetType": "instance",
+        "TargetGroupAttributes": [
+          {
+            "Key": "stickiness.enabled",
+            "Value": "true"
+          },
+          {
+            "Key": "stickiness.type",
+            "Value": "lb_cookie"
+          },
+          {
+            "Key": "stickiness.lb_cookie.duration_seconds",
+            "Value": "86400"
+          },
+          {
+            "Key": "deregistration_delay.timeout_seconds",
+            "Value": "30"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "product-catalog-tg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Application",
+            "Value": "ProductCatalogAPI"
+          }
+        ]
+      }
+    },
+    "ALBListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
+        "Port": 443,
+        "Protocol": "HTTPS",
+        "Certificates": [
+          {
+            "CertificateArn": {
+              "Ref": "CertificateArn"
+            }
+          }
+        ],
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "TargetGroup"
+            }
+          }
+        ]
+      }
+    },
+    "LaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateName": {
+          "Fn::Sub": "product-catalog-lt-${EnvironmentSuffix}"
+        },
+        "LaunchTemplateData": {
+          "ImageId": {
+            "Ref": "LatestAmiId"
+          },
+          "InstanceType": "t3.medium",
+          "IamInstanceProfile": {
+            "Arn": {
+              "Fn::GetAtt": [
+                "InstanceProfile",
+                "Arn"
+              ]
+            }
+          },
+          "SecurityGroupIds": [
+            {
+              "Ref": "InstanceSecurityGroup"
+            }
+          ],
+          "MetadataOptions": {
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled"
+          },
+          "UserData": {
+            "Fn::Base64": {
+              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\nmkdir -p /var/www/html/api/v1\necho '{\"status\":\"healthy\",\"service\":\"product-catalog\"}' > /var/www/html/api/v1/health\necho '<h1>Product Catalog API - ${EnvironmentSuffix}</h1>' > /var/www/html/index.html\n"
+            }
+          },
+          "TagSpecifications": [
+            {
+              "ResourceType": "instance",
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": {
+                    "Fn::Sub": "product-catalog-instance-${EnvironmentSuffix}"
+                  }
+                },
+                {
+                  "Key": "Environment",
+                  "Value": "Production"
+                },
+                {
+                  "Key": "Application",
+                  "Value": "ProductCatalogAPI"
+                }
+              ]
+            },
+            {
+              "ResourceType": "volume",
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": {
+                    "Fn::Sub": "product-catalog-volume-${EnvironmentSuffix}"
+                  }
+                },
+                {
+                  "Key": "Environment",
+                  "Value": "Production"
+                },
+                {
+                  "Key": "Application",
+                  "Value": "ProductCatalogAPI"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "AutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AutoScalingGroupName": {
+          "Fn::Sub": "product-catalog-asg-${EnvironmentSuffix}"
+        },
+        "LaunchTemplate": {
+          "LaunchTemplateId": {
+            "Ref": "LaunchTemplate"
+          },
+          "Version": {
+            "Fn::GetAtt": [
+              "LaunchTemplate",
+              "LatestVersionNumber"
+            ]
+          }
+        },
+        "MinSize": 2,
+        "MaxSize": 8,
+        "DesiredCapacity": 2,
+        "HealthCheckType": "ELB",
+        "HealthCheckGracePeriod": 300,
+        "VPCZoneIdentifier": {
+          "Ref": "PrivateSubnetIds"
+        },
+        "TargetGroupARNs": [
+          {
+            "Ref": "TargetGroup"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "product-catalog-asg-${EnvironmentSuffix}"
+            },
+            "PropagateAtLaunch": false
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production",
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "Application",
+            "Value": "ProductCatalogAPI",
+            "PropagateAtLaunch": true
+          }
+        ]
+      },
+      "DependsOn": [
+        "ALBListener"
+      ]
+    },
+    "ScaleUpPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AutoScalingGroupName": {
+          "Ref": "AutoScalingGroup"
+        },
+        "PolicyType": "TargetTrackingScaling",
+        "TargetTrackingConfiguration": {
+          "PredefinedMetricSpecification": {
+            "PredefinedMetricType": "ASGAverageCPUUtilization"
+          },
+          "TargetValue": 70.0
+        }
+      }
+    },
+    "HighCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "product-catalog-high-cpu-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when ASG average CPU exceeds 70%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 70,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "AutoScalingGroup"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LowCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "product-catalog-low-cpu-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when ASG average CPU falls below 30%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 30,
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "AutoScalingGroup"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  "Outputs": {
+    "LoadBalancerDNS": {
+      "Description": "DNS name of the Application Load Balancer for deployment pipeline integration",
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "DNSName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALB-DNS"
+        }
+      }
+    },
+    "TargetGroupArn": {
+      "Description": "ARN of the Target Group for CI/CD automation",
+      "Value": {
+        "Ref": "TargetGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TargetGroup-ARN"
+        }
+      }
+    },
+    "AutoScalingGroupName": {
+      "Description": "Name of the Auto Scaling Group",
+      "Value": {
+        "Ref": "AutoScalingGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ASG-Name"
+        }
+      }
+    },
+    "InstanceSecurityGroupId": {
+      "Description": "Security Group ID for EC2 instances",
+      "Value": {
+        "Ref": "InstanceSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-Instance-SG"
+        }
+      }
+    },
+    "ALBSecurityGroupId": {
+      "Description": "Security Group ID for Application Load Balancer",
+      "Value": {
+        "Ref": "ALBSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALB-SG"
+        }
+      }
+    }
+  }
+}
+```
+
+## Key Improvements from Model Response
+
+### Security Group Rule Separation
+
+The primary improvement is the separation of cross-security-group rules into dedicated resources:
+
+**ALBToInstanceEgress**: Separate egress rule resource for ALB to instance communication
+- Prevents circular dependency issues in CloudFormation
+- Follows AWS best practices for cross-security-group references
+- Improves deployment reliability
+
+**InstanceFromALBIngress**: Separate ingress rule resource for instance to receive ALB traffic
+- Complements the egress rule for bidirectional security group references
+- Enables proper CloudFormation dependency resolution
+
+This architectural pattern is a CloudFormation-specific best practice that prevents circular dependency errors when security groups reference each other.
+
+## Architecture Overview
+
+High-availability web application infrastructure featuring:
+
+- Application Load Balancer (ALB) across 3 availability zones with HTTPS termination
+- Auto Scaling Group (ASG) with t3.medium EC2 instances (min: 2, max: 8)
+- Target Group with health checks on /api/v1/health endpoint
+- CloudWatch alarms for CPU-based auto scaling (70% scale-out, 30% scale-in)
+- IAM roles with least-privilege access to Parameter Store and CloudWatch Logs
+- Security groups with proper network isolation
+- Launch template with IMDSv2 enforcement and automated application setup
+
+## Security Features
+
+1. Network Security
+   - ALB in public subnets, instances in private subnets
+   - Security group isolation (HTTPS from internet to ALB, HTTP from ALB to instances only)
+   - No direct internet access to application instances
+
+2. Encryption and Access Control
+   - HTTPS termination at ALB with ACM certificate
+   - IMDSv2 required for all EC2 instances (prevents SSRF attacks)
+   - Least privilege IAM policies scoped to specific resources
+
+3. Monitoring and Logging
+   - CloudWatch Logs integration for audit trails
+   - CloudWatch alarms for operational visibility
+
+## Production-Ready Features
+
+- Multi-AZ high availability architecture
+- Automatic scaling based on CPU utilization
+- Session stickiness for stateful applications
+- Health checks with grace periods
+- Parameterized for multiple environments (EnvironmentSuffix)
+- Comprehensive tagging (Environment, Application)
+- Stack outputs for CI/CD integration
+- No hardcoded values or Retain policies
+- All resources destroyable for clean teardown
+
+## Deployment Requirements
+
+Required parameters:
+- EnvironmentSuffix: Unique identifier (3-20 characters)
+- VpcId: Existing VPC ID
+- PublicSubnetIds: List of 3 public subnet IDs (one per AZ)
+- PrivateSubnetIds: List of 3 private subnet IDs (one per AZ)
+- CertificateArn: ACM certificate ARN for HTTPS
+
+The template uses SSM Parameter Store to automatically retrieve the latest Amazon Linux 2 AMI ID, eliminating the need for manual AMI updates.

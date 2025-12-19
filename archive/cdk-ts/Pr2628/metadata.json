@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350017",
+  "team": "3",
+  "startedAt": "2025-09-03T04:22:24.678Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Access Control",
+    "Performance Optimization",
+    "Monitoring Setup",
+    "Network Configuration"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS KMS",
+    "AWS IAM",
+    "AWS VPC",
+    "AWS EC2",
+    "AWS S3",
+    "AWS CloudWatch",
+    "AWS SSM",
+    "AWS CloudTrail"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chiragp-turing",
+  "dockerS3Location": ""
+}

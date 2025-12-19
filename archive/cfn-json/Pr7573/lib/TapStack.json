@@ -1,0 +1,1044 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Multi-Region Disaster Recovery Solution for Payment Processing - Primary Region (us-east-1)",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to enable multiple deployments",
+      "Default": "dev",
+      "AllowedPattern": "[a-z0-9-]+",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "HostedZoneName": {
+      "Type": "String",
+      "Description": "Route 53 hosted zone name (e.g., example.com)",
+      "Default": "payment-dr.local"
+    },
+    "AlertEmail": {
+      "Type": "String",
+      "Description": "Email address for CloudWatch alarm notifications",
+      "Default": "alerts@example.com"
+    }
+  },
+  "Resources": {
+    "DBMasterPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "aurora-master-password-${EnvironmentSuffix}"
+        },
+        "Description": "Master password for Aurora database",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-master-password-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "vpc-primary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryPublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "subnet-public-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryPublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "subnet-public-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryPrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
+        "CidrBlock": "10.0.11.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "subnet-private-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryPrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
+        "CidrBlock": "10.0.12.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "subnet-private-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryInternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "igw-primary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryVPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "PrimaryInternetGateway"
+        }
+      }
+    },
+    "PrimaryPublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rt-public-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryPublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "PrimaryVPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrimaryPublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "PrimaryInternetGateway"
+        }
+      }
+    },
+    "PrimaryPublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrimaryPublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrimaryPublicRouteTable"
+        }
+      }
+    },
+    "PrimaryPublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrimaryPublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrimaryPublicRouteTable"
+        }
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "aurora-subnet-group-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for Aurora Global Database",
+        "SubnetIds": [
+          {
+            "Ref": "PrimaryPrivateSubnet1"
+          },
+          {
+            "Ref": "PrimaryPrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-subnet-group-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AuroraSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "aurora-db-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for Aurora database",
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "LambdaSecurityGroup"
+            },
+            "Description": "Allow MySQL from Lambda functions"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": "20.0.0.0/16",
+            "Description": "Allow MySQL from secondary region VPC"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "sg-aurora-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "GlobalDBCluster": {
+      "Type": "AWS::RDS::GlobalCluster",
+      "Properties": {
+        "GlobalClusterIdentifier": {
+          "Fn::Sub": "global-payment-cluster-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "DeletionProtection": false,
+        "StorageEncrypted": true
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryDBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Fn::Sub": "primary-payment-cluster-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "AuroraSecurityGroup"
+          }
+        ],
+        "GlobalClusterIdentifier": {
+          "Ref": "GlobalDBCluster"
+        },
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "StorageEncrypted": true,
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "slowquery"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "primary-payment-cluster-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryDBInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "primary-payment-instance-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "PrimaryDBCluster"
+        },
+        "Engine": "aurora-mysql",
+        "DBInstanceClass": "db.r5.large",
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "primary-payment-instance-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "TransactionLogsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "transaction-logs-primary-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionExpirationInDays": 30
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-logs-primary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "lambda-fn-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for Lambda functions",
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "sg-lambda-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "lambda-execution-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "LambdaPaymentProcessingPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${TransactionLogsBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:*:*:*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sts:AssumeRole"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/lambda-execution-role-*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": {
+                    "Ref": "DBMasterPasswordSecret"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "lambda-execution-role-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PaymentProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "payment-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs20.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "DB_ENDPOINT": {
+              "Fn::GetAtt": [
+                "PrimaryDBCluster",
+                "Endpoint.Address"
+              ]
+            },
+            "DB_NAME": "payments",
+            "BUCKET_NAME": {
+              "Ref": "TransactionLogsBucket"
+            },
+            "REGION": {
+              "Ref": "AWS::Region"
+            }
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "PrimaryPrivateSubnet1"
+            },
+            {
+              "Ref": "PrimaryPrivateSubnet2"
+            }
+          ]
+        },
+        "Code": {
+          "ZipFile": "const AWS = require('aws-sdk');\nconst s3 = new AWS.S3();\n\nexports.handler = async (event) => {\n  console.log('Processing payment:', JSON.stringify(event));\n  \n  try {\n    const transactionId = event.transactionId || Date.now().toString();\n    const amount = event.amount || 0;\n    const timestamp = new Date().toISOString();\n    \n    // Log transaction to S3\n    const logData = {\n      transactionId,\n      amount,\n      timestamp,\n      status: 'processed',\n      region: process.env.REGION\n    };\n    \n    await s3.putObject({\n      Bucket: process.env.BUCKET_NAME,\n      Key: `transactions/${timestamp}/${transactionId}.json`,\n      Body: JSON.stringify(logData),\n      ContentType: 'application/json'\n    }).promise();\n    \n    return {\n      statusCode: 200,\n      body: JSON.stringify({\n        message: 'Payment processed successfully',\n        transactionId,\n        region: process.env.REGION\n      })\n    };\n  } catch (error) {\n    console.error('Payment processing error:', error);\n    throw error;\n  }\n};\n"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-processor-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "ALBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for Application Load Balancer",
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTP from internet"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTPS from internet"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "sg-alb-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryALB": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "alb-primary-${EnvironmentSuffix}"
+        },
+        "Type": "application",
+        "Scheme": "internet-facing",
+        "IpAddressType": "ipv4",
+        "Subnets": [
+          {
+            "Ref": "PrimaryPublicSubnet1"
+          },
+          {
+            "Ref": "PrimaryPublicSubnet2"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "Ref": "ALBSecurityGroup"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "alb-primary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PaymentProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "elasticloadbalancing.amazonaws.com",
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      }
+    },
+    "PrimaryTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "DependsOn": "LambdaInvokePermission",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "tg-primary-${EnvironmentSuffix}"
+        },
+        "TargetType": "lambda",
+        "Targets": [
+          {
+            "Id": {
+              "Fn::GetAtt": [
+                "PaymentProcessorFunction",
+                "Arn"
+              ]
+            }
+          }
+        ],
+        "HealthCheckEnabled": true,
+        "HealthCheckPath": "/health",
+        "HealthCheckIntervalSeconds": 35,
+        "HealthCheckTimeoutSeconds": 30,
+        "HealthyThresholdCount": 5,
+        "UnhealthyThresholdCount": 2,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "tg-primary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryALBListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "PrimaryALB"
+        },
+        "Protocol": "HTTP",
+        "Port": 80,
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "PrimaryTargetGroup"
+            }
+          }
+        ]
+      }
+    },
+    "PrimaryALBHealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Properties": {
+        "HealthCheckConfig": {
+          "Type": "HTTP",
+          "ResourcePath": "/health",
+          "FullyQualifiedDomainName": {
+            "Fn::GetAtt": [
+              "PrimaryALB",
+              "DNSName"
+            ]
+          },
+          "Port": 80,
+          "RequestInterval": 30,
+          "FailureThreshold": 3
+        },
+        "HealthCheckTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "health-check-primary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "HostedZone": {
+      "Type": "AWS::Route53::HostedZone",
+      "Properties": {
+        "Name": {
+          "Ref": "HostedZoneName"
+        },
+        "HostedZoneConfig": {
+          "Comment": {
+            "Fn::Sub": "Hosted zone for payment DR solution - ${EnvironmentSuffix}"
+          }
+        },
+        "HostedZoneTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "hz-payment-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryRecordSet": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "HostedZone"
+        },
+        "Name": {
+          "Fn::Sub": "payments.${HostedZoneName}"
+        },
+        "Type": "A",
+        "SetIdentifier": "Primary",
+        "Failover": "PRIMARY",
+        "HealthCheckId": {
+          "Ref": "PrimaryALBHealthCheck"
+        },
+        "AliasTarget": {
+          "HostedZoneId": {
+            "Fn::GetAtt": [
+              "PrimaryALB",
+              "CanonicalHostedZoneID"
+            ]
+          },
+          "DNSName": {
+            "Fn::GetAtt": [
+              "PrimaryALB",
+              "DNSName"
+            ]
+          },
+          "EvaluateTargetHealth": true
+        }
+      }
+    },
+    "PrimarySNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "payment-alerts-primary-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Payment Processing Alerts - Primary Region",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "AlertEmail"
+            },
+            "Protocol": "email"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-alerts-primary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AuroraReplicationLagAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "aurora-replication-lag-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Aurora replication lag exceeds 5 seconds",
+        "MetricName": "AuroraGlobalDBReplicationLag",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": 5.0,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": {
+              "Ref": "PrimaryDBCluster"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "PrimarySNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "ALBTargetHealthAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "alb-target-health-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when ALB has no healthy targets",
+        "MetricName": "HealthyHostCount",
+        "Namespace": "AWS/ApplicationELB",
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": 1,
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Fn::GetAtt": [
+                "PrimaryTargetGroup",
+                "TargetGroupFullName"
+              ]
+            }
+          },
+          {
+            "Name": "LoadBalancer",
+            "Value": {
+              "Fn::GetAtt": [
+                "PrimaryALB",
+                "LoadBalancerFullName"
+              ]
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "PrimarySNSTopic"
+          }
+        ]
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "lambda-errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function has errors",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PaymentProcessorFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "PrimarySNSTopic"
+          }
+        ]
+      }
+    },
+    "HealthCheckAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "route53-health-check-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Route 53 health check fails",
+        "MetricName": "HealthCheckStatus",
+        "Namespace": "AWS/Route53",
+        "Statistic": "Minimum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "HealthCheckId",
+            "Value": {
+              "Ref": "PrimaryALBHealthCheck"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "PrimarySNSTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "PrimaryVPCId": {
+      "Description": "VPC ID for primary region",
+      "Value": {
+        "Ref": "PrimaryVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
+      }
+    },
+    "PrimaryALBDNSName": {
+      "Description": "DNS name of the primary Application Load Balancer",
+      "Value": {
+        "Fn::GetAtt": [
+          "PrimaryALB",
+          "DNSName"
+        ]
+      }
+    },
+    "GlobalDBClusterArn": {
+      "Description": "ARN of the Aurora Global Database cluster",
+      "Value": {
+        "Fn::Sub": "arn:aws:rds::${AWS::AccountId}:global-cluster:${GlobalDBCluster}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GlobalDBClusterArn"
+        }
+      }
+    },
+    "PrimaryDBClusterEndpoint": {
+      "Description": "Writer endpoint for the primary Aurora cluster",
+      "Value": {
+        "Fn::GetAtt": [
+          "PrimaryDBCluster",
+          "Endpoint.Address"
+        ]
+      }
+    },
+    "TransactionLogsBucketName": {
+      "Description": "S3 bucket for transaction logs in primary region",
+      "Value": {
+        "Ref": "TransactionLogsBucket"
+      }
+    },
+    "Route53HostedZoneId": {
+      "Description": "Hosted Zone ID for Route 53",
+      "Value": {
+        "Ref": "HostedZone"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-HostedZoneId"
+        }
+      }
+    },
+    "PaymentEndpoint": {
+      "Description": "Route 53 payment processing endpoint",
+      "Value": {
+        "Fn::Sub": "payments.${HostedZoneName}"
+      }
+    }
+  }
+}

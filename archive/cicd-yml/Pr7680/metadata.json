@@ -1,0 +1,29 @@
+{
+  "platform": "cicd",
+  "language": "yml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "j4i1q7e1",
+  "team": "synth",
+  "startedAt": "2025-12-02T00:00:00Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "S3",
+    "ECR",
+    "IAM",
+    "CloudWatch Logs",
+    "ECS"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

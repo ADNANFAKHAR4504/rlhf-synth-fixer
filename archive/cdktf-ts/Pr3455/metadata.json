@@ -1,0 +1,32 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "95423180",
+  "team": "synth",
+  "subtask": "Serverless Infrastructure",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "startedAt": "2025-10-03T17:14:00+05:30",
+  "training_quality": 8,
+  "aws_services": [
+    "EventBridge",
+    "Lambda",
+    "DynamoDB",
+    "DynamoDB Streams",
+    "SNS",
+    "SQS",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "EventBridge Scheduler"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

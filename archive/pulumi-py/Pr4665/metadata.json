@@ -1,0 +1,44 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth",
+  "startedAt": "2025-10-17T06:37:44+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "Infrastructure task for Pulumi",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "po_id": "4474569941",
+  "aws_services": [
+    "IoT Core",
+    "Kinesis Data Streams",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ],
+  "region": "sa-east-1",
+  "turn_type": "single",
+  "training_quality": 9,
+  "training_quality_justification": "High training value (9/10) due to comprehensive Pulumi Python implementation that delivers a production-ready IoT pipeline, enforces environment suffix naming, and demonstrates multi-service integration (IoT Core -> Kinesis -> Lambda -> DynamoDB/S3) with observability and least-privilege IAM patterns. The pairing MODEL_FAILURES.md highlights realistic shortcomings the model must avoid, providing clear contrast for learners.",
+  "aws_services_count": 8,
+  "quality_checks": {
+    "platform_language_compliance": true,
+    "prompt_style": "human",
+    "environment_suffix_usage": "consistent"
+  },
+  "prompt_file": "lib/PROMPT.md",
+  "model_response_file": "lib/MODEL_RESPONSE.md",
+  "ideal_response_file": "lib/IDEAL_RESPONSE.md",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

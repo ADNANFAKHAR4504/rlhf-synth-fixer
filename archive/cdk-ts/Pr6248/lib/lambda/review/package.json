@@ -1,0 +1,9 @@
+{
+  "name": "review-lambda",
+  "version": "1.0.0",
+  "description": "Review processing Lambda function",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.450.0"
+  }
+}

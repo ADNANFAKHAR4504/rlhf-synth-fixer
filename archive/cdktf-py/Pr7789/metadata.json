@@ -1,0 +1,37 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-03T08:42:12+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "po_id": "15685254",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "VPC Peering Connection",
+    "Route Tables",
+    "Security Groups",
+    "Network ACLs",
+    "S3",
+    "VPC Flow Logs",
+    "VPC Endpoints",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Dashboard",
+    "AWS Config"
+  ],
+  "region": "us-east-1",
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

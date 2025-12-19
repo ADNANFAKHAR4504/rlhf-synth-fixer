@@ -1,0 +1,722 @@
+---
+# lib/ci-cd.yml
+# Enterprise GitLab CI/CD - Multi-account AWS (dev/staging/prod)
+# with OIDC, 15 stages, canary to blue/green to prod
+# Images: pulled from private registry
+# No hardcoded credentials or account IDs.
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - when: always
+
+stages:
+  - validation
+  - build
+  - test
+  - security
+  - compliance
+  - dev_deploy
+  - integration
+  - canary
+  - smoke
+  - staging_deploy
+  - e2e
+  - prod_approval
+  - prod_deploy
+  - monitoring
+  - rollback
+
+default:
+  interruptible: true
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - api_failure
+      - scheduler_failure
+  artifacts:
+    expire_in: 1 week
+  cache:
+    key: "node-${CI_PROJECT_NAME}-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - node_modules/
+    policy: pull-push
+  before_script:
+    - echo "Starting $CI_JOB_NAME in stage $CI_JOB_STAGE"
+
+# -------------------------
+# Anchors (reusable blocks)
+# -------------------------
+.aws_oidc_setup: &aws_oidc_setup
+  image: $CI_REGISTRY/cli/awscli:2
+  before_script:
+    - mkdir -p .aws
+    - echo "$CI_JOB_JWT_V2" > .aws/web_identity_token
+    - export AWS_WEB_IDENTITY_TOKEN_FILE=$CI_PROJECT_DIR/.aws/web_identity_token
+    - export AWS_REGION="${AWS_REGION:-us-east-1}"
+    - export ACCOUNT_ID="${ACCOUNT_ID:?ACCOUNT_ID missing}"
+    - export AWS_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/GitLabCIRole
+    - bash scripts/aws-oidc-setup.sh
+
+.pulumi_setup: &pulumi_setup
+  image: $CI_REGISTRY/cli/pulumi:3
+  before_script:
+    - export AWS_REGION="${AWS_REGION:-us-east-1}"
+    - export PULUMI_BACKEND_URL="${PULUMI_BACKEND_URL:?Required}"
+    - pulumi login "$PULUMI_BACKEND_URL"
+    - pulumi stack select "${PULUMI_STACK:-dev}" --create
+
+.kubectl_setup: &kubectl_setup
+  image: $CI_REGISTRY/cli/kubectl:1.30
+  before_script:
+    - export AWS_REGION="${AWS_REGION:-us-east-1}"
+    - export EKS_CLUSTER="${EKS_CLUSTER:?EKS_CLUSTER is required}"
+    - aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER"
+
+.node_runtime: &node_runtime
+  image: $CI_REGISTRY/ci/node:22
+  before_script:
+    - node --version
+    - npm --version
+
+# -------------------------
+# Validation
+# -------------------------
+lint:
+  stage: validation
+  <<: *node_runtime
+  rules:
+    - changes:
+        - "**/*.ts"
+        - "**/*.js"
+        - package.json
+        - eslint.config.*
+        - .eslintrc.*
+  script:
+    - npm ci
+    - npm run lint
+  artifacts:
+    reports:
+      junit: reports/junit/lint.xml
+  coverage: '/Lines\s*:\s*(\d+\.\d+)%/'
+
+license_check:
+  stage: validation
+  <<: *node_runtime
+  rules:
+    - changes:
+        - package-lock.json
+        - package.json
+  script:
+    - npm ci
+    - npx license-checker --production --json > reports/license.json
+    - test -s reports/license.json
+  artifacts:
+    paths:
+      - reports/license.json
+
+npm_audit:
+  stage: validation
+  <<: *node_runtime
+  rules:
+    - changes:
+        - package-lock.json
+        - package.json
+  script:
+    - npm ci
+    - npm audit --audit-level=high --omit=dev
+  artifacts:
+    reports:
+      junit: reports/junit/npm-audit.xml
+
+pulumi_preview:
+  stage: validation
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $DEV_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+  rules:
+    - changes:
+        - "lib/**"
+        - "bin/**"
+        - "package*.json"
+        - "tsconfig.json"
+        - "Pulumi*.yaml"
+  script:
+    - npm ci
+    - pulumi login "$PULUMI_BACKEND_URL"
+    - pulumi stack select dev --create
+    - pulumi preview --json > reports/pulumi-preview.json
+  artifacts:
+    paths:
+      - reports/pulumi-preview.json
+
+# -------------------------
+# Build
+# -------------------------
+typescript_build:
+  stage: build
+  <<: *node_runtime
+  rules:
+    - changes:
+        - "lib/**"
+        - "bin/**"
+        - "package*.json"
+        - "tsconfig.json"
+  script:
+    - npm ci
+    - npm run build
+    - tar -czf dist.tgz dist/
+  artifacts:
+    paths:
+      - dist.tgz
+      - dist/
+
+container_build:
+  stage: build
+  image: $CI_REGISTRY/ci/docker:24
+  services:
+    - name: $CI_REGISTRY/ci/docker:24-dind
+      alias: docker
+  variables:
+    DOCKER_DRIVER: overlay2
+    DOCKER_TLS_CERTDIR: ""
+  rules:
+    - changes:
+        - "Dockerfile"
+        - "docker/**"
+        - ".dockerignore"
+  script:
+    - bash scripts/docker-build.sh
+  artifacts:
+    reports:
+      junit: reports/junit/docker-build.xml
+
+# -------------------------
+# Testing
+# -------------------------
+unit_tests:
+  stage: test
+  <<: *node_runtime
+  rules:
+    - changes:
+        - "**/*.ts"
+        - "**/*.js"
+        - "jest.*"
+        - "test/**"
+  script:
+    - npm ci
+    - npm run test:unit -- --ci --coverage
+  artifacts:
+    reports:
+      junit: reports/junit/unit.xml
+      cobertura: coverage/cobertura-coverage.xml
+    paths:
+      - coverage/
+  coverage: '/Lines\s*:\s*(\d+\.\d+)%/'
+
+mutation_tests:
+  stage: test
+  <<: *node_runtime
+  rules:
+    - changes:
+        - "**/*.ts"
+        - "**/*.js"
+        - "stryker.conf.*"
+  script:
+    - npm ci
+    - npx stryker run
+  artifacts:
+    paths:
+      - reports/mutation/
+
+k6_load_tests:
+  stage: test
+  image: $CI_REGISTRY/ci/k6:0.51
+  rules:
+    - changes:
+        - "load/**"
+        - "k6/**"
+  script:
+    - k6 run load/main.js
+  artifacts:
+    paths:
+      - reports/k6/
+
+# -------------------------
+# Security
+# -------------------------
+semgrep_sast:
+  stage: security
+  image: $CI_REGISTRY/security/semgrep:1.80
+  rules:
+    - changes:
+        - "**/*.ts"
+        - "**/*.js"
+        - "semgrep/*.yml"
+  script:
+    - bash scripts/semgrep-scan.sh
+  artifacts:
+    reports:
+      sast: reports/semgrep.json
+  allow_failure: false
+
+trufflehog_secrets:
+  stage: security
+  image: $CI_REGISTRY/security/trufflehog:3
+  rules:
+    - changes:
+        - "**/*"
+  script:
+    - bash scripts/trufflehog-scan.sh
+  artifacts:
+    paths:
+      - reports/trufflehog.json
+  allow_failure: false
+
+snyk_sca:
+  stage: security
+  image: $CI_REGISTRY/security/snyk:latest
+  rules:
+    - changes:
+        - "package*.json"
+        - "snyk.*"
+  script:
+    - snyk test --severity-threshold=high --json-file-output=reports/snyk.json
+  artifacts:
+    paths:
+      - reports/snyk.json
+
+pulumi_policy:
+  stage: security
+  <<: *node_runtime
+  rules:
+    - changes:
+        - "lib/**"
+        - "bin/**"
+        - "policy/**"
+  script:
+    - npm ci
+    - pulumi login "$PULUMI_BACKEND_URL"
+    - pulumi stack select dev --create
+    - pulumi preview --policy-pack policy/
+  artifacts:
+    reports:
+      junit: reports/junit/pulumi-policy.xml
+
+trivy_grype_container_scans:
+  stage: security
+  image: $CI_REGISTRY/security/trivy:0.54
+  rules:
+    - changes:
+        - "Dockerfile"
+        - "docker/**"
+  script:
+    - bash scripts/container-security-scan.sh
+  artifacts:
+    paths:
+      - reports/trivy.json
+      - reports/grype.json
+      - reports/sbom.spdx.json
+  allow_failure: false
+
+# -------------------------
+# Compliance
+# -------------------------
+checkov_cis:
+  stage: compliance
+  image: $CI_REGISTRY/compliance/checkov:3
+  rules:
+    - changes:
+        - "**/*.ts"
+        - ".checkov.yml"
+        - "lib/**"
+  script:
+    - checkov -d . -o junitxml > reports/junit/checkov.xml
+  artifacts:
+    reports:
+      junit: reports/junit/checkov.xml
+
+prowler_pci:
+  stage: compliance
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $STAGING_ACCOUNT_ID
+  rules:
+    - changes:
+        - "lib/**"
+        - ".prowler/**"
+  script:
+    - bash scripts/run-prowler.sh pci-dss reports/prowler
+  artifacts:
+    paths:
+      - reports/prowler/
+
+infracost_estimate:
+  stage: compliance
+  image: $CI_REGISTRY/compliance/infracost:0.10
+  rules:
+    - changes:
+        - "lib/**"
+        - "infracost*.yml"
+  script:
+    - bash scripts/infracost-estimate.sh
+  artifacts:
+    paths:
+      - reports/infracost.json
+
+# -------------------------
+# Dev Deploy (auto on main/develop), with 1-week cleanup
+# -------------------------
+deploy_dev:
+  stage: dev_deploy
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $DEV_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+    ENV_NAME: dev
+    PULUMI_STACK: dev
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - "lib/**"
+        - "bin/**"
+        - "Dockerfile"
+        - "docker/**"
+        - "Pulumi*.yaml"
+    - if: $CI_COMMIT_BRANCH == "develop"
+      changes:
+        - "lib/**"
+        - "bin/**"
+        - "Dockerfile"
+        - "docker/**"
+        - "Pulumi*.yaml"
+  script:
+    - npm ci
+    - bash scripts/pulumi-deploy.sh dev
+  environment:
+    name: dev/$CI_COMMIT_REF_SLUG
+    url: https://dev.example.com
+    on_stop: stop_dev
+    auto_stop_in: 1 week
+    tier: development
+  artifacts:
+    paths:
+      - reports/pulumi-deploy-dev.json
+    reports:
+      junit: reports/junit/dev-deploy.xml
+  needs:
+    - typescript_build
+    - container_build
+
+stop_dev:
+  stage: dev_deploy
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $DEV_ACCOUNT_ID
+    ENV_NAME: dev
+    PULUMI_STACK: dev
+  when: manual
+  script:
+    - npm ci
+    - bash scripts/pulumi-destroy.sh dev
+  environment:
+    name: dev/$CI_COMMIT_REF_SLUG
+    action: stop
+    tier: development
+
+# -------------------------
+# Integration Testing (API + Contract via Pact)
+# -------------------------
+integration_tests:
+  stage: integration
+  <<: *node_runtime
+  rules:
+    - changes:
+        - "test/integration/**"
+        - "pact/**"
+  script:
+    - npm ci
+    - npm run test:api:integration
+    - npm run pact:verify
+  artifacts:
+    reports:
+      junit: reports/junit/integration.xml
+
+codepipeline_validation:
+  stage: integration
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $DEV_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+  rules:
+    - changes:
+        - "lib/**"
+        - "bin/**"
+  script:
+    - bash scripts/validate-codepipeline.sh
+    - bash scripts/validate-codebuild.sh
+    - bash scripts/validate-ecr.sh
+  artifacts:
+    paths:
+      - reports/pipeline-validation.json
+  needs:
+    - deploy_dev
+
+# -------------------------
+# Canary (10% on staging EKS, manual approval)
+# -------------------------
+deploy_canary:
+  stage: canary
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $STAGING_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+    EKS_CLUSTER: staging-cluster
+    CANARY_WEIGHT: "10"
+  when: manual
+  script:
+    - bash scripts/deploy-canary.sh "$CANARY_WEIGHT"
+  environment:
+    name: staging/canary
+    url: https://staging.example.com
+    tier: staging
+  needs:
+    - deploy_dev
+    - integration_tests
+
+# -------------------------
+# Smoke (monitoring canary + Newman API checks)
+# -------------------------
+smoke_canary:
+  stage: smoke
+  image: $CI_REGISTRY/qa/newman:6
+  rules:
+    - changes:
+        - "postman/**"
+        - "scripts/monitor-canary.sh"
+  script:
+    - bash scripts/monitor-canary.sh
+    - bash scripts/newman-tests.sh
+  artifacts:
+    reports:
+      junit: reports/junit/newman.xml
+  needs:
+    - deploy_canary
+
+# -------------------------
+# Staging Deploy (blue/green after canary validation)
+# -------------------------
+deploy_staging:
+  stage: staging_deploy
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $STAGING_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+    EKS_CLUSTER: staging-cluster
+    PULUMI_STACK: staging
+  when: manual
+  script:
+    - npm ci
+    - bash scripts/pulumi-deploy.sh staging
+  environment:
+    name: staging
+    url: https://staging.example.com
+    tier: staging
+  artifacts:
+    paths:
+      - reports/pulumi-deploy-staging.json
+  needs:
+    - smoke_canary
+
+promote_canary:
+  stage: staging_deploy
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $STAGING_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+    EKS_CLUSTER: staging-cluster
+  when: manual
+  script:
+    - bash scripts/promote-canary.sh
+  environment:
+    name: staging
+    url: https://staging.example.com
+    tier: staging
+  needs:
+    - deploy_staging
+
+# -------------------------
+# E2E Testing (Cypress + Playwright + Axe a11y)
+# -------------------------
+e2e_cypress:
+  stage: e2e
+  image: $CI_REGISTRY/qa/cypress:13
+  rules:
+    - changes:
+        - "cypress/**"
+  script:
+    - npm ci
+    - bash scripts/cypress-e2e.sh
+  artifacts:
+    reports:
+      junit: reports/junit/cypress-*.xml
+
+e2e_playwright_accessibility:
+  stage: e2e
+  image: $CI_REGISTRY/qa/playwright:1.47
+  rules:
+    - changes:
+        - "playwright/**"
+        - "scripts/run-a11y-tests.sh"
+  script:
+    - bash scripts/run-a11y-tests.sh
+  allow_failure: true
+
+# -------------------------
+# Production Approvals (two separate manual gates)
+# -------------------------
+prod_security_approval:
+  stage: prod_approval
+  when: manual
+  script:
+    - echo "Security team approval granted"
+  needs:
+    - e2e_cypress
+    - e2e_playwright_accessibility
+
+prod_product_approval:
+  stage: prod_approval
+  when: manual
+  script:
+    - echo "Product team approval granted"
+  needs:
+    - e2e_cypress
+    - e2e_playwright_accessibility
+
+# -------------------------
+# Production Deploy (Pulumi with ECS, 2 retries, manual only)
+# -------------------------
+deploy_prod:
+  stage: prod_deploy
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $PROD_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+    EKS_CLUSTER: production-cluster
+    PULUMI_STACK: prod
+  when: manual
+  script:
+    - npm ci
+    - bash scripts/pulumi-deploy.sh prod
+  environment:
+    name: production
+    url: https://app.example.com
+    tier: production
+  artifacts:
+    paths:
+      - reports/pulumi-deploy-prod.json
+  needs:
+    - prod_security_approval
+    - prod_product_approval
+  retry:
+    max: 2
+    when:
+      - script_failure
+
+# -------------------------
+# Monitoring (Sentry, Datadog events, synthetic tests)
+# -------------------------
+monitor_release:
+  stage: monitoring
+  image: $CI_REGISTRY/ops/node-tools:22
+  rules:
+    - changes:
+        - "scripts/create-datadog-event.sh"
+        - "scripts/run-synthetic-tests.sh"
+        - "scripts/run-lighthouse.sh"
+  script:
+    - bash scripts/monitor-release.sh
+  needs:
+    - deploy_prod
+
+codepipeline_monitor:
+  stage: monitoring
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $PROD_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+  script:
+    - bash scripts/codepipeline-monitor.sh
+  artifacts:
+    paths:
+      - reports/pipeline-state.json
+      - reports/codebuild-metrics.json
+  needs:
+    - deploy_prod
+
+# -------------------------
+# Rollback (manual)
+# -------------------------
+rollback_prod:
+  stage: rollback
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $PROD_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+    EKS_CLUSTER: production-cluster
+    PULUMI_STACK: prod
+  when: manual
+  script:
+    - npm ci
+    - bash scripts/rollback.sh
+  environment:
+    name: production
+    action: rollback
+    tier: production
+  needs:
+    - deploy_prod
+
+# -------------------------
+# Notifications
+# -------------------------
+notify_slack_main_develop:
+  stage: monitoring
+  image: $CI_REGISTRY/ops/curl:8
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - "**/*"
+    - if: $CI_COMMIT_BRANCH == "develop"
+      changes:
+        - "**/*"
+  script:
+    - bash scripts/notify-slack.sh
+
+notify_sns_build_failure:
+  stage: monitoring
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $PROD_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - "**/*"
+  when: on_failure
+  script:
+    - bash scripts/notify-sns-failure.sh
+
+notify_pagerduty_on_main_fail:
+  stage: monitoring
+  image: $CI_REGISTRY/ops/curl:8
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - "**/*"
+  when: on_failure
+  script:
+    - bash scripts/notify-pagerduty.sh

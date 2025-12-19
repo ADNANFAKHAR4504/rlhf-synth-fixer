@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291530",
+  "team": "1",
+  "startedAt": "2025-08-26T17:04:31.763Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Performance Optimization",
+    "Access Control",
+    "Resource Scaling"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "RDS",
+    "Lambda",
+    "IAM",
+    "VPC",
+    "EC2",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohankrishnapechetti",
+  "dockerS3Location": ""
+}

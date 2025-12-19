@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-02T00:00:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency and Replication"
+  ],
+  "po_id": "101000953",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "DynamoDB",
+    "S3",
+    "Lambda",
+    "API Gateway",
+    "Route53",
+    "CloudFront",
+    "ACM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

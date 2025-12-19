@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349427",
+  "team": "2",
+  "startedAt": "2025-10-14T14:04:01.869Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "IAM",
+    "RDS",
+    "S3",
+    "VPC",
+    "CloudFront",
+    "Route 53",
+    "SQS",
+    "CloudWatch",
+    "Secrets Manager",
+    "EC2"
+  ],
+  "training_quality": 8,
+  "background": "This repository contains AWS CDK (TypeScript) infrastructure code and tests for provisioning a multi-service application stack including API Gateway, Lambda, RDS (with credentials in Secrets Manager), S3, SQS, CloudFront, and monitoring/alerting via CloudWatch. It includes integration tests that validate end-to-end flows using deployment outputs in cfn-outputs/flat-outputs.json.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
+}

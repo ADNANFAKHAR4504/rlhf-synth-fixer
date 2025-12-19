@@ -1,0 +1,9 @@
+Hey there! We need to design and deploy a super reliable and fault-tolerant infrastructure for a web application on AWS. The goal is to make sure the application can handle failures gracefully and stay highly available at all times. To do this, we’ll use AWS CDK with Python to define everything as code.
+
+Here’s what we’re aiming for: The infrastructure should span at least two availability zones in the same region to ensure high availability. We’ll use Route 53 for DNS management, and it should include health checks to automatically redirect traffic if something goes wrong. An Elastic Load Balancer will help distribute traffic evenly across multiple EC2 instances, and Auto Scaling will make sure we always have enough capacity to handle demand.
+
+For the database, we’ll use Amazon RDS with Read Replicas to improve performance and reliability. We’ll also set up S3 with Cross-Region Replication to make sure our data is durable and safe. CloudWatch will be used to monitor everything in real time, and we’ll configure alarms to notify us or trigger actions when something fails. On top of that, we’ll deploy Lambda functions to automatically fix issues, like restarting instances or updating DNS records.
+
+Security is a big deal, so we’ll follow the principle of least privilege when defining IAM roles and policies. Sensitive data will be encrypted using AWS KMS to keep it safe.
+
+The final output should be a Python-based AWS CDK project that can deploy this entire setup. It should follow best practices, use proper naming conventions, and include tags for easy identification and cost tracking. Let’s make sure this is production-ready and rock solid!

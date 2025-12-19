@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912151",
+  "team": "4",
+  "startedAt": "2025-11-16T17:45:39.693Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "KMS",
+    "S3",
+    "IAM",
+    "VPC",
+    "CloudTrail",
+    "SecurityHub",
+    "GuardDuty",
+    "Config",
+    "SecretsManager",
+    "CloudWatch",
+    "WAF",
+    "Organizations",
+    "EC2",
+    "Lambda",
+    "EventBridge",
+    "SNS",
+    "DynamoDB"
+  ],
+  "training_quality": 9,
+  "background": "Production-grade secure AWS infrastructure implementing PCI-DSS Level 1 and SOC2 Type II compliance requirements with zero-trust architecture. Comprehensive implementation of security services including KMS encryption, Security Hub with CIS benchmarks, GuardDuty threat detection with automated remediation, AWS Config compliance monitoring, Secrets Manager with rotation, Service Control Policies, CloudWatch alarms, and WAF protection. Infrastructure follows least-privilege IAM principles with MFA enforcement, IP restrictions, private networking with VPC endpoints, and IMDSv2 enforcement for EC2 instances.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

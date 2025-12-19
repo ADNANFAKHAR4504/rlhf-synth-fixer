@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "npm start rlhf-task",
+  "team": "5",
+  "startedAt": "2025-10-17T03:47:33.395Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "Eventbridge, Lambda, Dynamodb, lambda SNS",
+  "training_quality": 5,
+  "background": "Event-driven processing system for logistics platform handling 2000 shipment updates per day with reliable event delivery, automated processing, and operational monitoring using EventBridge, Lambda, DynamoDB, SNS, and CloudWatch",
+  "aws_services_enhanced": [
+    "EventBridge",
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

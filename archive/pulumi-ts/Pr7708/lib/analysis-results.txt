@@ -1,0 +1,37 @@
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:34: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  self.timestamp = datetime.utcnow().isoformat()
+2025-12-03 08:34:53,517 - INFO - Found credentials in environment variables.
+2025-12-03 08:34:53,609 - INFO - Starting infrastructure compliance analysis...
+2025-12-03 08:34:53,609 - INFO - Analyzing Lambda functions...
+2025-12-03 08:34:53,635 - INFO - Found 2 scanner functions
+2025-12-03 08:34:53,635 - INFO - Analyzing DynamoDB tables...
+2025-12-03 08:34:53,649 - INFO - Found 1 compliance tables
+2025-12-03 08:34:53,649 - INFO - Analyzing SNS topics...
+2025-12-03 08:34:53,665 - INFO - Found 1 alert topics
+2025-12-03 08:34:53,665 - INFO - Analyzing CloudWatch alarms...
+2025-12-03 08:34:53,672 - INFO - Found 1 compliance alarms
+2025-12-03 08:34:53,672 - INFO - Analyzing EventBridge rules...
+2025-12-03 08:34:53,682 - INFO - Found 1 scanner rules
+2025-12-03 08:34:53,682 - INFO - Analyzing CloudWatch metrics...
+2025-12-03 08:34:53,688 - INFO - Found 0 compliance metrics
+2025-12-03 08:34:53,688 - INFO - Analysis complete!
+2025-12-03 08:34:53,688 - INFO - Saving JSON report to report.json
+2025-12-03 08:34:53,688 - INFO - Saving CSV report to report.csv
+2025-12-03 08:34:53,688 - INFO - Reports saved successfully!
+
+Infrastructure Analysis Summary:
+- Scanner Lambda Functions: 2
+- Compliance DynamoDB Tables: 1 (TTL enabled: 0)
+- Alert SNS Topics: 1 (Subscriptions: 0)
+- Compliance CloudWatch Alarms: 1
+- Scanner EventBridge Rules: 1
+- Compliance Metrics: 0
+
+Health Checks:
+  ✓ Has Scanner Functions
+  ✓ Has Compliance Table
+  ✗ Ttl Configured
+  ✓ Has Alert Topic
+  ✗ Has Subscriptions
+  ✓ Has Compliance Alarms
+  ✓ Has Scheduled Scans

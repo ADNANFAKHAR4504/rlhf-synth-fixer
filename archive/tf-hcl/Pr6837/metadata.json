@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-19T06:57:19+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "security-configuration-as-code"
+  ],
+  "po_id": "101912423",
+  "aws_services": [
+    "VPC",
+    "KMS",
+    "S3",
+    "IAM",
+    "CloudTrail",
+    "CloudWatch",
+    "GuardDuty",
+    "VPC Flow Logs",
+    "Security Groups",
+    "Network ACLs",
+    "VPC Endpoints"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,39 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348915",
+  "team": "3",
+  "startedAt": "2025-09-04T20:34:22.457Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "KMS",
+    "S3",
+    "IAM",
+    "CloudTrail",
+    "Config",
+    "GuardDuty",
+    "Systems Manager",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nikhilturing",
+  "dockerS3Location": ""
+}

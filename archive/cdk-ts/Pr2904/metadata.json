@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349504",
+  "team": "3",
+  "startedAt": "2025-09-08T08:33:30.168Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Serverless Computing",
+    "Security Configuration",
+    "Performance Optimization",
+    "Monitoring Setup",
+    "Access Control",
+    "Database Management",
+    "Network Configuration",
+    "Event-Driven Architecture"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon S3",
+    "Amazon DynamoDB",
+    "Amazon API Gateway",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

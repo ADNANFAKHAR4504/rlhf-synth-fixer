@@ -1,0 +1,24 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "15839204",
+  "team": "synth",
+  "startedAt": "2025-10-01T21:58:28+05:30",
+  "training_quality": 8.5,
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudTrail",
+    "CloudWatch",
+    "SNS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

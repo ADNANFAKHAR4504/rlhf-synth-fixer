@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "3104055492",
+  "team": "synth",
+  "startedAt": "2025-10-14T05:37:40+05:30",
+  "subtask": "Application Deployment",
+  "background": "Infrastructure task for CloudFormation",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "VPC",
+    "EC2",
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch Logs",
+    "IAM",
+    "SSM Parameter Store"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,4 @@
+name: TapStack
+runtime: nodejs
+description: S3 bucket compliance analysis and reporting system
+main: bin/tap.ts

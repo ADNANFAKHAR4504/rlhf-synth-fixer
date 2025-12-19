@@ -1,0 +1,46 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "349997",
+  "team": "1",
+  "startedAt": "2025-09-08T18:50:23.558Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Database Management",
+    "Network Configuration",
+    "Access Control",
+    "Monitoring Setup"
+  ],
+  "training_quality": 2,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS",
+    "DynamoDB",
+    "Lambda",
+    "CloudFront",
+    "Route53",
+    "CloudTrail",
+    "CloudWatch",
+    "Config",
+    "KMS",
+    "IAM",
+    "ElasticLoadBalancing",
+    "AutoScaling",
+    "CertificateManager",
+    "Elasticsearch",
+    "WAFv2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivav-cmd",
+  "dockerS3Location": ""
+}

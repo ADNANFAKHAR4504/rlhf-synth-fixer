@@ -1,0 +1,7 @@
+name: TapStack
+runtime:
+  name: python
+description: CI/CD Pipeline Infrastructure for Automated Pulumi Deployments
+main: tap.py
+config:
+  aws:region: us-east-1

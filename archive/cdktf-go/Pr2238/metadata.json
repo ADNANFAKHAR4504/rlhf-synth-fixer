@@ -1,0 +1,15 @@
+{
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "274775",
+  "team": "4",
+  "startedAt": "2025-08-25T17:40:13.926Z",
+  "author": "jpoola-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

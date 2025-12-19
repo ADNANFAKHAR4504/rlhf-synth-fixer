@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349120",
+  "team": "3",
+  "startedAt": "2025-10-20T06:07:39.942Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "RDS",
+    "VPC",
+    "EC2",
+    "CloudTrail",
+    "CloudWatch",
+    "SNS",
+    "SecretsManager",
+    "CloudFormation"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

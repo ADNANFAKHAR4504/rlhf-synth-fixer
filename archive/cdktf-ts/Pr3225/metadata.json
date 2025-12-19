@@ -1,0 +1,36 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349775",
+  "team": "6",
+  "startedAt": "2025-10-01T13:39:49.933Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing (ALB)",
+    "RDS",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "Data Lifecycle Manager (DLM)",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups",
+    "Elastic IP"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

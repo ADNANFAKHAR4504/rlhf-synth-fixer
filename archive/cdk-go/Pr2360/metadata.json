@@ -1,0 +1,41 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr974",
+  "team": "synth",
+  "startedAt": "2025-08-27T12:16:42.915Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS Aurora",
+    "S3",
+    "ElastiCache",
+    "Application Load Balancer",
+    "Auto Scaling Groups",
+    "GuardDuty",
+    "CloudWatch",
+    "Lambda",
+    "SNS",
+    "Bedrock",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

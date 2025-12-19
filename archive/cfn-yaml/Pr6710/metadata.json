@@ -1,0 +1,47 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912197",
+  "team": "4",
+  "startedAt": "2025-11-17T15:20:09.473Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "Security Groups",
+    "EC2",
+    "IAM Role",
+    "IAM Instance Profile",
+    "Launch Template",
+    "Auto Scaling Group",
+    "Application Load Balancer (ALB)",
+    "Target Group",
+    "ALB Listener",
+    "RDS Aurora PostgreSQL Cluster",
+    "RDS DB Instances (Writer & Reader)",
+    "DB Subnet Group",
+    "DB Cluster Parameter Group",
+    "Secrets Manager",
+    "S3 Bucket",
+    "S3 Bucket Policy",
+    "CloudFront Distribution",
+    "CloudFront Origin Access Control",
+    "WAFv2 WebACL",
+    "WAF WebACL Association",
+    "CloudWatch Alarms"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

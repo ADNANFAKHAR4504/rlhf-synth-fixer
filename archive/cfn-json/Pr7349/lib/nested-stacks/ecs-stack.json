@@ -1,0 +1,640 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "ECS Fargate services for blue and green environments",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming"
+    },
+    "PrivateSubnet1": {
+      "Type": "String",
+      "Description": "Private Subnet 1"
+    },
+    "PrivateSubnet2": {
+      "Type": "String",
+      "Description": "Private Subnet 2"
+    },
+    "PrivateSubnet3": {
+      "Type": "String",
+      "Description": "Private Subnet 3"
+    },
+    "ECSSecurityGroup": {
+      "Type": "String",
+      "Description": "ECS Security Group"
+    },
+    "ECSTaskImage": {
+      "Type": "String",
+      "Description": "Docker image for payment processing application"
+    },
+    "BlueDBEndpoint": {
+      "Type": "String",
+      "Description": "Blue database endpoint"
+    },
+    "GreenDBEndpoint": {
+      "Type": "String",
+      "Description": "Green database endpoint"
+    },
+    "BlueDBSecretArn": {
+      "Type": "String",
+      "Description": "Blue database secret ARN"
+    },
+    "GreenDBSecretArn": {
+      "Type": "String",
+      "Description": "Green database secret ARN"
+    },
+    "BlueTargetGroup": {
+      "Type": "String",
+      "Description": "Blue target group ARN"
+    },
+    "GreenTargetGroup": {
+      "Type": "String",
+      "Description": "Green target group ARN"
+    },
+    "Project": {
+      "Type": "String",
+      "Description": "Project name for tagging"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Description": "Cost center for tagging"
+    }
+  },
+  "Resources": {
+    "ECSCluster": {
+      "Type": "AWS::ECS::Cluster",
+      "Properties": {
+        "ClusterName": {
+          "Fn::Sub": "payment-cluster-${EnvironmentSuffix}"
+        },
+        "ClusterSettings": [
+          {
+            "Name": "containerInsights",
+            "Value": "enabled"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "ECSTaskExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SecretsManagerAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": [
+                    {
+                      "Ref": "BlueDBSecretArn"
+                    },
+                    {
+                      "Ref": "GreenDBSecretArn"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "ECSTaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ApplicationPermissions",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "BlueTaskLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/ecs/blue-payment-app-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "GreenTaskLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/ecs/green-payment-app-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "BlueTaskDefinition": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": {
+          "Fn::Sub": "blue-payment-app-${EnvironmentSuffix}"
+        },
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "Cpu": "512",
+        "Memory": "1024",
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "ECSTaskExecutionRole",
+            "Arn"
+          ]
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "ECSTaskRole",
+            "Arn"
+          ]
+        },
+        "ContainerDefinitions": [
+          {
+            "Name": "payment-app",
+            "Image": {
+              "Ref": "ECSTaskImage"
+            },
+            "PortMappings": [
+              {
+                "ContainerPort": 8080,
+                "Protocol": "tcp"
+              }
+            ],
+            "Environment": [
+              {
+                "Name": "ENVIRONMENT",
+                "Value": "blue"
+              },
+              {
+                "Name": "DB_ENDPOINT",
+                "Value": {
+                  "Ref": "BlueDBEndpoint"
+                }
+              }
+            ],
+            "Secrets": [
+              {
+                "Name": "DB_USERNAME",
+                "ValueFrom": {
+                  "Fn::Sub": "${BlueDBSecretArn}:username::"
+                }
+              },
+              {
+                "Name": "DB_PASSWORD",
+                "ValueFrom": {
+                  "Fn::Sub": "${BlueDBSecretArn}:password::"
+                }
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "BlueTaskLogGroup"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": "ecs"
+              }
+            },
+            "Essential": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-task-def-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "blue"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "GreenTaskDefinition": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": {
+          "Fn::Sub": "green-payment-app-${EnvironmentSuffix}"
+        },
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "Cpu": "512",
+        "Memory": "1024",
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "ECSTaskExecutionRole",
+            "Arn"
+          ]
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "ECSTaskRole",
+            "Arn"
+          ]
+        },
+        "ContainerDefinitions": [
+          {
+            "Name": "payment-app",
+            "Image": {
+              "Ref": "ECSTaskImage"
+            },
+            "PortMappings": [
+              {
+                "ContainerPort": 8080,
+                "Protocol": "tcp"
+              }
+            ],
+            "Environment": [
+              {
+                "Name": "ENVIRONMENT",
+                "Value": "green"
+              },
+              {
+                "Name": "DB_ENDPOINT",
+                "Value": {
+                  "Ref": "GreenDBEndpoint"
+                }
+              }
+            ],
+            "Secrets": [
+              {
+                "Name": "DB_USERNAME",
+                "ValueFrom": {
+                  "Fn::Sub": "${GreenDBSecretArn}:username::"
+                }
+              },
+              {
+                "Name": "DB_PASSWORD",
+                "ValueFrom": {
+                  "Fn::Sub": "${GreenDBSecretArn}:password::"
+                }
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "GreenTaskLogGroup"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": "ecs"
+              }
+            },
+            "Essential": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-task-def-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "green"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "BlueService": {
+      "Type": "AWS::ECS::Service",
+      "Properties": {
+        "ServiceName": {
+          "Fn::Sub": "blue-payment-service-${EnvironmentSuffix}"
+        },
+        "Cluster": {
+          "Ref": "ECSCluster"
+        },
+        "TaskDefinition": {
+          "Ref": "BlueTaskDefinition"
+        },
+        "DesiredCount": 2,
+        "LoadBalancers": [
+          {
+            "TargetGroupArn": {
+              "Ref": "BlueTargetGroup"
+            },
+            "ContainerName": "payment-app",
+            "ContainerPort": 8080
+          }
+        ],
+        "LaunchType": "FARGATE",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "DISABLED",
+            "SecurityGroups": [
+              {
+                "Ref": "ECSSecurityGroup"
+              }
+            ],
+            "Subnets": [
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
+            ]
+          }
+        },
+        "HealthCheckGracePeriodSeconds": 60,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-payment-service-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "blue"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "GreenService": {
+      "Type": "AWS::ECS::Service",
+      "Properties": {
+        "ServiceName": {
+          "Fn::Sub": "green-payment-service-${EnvironmentSuffix}"
+        },
+        "Cluster": {
+          "Ref": "ECSCluster"
+        },
+        "TaskDefinition": {
+          "Ref": "GreenTaskDefinition"
+        },
+        "DesiredCount": 2,
+        "LoadBalancers": [
+          {
+            "TargetGroupArn": {
+              "Ref": "GreenTargetGroup"
+            },
+            "ContainerName": "payment-app",
+            "ContainerPort": 8080
+          }
+        ],
+        "LaunchType": "FARGATE",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "DISABLED",
+            "SecurityGroups": [
+              {
+                "Ref": "ECSSecurityGroup"
+              }
+            ],
+            "Subnets": [
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
+            ]
+          }
+        },
+        "HealthCheckGracePeriodSeconds": 60,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-payment-service-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "green"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ECSClusterArn": {
+      "Description": "ECS Cluster ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "ECSCluster",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ECSClusterArn"
+        }
+      }
+    },
+    "BlueECSService": {
+      "Description": "Blue ECS Service Name",
+      "Value": {
+        "Fn::GetAtt": [
+          "BlueService",
+          "Name"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueECSService"
+        }
+      }
+    },
+    "GreenECSService": {
+      "Description": "Green ECS Service Name",
+      "Value": {
+        "Fn::GetAtt": [
+          "GreenService",
+          "Name"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenECSService"
+        }
+      }
+    }
+  }
+}

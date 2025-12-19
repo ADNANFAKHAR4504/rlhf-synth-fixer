@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "IAC-3389",
+  "team": "5",
+  "startedAt": "2025-10-02T23:50:29.380Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Lambda",
+    "IAM",
+    "S3",
+    "SecretsManager",
+    "CloudWatch",
+    "SNS",
+    "ElastiCache",
+    "Backup",
+    "KMS",
+    "Config",
+    "Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}

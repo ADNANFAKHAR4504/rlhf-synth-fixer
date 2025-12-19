@@ -1,0 +1,30 @@
+{
+  "task_id": "a0v1c9x0",
+  "platform": "cicd",
+  "language": "yml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "synth",
+  "team": "synth",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "startedAt": "2025-12-04T16:37:55.102167Z",
+  "aws_services": [
+    "S3",
+    "cloudfront",
+    "DynamoDB",
+    "API Gateway",
+    "IAM",
+    "lambda",
+    "SNS Topic"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

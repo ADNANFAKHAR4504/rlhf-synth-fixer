@@ -1,0 +1,29 @@
+{
+  "task_id": "z5b3t6",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "z5b3t6",
+  "team": "synth",
+  "startedAt": "2025-11-20T23:23:27+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "EKS",
+    "EC2",
+    "VPC",
+    "KMS",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

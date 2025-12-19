@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350141",
+  "team": "4",
+  "startedAt": "2025-10-15T02:19:14.799Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "S3 Bucket, VPC, IAM, CloudTrail, RDS, CloudWatch, CloudFront, KMS, IGW",
+  "training_quality": 9,
+  "background": "Implement secure AWS production infrastructure using Terraform with encryption, monitoring, and compliance",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

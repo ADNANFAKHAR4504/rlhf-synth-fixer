@@ -1,0 +1,42 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348973",
+  "team": "3",
+  "startedAt": "2025-09-04T11:33:05.895Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Database Management",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "Lambda",
+    "DynamoDB",
+    "RDS",
+    "Elasticsearch",
+    "CloudTrail",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "NAT Gateway",
+    "Internet Gateway",
+    "VPC Endpoint"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tushar-turing8",
+  "dockerS3Location": ""
+}

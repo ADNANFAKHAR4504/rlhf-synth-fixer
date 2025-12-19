@@ -1,0 +1,18 @@
+{
+  "task_id": "u6j2o0o7",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "Application Deployment",
+  "turn_type": "Web Application Deployment",
+  "subtask": "Create a Pulumi TypeScript program to deploy a production-ready EC2 Auto Scaling groups with managed node groups and Lambda profiles. The configuration must: 1. Create a custom VPC with 6 subnets (3 public, 3 private) across 3 AZs. 2. Deploy an EC2 Auto Scaling groups with private endpoint access only. 3. Configure two managed node groups: one for general workloads (2-10 nodes) and one for compute-intensive workloads (1-5 nodes, using m5.xlarge). 5. Enable EC2 add-ons: VPC CNI, CoreDNS, and kube-proxy with latest compatible versions. 6. Configure OIDC provider for the cluster to enable IRSA (IAM Roles for Service Accounts). 7. Create an IAM role for the AWS Load Balancer Controller with proper trust policy. 8. Output the cluster endpoint, certificate authority data, and kubeconfig content. 9. Tag all resources with Environment=production and ManagedBy=pulumi. 10. Enable control plane logging for api, audit, authenticator, controllerManager, and scheduler. Expected output: A complete Pulumi program that provisions an EC2 Auto Scaling groups with proper network isolation, managed node groups with auto-scaling, Lambda profile for system workloads, and necessary IAM roles for service integration. The stack should output connection details for AWS CLI access.",
+  "subject_labels": [
+    "EC2 Auto Scaling groups must use EC2 version 1.28 or higher",
+    "Worker nodes must use Bottlerocket AMI for enhanced security",
+    "All node groups must have encryption at rest enabled using AWS-managed KMS keys",
+    "Cluster endpoint access must be restricted to private-only mode",
+    "Node groups must span exactly 3 availability zones for high availability"
+  ],
+  "startedAt": "2025-11-27T00:00:00Z",
+  "aws_services": []
+}

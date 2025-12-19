@@ -1,0 +1,43 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291627",
+  "team": "4",
+  "startedAt": "2025-08-21T18:03:06.106Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "IaC Optimization",
+    "General Infrastructure Tooling QA",
+    "Resource Policy Management"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "ELB",
+    "AutoScaling",
+    "KMS",
+    "SecretsManager",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "CloudWatchLogs",
+    "Route53",
+    "CertificateManager",
+    "Config",
+    "Lambda",
+    "EventBridge"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "TK2MSS000",
+  "team": "1",
+  "startedAt": "2025-10-09T08:53:50.795Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "Fargate",
+    "ALB",
+    "Aurora",
+    "RDS",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "S3",
+    "Cognito",
+    "SES",
+    "CloudWatch",
+    "IAM",
+    "Secrets Manager"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
+}

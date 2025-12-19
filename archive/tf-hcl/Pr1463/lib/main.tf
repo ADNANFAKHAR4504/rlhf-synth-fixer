@@ -46,7 +46,7 @@ variable "bastion_key_name" {
 variable "allowed_ssh_cidr" {
   description = "CIDR block allowed for SSH access to bastion host"
   type        = string
-  default     = "0.0.0.0/0"  # Change this to your IP range in production
+  default     = "0.0.0.0/0" # Change this to your IP range in production
 }
 
 variable "enable_cloudtrail" {
@@ -93,9 +93,9 @@ resource "random_string" "bucket_suffix" {
 
 # DynamoDB table for Terraform state locking
 resource "aws_dynamodb_table" "terraform_state_lock" {
-  name           = "${var.project}-${var.environment}-terraform-state-lock-${random_string.bucket_suffix.result}"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "LockID"
+  name         = "${var.project}-${var.environment}-terraform-state-lock-${random_string.bucket_suffix.result}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"
 
   attribute {
     name = "LockID"

@@ -1,0 +1,7 @@
+We’re building this in AWS CDK with TypeScript, deployed via CloudFormation, and keeping it to three files: bin/tap.ts (app + region), lib/tap-stack.ts (all resources), and cdk.json (project config). When the model replies, it must return only the code for those three files — no explanations, no comments, nothing extra.
+
+Target region is us-east-1. Stand up a VPC with at least two public and two private subnets and make sure the public subnets route out through an Internet Gateway. Put an Application Load Balancer in front of an Auto Scaling Group of EC2 instances (min 2, max 6). Security groups should allow inbound on 22, 80, and 443 only; keep everything else locked down. Create IAM roles with least-privilege policies for both EC2 and Lambda. Add an RDS instance with automated backups (retain at least 7 days) and encryption at rest, and launch it inside private subnets. All S3 buckets must use KMS-based server-side encryption and have versioning turned on. Enable CloudWatch: Logs for Lambda, and CPU utilization alarms on the EC2 fleet that can drive scaling decisions. Apply tagging everywhere with project=cloudformation-setup and owner=current_user. Use CloudFormation stack outputs to share values between stacks, and make sure you output the VPC ID and the ALB’s public DNS name.
+
+This should synth and deploy cleanly with cdk synth / cdk deploy and create exactly what’s described above in us-east-1.
+
+Return only the code for bin/tap.ts, lib/tap-stack.ts, and cdk.json.

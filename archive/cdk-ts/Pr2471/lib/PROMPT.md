@@ -1,0 +1,7 @@
+We’re doing this in AWS CDK (TypeScript) for us-west-2. Keep the project to three files: bin/tap.ts (app + region wiring), lib/tap-stack.ts (all resources), and cdk.json (project config). When the model replies, it must return only the code for those three files — no explanations, no comments, nothing extra.
+
+Build a small, private serverless stack. The Lambda runs in a VPC; take the subnet IDs as configurable parameters and use the existing VPC (vpc-123abc). The Lambda is secured with least-privilege IAM, has 512 MB memory, a timeout that’s reasonable for an API (you can set it, but don’t exceed typical limits), and ships logs to CloudWatch Logs. Pass runtime configuration via environment variables. Use API Gateway (PRIVATE endpoint) to trigger the Lambda; create an Interface VPC Endpoint for execute-api and lock the API with a resource policy so it’s only reachable from the VPC. Tag everything consistently (e.g., CompanyName-ProjectName-Environment in names, and apply tags like CostCenter and Environment).
+
+Wire up a minimal CodePipeline CI/CD pipeline that can build and deploy this CDK app (Source → Build → Deploy). Keep IAM policies least-privilege for Lambda and the pipeline (artifacts, assume roles, etc.). Ensure the stack synthesizes and deploys cleanly via CloudFormation through CDK, and that all resources land in us-west-2.
+
+Return only the code for bin/tap.ts, lib/tap-stack.ts, and cdk.json. No extra text.

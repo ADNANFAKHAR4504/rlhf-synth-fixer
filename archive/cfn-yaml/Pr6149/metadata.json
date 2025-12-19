@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000871",
+  "team": "synth",
+  "startedAt": "2025-11-10T04:09:47",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "vpc",
+    "networking",
+    "cloud-setup",
+    "rds",
+    "ec2",
+    "alb"
+  ],
+  "aws_services": [
+    "Auto Scaling",
+    "CloudWatch",
+    "EC2",
+    "ELB",
+    "IAM",
+    "Internet Gateway",
+    "NAT Gateway",
+    "RDS",
+    "VPC"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

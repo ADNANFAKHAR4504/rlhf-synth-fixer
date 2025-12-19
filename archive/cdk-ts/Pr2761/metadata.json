@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348856",
+  "team": "4",
+  "startedAt": "2025-09-05T01:17:21.791Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Web Application Deployment",
+    "Database Management",
+    "Monitoring Setup",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "SNS",
+    "SQS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "KMS",
+    "IAM",
+    "Systems Manager Parameter Store"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}

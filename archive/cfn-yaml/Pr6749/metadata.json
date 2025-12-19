@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "po_id": "54729183",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-18T06:25:34+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "security-configuration-as-code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "VPC Endpoints",
+    "IAM",
+    "CloudWatch Logs",
+    "VPC Flow Logs",
+    "Security Groups",
+    "CloudFormation"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

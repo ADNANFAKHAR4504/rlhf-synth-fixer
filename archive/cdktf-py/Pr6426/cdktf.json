@@ -1,0 +1,14 @@
+{
+  "language": "python",
+  "app": "pipenv run python3 tap.py",
+  "projectId": "multi-env-infrastructure",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}

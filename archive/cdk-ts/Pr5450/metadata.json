@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000774",
+  "team": "synth",
+  "startedAt": "2025-10-30T12:52:34",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Amazon VPC",
+    "VPC Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "Security Groups",
+    "VPC Flow Logs",
+    "CloudWatch Logs",
+    "IAM Role"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

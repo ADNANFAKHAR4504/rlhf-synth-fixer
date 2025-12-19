@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: IAM policy compliance analyzer for AWS
+main: index.ts

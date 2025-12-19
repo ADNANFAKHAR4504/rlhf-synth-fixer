@@ -1,0 +1,1937 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack - Secure and compliant AWS infrastructure with complete foundational components (us-east-1 only)",
+    "Metadata": {
+        "cfn-lint": {
+            "config": {
+                "regions": [
+                    "us-east-1"
+                ]
+            }
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "prod",
+            "Description": "Environment suffix for resource naming",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ]
+        },
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for VPC",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
+        },
+        "PublicSubnet1Cidr": {
+            "Type": "String",
+            "Default": "10.0.1.0/24",
+            "Description": "CIDR block for public subnet 1"
+        },
+        "PublicSubnet2Cidr": {
+            "Type": "String",
+            "Default": "10.0.2.0/24",
+            "Description": "CIDR block for public subnet 2"
+        },
+        "PrivateSubnet1Cidr": {
+            "Type": "String",
+            "Default": "10.0.11.0/24",
+            "Description": "CIDR block for private subnet 1"
+        },
+        "PrivateSubnet2Cidr": {
+            "Type": "String",
+            "Default": "10.0.12.0/24",
+            "Description": "CIDR block for private subnet 2"
+        },
+        "KnownIpCidr": {
+            "Type": "String",
+            "Default": "203.0.113.0/24",
+            "Description": "Known IP CIDR block for restricted access",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
+        },
+        "DbUsername": {
+            "Type": "String",
+            "Default": "dbadmin",
+            "Description": "Database master username",
+            "MinLength": 1,
+            "MaxLength": 16,
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
+        },
+        "InstanceType": {
+            "Type": "String",
+            "Default": "t3.micro",
+            "Description": "EC2 instance type for Auto Scaling Group",
+            "AllowedValues": [
+                "t3.micro",
+                "t3.small",
+                "t3.medium"
+            ]
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+            "Description": "Latest Amazon Linux 2 AMI ID"
+        }
+    },
+    "Conditions": {
+        "IsUsEast1": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::Region"
+                },
+                "us-east-1"
+            ]
+        }
+    },
+    "Resources": {
+        "MasterKmsKey": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "Master KMS key for TapStack-${EnvironmentSuffix}"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "AllowServicesUseKey",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "cloudtrail.amazonaws.com",
+                                    "s3.amazonaws.com",
+                                    "rds.amazonaws.com",
+                                    "logs.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": [
+                                        "s3.us-east-1.amazonaws.com",
+                                        "rds.us-east-1.amazonaws.com"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-KMS-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "MasterKmsKeyAlias": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/tapstack-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "MasterKmsKey"
+                }
+            }
+        },
+        "TapVpc": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-VPC-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-IGW-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet1Cidr"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-PublicSubnet1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet2Cidr"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-PublicSubnet2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet1Cidr"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-PrivateSubnet1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet2Cidr"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-PrivateSubnet2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway1Eip": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-NatGateway1-EIP-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway1": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway1Eip",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-NatGateway1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-PublicRouteTable-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-PrivateRouteTable-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PrivateRoute": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway1"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "WebSecurityGroup": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for web servers",
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "KnownIpCidr"
+                        }
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-WebSG-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for RDS database",
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-DatabaseSG-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "LoggingBucket": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": [
+                        "ts-logs-${Env}-${Acct}-${Reg}-${Sfx}",
+                        {
+                            "Env": {
+                                "Ref": "EnvironmentSuffix"
+                            },
+                            "Acct": {
+                                "Ref": "AWS::AccountId"
+                            },
+                            "Reg": {
+                                "Ref": "AWS::Region"
+                            },
+                            "Sfx": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "MasterKmsKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-LoggingBucket-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "LoggingBucketPolicy": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "LoggingBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "S3ServerAccessLogsPolicy",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logging.s3.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${LoggingBucket.Arn}/*"
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigGetBucketAcl",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "LoggingBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${LoggingBucket.Arn}/config/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "EnforceTLSAndSSE",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "${LoggingBucket.Arn}"
+                                },
+                                {
+                                    "Fn::Sub": "${LoggingBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": false
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudTrailBucket": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": [
+                        "ts-ct-${Env}-${Acct}-${Reg}-${Sfx}",
+                        {
+                            "Env": {
+                                "Ref": "EnvironmentSuffix"
+                            },
+                            "Acct": {
+                                "Ref": "AWS::AccountId"
+                            },
+                            "Reg": {
+                                "Ref": "AWS::Region"
+                            },
+                            "Sfx": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "MasterKmsKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "LoggingBucket"
+                    },
+                    "LogFilePrefix": "cloudtrail-bucket-logs/"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-CloudTrailBucket-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudTrailBucketPolicy": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudTrailBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CloudTrailBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "EnforceTLSAndSSE",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "${CloudTrailBucket.Arn}"
+                                },
+                                {
+                                    "Fn::Sub": "${CloudTrailBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": false
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "DataBucket": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": [
+                        "ts-data-${Env}-${Acct}-${Reg}-${Sfx}",
+                        {
+                            "Env": {
+                                "Ref": "EnvironmentSuffix"
+                            },
+                            "Acct": {
+                                "Ref": "AWS::AccountId"
+                            },
+                            "Reg": {
+                                "Ref": "AWS::Region"
+                            },
+                            "Sfx": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "MasterKmsKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "LoggingBucket"
+                    },
+                    "LogFilePrefix": "data-bucket-logs/"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-DataBucket-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "DataBucketPolicy": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "DataBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureTransport",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "${DataBucket.Arn}"
+                                },
+                                {
+                                    "Fn::Sub": "${DataBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": false
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "Ec2InstanceRole": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "TapStack-Ec2Role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3AccessLeastPrivilege",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "DataBucketObjectRW",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${DataBucket.Arn}/*"
+                                    }
+                                },
+                                {
+                                    "Sid": "DataBucketList",
+                                    "Effect": "Allow",
+                                    "Action": "s3:ListBucket",
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DataBucket",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "KMSDataAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MasterKmsKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-Ec2Role-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "Ec2InstanceProfile": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "TapStack-Ec2Profile-${EnvironmentSuffix}"
+                },
+                "Roles": [
+                    {
+                        "Ref": "Ec2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "ConfigRole": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "TapStack-ConfigRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ConfigDeliveryS3Kms",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "GetBucketAclForDelivery",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketAcl"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "LoggingBucket",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "PutConfigToLoggingBucket",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${LoggingBucket.Arn}/config/*"
+                                    },
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "s3:x-amz-acl": "bucket-owner-full-control"
+                                        }
+                                    }
+                                },
+                                {
+                                    "Sid": "KmsForConfig",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MasterKmsKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ConfigRecorder": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "DependsOn": "LoggingBucketPolicy",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TapStack-ConfigRecorder-${EnvironmentSuffix}"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TapStack-ConfigDeliveryChannel-${EnvironmentSuffix}"
+                },
+                "S3BucketName": {
+                    "Ref": "LoggingBucket"
+                },
+                "S3KeyPrefix": "config",
+                "S3KmsKeyArn": {
+                    "Fn::GetAtt": [
+                        "MasterKmsKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "CloudTrail": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": "CloudTrailBucketPolicy",
+            "Properties": {
+                "TrailName": {
+                    "Fn::Sub": "TapStack-CloudTrail-${EnvironmentSuffix}"
+                },
+                "S3BucketName": {
+                    "Ref": "CloudTrailBucket"
+                },
+                "IncludeGlobalServiceEvents": true,
+                "IsLogging": true,
+                "IsMultiRegionTrail": true,
+                "EnableLogFileValidation": true,
+                "EventSelectors": [
+                    {
+                        "ReadWriteType": "All",
+                        "IncludeManagementEvents": true,
+                        "DataResources": [
+                            {
+                                "Type": "AWS::S3::Object",
+                                "Values": [
+                                    {
+                                        "Fn::Sub": "${DataBucket.Arn}/"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "KMSKeyId": {
+                    "Ref": "MasterKmsKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-CloudTrail-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "DbSecret": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tapstack-db-secret-${EnvironmentSuffix}"
+                },
+                "Description": {
+                    "Fn::Sub": "RDS master credentials for TapStack-${EnvironmentSuffix}"
+                },
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\":\"${DbUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 20,
+                    "ExcludeCharacters": "\"@/\\'"
+                }
+            }
+        },
+        "DbSubnetGroup": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "tapstack-db-subnet-group-${EnvironmentSuffix}"
+                },
+                "DBSubnetGroupDescription": "Subnet group for RDS database",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-DbSubnetGroup-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "RdsDatabase": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "tapstack-db-${EnvironmentSuffix}"
+                },
+                "AllocatedStorage": "20",
+                "DBInstanceClass": "db.t3.micro",
+                "Engine": "mysql",
+                "EngineVersion": "8.0.43",
+                "MasterUsername": {
+                    "Ref": "DbUsername"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DbSecret}::password}}"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "DatabaseSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DbSubnetGroup"
+                },
+                "BackupRetentionPeriod": 7,
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "MultiAZ": true,
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "MasterKmsKey"
+                },
+                "EnableCloudwatchLogsExports": [
+                    "error",
+                    "general",
+                    "slowquery"
+                ],
+                "PubliclyAccessible": false,
+                "DeletionProtection": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-RDS-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiLogsGroup": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/apigateway/tapstack-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "ApiGateway": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TapStack-API-${EnvironmentSuffix}"
+                },
+                "Description": "TapStack API Gateway",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-API-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayCloudWatchRole": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "TapStack-APIGW-LogsRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "apigateway.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                ]
+            }
+        },
+        "ApiGatewayAccount": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::ApiGateway::Account",
+            "Properties": {
+                "CloudWatchRoleArn": {
+                    "Fn::GetAtt": [
+                        "ApiGatewayCloudWatchRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "ApiGatewayResource": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "ApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "health"
+            }
+        },
+        "ApiGatewayMethod": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ResourceId": {
+                    "Ref": "ApiGatewayResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseTemplates": {
+                                "application/json": "{\"message\": \"OK\"}"
+                            }
+                        }
+                    ]
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
+                    }
+                ]
+            }
+        },
+        "ApiGatewayDeployment": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "ApiGatewayMethod",
+                "ApiGatewayAccount"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "Description": {
+                    "Fn::Sub": "TapStack API deployment ${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ApiGatewayStage": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "StageName": "prod",
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiGatewayDeployment"
+                },
+                "AccessLogSetting": {
+                    "DestinationArn": {
+                        "Fn::GetAtt": [
+                            "ApiLogsGroup",
+                            "Arn"
+                        ]
+                    },
+                    "Format": "{ \"requestId\":\"$context.requestId\", \"ip\":\"$context.identity.sourceIp\", \"caller\":\"$context.identity.caller\", \"user\":\"$context.identity.user\", \"requestTime\":\"$context.requestTime\", \"httpMethod\":\"$context.httpMethod\", \"resourcePath\":\"$context.resourcePath\", \"status\":\"$context.status\", \"protocol\":\"$context.protocol\", \"responseLength\":\"$context.responseLength\" }"
+                },
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "MetricsEnabled": true,
+                        "DataTraceEnabled": true,
+                        "LoggingLevel": "INFO"
+                    }
+                ]
+            }
+        },
+        "WafWebAcl": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::WAFv2::WebACL",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TapStack-WAF-${EnvironmentSuffix}"
+                },
+                "Scope": "REGIONAL",
+                "DefaultAction": {
+                    "Allow": {}
+                },
+                "Rules": [
+                    {
+                        "Name": "RateLimitRule",
+                        "Priority": 1,
+                        "Statement": {
+                            "RateBasedStatement": {
+                                "Limit": 2000,
+                                "AggregateKeyType": "IP"
+                            }
+                        },
+                        "Action": {
+                            "Block": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "RateLimitRule"
+                        }
+                    },
+                    {
+                        "Name": "CommonRuleSet",
+                        "Priority": 2,
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesCommonRuleSet"
+                            }
+                        },
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "CommonRuleSetMetric"
+                        }
+                    }
+                ],
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": {
+                        "Fn::Sub": "TapStack-WAF-${EnvironmentSuffix}"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-WAF-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "WafApiGatewayAssociation": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::WAFv2::WebACLAssociation",
+            "DependsOn": [
+                "ApiGatewayStage"
+            ],
+            "Properties": {
+                "ResourceArn": {
+                    "Fn::Sub": "arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/prod"
+                },
+                "WebACLArn": {
+                    "Fn::GetAtt": [
+                        "WafWebAcl",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "LaunchTemplate": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "TapStack-LaunchTemplate-${EnvironmentSuffix}"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Ref": "LatestAmiId"
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "Ec2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "WebSecurityGroup"
+                        }
+                    ],
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "TapStack-Instance-${EnvironmentSuffix}"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\namazon-linux-extras install -y nginx1\nsystemctl start nginx\nsystemctl enable nginx\n"
+                    }
+                }
+            }
+        },
+        "AutoScalingGroup": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "TapStack-ASG-${EnvironmentSuffix}"
+                },
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": 2,
+                "MaxSize": 4,
+                "DesiredCapacity": 2,
+                "HealthCheckType": "EC2",
+                "HealthCheckGracePeriod": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapStack-ASG-Instance-${EnvironmentSuffix}"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "ScaleUpPolicy": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "Cooldown": "60",
+                "ScalingAdjustment": 1
+            }
+        },
+        "ScaleDownPolicy": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "Cooldown": "300",
+                "ScalingAdjustment": -1
+            }
+        },
+        "HighCpuAlarm": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "TapStack-HighCPU-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Trigger scaling when CPU exceeds 70%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 70,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleUpPolicy"
+                    }
+                ]
+            }
+        },
+        "LowCpuAlarm": {
+            "Condition": "IsUsEast1",
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "TapStack-LowCPU-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Trigger scale down when CPU is below 20%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 20,
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleDownPolicy"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VpcId": {
+            "Condition": "IsUsEast1",
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "TapVpc"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-VPC-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "KmsKeyId": {
+            "Condition": "IsUsEast1",
+            "Description": "KMS Key ID",
+            "Value": {
+                "Ref": "MasterKmsKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-KMS-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "KmsKeyArn": {
+            "Condition": "IsUsEast1",
+            "Description": "KMS Key ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MasterKmsKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-KMS-ARN-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "DataBucketName": {
+            "Condition": "IsUsEast1",
+            "Description": "Data Bucket Name",
+            "Value": {
+                "Ref": "DataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-DataBucket-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "DataBucketArn": {
+            "Condition": "IsUsEast1",
+            "Description": "Data Bucket ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-DataBucket-ARN-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "CloudTrailBucketName": {
+            "Condition": "IsUsEast1",
+            "Description": "CloudTrail Bucket Name",
+            "Value": {
+                "Ref": "CloudTrailBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-CloudTrailBucket-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "CloudTrailArn": {
+            "Condition": "IsUsEast1",
+            "Description": "CloudTrail ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudTrail",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-CloudTrail-ARN-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "RdsEndpoint": {
+            "Condition": "IsUsEast1",
+            "Description": "RDS Database Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RdsDatabase",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-RDS-Endpoint-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ApiGatewayUrl": {
+            "Condition": "IsUsEast1",
+            "Description": "API Gateway URL",
+            "Value": {
+                "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-API-URL-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "WafWebAclArn": {
+            "Condition": "IsUsEast1",
+            "Description": "WAF WebACL ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WafWebAcl",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-WAF-ARN-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "AutoScalingGroupName": {
+            "Condition": "IsUsEast1",
+            "Description": "Auto Scaling Group Name",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-ASG-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "WebSecurityGroupId": {
+            "Condition": "IsUsEast1",
+            "Description": "Web Security Group ID",
+            "Value": {
+                "Ref": "WebSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-WebSG-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "DatabaseSecurityGroupId": {
+            "Condition": "IsUsEast1",
+            "Description": "Database Security Group ID",
+            "Value": {
+                "Ref": "DatabaseSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-DatabaseSG-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ConfigRecorderName": {
+            "Condition": "IsUsEast1",
+            "Description": "AWS Config Recorder Name",
+            "Value": {
+                "Ref": "ConfigRecorder"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-ConfigRecorder-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ConfigDeliveryChannelName": {
+            "Condition": "IsUsEast1",
+            "Description": "AWS Config Delivery Channel Name",
+            "Value": {
+                "Ref": "ConfigDeliveryChannel"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-ConfigDeliveryChannel-${EnvironmentSuffix}"
+                }
+            }
+        }
+    }
+}

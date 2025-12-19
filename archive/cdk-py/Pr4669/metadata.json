@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-17T06:38:05+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "Infrastructure task for CDK",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "po_id": "4360780393",
+  "training_quality": 9,
+  "aws_services": [
+    "RDS",
+    "Kinesis",
+    "Lambda",
+    "VPC",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "SNS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

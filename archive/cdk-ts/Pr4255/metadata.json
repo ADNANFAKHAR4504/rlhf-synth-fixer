@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349443",
+  "team": "6",
+  "startedAt": "2025-10-13T10:19:28.591Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "ELB",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "Route53",
+    "KMS",
+    "CloudWatch",
+    "Lambda",
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "IAM",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshit-at-turing",
+  "dockerS3Location": ""
+}
