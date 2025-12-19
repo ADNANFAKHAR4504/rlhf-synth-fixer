@@ -6,13 +6,8 @@ import {
   DescribeSecurityGroupsCommand,
   DescribeFlowLogsCommand,
   DescribeSubnetsCommand,
-  DescribeNatGatewaysCommand,
   DescribeInternetGatewaysCommand
 } from '@aws-sdk/client-ec2';
-import {
-  VPCLatticeClient,
-  GetServiceNetworkCommand
-} from '@aws-sdk/client-vpc-lattice';
 import {
   CloudWatchClient,
   ListDashboardsCommand
@@ -22,11 +17,27 @@ import {
   DescribeLogGroupsCommand
 } from '@aws-sdk/client-cloudwatch-logs';
 
-// Initialize AWS clients
-const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-const latticeClient = new VPCLatticeClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const logsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'us-east-1' });
+// Check if running on LocalStack
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+                     process.env.LOCALSTACK === 'true';
+
+// Initialize AWS clients with LocalStack configuration
+const clientConfig = {
+  region: process.env.AWS_REGION || 'us-east-1',
+  ...(isLocalStack && {
+    endpoint: process.env.AWS_ENDPOINT_URL || 'http://localhost:4566',
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: 'test',
+      secretAccessKey: 'test',
+    },
+  }),
+};
+
+const ec2Client = new EC2Client(clientConfig);
+const cloudWatchClient = new CloudWatchClient(clientConfig);
+const logsClient = new CloudWatchLogsClient(clientConfig);
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synthtrainr65';
@@ -73,42 +84,18 @@ describe('VPC Infrastructure Integration Tests', () => {
         ]
       });
       const response = await ec2Client.send(command);
-      
-      // Should have at least 4 subnets (2 public, 2 private)
-      expect(response.Subnets!.length).toBeGreaterThanOrEqual(4);
-      
+
+      // LocalStack only has public subnets (no NAT Gateway support in Community)
+      // Should have at least 2 public subnets across different AZs
+      expect(response.Subnets!.length).toBeGreaterThanOrEqual(2);
+
       // Check for public subnets
       const publicSubnets = response.Subnets!.filter(s => s.MapPublicIpOnLaunch === true);
       expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
-      
-      // Check for private subnets
-      const privateSubnets = response.Subnets!.filter(s => s.MapPublicIpOnLaunch === false);
-      expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
     });
 
-    test('should have NAT Gateway configured', async () => {
-      if (!outputs.VpcId) {
-        console.warn('VpcId not found in outputs, skipping test');
-        return;
-      }
-
-      const command = new DescribeNatGatewaysCommand({
-        Filter: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VpcId]
-          },
-          {
-            Name: 'state',
-            Values: ['available']
-          }
-        ]
-      });
-      const response = await ec2Client.send(command);
-      
-      expect(response.NatGateways!.length).toBeGreaterThanOrEqual(1);
-      expect(response.NatGateways![0].State).toBe('available');
-    });
+    // NAT Gateway test removed - not supported in LocalStack Community Edition
+    // The VPC stack has been configured with natGateways: 0 for LocalStack compatibility
 
     test('should have Internet Gateway attached', async () => {
       if (!outputs.VpcId) {
@@ -224,24 +211,8 @@ describe('VPC Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('VPC Lattice Configuration', () => {
-    test('should have VPC Lattice Service Network configured', async () => {
-      if (!outputs.LatticeServiceNetworkId) {
-        console.warn('LatticeServiceNetworkId not found in outputs, skipping test');
-        return;
-      }
-
-      const command = new GetServiceNetworkCommand({
-        serviceNetworkIdentifier: outputs.LatticeServiceNetworkId
-      });
-      const response = await latticeClient.send(command);
-      
-      expect(response.authType).toBe('NONE');
-      expect(response.name).toBeDefined();
-      // Check that the name includes 'service-network'
-      expect(response.name).toContain('service-network');
-    });
-  });
+  // VPC Lattice tests removed - not supported in LocalStack Community Edition
+  // The VPC stack has been configured without VPC Lattice resources for LocalStack compatibility
 
   describe('Resource Tagging', () => {
     test('should have correct tags on VPC', async () => {
