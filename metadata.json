@@ -4,11 +4,17 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "482222",
-  "team": "2",
+  "team": "synth",
   "startedAt": "2025-11-16T23:01:32.320Z",
-  "subtask": "IaC Program Optimization",
   "subject_labels": [
-    "IaC Optimization"
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "CloudFront",
+    "CloudWatch",
+    "WAF",
+    "Lambda@Edge",
+    "S3"
   ],
   "provider": "localstack"
 }
