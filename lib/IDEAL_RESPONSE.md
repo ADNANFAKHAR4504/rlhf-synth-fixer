@@ -6,7 +6,7 @@ This CloudFormation template deploys a serverless infrastructure that automatica
 
 ## Architecture
 
-```
+```text
 [Existing S3 Bucket] --triggers--> [Lambda Function] --logs-to--> [Existing CloudWatch Log Group]
                                            |
                                      [IAM Role with minimal permissions]
