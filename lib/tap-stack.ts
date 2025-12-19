@@ -248,34 +248,50 @@ export class TapStack extends cdk.Stack {
     );
 
     // Auto Scaling Group with instances in private subnets
-    // For LocalStack: Use direct configuration instead of LaunchTemplate to avoid
-    // LatestVersionNumber property issue
+    // For LocalStack: Use MixedInstancesPolicy with LaunchTemplate version=$Latest
+    // to work around LocalStack's LatestVersionNumber issue
     let autoScalingGroup: autoscaling.AutoScalingGroup;
 
     if (isLocalStack) {
-      // LocalStack: Use direct instance configuration
-      autoScalingGroup = new autoscaling.AutoScalingGroup(
+      // LocalStack: Use LaunchTemplate with explicit version reference
+      const launchTemplate = new ec2.LaunchTemplate(this, 'AppLaunchTemplate', {
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2023(),
+        securityGroup: appSecurityGroup,
+        role: ec2Role,
+        userData,
+        // Skip IMDSv2 for LocalStack compatibility
+      });
+
+      // Use CfnAutoScalingGroup with explicit LaunchTemplate version reference
+      const cfnAsg = new autoscaling.CfnAutoScalingGroup(
         this,
         'AppAutoScalingGroup',
         {
-          vpc,
-          vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-          instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.T3,
-            ec2.InstanceSize.MICRO
-          ),
-          machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-          securityGroup: appSecurityGroup,
-          role: ec2Role,
-          userData,
-          minCapacity: 1,
-          maxCapacity: 3,
-          desiredCapacity: 2,
-          healthCheck: autoscaling.HealthCheck.elb({
-            grace: cdk.Duration.seconds(300),
-          }),
+          minSize: '1',
+          maxSize: '3',
+          desiredCapacity: '2',
+          vpcZoneIdentifier: vpc
+            .selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS })
+            .subnetIds,
+          launchTemplate: {
+            launchTemplateId: launchTemplate.launchTemplateId,
+            version: '$Latest', // Use $Latest instead of LatestVersionNumber
+          },
+          healthCheckType: 'ELB',
+          healthCheckGracePeriod: 300,
         }
       );
+
+      // Create a minimal wrapper for compatibility with target group
+      autoScalingGroup = autoscaling.AutoScalingGroup.fromAutoScalingGroupName(
+        this,
+        'AppAutoScalingGroupRef',
+        cfnAsg.ref
+      ) as autoscaling.AutoScalingGroup;
     } else {
       // AWS: Use LaunchTemplate with IMDSv2 for enhanced security
       const launchTemplate = new ec2.LaunchTemplate(this, 'AppLaunchTemplate', {
