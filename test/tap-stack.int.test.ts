@@ -43,6 +43,9 @@ const awsRegion =
   'us-east-1';
 const clientConfig: any = { region: awsRegion };
 
+// Detect LocalStack environment
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('localstack');
+
 // Configure LocalStack endpoint if present
 if (process.env.AWS_ENDPOINT_URL) {
   clientConfig.endpoint = process.env.AWS_ENDPOINT_URL;
