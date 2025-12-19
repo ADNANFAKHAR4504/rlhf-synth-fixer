@@ -171,7 +171,14 @@ describe('TapStack Integration Tests', () => {
         console.warn('LocalStack Community: Elastic IP returned "unknown" (limited support)');
         return;
       }
-      expect(outputs.EC2PublicIP).toMatch(
+
+      // LocalStack Pro returns IP in format: "127.103.40.192-eipalloc-xxxxx"
+      // Extract just the IP part for validation
+      const ipAddress = isLocalStack && outputs.EC2PublicIP.includes('-')
+        ? outputs.EC2PublicIP.split('-')[0]
+        : outputs.EC2PublicIP;
+
+      expect(ipAddress).toMatch(
         /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/
       );
     });
