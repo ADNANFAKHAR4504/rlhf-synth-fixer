@@ -1,5 +1,5 @@
 {
-  "app": "npx ts-node --prefer-ts-exts bin/tap.ts",
+  "app": "python3 tap.py",
   "watch": {
     "include": [
       "**"

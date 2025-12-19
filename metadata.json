@@ -1,6 +1,6 @@
 {
   "platform": "cdk",
-  "language": "ts",
+  "language": "py",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "trainr98",
@@ -12,7 +12,12 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
+    "s3",
     "dynamodb",
-    "iam"
+    "sns",
+    "lambda",
+    "apigateway",
+    "iam",
+    "logs"
   ]
 }
