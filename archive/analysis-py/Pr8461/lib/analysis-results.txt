@@ -1,34 +1,34 @@
-2025-11-20 10:05:47,323 - INFO - Starting CloudWatch Logs analysis...
-2025-11-20 10:05:47,341 - INFO - Found 7 total log groups
-2025-11-20 10:05:47,364 - INFO - Analyzing 5 log groups after filtering
-2025-11-20 10:05:50,785 - WARNING - Error checking saved queries for /aws/ecs/my-service: An error occurred (500) when calling the DescribeQueryDefinitions operation (reached max retries: 4): <!doctype html>
+2025-12-19 14:42:43,706 - INFO - Starting CloudWatch Logs analysis...
+2025-12-19 14:42:43,724 - INFO - Found 7 total log groups
+2025-12-19 14:42:43,746 - INFO - Analyzing 5 log groups after filtering
+2025-12-19 14:42:55,160 - WARNING - Error checking saved queries for /aws/ecs/my-service: An error occurred (500) when calling the DescribeQueryDefinitions operation (reached max retries: 4): <!doctype html>
 <html lang=en>
 <title>500 Internal Server Error</title>
 <h1>Internal Server Error</h1>
 <p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
 
-2025-11-20 10:05:54,583 - WARNING - Error checking saved queries for /aws/lambda/audit-service: An error occurred (500) when calling the DescribeQueryDefinitions operation (reached max retries: 4): <!doctype html>
+2025-12-19 14:43:02,185 - WARNING - Error checking saved queries for /aws/lambda/audit-service: An error occurred (500) when calling the DescribeQueryDefinitions operation (reached max retries: 4): <!doctype html>
 <html lang=en>
 <title>500 Internal Server Error</title>
 <h1>Internal Server Error</h1>
 <p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
 
-2025-11-20 10:05:56,240 - WARNING - Error checking saved queries for /aws/lambda/debug-function: An error occurred (500) when calling the DescribeQueryDefinitions operation (reached max retries: 4): <!doctype html>
+2025-12-19 14:43:09,683 - WARNING - Error checking saved queries for /aws/lambda/debug-function: An error occurred (500) when calling the DescribeQueryDefinitions operation (reached max retries: 4): <!doctype html>
 <html lang=en>
 <title>500 Internal Server Error</title>
 <h1>Internal Server Error</h1>
 <p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
 
-2025-11-20 10:06:07,236 - WARNING - Error checking saved queries for /aws/lambda/my-app: An error occurred (500) when calling the DescribeQueryDefinitions operation (reached max retries: 4): <!doctype html>
+2025-12-19 14:43:15,602 - WARNING - Error checking saved queries for /aws/lambda/my-app: An error occurred (500) when calling the DescribeQueryDefinitions operation (reached max retries: 4): <!doctype html>
 <html lang=en>
 <title>500 Internal Server Error</title>
 <h1>Internal Server Error</h1>
 <p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
 
-2025-11-20 10:06:07,298 - INFO - JSON output saved to aws_audit_results.json
-2025-11-20 10:06:07,298 - WARNING - Matplotlib/Pandas not available - skipping chart generation. Install with: pip install matplotlib pandas
-2025-11-20 10:06:07,298 - INFO - CSV report saved to monitoring_coverage_report.csv
-2025-11-20 10:06:07,298 - INFO - Analysis complete!
+2025-12-19 14:43:15,658 - INFO - JSON output saved to aws_audit_results.json
+2025-12-19 14:43:15,658 - WARNING - Matplotlib/Pandas not available - skipping chart generation. Install with: pip install matplotlib pandas
+2025-12-19 14:43:15,658 - INFO - CSV report saved to monitoring_coverage_report.csv
+2025-12-19 14:43:15,658 - INFO - Analysis complete!
 
 ========================================================================================================================
 CLOUDWATCH LOGS COST AND MONITORING ANALYSIS
