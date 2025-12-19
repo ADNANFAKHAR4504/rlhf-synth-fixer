@@ -379,5 +379,70 @@ describe('TapStack', () => {
       expect(secondaryStack).toBeDefined();
     });
   });
+
+  describe('Import Existing Table Configuration', () => {
+    test('creates stack with imported existing table', () => {
+      const importApp = new cdk.App();
+      const importStack = new TapStack(importApp, 'ImportStack', {
+        environmentSuffix: 'test',
+        isPrimary: true,
+        importExisting: true,
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      expect(importStack).toBeDefined();
+    });
+  });
+
+  describe('Route53 Latency Routing Configuration', () => {
+    test('creates stack with Route53 latency-based routing', () => {
+      const routeApp = new cdk.App();
+      const routeStack = new TapStack(routeApp, 'RouteStack', {
+        environmentSuffix: 'test',
+        isPrimary: true,
+        hostedZoneId: 'Z1234567890ABC',
+        domainName: 'api.example.com',
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      expect(routeStack).toBeDefined();
+      const routeTemplate = Template.fromStack(routeStack);
+      routeTemplate.hasResourceProperties('AWS::Route53::RecordSet', {
+        Type: 'A',
+      });
+    });
+  });
+
+  describe('QuickSight Analytics Configuration', () => {
+    test('creates stack with QuickSight analytics enabled', () => {
+      const qsApp = new cdk.App();
+      const qsStack = new TapStack(qsApp, 'QuickSightStack', {
+        environmentSuffix: 'test',
+        isPrimary: true,
+        enableQuickSight: true,
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      expect(qsStack).toBeDefined();
+      const qsTemplate = Template.fromStack(qsStack);
+      qsTemplate.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Principal: {
+                Service: 'quicksight.amazonaws.com',
+              },
+            }),
+          ]),
+        },
+      });
+    });
+  });
 });
 
