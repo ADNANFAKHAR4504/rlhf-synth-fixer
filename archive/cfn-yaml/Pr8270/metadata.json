@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291440",
+  "team": "4",
+  "startedAt": "2025-08-16T16:20:00.928Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "provider": "localstack",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Route Table",
+    "Security Group",
+    "EC2",
+    "S3",
+    "DynamoDB",
+    "SNS",
+    "SQS",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}
