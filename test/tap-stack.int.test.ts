@@ -56,14 +56,24 @@ function discoverStackName(): string {
       return tapStackMatch.StackName;
     }
 
-    // Priority 3: Lowercase tapstack (LocalStack fallback)
-    const localstackPattern = stacks.StackSummaries.find(
+    // Priority 3: LocalStack stack name pattern (localstack-stack-*)
+    const localstackStackPattern = stacks.StackSummaries.find(
+      (stack: any) => stack.StackName.startsWith('localstack-stack-')
+    );
+
+    if (localstackStackPattern) {
+      console.log(`Using LocalStack stack name: ${localstackStackPattern.StackName}`);
+      return localstackStackPattern.StackName;
+    }
+
+    // Priority 4: Lowercase tapstack (generic fallback)
+    const tapstackPattern = stacks.StackSummaries.find(
       (stack: any) => stack.StackName.toLowerCase().startsWith('tapstack')
     );
 
-    if (localstackPattern) {
-      console.log(`Using LocalStack stack name: ${localstackPattern.StackName}`);
-      return localstackPattern.StackName;
+    if (tapstackPattern) {
+      console.log(`Using stack with tapstack prefix: ${tapstackPattern.StackName}`);
+      return tapstackPattern.StackName;
     }
 
     // List available stacks for debugging
