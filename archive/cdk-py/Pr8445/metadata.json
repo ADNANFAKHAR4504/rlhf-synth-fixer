@@ -13,11 +13,18 @@
     "Web Application Deployment"
   ],
   "aws_services": [
+    "apigateway",
+    "lambda",
     "s3",
     "dynamodb",
-    "lambda",
     "stepfunctions",
-    "apigateway",
     "iam"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
