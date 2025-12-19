@@ -707,9 +707,10 @@ deploy_cloudformation() {
             print_status $BLUE "   Stack description retrieved, parsing outputs..."
 
             output_json=$(echo "$stack_desc" | python3 -c "
-import sys, json
+import sys, json, os
 try:
     data = json.load(sys.stdin)
+    stack_name = '$stack_name'
     outputs = {}
     if data and 'Stacks' in data and len(data['Stacks']) > 0:
         stack = data['Stacks'][0]
@@ -721,7 +722,9 @@ try:
             print('DEBUG: No Outputs field in stack or Outputs is empty', file=sys.stderr)
     else:
         print('DEBUG: No Stacks in response', file=sys.stderr)
-    print(json.dumps(outputs, indent=2))
+    # Nest outputs under stack name for compatibility with test expectations
+    result = {stack_name: outputs} if outputs else {}
+    print(json.dumps(result, indent=2))
 except Exception as e:
     print(f'DEBUG: Exception parsing outputs: {e}', file=sys.stderr)
     print('{}')
