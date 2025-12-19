@@ -12,8 +12,15 @@ app = App()
 environment_suffix = app.node.try_get_context("environmentSuffix") or os.environ.get("ENVIRONMENT_SUFFIX", "dev")
 
 # Get AWS account and region from environment
-account = os.environ.get("CDK_DEFAULT_ACCOUNT") or os.environ.get("AWS_ACCOUNT_ID") or os.environ.get("CURRENT_ACCOUNT_ID")
-region = os.environ.get("CDK_DEFAULT_REGION") or os.environ.get("AWS_REGION", "us-east-1")
+account = (
+    os.environ.get("CDK_DEFAULT_ACCOUNT")
+    or os.environ.get("AWS_ACCOUNT_ID")
+    or os.environ.get("CURRENT_ACCOUNT_ID")
+)
+region = (
+    os.environ.get("CDK_DEFAULT_REGION")
+    or os.environ.get("AWS_REGION", "us-east-1")
+)
 
 # Create stack properties
 props = TapStackProps(
