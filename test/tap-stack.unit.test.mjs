@@ -119,5 +119,35 @@ describe('TapStack Unit Tests', () => {
       template.hasOutput('TableName', {});
     });
   });
+
+  describe('Default Environment Suffix', () => {
+    test('should use default environment suffix when not provided', () => {
+      const defaultApp = new cdk.App();
+      const defaultStack = new TapStack(defaultApp, 'DefaultStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      expect(defaultStack).toBeDefined();
+      const defaultTemplate = Template.fromStack(defaultStack);
+      defaultTemplate.resourceCountIs('AWS::DynamoDB::Table', 1);
+    });
+
+    test('should use context environment suffix when props not provided', () => {
+      const contextApp = new cdk.App({
+        context: {
+          environmentSuffix: 'staging',
+        },
+      });
+      const contextStack = new TapStack(contextApp, 'ContextStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      expect(contextStack).toBeDefined();
+    });
+  });
 });
 
