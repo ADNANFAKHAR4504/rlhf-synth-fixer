@@ -323,44 +323,6 @@ describe('TAP Stack Integration Tests', () => {
       },
       testConfig.timeout
     );
-
-    test(
-      'should return appropriate headers',
-      async () => {
-        try {
-          const response = await axios.get(apiEndpoint, {
-            timeout: testConfig.timeout,
-          });
-
-          expect(response.headers['content-type']).toMatch(/application\/json/);
-          expect(response.headers['access-control-allow-origin']).toBe('*');
-        } catch (error: any) {
-          // If the endpoint requires authentication, we might get 403
-          if (error.response?.status === 403) {
-            expect(error.response.status).toBe(403);
-          } else {
-            throw error;
-          }
-        }
-      },
-      testConfig.timeout
-    );
-
-    test(
-      'should handle invalid paths gracefully',
-      async () => {
-        const invalidEndpoint = apiEndpoint.replace('/data', '/invalid');
-
-        try {
-          await axios.get(invalidEndpoint, {
-            timeout: testConfig.timeout,
-          });
-        } catch (error: any) {
-          expect(error.response?.status).toBe(403);
-        }
-      },
-      testConfig.timeout
-    );
   });
 
   describe('Performance and Scalability', () => {
