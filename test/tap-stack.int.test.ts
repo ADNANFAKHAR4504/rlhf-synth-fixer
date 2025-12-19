@@ -267,7 +267,7 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
     }
   });
 
-  test.skipIf(isLocalStack)('GuardDuty should be enabled', async () => {
+  (isLocalStack ? test.skip : test)('GuardDuty should be enabled', async () => {
     const gd = new GuardDutyClient({ region });
     const res = await gd.send(new ListDetectorsCommand({}));
     expect(res.DetectorIds?.length).toBeGreaterThan(0);
