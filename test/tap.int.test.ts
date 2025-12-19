@@ -28,7 +28,9 @@ const ec2Client = new EC2Client({
 });
 
 // Stack name from environment or default
-const stackName = process.env.STACK_NAME || 'tap-stack-Pr2045';
+// For LocalStack, the stack name follows the pattern: localstack-stack-{pr_number}
+const stackName = process.env.STACK_NAME ||
+                   (process.env.ENVIRONMENT_SUFFIX ? `localstack-stack-${process.env.ENVIRONMENT_SUFFIX}` : 'localstack-stack-pr8279');
 
 describe('CloudFormation Stack Integration Tests', () => {
   let stackOutputs: Record<string, string> = {};
