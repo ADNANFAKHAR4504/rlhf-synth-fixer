@@ -617,7 +617,9 @@ describe('CloudEnvironmentSetup Integration Tests', () => {
 
     test('Network connectivity is properly configured', async () => {
       // Verify instance has public IP through Elastic IP
-      expect(outputs.ElasticIp).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
+      // LocalStack returns EIP in format: "IP-allocationId", so extract just the IP part
+      const elasticIp = outputs.ElasticIp.split('-')[0];
+      expect(elasticIp).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
 
       // Get instance details
       const instanceResponse = await describeInstanceSafe(outputs.InstanceId);
