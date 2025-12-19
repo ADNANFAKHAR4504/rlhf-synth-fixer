@@ -211,7 +211,7 @@ describe('TapStack', () => {
         Handler: 'patient-processor.handler',
         MemorySize: 512,
         Timeout: 300,
-        Architectures: ['arm64'],
+        Architectures: ['x86_64'], // LocalStack compatible architecture
         Environment: {
           Variables: Match.objectLike({
             PATIENTS_TABLE: Match.anyValue(),
@@ -230,7 +230,7 @@ describe('TapStack', () => {
         Handler: 'notification-processor.handler',
         MemorySize: 256,
         Timeout: 180,
-        Architectures: ['arm64'],
+        Architectures: ['x86_64'], // LocalStack compatible architecture
       });
     });
 
@@ -241,7 +241,7 @@ describe('TapStack', () => {
         Handler: 'analytics-processor.handler',
         MemorySize: 1024,
         Timeout: 600,
-        Architectures: ['arm64'],
+        Architectures: ['x86_64'], // LocalStack compatible architecture
       });
     });
 
@@ -252,7 +252,7 @@ describe('TapStack', () => {
         Handler: 'streaming-api.handler',
         MemorySize: 512,
         Timeout: 300,
-        Architectures: ['arm64'],
+        Architectures: ['x86_64'], // LocalStack compatible architecture
       });
     });
   });
