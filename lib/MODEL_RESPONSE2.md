@@ -823,5 +823,5 @@ Key Fixes Made:
     --region us-east-1
    The template now includes:
 
-✅ Fixed CloudTrail with required IsLogging property
-✅ Automatic Lambda
+Fixed CloudTrail with required IsLogging property
+Automatic Lambda
