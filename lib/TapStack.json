@@ -82,27 +82,16 @@
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "logs:CreateLogGroup",
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents"
+                    "logs:*"
                   ],
-                  "Resource": [
-                    {
-                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
-                    }
-                  ]
+                  "Resource": "*"
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "s3:GetObject",
-                    "s3:PutObject"
+                    "s3:*"
                   ],
-                  "Resource": [
-                    {
-                      "Fn::Sub": "${ArtifactBucket.Arn}/*"
-                    }
-                  ]
+                  "Resource": "*"
                 }
               ]
             }
@@ -185,56 +174,30 @@
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "s3:GetObject",
-                    "s3:PutObject",
-                    "s3:GetObjectVersion",
-                    "s3:GetBucketLocation"
+                    "s3:*"
                   ],
-                  "Resource": [
-                    {
-                      "Fn::Sub": "${ArtifactBucket.Arn}"
-                    },
-                    {
-                      "Fn::Sub": "${ArtifactBucket.Arn}/*"
-                    }
-                  ]
+                  "Resource": "*"
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "codecommit:GetBranch",
-                    "codecommit:GetCommit",
-                    "codecommit:UploadArchive",
-                    "codecommit:GetUploadArchiveStatus"
+                    "codecommit:*"
                   ],
-                  "Resource": [
-                    {
-                      "Fn::GetAtt": ["SourceRepository", "Arn"]
-                    }
-                  ]
+                  "Resource": "*"
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "codebuild:BatchGetBuilds",
-                    "codebuild:StartBuild"
+                    "codebuild:*"
                   ],
-                  "Resource": [
-                    {
-                      "Fn::GetAtt": ["BuildProject", "Arn"]
-                    }
-                  ]
+                  "Resource": "*"
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "sns:Publish"
+                    "sns:*"
                   ],
-                  "Resource": [
-                    {
-                      "Ref": "PipelineNotificationTopic"
-                    }
-                  ]
+                  "Resource": "*"
                 }
               ]
             }

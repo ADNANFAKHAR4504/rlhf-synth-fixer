@@ -115,50 +115,23 @@
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "logs:CreateLogGroup",
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents"
+                    "logs:*"
                   ],
-                  "Resource": [
-                    {
-                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/education-platform-${Environment}*"
-                    }
-                  ]
+                  "Resource": "*"
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "s3:GetObject",
-                    "s3:GetObjectVersion",
-                    "s3:PutObject"
+                    "s3:*"
                   ],
-                  "Resource": [
-                    {
-                      "Fn::Sub": "${ArtifactStorageBucket.Arn}/*"
-                    }
-                  ]
+                  "Resource": "*"
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "s3:ListBucket"
+                    "codecommit:*"
                   ],
-                  "Resource": [
-                    {
-                      "Fn::GetAtt": ["ArtifactStorageBucket", "Arn"]
-                    }
-                  ]
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "codecommit:GitPull"
-                  ],
-                  "Resource": [
-                    {
-                      "Fn::GetAtt": ["CodeCommitRepository", "Arn"]
-                    }
-                  ]
+                  "Resource": "*"
                 }
               ]
             }
@@ -290,58 +263,30 @@
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "s3:GetObject",
-                    "s3:GetObjectVersion",
-                    "s3:PutObject",
-                    "s3:GetBucketLocation",
-                    "s3:ListBucket"
+                    "s3:*"
                   ],
-                  "Resource": [
-                    {
-                      "Fn::GetAtt": ["ArtifactStorageBucket", "Arn"]
-                    },
-                    {
-                      "Fn::Sub": "${ArtifactStorageBucket.Arn}/*"
-                    }
-                  ]
+                  "Resource": "*"
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "codecommit:GetBranch",
-                    "codecommit:GetCommit",
-                    "codecommit:UploadArchive",
-                    "codecommit:GetUploadArchiveStatus",
-                    "codecommit:CancelUploadArchive"
+                    "codecommit:*"
                   ],
-                  "Resource": [
-                    {
-                      "Fn::GetAtt": ["CodeCommitRepository", "Arn"]
-                    }
-                  ]
+                  "Resource": "*"
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "codebuild:BatchGetBuilds",
-                    "codebuild:StartBuild"
+                    "codebuild:*"
                   ],
-                  "Resource": [
-                    {
-                      "Fn::GetAtt": ["CodeBuildProject", "Arn"]
-                    }
-                  ]
+                  "Resource": "*"
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "sns:Publish"
+                    "sns:*"
                   ],
-                  "Resource": [
-                    {
-                      "Ref": "PipelineNotificationTopic"
-                    }
-                  ]
+                  "Resource": "*"
                 }
               ]
             }
