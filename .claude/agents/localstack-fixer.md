@@ -34,18 +34,38 @@ batch_fix:
 
 **The agent MUST respect these boundaries to prevent destructive operations.**
 
+### ⚠️ TOP 3 RESTRICTIONS (READ FIRST!)
+
+1. **🚫 NEVER modify `scripts/` folder** - This is STRICTLY FORBIDDEN everywhere, including in worktrees. No exceptions.
+
+2. **🚫 NEVER modify `jest.config.js` without 80%+ coverage** - The agent must verify test coverage is at least 80% before ANY modification to jest.config.js. Without coverage verification, this file is READ-ONLY.
+
+3. **🚫 ONLY modify files in the allowed list** - Changes are STRICTLY limited to:
+   - `lib/` directory (source files)
+   - `test/` directory (test files)
+   - `metadata.json`, `execution-output.md`, `package.json`, `tsconfig.json`, `cdk.json`, `Pulumi.yaml`
+   - **NOTHING ELSE!**
+
 ### Restricted Paths (NEVER operate in these directories)
 
 ```yaml
 restricted_paths:
   # Repository infrastructure - NEVER modify
-  - scripts/           # Shell scripts for CI/CD and deployment
+  - scripts/           # Shell scripts for CI/CD and deployment - STRICTLY FORBIDDEN
   - .github/           # GitHub Actions and workflows
   - .claude/           # Claude agent configurations
   - config/            # Schema and configuration files
   - node_modules/      # Dependencies
   - dist/              # Build output
   - .git/              # Git internals
+
+  # 🔴 CRITICAL: scripts/ folder is STRICTLY FORBIDDEN
+  # The agent MUST NEVER:
+  # - Read, write, or modify ANY file in scripts/
+  # - Create new files in scripts/
+  # - Delete files from scripts/
+  # - Even reference scripts/ in fixes
+  # This applies EVERYWHERE, including in worktrees!
 
   # Never delete these directories (even in worktree)
   never_delete:
@@ -67,20 +87,94 @@ allowed_paths:
     - worktree/fixer-*         # Fixer worktrees
     - worktree/synth-*         # Synth worktrees
 
-  # Within the worktree, only modify these directories
+  # Within the worktree, only modify these directories/files
+  # 🔴 STRICT ENFORCEMENT: Changes ONLY allowed to files listed here
   modifiable_directories:
     - lib/               # Main IaC source code
     - test/              # Test files
     - metadata.json      # Task metadata
     - execution-output.md # Execution logs
-    - package.json       # Only for dependency issues (NOT scripts)
+    - package.json       # Only for dependency issues (NOT scripts section)
     - tsconfig.json      # TypeScript configuration
-    - jest.config.js     # Jest configuration
     - cdk.json           # CDK configuration
     - Pulumi.yaml        # Pulumi configuration
     - *.tf               # Terraform files
-    - *.py               # Python files
+    - *.py               # Python files (in lib/ or test/ only)
+
+  # 🔴 CRITICAL: jest.config.js has SPECIAL RESTRICTIONS
+  # See "Jest Config Modification Rules" section below
+  jest_config_rules:
+    file: jest.config.js
+    restriction: "ONLY modify if coverage threshold met"
+    min_coverage_for_modification: 80%  # Must have 80%+ coverage before modifying
+
+  # 🔴 STRICTLY FORBIDDEN - NEVER modify these (even in worktree)
+  strictly_forbidden:
+    - scripts/           # Shell scripts - NEVER TOUCH
+    - .github/           # Workflow files
+    - .claude/           # Agent configs
+    - config/            # Schema files
 ```
+
+### Jest Config Modification Rules
+
+**🔴 CRITICAL: `jest.config.js` has SPECIAL RESTRICTIONS**
+
+The agent MUST NOT modify `jest.config.js` unless:
+
+1. Test coverage is at least 80% achieved
+2. The modification is essential for test execution (not just preferences)
+3. The current tests are actually running and producing coverage reports
+
+```bash
+#!/bin/bash
+# check_jest_config_permission.sh - Run BEFORE modifying jest.config.js
+
+can_modify_jest_config() {
+  local WORK_DIR="$1"
+
+  # ═══════════════════════════════════════════════════════════════
+  # CHECK 1: Does coverage data exist?
+  # ═══════════════════════════════════════════════════════════════
+
+  if [[ ! -d "$WORK_DIR/coverage" ]] && [[ ! -f "$WORK_DIR/coverage/coverage-summary.json" ]]; then
+    echo "❌ BLOCKED: Cannot modify jest.config.js - no coverage data found"
+    echo "   Run tests first to generate coverage data"
+    return 1
+  fi
+
+  # ═══════════════════════════════════════════════════════════════
+  # CHECK 2: Is coverage at least 80%?
+  # ═══════════════════════════════════════════════════════════════
+
+  if [[ -f "$WORK_DIR/coverage/coverage-summary.json" ]]; then
+    COVERAGE_PCT=$(jq -r '.total.lines.pct // 0' "$WORK_DIR/coverage/coverage-summary.json" 2>/dev/null)
+
+    if [[ $(echo "$COVERAGE_PCT < 80" | bc -l) -eq 1 ]]; then
+      echo "❌ BLOCKED: Cannot modify jest.config.js - coverage too low"
+      echo "   Current coverage: ${COVERAGE_PCT}%"
+      echo "   Required minimum: 80%"
+      echo ""
+      echo "   Focus on improving test coverage first before modifying jest.config.js"
+      return 1
+    fi
+
+    echo "✅ Coverage check passed: ${COVERAGE_PCT}%"
+  else
+    echo "❌ BLOCKED: Cannot modify jest.config.js - coverage-summary.json not found"
+    return 1
+  fi
+
+  return 0
+}
+```
+
+**When jest.config.js modification is blocked:**
+
+- Focus on fixing actual test files in `test/` directory
+- Improve test coverage by adding more test cases
+- Fix test assertions and mocks
+- Do NOT work around test issues by modifying jest configuration
 
 ### Path Validation (MUST run before ANY file operation)
 
@@ -95,6 +189,18 @@ validate_path() {
   # Get absolute path
   local ABS_PATH=$(realpath "$TARGET_PATH" 2>/dev/null || echo "$TARGET_PATH")
   local PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+
+  # ═══════════════════════════════════════════════════════════════
+  # SPECIAL CHECK: scripts/ folder is STRICTLY FORBIDDEN
+  # ═══════════════════════════════════════════════════════════════
+
+  if [[ "$ABS_PATH" == *"/scripts/"* ]] || [[ "$ABS_PATH" == *"/scripts" ]] || [[ "$TARGET_PATH" == scripts/* ]] || [[ "$TARGET_PATH" == */scripts/* ]]; then
+    echo "❌ STRICTLY FORBIDDEN: Cannot $OPERATION in scripts/ folder"
+    echo "   Target: $TARGET_PATH"
+    echo "   The scripts/ folder is NEVER modifiable by this agent."
+    echo "   This restriction applies EVERYWHERE, including worktrees."
+    return 1
+  fi
 
   # ═══════════════════════════════════════════════════════════════
   # BLOCKED PATHS - NEVER allow operations here
@@ -114,13 +220,80 @@ validate_path() {
   )
 
   for blocked in "${BLOCKED_PATHS[@]}"; do
-    if [[ "$ABS_PATH" == *"$PROJECT_ROOT/$blocked"* ]] && [[ "$ABS_PATH" != *"worktree/"* ]]; then
+    # 🔴 SPECIAL CASE: scripts/ is ALWAYS blocked, even in worktrees
+    if [[ "$blocked" == "scripts" ]]; then
+      if [[ "$ABS_PATH" == *"/scripts/"* ]] || [[ "$ABS_PATH" == *"/scripts" ]]; then
+        echo "❌ STRICTLY FORBIDDEN: Cannot $OPERATION in scripts/ folder"
+        echo "   Target: $TARGET_PATH"
+        echo "   The scripts/ folder is NEVER modifiable - this applies EVERYWHERE!"
+        return 1
+      fi
+    elif [[ "$ABS_PATH" == *"$PROJECT_ROOT/$blocked"* ]] && [[ "$ABS_PATH" != *"worktree/"* ]]; then
       echo "❌ BLOCKED: Cannot $OPERATION in restricted path: $blocked"
       echo "   Target: $TARGET_PATH"
       echo "   This path is protected repository infrastructure."
       return 1
     fi
   done
+
+  # ═══════════════════════════════════════════════════════════════
+  # ALLOWED FILES CHECK - Strictly enforce allowed file list
+  # ═══════════════════════════════════════════════════════════════
+
+  if [[ "$OPERATION" == "write" ]] || [[ "$OPERATION" == "delete" ]]; then
+    local FILENAME=$(basename "$TARGET_PATH")
+    local DIRNAME=$(dirname "$TARGET_PATH")
+    local IS_ALLOWED=false
+
+    # Check if in allowed directories
+    if [[ "$DIRNAME" == *"/lib"* ]] || [[ "$DIRNAME" == *"/test"* ]]; then
+      IS_ALLOWED=true
+    fi
+
+    # Check if it's an allowed specific file
+    ALLOWED_FILES=(
+      "metadata.json"
+      "execution-output.md"
+      "package.json"
+      "tsconfig.json"
+      "cdk.json"
+      "Pulumi.yaml"
+      "requirements.txt"
+      "pyproject.toml"
+    )
+
+    for allowed in "${ALLOWED_FILES[@]}"; do
+      if [[ "$FILENAME" == "$allowed" ]]; then
+        IS_ALLOWED=true
+        break
+      fi
+    done
+
+    # Special handling for jest.config.js - needs coverage check
+    if [[ "$FILENAME" == "jest.config.js" ]]; then
+      if [[ -f "coverage/coverage-summary.json" ]]; then
+        COVERAGE=$(jq -r '.total.lines.pct // 0' "coverage/coverage-summary.json" 2>/dev/null || echo "0")
+        if [[ $(echo "$COVERAGE >= 80" | bc -l 2>/dev/null || echo "0") -eq 1 ]]; then
+          IS_ALLOWED=true
+          echo "✅ jest.config.js modification allowed (coverage: ${COVERAGE}%)"
+        else
+          echo "❌ BLOCKED: jest.config.js modification requires 80%+ coverage"
+          echo "   Current coverage: ${COVERAGE}%"
+          return 1
+        fi
+      else
+        echo "❌ BLOCKED: jest.config.js modification requires coverage data"
+        return 1
+      fi
+    fi
+
+    if [[ "$IS_ALLOWED" == "false" ]]; then
+      echo "❌ BLOCKED: File not in allowed modifications list"
+      echo "   Target: $TARGET_PATH"
+      echo "   Only files in lib/, test/, and specific config files can be modified"
+      return 1
+    fi
+  fi
 
   # ═══════════════════════════════════════════════════════════════
   # DELETE RESTRICTIONS - Extra protection for delete operations
@@ -193,6 +366,62 @@ validate_path() {
 4. **ALWAYS use the validation function** before file operations
 5. **If unsure about a path, ASK the user** rather than proceeding
 6. **STOP immediately** if a blocked path is detected
+7. **🔴 NEVER modify scripts/ folder** - this is STRICTLY FORBIDDEN everywhere
+8. **🔴 NEVER modify jest.config.js** without 80%+ test coverage verified
+9. **🔴 STRICTLY enforce allowed files list** - only modify files explicitly listed in allowed_paths
+
+### Strict File Modification Enforcement
+
+**🔴 CRITICAL: Changes are ONLY allowed to these specific files/patterns:**
+
+```yaml
+# EXHAUSTIVE list of modifiable files - NO EXCEPTIONS
+strictly_allowed_modifications:
+  directories:
+    - lib/                    # IaC source code files
+    - test/                   # Test files
+
+  specific_files:
+    - metadata.json           # Task metadata
+    - execution-output.md     # Execution logs
+    - package.json            # Dependencies only (NOT scripts section!)
+    - tsconfig.json           # TypeScript config
+    - cdk.json                # CDK config
+    - Pulumi.yaml             # Pulumi config
+    - requirements.txt        # Python dependencies
+    - pyproject.toml          # Python project config
+
+  file_patterns:
+    - "lib/*.ts"              # TypeScript source
+    - "lib/*.py"              # Python source
+    - "lib/*.tf"              # Terraform files
+    - "lib/*.go"              # Go source
+    - "test/*.ts"             # TypeScript tests
+    - "test/*.py"             # Python tests
+    - "test/*.test.ts"        # Test files
+    - "test/*.int.test.ts"    # Integration tests
+    - "test/*.unit.test.ts"   # Unit tests
+
+  conditional_files:
+    - jest.config.js:         # ONLY if coverage >= 80%
+        condition: "coverage >= 80%"
+
+# EVERYTHING ELSE IS FORBIDDEN - including:
+absolutely_forbidden:
+  - scripts/*                 # NEVER - shell scripts
+  - .github/*                 # NEVER - workflows
+  - .claude/*                 # NEVER - agent configs
+  - config/*                  # NEVER - schemas
+  - *.sh                      # NEVER - shell scripts anywhere
+  - jest.config.js            # BLOCKED unless coverage >= 80%
+```
+
+**Before ANY file operation, the agent MUST:**
+
+1. Check if the file is in the `strictly_allowed_modifications` list
+2. If it's `jest.config.js`, verify coverage >= 80%
+3. If it's `package.json`, ensure only dependencies are being modified (NOT scripts)
+4. If the file is not in the allowed list, REFUSE to modify it
 
 ### Automatic Guardrail Enforcement
 
@@ -1067,19 +1296,51 @@ EOF
 
     # ═══════════════════════════════════════════════════════
     # JEST CONFIGURATION
+    # 🔴 CRITICAL: Only modify if coverage threshold met!
     # ═══════════════════════════════════════════════════════
     jest_config)
-      echo "📝 Fixing Jest configuration..."
+      echo "📝 Checking Jest configuration fix eligibility..."
 
       if [[ -f "jest.config.js" ]]; then
-        # Ensure roots points to 'test/' not 'tests/'
-        if grep -q "roots.*tests" "jest.config.js"; then
-          sed -i.bak "s|roots:.*\['<rootDir>/tests'\]|roots: ['<rootDir>/test']|g" "jest.config.js" && rm -f "jest.config.js.bak"
-          echo "   ✅ Fixed Jest roots to use 'test/' folder"
+        # ═══════════════════════════════════════════════════════
+        # COVERAGE CHECK - MUST pass before modifying jest.config.js
+        # ═══════════════════════════════════════════════════════
+        CAN_MODIFY_JEST=false
+
+        # Check if coverage data exists
+        if [[ -f "coverage/coverage-summary.json" ]]; then
+          COVERAGE_PCT=$(jq -r '.total.lines.pct // 0' "coverage/coverage-summary.json" 2>/dev/null || echo "0")
+
+          # Check if coverage is at least 80%
+          if [[ $(echo "$COVERAGE_PCT >= 80" | bc -l 2>/dev/null || echo "0") -eq 1 ]]; then
+            CAN_MODIFY_JEST=true
+            echo "   ✅ Coverage check passed: ${COVERAGE_PCT}%"
+          else
+            echo "   ❌ BLOCKED: Coverage too low (${COVERAGE_PCT}% < 80%)"
+            echo "      Cannot modify jest.config.js without sufficient coverage"
+            echo "      Focus on improving test coverage first"
+          fi
+        else
+          echo "   ❌ BLOCKED: No coverage data found"
+          echo "      Run tests first to generate coverage data"
+          echo "      Cannot modify jest.config.js without coverage verification"
+        fi
+
+        # Only proceed with jest.config.js modifications if coverage check passed
+        if [[ "$CAN_MODIFY_JEST" == "true" ]]; then
+          # Ensure roots points to 'test/' not 'tests/'
+          if grep -q "roots.*tests" "jest.config.js"; then
+            sed -i.bak "s|roots:.*\['<rootDir>/tests'\]|roots: ['<rootDir>/test']|g" "jest.config.js" && rm -f "jest.config.js.bak"
+            echo "   ✅ Fixed Jest roots to use 'test/' folder"
+            APPLIED_FIXES+=("jest_config")
+          else
+            echo "   ℹ️ Jest roots already correct, no changes needed"
+          fi
+        else
+          echo "   ⚠️ Skipping jest.config.js modification - coverage requirement not met"
+          echo "   📋 Alternative: Fix test files directly in test/ folder"
         fi
       fi
-
-      APPLIED_FIXES+=("jest_config")
       ;;
 
     # ═══════════════════════════════════════════════════════
