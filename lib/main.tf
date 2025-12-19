@@ -354,6 +354,13 @@ resource "aws_route_table_association" "private_db" {
 # VPC FLOW LOGS
 # ===========================
 
+# -------------------------------------------------------------------
+# LocalStack limitation (Community / coverage):
+# VPC Flow Logs are not fully supported in this LocalStack run.
+# Error observed:
+# "Invalid Flow Log Max Aggregation Interval"
+# -------------------------------------------------------------------
+/*
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/${local.name_prefix}-flow-logs"
   retention_in_days = 30
@@ -412,6 +419,7 @@ resource "aws_flow_log" "main" {
     Name = "${local.name_prefix}-vpc-flow-log"
   })
 }
+*/
 
 # ===========================
 # SECURITY GROUPS
@@ -1265,15 +1273,16 @@ output "app_log_group_arn" {
   value       = aws_cloudwatch_log_group.app.arn
 }
 
+/*
 output "vpc_flow_logs_group_name" {
   description = "VPC Flow Logs CloudWatch log group name"
   value       = aws_cloudwatch_log_group.vpc_flow_logs.name
 }
-
 output "vpc_flow_logs_group_arn" {
   description = "VPC Flow Logs CloudWatch log group ARN"
   value       = aws_cloudwatch_log_group.vpc_flow_logs.arn
 }
+*/
 
 # -------------------------------------------------------------------
 # LocalStack (Community) compatibility:
