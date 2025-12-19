@@ -284,6 +284,12 @@ EOF`,
     });
 
     // S3 Bucket for application logs with blocked public access
+    // Note: autoDeleteObjects requires Lambda custom resource which needs ECR (LocalStack Pro)
+    // For LocalStack Community, we use removalPolicy.DESTROY without autoDeleteObjects
+    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                         process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+                         props?.environmentSuffix?.startsWith('pr'); // CI uses pr prefix
+
     const logsBucket = new s3.Bucket(this, 'ApplicationLogsBucket', {
       bucketName: `migration-app-logs-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -297,7 +303,9 @@ EOF`,
         },
       ],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
+      // Only enable autoDeleteObjects for real AWS, not LocalStack
+      // LocalStack Community doesn't support the Lambda custom resource needed
+      autoDeleteObjects: !isLocalStack,
     });
 
     // CloudWatch Application Insights is a Pro/Enterprise feature in LocalStack
