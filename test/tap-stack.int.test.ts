@@ -88,7 +88,7 @@ describe('Security Infrastructure Integration Tests', () => {
 
     test('VPC should have NAT Gateways for private subnet connectivity', async () => {
       const vpcId = outputs.SecurityStackVpcId62BB3396;
-      
+
       const response = await ec2Client.send(new DescribeNatGatewaysCommand({
         Filter: [
           {
@@ -97,11 +97,17 @@ describe('Security Infrastructure Integration Tests', () => {
           },
         ],
       }));
-      
+
+      // For LocalStack: NAT gateways are set to 0 for compatibility
+      // Private subnets use VPC endpoints instead for AWS service communication
       const activeNatGateways = response.NatGateways!.filter(
         ng => ng.State === 'available'
       );
-      expect(activeNatGateways.length).toBeGreaterThanOrEqual(2);
+      if (isLocalStack) {
+        expect(activeNatGateways.length).toBe(0);
+      } else {
+        expect(activeNatGateways.length).toBeGreaterThanOrEqual(2);
+      }
     });
 
     test('VPC should have Internet Gateway attached', async () => {

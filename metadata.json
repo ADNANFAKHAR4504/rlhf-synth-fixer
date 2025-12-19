@@ -9,8 +9,7 @@
   "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
   "subject_labels": [
-    "Cloud Environment Setup",
-    "Security Configuration as Code"
+    "Infrastructure Analysis/Monitoring"
   ],
   "aws_services": [
     "EC2",
