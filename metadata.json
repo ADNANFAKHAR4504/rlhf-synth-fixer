@@ -4,10 +4,20 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "291390",
-  "team": "3",
+  "team": "synth-2",
   "startedAt": "2025-08-14T11:11:30.754Z",
   "subtask": "Application Deployment",
   "provider": "localstack",
-  "subject_labels": ["Web Application Deployment"],
-  "aws_services": ["EC2", "VPC", "RDS", "ELB", "AutoScaling", "SecretsManager", "IAM"]
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "ELB",
+    "AutoScaling",
+    "SecretsManager",
+    "IAM"
+  ]
 }
