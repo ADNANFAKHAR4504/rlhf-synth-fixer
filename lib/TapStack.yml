@@ -25,11 +25,11 @@ Parameters:
     Default: "whitelisteduser" # Replace with actual IAM user
   IsLocalStack:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues:
       - 'true'
       - 'false'
-    Description: 'Set to true when deploying to LocalStack (skips Pro features)'
+    Description: 'Set to true when deploying to LocalStack (skips Pro features like GuardDuty)'
 
 Conditions:
   NotLocalStack: !Equals [!Ref IsLocalStack, 'false']
