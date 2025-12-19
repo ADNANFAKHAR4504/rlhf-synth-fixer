@@ -4,7 +4,7 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "294",
-  "team": "synth",
+  "team": "synth-2",
   "startedAt": "2025-08-05T22:32:28-05:00",
   "subtask": "Application Deployment",
   "provider": "localstack",
