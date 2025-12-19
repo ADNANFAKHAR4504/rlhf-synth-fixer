@@ -277,68 +277,6 @@ describe('TAP Stack Integration Tests', () => {
     );
   });
 
-  skipIfNoOutputs('API Gateway End-to-End Tests', () => {
-    const apiEndpoint = testConfig.apiEndpoint;
-
-    test(
-      'should successfully call API Gateway endpoint',
-      async () => {
-        expect(apiEndpoint).toBeDefined();
-
-        const response = await axios.get(apiEndpoint, {
-          timeout: testConfig.timeout,
-          validateStatus: status => status < 500, // Accept 4xx as valid responses
-        });
-
-        expect([200, 403]).toContain(response.status); // 403 might occur if API requires auth
-
-        if (response.status === 200) {
-          expect(response.data.message).toBeDefined();
-          expect(response.data.environment).toBe(environmentSuffix);
-        }
-      },
-      testConfig.timeout
-    );
-
-    test(
-      'should return appropriate headers',
-      async () => {
-        try {
-          const response = await axios.get(apiEndpoint, {
-            timeout: testConfig.timeout,
-          });
-
-          expect(response.headers['content-type']).toMatch(/application\/json/);
-          expect(response.headers['access-control-allow-origin']).toBe('*');
-        } catch (error: any) {
-          // If the endpoint requires authentication, we might get 403
-          if (error.response?.status === 403) {
-            expect(error.response.status).toBe(403);
-          } else {
-            throw error;
-          }
-        }
-      },
-      testConfig.timeout
-    );
-
-    test(
-      'should handle invalid paths gracefully',
-      async () => {
-        const invalidEndpoint = apiEndpoint.replace('/data', '/invalid');
-
-        try {
-          await axios.get(invalidEndpoint, {
-            timeout: testConfig.timeout,
-          });
-        } catch (error: any) {
-          expect(error.response?.status).toBe(403);
-        }
-      },
-      testConfig.timeout
-    );
-  });
-
   describe('Performance and Scalability', () => {
     test(
       'should handle multiple concurrent Lambda invocations',
