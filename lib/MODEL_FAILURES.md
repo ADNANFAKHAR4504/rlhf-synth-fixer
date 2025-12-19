@@ -1,6 +1,6 @@
 # Model Failures & Issues Encountered
 
-## 🚨 Deployment Failures & Solutions
+##  Deployment Failures & Solutions
 
 ### **1. Lambda Reserved Concurrency Error**
 
@@ -169,7 +169,7 @@ Object.entries(commonTags).forEach(([key, value]) => {
 
 ---
 
-## 🔴 Critical Issues Encountered
+##  Critical Issues Encountered
 
 ### **5. Hard-coded Bucket Name with Timestamp**
 
@@ -501,7 +501,7 @@ new ServerlessStack(this, 'ServerlessStack', {
 
 ---
 
-## 🔍 Common Patterns & Best Practices
+##  Common Patterns & Best Practices
 
 ### **1. Error Prevention Checklist**
 
@@ -576,7 +576,7 @@ curl -X GET https://api-id.execute-api.region.amazonaws.com/test/data \
 
 ---
 
-## 📚 Lessons Learned Summary
+##  Lessons Learned Summary
 
 ### **Technical Lessons:**
 1. **AWS Service Limits**: Always verify account limits before setting reserved resources
@@ -654,7 +654,7 @@ curl -X GET https://api-id.execute-api.region.amazonaws.com/test/data \
 | **Minor**      | 3     | 3     | **100% FIXED** |
 | **Total**      | **6** | **6** | **100% FIXED** |
 
-### **🏆 Production Readiness Achieved:**
+### ** Production Readiness Achieved:**
 
 - **100% Test Coverage**: All 85 tests passing
 - **Successful Build**: TypeScript compilation successful
