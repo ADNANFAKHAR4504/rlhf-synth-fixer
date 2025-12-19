@@ -18,6 +18,12 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
+    // Detect LocalStack environment
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+      this.account === '000000000000';
+
     // Apply consistent tags to all resources
     const defaultTags = {
       Environment: 'Production',
@@ -241,36 +247,66 @@ export class TapStack extends cdk.Stack {
       '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
     );
 
-    // Launch Template for Auto Scaling Group
-    const launchTemplate = new ec2.LaunchTemplate(this, 'AppLaunchTemplate', {
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-      securityGroup: appSecurityGroup,
-      role: ec2Role,
-      userData,
-      requireImdsv2: true, // Require IMDSv2 for enhanced security
-      httpTokens: ec2.LaunchTemplateHttpTokens.REQUIRED,
-    });
-
     // Auto Scaling Group with instances in private subnets
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(
-      this,
-      'AppAutoScalingGroup',
-      {
-        vpc,
-        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-        launchTemplate,
-        minCapacity: 1,
-        maxCapacity: 3,
-        desiredCapacity: 2,
-        healthCheck: autoscaling.HealthCheck.elb({
-          grace: cdk.Duration.seconds(300),
-        }),
-      }
-    );
+    // For LocalStack: Use direct configuration instead of LaunchTemplate to avoid
+    // LatestVersionNumber property issue
+    let autoScalingGroup: autoscaling.AutoScalingGroup;
+
+    if (isLocalStack) {
+      // LocalStack: Use direct instance configuration
+      autoScalingGroup = new autoscaling.AutoScalingGroup(
+        this,
+        'AppAutoScalingGroup',
+        {
+          vpc,
+          vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+          instanceType: ec2.InstanceType.of(
+            ec2.InstanceClass.T3,
+            ec2.InstanceSize.MICRO
+          ),
+          machineImage: ec2.MachineImage.latestAmazonLinux2023(),
+          securityGroup: appSecurityGroup,
+          role: ec2Role,
+          userData,
+          minCapacity: 1,
+          maxCapacity: 3,
+          desiredCapacity: 2,
+          healthCheck: autoscaling.HealthCheck.elb({
+            grace: cdk.Duration.seconds(300),
+          }),
+        }
+      );
+    } else {
+      // AWS: Use LaunchTemplate with IMDSv2 for enhanced security
+      const launchTemplate = new ec2.LaunchTemplate(this, 'AppLaunchTemplate', {
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2023(),
+        securityGroup: appSecurityGroup,
+        role: ec2Role,
+        userData,
+        requireImdsv2: true, // Require IMDSv2 for enhanced security
+        httpTokens: ec2.LaunchTemplateHttpTokens.REQUIRED,
+      });
+
+      autoScalingGroup = new autoscaling.AutoScalingGroup(
+        this,
+        'AppAutoScalingGroup',
+        {
+          vpc,
+          vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+          launchTemplate,
+          minCapacity: 1,
+          maxCapacity: 3,
+          desiredCapacity: 2,
+          healthCheck: autoscaling.HealthCheck.elb({
+            grace: cdk.Duration.seconds(300),
+          }),
+        }
+      );
+    }
 
     // Application Load Balancer
     const alb = new elbv2.ApplicationLoadBalancer(this, 'AppLoadBalancer', {

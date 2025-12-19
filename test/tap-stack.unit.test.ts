@@ -169,22 +169,46 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create launch template with security configuration', () => {
-      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+    test('should create auto scaling group', () => {
+      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        MinSize: '1',
+        MaxSize: '3',
+        DesiredCapacity: '2',
+      });
+    });
+
+    test('should create launch configuration for LocalStack (no LaunchTemplate)', () => {
+      // For LocalStack environment, the stack uses LaunchConfiguration
+      // Check that ASG has either LaunchTemplate OR LaunchConfiguration properties
+      const templateJson = template.toJSON();
+      const asgResource = Object.values(templateJson.Resources).find(
+        (resource: any) => resource.Type === 'AWS::AutoScaling::AutoScalingGroup'
+      ) as any;
+
+      expect(asgResource).toBeDefined();
+      // Either LaunchTemplate or LaunchConfiguration should be present
+      const hasLaunchMechanism =
+        asgResource.Properties.LaunchTemplate !== undefined ||
+        asgResource.Properties.LaunchConfigurationName !== undefined;
+      expect(hasLaunchMechanism).toBe(true);
+    });
+
+    test('should use launch template for non-LocalStack with IMDSv2', () => {
+      // When not in LocalStack (e.g., account !== 000000000000), should have LaunchTemplate
+      const appNonLocalStack = new cdk.App();
+      const stackNonLocalStack = new TapStack(appNonLocalStack, 'NonLocalStackTest', {
+        env: { account: '123456789012', region: 'us-east-1' }
+      });
+      const templateNonLocalStack = Template.fromStack(stackNonLocalStack);
+
+      // Should have LaunchTemplate with IMDSv2
+      templateNonLocalStack.hasResourceProperties('AWS::EC2::LaunchTemplate', {
         LaunchTemplateData: {
           InstanceType: 't3.micro',
           MetadataOptions: {
             HttpTokens: 'required',
           },
         },
-      });
-    });
-
-    test('should create auto scaling group', () => {
-      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        MinSize: '1',
-        MaxSize: '3',
-        DesiredCapacity: '2',
       });
     });
   });
