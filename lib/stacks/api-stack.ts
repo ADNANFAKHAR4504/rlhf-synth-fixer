@@ -85,54 +85,66 @@ export class ApiStack extends cdk.NestedStack {
     });
 
     // Lambda integration with error handling
+    // Detect LocalStack for proxy integration
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
+
     const lambdaIntegration = new apigateway.LambdaIntegration(
       imageProcessorFunction,
       {
-        requestTemplates: {
-          'application/json': JSON.stringify({
-            body: '$input.json("$")',
-            headers: {
-              '#foreach($header in $input.params().header.keySet())':
-                '"$header": "$util.escapeJavaScript($input.params().header.get($header))"#if($foreach.hasNext),#end#end',
-            },
-            pathParameters: {
-              '#foreach($param in $input.params().path.keySet())':
-                '"$param": "$util.escapeJavaScript($input.params().path.get($param))"#if($foreach.hasNext),#end#end',
-            },
-            queryStringParameters: {
-              '#foreach($queryParam in $input.params().querystring.keySet())':
-                '"$queryParam": "$util.escapeJavaScript($input.params().querystring.get($queryParam))"#if($foreach.hasNext),#end#end',
-            },
-          }),
-        },
-        integrationResponses: [
-          {
-            statusCode: '200',
-            responseTemplates: {
-              'application/json': '$input.json("$")',
-            },
-          },
-          {
-            statusCode: '400',
-            selectionPattern: '4\\d{2}',
-            responseTemplates: {
+        // Use proxy integration for LocalStack to avoid request template issues
+        proxy: isLocalStack,
+        timeout: cdk.Duration.minutes(1), // Increased for cold starts
+        requestTemplates: isLocalStack
+          ? undefined
+          : {
               'application/json': JSON.stringify({
-                error: 'Bad Request',
-                message: '$input.path("$.errorMessage")',
+                body: '$input.json("$")',
+                headers: {
+                  '#foreach($header in $input.params().header.keySet())':
+                    '"$header": "$util.escapeJavaScript($input.params().header.get($header))"#if($foreach.hasNext),#end#end',
+                },
+                pathParameters: {
+                  '#foreach($param in $input.params().path.keySet())':
+                    '"$param": "$util.escapeJavaScript($input.params().path.get($param))"#if($foreach.hasNext),#end#end',
+                },
+                queryStringParameters: {
+                  '#foreach($queryParam in $input.params().querystring.keySet())':
+                    '"$queryParam": "$util.escapeJavaScript($input.params().querystring.get($queryParam))"#if($foreach.hasNext),#end#end',
+                },
               }),
             },
-          },
-          {
-            statusCode: '500',
-            selectionPattern: '5\\d{2}',
-            responseTemplates: {
-              'application/json': JSON.stringify({
-                error: 'Internal Server Error',
-                message: '$input.path("$.errorMessage")',
-              }),
-            },
-          },
-        ],
+        integrationResponses: isLocalStack
+          ? undefined
+          : [
+              {
+                statusCode: '200',
+                responseTemplates: {
+                  'application/json': '$input.json("$")',
+                },
+              },
+              {
+                statusCode: '400',
+                selectionPattern: '4\\d{2}',
+                responseTemplates: {
+                  'application/json': JSON.stringify({
+                    error: 'Bad Request',
+                    message: '$input.path("$.errorMessage")',
+                  }),
+                },
+              },
+              {
+                statusCode: '500',
+                selectionPattern: '5\\d{2}',
+                responseTemplates: {
+                  'application/json': JSON.stringify({
+                    error: 'Internal Server Error',
+                    message: '$input.path("$.errorMessage")',
+                  }),
+                },
+              },
+            ],
       }
     );
 
