@@ -126,34 +126,31 @@ class TapStack(cdk.Stack):
         # Export outputs from nested stack to parent stack
         # Access resources directly from the nested stack
         # These outputs will be available in the parent CloudFormation stack
+        # Use nested stack outputs to avoid cross-stack reference issues
         cdk.CfnOutput(
             self,
             "RdsEndpoint",
-            value=self.rds_infra.db_instance.instance_endpoint.hostname,
-            description="RDS PostgreSQL endpoint",
-            export_name=f"RdsEndpoint-{environment_suffix}"
+            value=self.rds_infra.nested_stack_resource.get_att("Outputs.RdsEndpoint").to_string(),
+            description="RDS PostgreSQL endpoint"
         )
 
         cdk.CfnOutput(
             self,
             "RdsPort",
-            value=str(self.rds_infra.db_instance.instance_endpoint.port),
-            description="RDS PostgreSQL port",
-            export_name=f"RdsPort-{environment_suffix}"
+            value=self.rds_infra.nested_stack_resource.get_att("Outputs.RdsPort").to_string(),
+            description="RDS PostgreSQL port"
         )
 
         cdk.CfnOutput(
             self,
             "BackupBucketName",
-            value=self.rds_infra.backup_bucket.bucket_name,
-            description="S3 backup bucket name",
-            export_name=f"BackupBucketName-{environment_suffix}"
+            value=self.rds_infra.nested_stack_resource.get_att("Outputs.BackupBucketName").to_string(),
+            description="S3 backup bucket name"
         )
 
         cdk.CfnOutput(
             self,
             "NotificationTopicArn",
-            value=self.rds_infra.notification_topic.topic_arn,
-            description="SNS notification topic ARN",
-            export_name=f"NotificationTopicArn-{environment_suffix}"
+            value=self.rds_infra.nested_stack_resource.get_att("Outputs.NotificationTopicArn").to_string(),
+            description="SNS notification topic ARN"
         )

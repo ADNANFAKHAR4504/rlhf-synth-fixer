@@ -105,8 +105,9 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
         # Set up CloudWatch monitoring
         self._setup_cloudwatch_monitoring()
 
-        # Set up AWS Backup
-        self._setup_aws_backup()
+        # Set up AWS Backup (skip for LocalStack as it's not well supported)
+        if not self.props.is_localstack:
+            self._setup_aws_backup()
 
         # Create outputs
         self._create_outputs()
@@ -158,13 +159,26 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
                                            "ExistingVpc",
                                            vpc_id=self.props.vpc_id)
         else:
-            # Create new VPC
-            self.vpc = ec2.Vpc(
-                self,
-                "RdsVpc",
-                max_azs=3,
-                nat_gateways=2,
-                subnet_configuration=[
+            # Create new VPC with simplified configuration for LocalStack
+            # LocalStack Community has limited NAT Gateway support
+            max_azs = 2 if self.props.is_localstack else 3
+            nat_gateways = 0 if self.props.is_localstack else 2
+
+            # Simplified subnet configuration for LocalStack
+            if self.props.is_localstack:
+                # LocalStack: Use simpler configuration
+                subnet_config = [
+                    ec2.SubnetConfiguration(name="Public",
+                                            subnet_type=ec2.SubnetType.PUBLIC,
+                                            cidr_mask=24),
+                    ec2.SubnetConfiguration(
+                        name="Database",
+                        subnet_type=ec2.SubnetType.PUBLIC,  # Use public for LocalStack compatibility
+                        cidr_mask=24)
+                ]
+            else:
+                # AWS: Full configuration with private subnets
+                subnet_config = [
                     ec2.SubnetConfiguration(name="Public",
                                             subnet_type=ec2.SubnetType.PUBLIC,
                                             cidr_mask=24),
@@ -176,7 +190,14 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
                         name="Database",
                         subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
                         cidr_mask=24)
-                ])
+                ]
+
+            self.vpc = ec2.Vpc(
+                self,
+                "RdsVpc",
+                max_azs=max_azs,
+                nat_gateways=nat_gateways,
+                subnet_configuration=subnet_config)
 
             # Add tags to VPC
             for key, value in self.common_tags.items():
@@ -294,7 +315,11 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
     def _create_db_subnet_group(self):
         """Create RDS subnet group using private/isolated subnets."""
         # Use isolated subnets if available, otherwise private subnets
-        subnets = self.vpc.isolated_subnets or self.vpc.private_subnets
+        # For LocalStack, use public subnets since we simplified the VPC
+        if self.props.is_localstack:
+            subnets = self.vpc.public_subnets
+        else:
+            subnets = self.vpc.isolated_subnets or self.vpc.private_subnets
 
         self.db_subnet_group = rds.SubnetGroup(
             self,
@@ -318,12 +343,21 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
             f"Security group for RDS PostgreSQL - {self.props.environment_suffix}",
             allow_all_outbound=False)
 
-        # Allow PostgreSQL access from private subnets only
-        for subnet in self.vpc.private_subnets:
+        # Allow PostgreSQL access from VPC subnets
+        # For LocalStack, allow from all VPC; for AWS, restrict to private subnets
+        if self.props.is_localstack:
+            # LocalStack: Allow from entire VPC CIDR
             self.db_security_group.add_ingress_rule(
-                peer=ec2.Peer.ipv4(subnet.ipv4_cidr_block),
+                peer=ec2.Peer.ipv4(self.vpc.vpc_cidr_block),
                 connection=ec2.Port.tcp(5432),
-                description="PostgreSQL access from private subnet")
+                description="PostgreSQL access from VPC")
+        else:
+            # AWS: Allow from private subnets only
+            for subnet in self.vpc.private_subnets:
+                self.db_security_group.add_ingress_rule(
+                    peer=ec2.Peer.ipv4(subnet.ipv4_cidr_block),
+                    connection=ec2.Port.tcp(5432),
+                    description="PostgreSQL access from private subnet")
 
         # Add tags to security group
         for key, value in self.common_tags.items():
@@ -517,29 +551,26 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
 
     def _create_outputs(self):
         """Create CloudFormation outputs."""
+        # Don't use export_name in nested stacks as it can cause issues in LocalStack
         CfnOutput(self,
                   "RdsEndpoint",
                   value=self.db_instance.instance_endpoint.hostname,
-                  description="RDS PostgreSQL endpoint",
-                  export_name=f"RdsEndpoint-{self.props.environment_suffix}")
+                  description="RDS PostgreSQL endpoint")
 
         CfnOutput(self,
                   "RdsPort",
                   value=str(self.db_instance.instance_endpoint.port),
-                  description="RDS PostgreSQL port",
-                  export_name=f"RdsPort-{self.props.environment_suffix}")
+                  description="RDS PostgreSQL port")
 
         CfnOutput(
             self,
             "BackupBucketName",
             value=self.backup_bucket.bucket_name,
-            description="S3 backup bucket name",
-            export_name=f"BackupBucketName-{self.props.environment_suffix}")
+            description="S3 backup bucket name")
 
         CfnOutput(
             self,
             "NotificationTopicArn",
             value=self.notification_topic.topic_arn,
-            description="SNS notification topic ARN",
-            export_name=f"NotificationTopicArn-{self.props.environment_suffix}"
+            description="SNS notification topic ARN"
         )
