@@ -4,19 +4,19 @@
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "274768",
+  "team": "synth-2",
   "startedAt": "2025-07-29T14:17:26.597Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "Hardik-2117",
-  "dockerS3Location": "",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Web Application Deployment"
+  ],
   "aws_services": [
     "VPC",
     "EC2",
     "S3",
     "RDS",
     "IAM"
-  ],
-  "team": "synth-2"
+  ]
 }
