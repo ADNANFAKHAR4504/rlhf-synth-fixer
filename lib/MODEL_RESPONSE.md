@@ -1,23 +1,23 @@
 I'll design and implement a production-ready, event-driven serverless architecture using AWS CDK with Python. This solution will handle automatic processing, notification, and tracking of S3 object uploads.
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 serverless-s3-processor/
-├── app.py                 # CDK app entry point
-├── serverless_s3_processor/
-│   ├── __init__.py
-│   ├── stack.py           # Main CDK stack
-│   └── lambda_functions/
-│       ├── __init__.py
-│       └── processor/
-│           ├── __init__.py
-│           └── handler.py # Lambda function code
-├── requirements.txt
-└── cdk.json
+ app.py                 # CDK app entry point
+ serverless_s3_processor/
+    __init__.py
+    stack.py           # Main CDK stack
+    lambda_functions/
+        __init__.py
+        processor/
+            __init__.py
+            handler.py # Lambda function code
+ requirements.txt
+ cdk.json
 ```
 
-## 🚀 Implementation
+##  Implementation
 
 ### 1. CDK App Entry Point (`app.py`)
 
@@ -586,7 +586,7 @@ boto3>=1.28.0
 }
 ```
 
-## 🚀 Deployment Instructions
+##  Deployment Instructions
 
 ### 1. Setup Environment
 
@@ -627,9 +627,9 @@ curl -X POST https://your-api-id.execute-api.us-east-1.amazonaws.com/prod/proces
   -d '{"bucket": "your-bucket", "key": "test-file.txt"}'
 ```
 
-## 🔧 Key Features Implemented
+##  Key Features Implemented
 
-### ✅ **Architecture Requirements Met**
+###  **Architecture Requirements Met**
 
 1. **S3 Bucket**: AES-256 encryption, proper tagging
 2. **Lambda Function**: Python, VPC deployment, 30s timeout, proper IAM permissions
@@ -638,7 +638,7 @@ curl -X POST https://your-api-id.execute-api.us-east-1.amazonaws.com/prod/proces
 5. **DynamoDB**: Metadata storage with partition and sort keys
 6. **IAM Roles**: Least-privilege permissions
 
-### 🛡️ **Security Best Practices**
+###  **Security Best Practices**
 
 - **Least-privilege IAM roles** with scoped permissions
 - **VPC deployment** for Lambda isolation
@@ -646,14 +646,14 @@ curl -X POST https://your-api-id.execute-api.us-east-1.amazonaws.com/prod/proces
 - **Block public access** on S3 bucket
 - **Proper error handling** and logging
 
-### 📊 **Monitoring & Observability**
+###  **Monitoring & Observability**
 
 - **CloudWatch Logs** integration
 - **Structured logging** in Lambda
 - **Error handling** with proper status codes
 - **CloudFormation outputs** for resource references
 
-### 🔄 **Scalability & Performance**
+###  **Scalability & Performance**
 
 - **Reserved concurrent executions** for Lambda
 - **DynamoDB on-demand billing** for automatic scaling
