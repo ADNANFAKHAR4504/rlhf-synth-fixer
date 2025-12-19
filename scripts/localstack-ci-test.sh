@@ -516,20 +516,19 @@ run_pulumi_tests() {
         "go")
             print_status $YELLOW "🧪 Running Go tests..."
             
-            # Check for Go test files in tests/integration/ only
+            # Check for Go test files in tests/integration/
             if ! find "$test_dir/integration" -name "*_test.go" 2>/dev/null | grep -q .; then
                 print_status $RED "❌ No Go test files found in tests/integration/"
                 exit 1
             fi
             
-            # Build files (go.mod) in project root
-            cd "$PROJECT_ROOT"
+            cd "$test_dir"
             
             if [ -f "go.mod" ]; then
                 go mod download
             fi
             
-            go test -v -timeout 30m ./tests/integration/... 2>&1
+            go test -v -timeout 30m ./... 2>&1
             local exit_code=$?
             if [ $exit_code -ne 0 ]; then
                 print_status $RED "❌ Go tests failed with exit code: $exit_code"
@@ -539,13 +538,12 @@ run_pulumi_tests() {
         "java")
             print_status $YELLOW "🧪 Running Java tests..."
             
-            # Check for Java test files in tests/integration/ only
+            # Check for Java test files in tests/integration/
             if ! find "$test_dir/integration" -name "*Test.java" -o -name "*Tests.java" 2>/dev/null | grep -q .; then
                 print_status $RED "❌ No Java test files found in tests/integration/"
                 exit 1
             fi
             
-            # Build files (pom.xml, build.gradle) in project root
             cd "$PROJECT_ROOT"
             
             if [ -f "pom.xml" ]; then
