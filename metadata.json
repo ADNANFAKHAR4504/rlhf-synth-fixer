@@ -21,6 +21,5 @@
     "WAF",
     "X-Ray"
   ],
-  "provider": "localstack",
-  "training_quality": 9
+  "provider": "localstack"
 }
