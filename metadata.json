@@ -1,0 +1,25 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-05T14:28:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "c0l9i9q4",
+  "aws_services": [
+    "Config",
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch Events",
+    "IAM",
+    "S3",
+    "EC2",
+    "RDS"
+  ],
+  "provider": "localstack"
+}
