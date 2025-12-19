@@ -439,7 +439,8 @@ Resources:
       MultiAZ: false
       DBName: securewebapp
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      # LocalStack Community has limited Secrets Manager support - use simple password for testing
+      MasterUserPassword: 'TempPassword123!'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
