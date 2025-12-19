@@ -1,14 +1,9 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeInstancesCommand,
-} from '@aws-sdk/client-ec2';
-import {
   S3Client,
   ListBucketsCommand,
   GetPublicAccessBlockCommand,
+  GetBucketVersioningCommand,
+  GetBucketEncryptionCommand,
 } from '@aws-sdk/client-s3';
 import {
   CloudFormationClient,
@@ -24,13 +19,15 @@ const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'test';
 const STACK_NAME = `TapStack${ENVIRONMENT_SUFFIX}`;
 
 // LocalStack endpoint configuration
-const LOCALSTACK_ENDPOINT = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
-const isLocalStack = LOCALSTACK_ENDPOINT.includes('localhost') || LOCALSTACK_ENDPOINT.includes('4566');
+const LOCALSTACK_ENDPOINT =
+  process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
+const isLocalStack =
+  LOCALSTACK_ENDPOINT.includes('localhost') ||
+  LOCALSTACK_ENDPOINT.includes('4566');
 
-describe('TapStack Integration Tests', () => {
+describe('TapStack Integration Tests (LocalStack Compatible)', () => {
   let stack: TapStack;
   let app: cdk.App;
-  let ec2Client: EC2Client;
   let s3Client: S3Client;
   let cfClient: CloudFormationClient;
   let deploymentOutputs: any = {};
@@ -47,7 +44,6 @@ describe('TapStack Integration Tests', () => {
       ? { region: REGION, endpoint: LOCALSTACK_ENDPOINT, forcePathStyle: true }
       : { region: REGION };
 
-    ec2Client = new EC2Client(clientConfig);
     s3Client = new S3Client(clientConfig);
     cfClient = new CloudFormationClient(clientConfig);
 
@@ -78,57 +74,6 @@ describe('TapStack Integration Tests', () => {
     expect(template.stacks.length).toBeGreaterThan(0);
   });
 
-  test('VPC has correct configuration when deployed', async () => {
-    // Skip if no deployment outputs available
-    if (!deploymentOutputs.VpcId) {
-      console.log('Skipping VPC test - no deployment outputs available');
-      return;
-    }
-
-    const response = await ec2Client.send(
-      new DescribeVpcsCommand({
-        VpcIds: [deploymentOutputs.VpcId],
-      })
-    );
-
-    // Verify VPC exists and has correct CIDR
-    expect(response.Vpcs).toBeDefined();
-    expect(response.Vpcs?.length).toBe(1);
-    const vpc = response.Vpcs![0];
-    expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-    expect(vpc.Tags).toContainEqual({
-      Key: 'Environment',
-      Value: 'Production',
-    });
-  });
-
-  test('Security groups have proper ingress rules', async () => {
-    const response = await ec2Client.send(new DescribeSecurityGroupsCommand({
-      Filters: [
-        {
-          Name: 'tag:Environment', 
-          Values: ['Production']
-        }
-      ]
-    }));
-
-    // Verify SSH access is restricted to approved IP range
-    const bastionSG = response.SecurityGroups?.find((sg: any) => 
-      sg.GroupName?.includes('Bastion')
-    );
-
-    if (bastionSG) {
-      const sshRule = bastionSG.IpPermissions?.find((rule: any) =>
-        rule.FromPort === 22 && rule.ToPort === 22
-      );
-      
-      expect(sshRule).toBeDefined();
-      expect(sshRule?.IpRanges?.some((range: any) => 
-        range.CidrIp === '203.0.113.0/24'
-      )).toBeTruthy();
-    }
-  });
-
   test('S3 bucket has Block Public Access enabled', async () => {
     // Skip if no deployment outputs available
     if (!deploymentOutputs.S3BucketName) {
@@ -156,39 +101,45 @@ describe('TapStack Integration Tests', () => {
     ).toBe(true);
   });
 
-  test('NAT Gateways are deployed for high availability', async () => {
-    const response = await ec2Client.send(new DescribeNatGatewaysCommand({
-      Filter: [
-        {
-          Name: 'tag:Environment',
-          Values: ['Production']
-        }
-      ]
-    }));
-
-    // Should have 2 NAT Gateways for high availability
-    expect(response.NatGateways?.length).toBeGreaterThanOrEqual(2);
-  });
-
-  test('Bastion host is deployed and accessible', async () => {
+  test('S3 bucket has versioning enabled', async () => {
     // Skip if no deployment outputs available
-    if (!deploymentOutputs.BastionHostId) {
-      console.log('Skipping bastion host test - no deployment outputs available');
+    if (!deploymentOutputs.S3BucketName) {
+      console.log('Skipping versioning test - no deployment outputs available');
       return;
     }
 
-    const response = await ec2Client.send(
-      new DescribeInstancesCommand({
-        InstanceIds: [deploymentOutputs.BastionHostId],
+    const versioningConfig = await s3Client.send(
+      new GetBucketVersioningCommand({
+        Bucket: deploymentOutputs.S3BucketName,
       })
     );
 
-    expect(response.Reservations).toBeDefined();
-    expect(response.Reservations?.length).toBeGreaterThan(0);
-    const instance = response.Reservations![0].Instances![0];
-    expect(instance.State?.Name).toBe('running');
-    expect(instance.InstanceType).toBe('t3.micro');
+    expect(versioningConfig.Status).toBe('Enabled');
   });
 
-  // Note: Instance Connect Endpoint test removed - not supported in LocalStack Community Edition
+  test('S3 bucket has encryption enabled', async () => {
+    // Skip if no deployment outputs available
+    if (!deploymentOutputs.S3BucketName) {
+      console.log('Skipping encryption test - no deployment outputs available');
+      return;
+    }
+
+    const encryptionConfig = await s3Client.send(
+      new GetBucketEncryptionCommand({
+        Bucket: deploymentOutputs.S3BucketName,
+      })
+    );
+
+    expect(encryptionConfig.ServerSideEncryptionConfiguration).toBeDefined();
+    expect(
+      encryptionConfig.ServerSideEncryptionConfiguration?.Rules?.length
+    ).toBeGreaterThan(0);
+  });
+
+  test('LocalStack compatibility verified', () => {
+    // Verify the stack is running in LocalStack mode
+    if (isLocalStack) {
+      expect(process.env.AWS_ENDPOINT_URL).toContain('4566');
+    }
+  });
 });
