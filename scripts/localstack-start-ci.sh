@@ -65,7 +65,7 @@ if [ -n "$LOCALSTACK_SERVICES" ]; then
     echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
 else
     # Default service list for LocalStack Pro - includes all community + commonly used Pro services
-    SERVICES="s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,ecr,rds,ecs,vpc,elasticloadbalancing,route53,acm"
+    SERVICES="s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,ecr,rds,ecs,vpc,elasticloadbalancing,route53,acm,ssm"
     echo -e "${BLUE}📋 Services enabled: ${SERVICES}${NC}"
 fi
 
