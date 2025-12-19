@@ -1,0 +1,40 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291514_ls",
+  "team": "2",
+  "startedAt": "2025-08-17T17:54:55.529Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AWS::IAM::Role",
+    "AWS::IAM::InstanceProfile",
+    "AWS::EC2::VPC",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::SubnetRouteTableAssociation",
+    "AWS::EC2::SecurityGroup",
+    "AWS::EC2::Instance",
+    "AWS::EC2::EIP",
+    "AWS::S3::Bucket",
+    "AWS::S3::BucketPolicy",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::RDS::DBParameterGroup",
+    "AWS::SecretsManager::Secret",
+    "AWS::RDS::DBInstance"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "699",
+  "team": "synth",
+  "startedAt": "2025-12-18T14:37:51.303Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "EventBridge",
+    "EventBridge Scheduler",
+    "CloudWatch Alarms",
+    "CloudWatch LogGroup",
+    "CodeDeploy",
+    "IAM",
+    "CloudFormation"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}

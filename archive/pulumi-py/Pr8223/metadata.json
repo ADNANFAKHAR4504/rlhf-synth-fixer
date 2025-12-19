@@ -1,0 +1,28 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "provider": "localstack",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000950",
+  "team": "synth",
+  "startedAt": "2025-12-02T04:51:39+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "adnan-turing",
+  "dockerS3Location": ""
+}
