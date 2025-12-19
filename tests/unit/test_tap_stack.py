@@ -17,7 +17,7 @@ class TestTapStack(unittest.TestCase):
         self.app = cdk.App()
         self.env = cdk.Environment(account=ACCOUNT, region=REGION)
 
-    @mark.it("does not create resources directly; only composes nested stacks")
+    @mark.it("creates resources directly in flattened stack (LocalStack compatible)")
     def test_tapstack_is_just_orchestration(self):
         stack = TapStack(
             self.app,
@@ -26,10 +26,12 @@ class TestTapStack(unittest.TestCase):
             env=self.env,
         )
         template = Template.from_stack(stack)
-        template.resource_count_is("AWS::S3::Bucket", 0)
-        template.resource_count_is("AWS::Lambda::Function", 0)
-        template.resource_count_is("AWS::DynamoDB::Table", 0)
-        template.resource_count_is("AWS::CloudFormation::Stack", 1)
+        # Flattened stack should have resources directly (not nested)
+        template.resource_count_is("AWS::S3::Bucket", 1)
+        template.resource_count_is("AWS::Lambda::Function", 1)
+        template.resource_count_is("AWS::DynamoDB::Table", 1)
+        # No nested CloudFormation stacks in flattened architecture
+        template.resource_count_is("AWS::CloudFormation::Stack", 0)
 
     @mark.it("creates an S3 bucket in the nested stack with the correct env suffix")
     def test_nested_creates_s3_bucket_with_env_suffix(self):
@@ -40,11 +42,11 @@ class TestTapStack(unittest.TestCase):
             props=TapStackProps(environment_suffix=env_suffix),
             env=self.env,
         )
-        nested = Template.from_stack(stack.s3_processor)
+        template = Template.from_stack(stack)
         expected_bucket_name = f"serverless-processor-{env_suffix}-{ACCOUNT}-{REGION}"
 
-        nested.resource_count_is("AWS::S3::Bucket", 1)
-        nested.has_resource_properties(
+        template.resource_count_is("AWS::S3::Bucket", 1)
+        template.has_resource_properties(
             "AWS::S3::Bucket",
             {
                 "BucketName": expected_bucket_name,
@@ -65,9 +67,9 @@ class TestTapStack(unittest.TestCase):
     @mark.it("defaults environment suffix to 'dev' if not provided")
     def test_defaults_env_suffix_to_dev(self):
         stack = TapStack(self.app, "TapStackDefaultEnv", env=self.env)
-        nested = Template.from_stack(stack.s3_processor)
+        template = Template.from_stack(stack)
         expected_bucket_name = f"serverless-processor-dev-{ACCOUNT}-{REGION}"
-        nested.has_resource_properties("AWS::S3::Bucket", {"BucketName": expected_bucket_name})
+        template.has_resource_properties("AWS::S3::Bucket", {"BucketName": expected_bucket_name})
 
     @mark.it("uses Python 3.11 runtime, DLQ, Insights and tracing")
     def test_lambda_settings(self):
@@ -77,8 +79,8 @@ class TestTapStack(unittest.TestCase):
             props=TapStackProps(environment_suffix="dev"),
             env=self.env,
         )
-        nested = Template.from_stack(stack.s3_processor)
-        nested.has_resource_properties(
+        template = Template.from_stack(stack)
+        template.has_resource_properties(
             "AWS::Lambda::Function",
             {
                 "Runtime": "python3.11",
@@ -88,7 +90,7 @@ class TestTapStack(unittest.TestCase):
             },
         )
         # DLQ exists
-        nested.resource_count_is("AWS::SQS::Queue", 1)
+        template.resource_count_is("AWS::SQS::Queue", 1)
 
     @mark.it("enables KMS CMK and DynamoDB SSE-KMS")
     def test_kms_and_ddb_encryption(self):
@@ -98,11 +100,11 @@ class TestTapStack(unittest.TestCase):
             props=TapStackProps(environment_suffix="prod"),
             env=self.env,
         )
-        nested = Template.from_stack(stack.s3_processor)
+        template = Template.from_stack(stack)
         # KMS Key
-        nested.resource_count_is("AWS::KMS::Key", 1)
+        template.resource_count_is("AWS::KMS::Key", 1)
         # DynamoDB table SSE with KMS
-        nested.has_resource_properties(
+        template.has_resource_properties(
             "AWS::DynamoDB::Table",
             {
                 "SSESpecification": {
@@ -120,6 +122,6 @@ class TestTapStack(unittest.TestCase):
             props=TapStackProps(environment_suffix="dev"),
             env=self.env,
         )
-        nested = Template.from_stack(stack.s3_processor)
+        template = Template.from_stack(stack)
         # CDK uses Custom::S3BucketNotifications
-        nested.resource_count_is("Custom::S3BucketNotifications", 1)
+        template.resource_count_is("Custom::S3BucketNotifications", 1)
