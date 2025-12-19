@@ -1,3 +1,17 @@
+# Secure S3 Bucket CloudFormation Template
+
+This CloudFormation template creates a gold standard secure S3 bucket with comprehensive security controls and compliance features including:
+
+- KMS encryption with key rotation
+- Bucket policy enforcing encryption and secure transport
+- Access logging to a dedicated logging bucket
+- Lifecycle policies for cost optimization
+- Cross-account access for trusted partners
+- Public access blocking
+
+## CloudFormation Template
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Gold Standard Secure S3 Bucket with comprehensive security controls and compliance features'
 
@@ -147,7 +161,7 @@ Resources:
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'aws:kms'
-          
+
           # Deny uploads without the correct KMS key
           - Sid: 'DenyIncorrectKMSKey'
             Effect: Deny
@@ -157,7 +171,7 @@ Resources:
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt S3EncryptionKey.Arn
-          
+
           # Enforce encryption in transit - deny non-HTTPS requests
           - Sid: 'DenyInsecureConnections'
             Effect: Deny
@@ -169,7 +183,7 @@ Resources:
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
-          
+
           # Grant cross-account read access to external partner
           - Sid: 'AllowCrossAccountRead'
             Effect: Allow
@@ -185,7 +199,7 @@ Resources:
             Condition:
               Bool:
                 'aws:SecureTransport': 'true'
-          
+
           # Allow current account full access with secure transport
           - Sid: 'AllowAccountAccess'
             Effect: Allow
@@ -205,21 +219,38 @@ Outputs:
     Value: !Ref SecureDataBucket
     Export:
       Name: !Sub '${AWS::StackName}-SecureBucketName'
-  
+
   KMSKeyArn:
     Description: 'ARN of the KMS key used for bucket encryption'
     Value: !GetAtt S3EncryptionKey.Arn
     Export:
       Name: !Sub '${AWS::StackName}-KMSKeyArn'
-  
+
   LoggingBucketName:
     Description: 'Name of the access logging bucket'
     Value: !Ref LoggingBucket
     Export:
       Name: !Sub '${AWS::StackName}-LoggingBucketName'
-  
+
   KMSKeyAlias:
     Description: 'Alias of the KMS key for easier reference'
     Value: !Ref S3EncryptionKeyAlias
     Export:
       Name: !Sub '${AWS::StackName}-KMSKeyAlias'
+```
+
+## Security Features
+
+1. **KMS Encryption**: Customer-managed KMS key with automatic rotation enabled
+2. **Bucket Policy**: Enforces encryption at rest and in transit
+3. **Access Logging**: All access logged to dedicated logging bucket
+4. **Public Access Block**: All public access blocked by default
+5. **Cross-Account Access**: Controlled read access for trusted external partners
+6. **Lifecycle Policies**: Automatic transition to cheaper storage classes
+
+## Outputs
+
+- `SecureBucketName`: Name of the secure S3 bucket
+- `KMSKeyArn`: ARN of the KMS encryption key
+- `LoggingBucketName`: Name of the access logging bucket
+- `KMSKeyAlias`: Alias of the KMS key for reference
