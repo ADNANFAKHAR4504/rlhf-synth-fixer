@@ -1,18 +1,31 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-import { 
-  IAMClient, 
-  GetGroupCommand, 
+import {
+  IAMClient,
+  GetGroupCommand,
   ListAttachedGroupPoliciesCommand,
   GetPolicyCommand,
-  ListGroupsCommand 
+  ListGroupsCommand
 } from '@aws-sdk/client-iam';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// Initialize AWS IAM client
-const iamClient = new IAMClient({ region: process.env.AWS_REGION || 'us-east-1' });
+// LocalStack configuration
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                     process.env.AWS_ENDPOINT_URL?.includes('4566');
+
+// Initialize AWS IAM client with LocalStack endpoint support
+const iamClient = new IAMClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+  ...(isLocalStack && {
+    endpoint: process.env.AWS_ENDPOINT_URL || 'http://localhost:4566',
+    credentials: {
+      accessKeyId: 'test',
+      secretAccessKey: 'test'
+    }
+  })
+});
 
 let outputs: any = {};
 
