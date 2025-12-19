@@ -1,4 +1,4 @@
-Absolutely! Here’s your original expert-level AWS CDK task rewritten in your requested format, tailored for an AWS Lambda + API Gateway + S3 stack, using CDK (TypeScript), and following the same structure:
+Absolutely! Heres your original expert-level AWS CDK task rewritten in your requested format, tailored for an AWS Lambda + API Gateway + S3 stack, using CDK (TypeScript), and following the same structure:
 
 ---
 

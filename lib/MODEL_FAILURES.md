@@ -22,7 +22,7 @@ Specified ReservedConcurrentExecutions for function decreases account's Unreserv
 // FIXED Lambda configuration:
 this.lambdaFunction = new lambda.Function(this, 'ServerlessFunction', {
   // ... other properties
-  // reservedConcurrentExecutions: 10  // ← REMOVED
+  // reservedConcurrentExecutions: 10  //  REMOVED
 });
 ```
 
@@ -52,7 +52,7 @@ dataResource.addMethod('POST', lambdaIntegration, {
   authorizer: cognitoAuthorizer,
   authorizationType: apigateway.AuthorizationType.COGNITO,
   apiKeyRequired: true,
-  methodResponses: [  // ← ADDED
+  methodResponses: [  //  ADDED
     {
       statusCode: '200',
       responseParameters: {
@@ -97,11 +97,11 @@ this.apiGateway = new apigateway.RestApi(this, 'ServerlessApi', {
     stageName: props.environment,
     throttlingRateLimit: 100,
     throttlingBurstLimit: 200,
-    // accessLogDestination: new apigateway.LogGroupLogDestination(apiLogGroup),  // ← REMOVED
-    // accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields({...}),  // ← REMOVED
+    // accessLogDestination: new apigateway.LogGroupLogDestination(apiLogGroup),  //  REMOVED
+    // accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields({...}),  //  REMOVED
     tracingEnabled: true,
     metricsEnabled: true,
-    // loggingLevel: apigateway.MethodLoggingLevel.INFO  // ← REMOVED
+    // loggingLevel: apigateway.MethodLoggingLevel.INFO  //  REMOVED
   }
 });
 ```
@@ -158,7 +158,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 
 // FIXED tagging implementation:
 Object.entries(commonTags).forEach(([key, value]) => {
-  cdk.Tags.of(this).add(key, value);  // ← Uses cdk.Tags
+  cdk.Tags.of(this).add(key, value);  //  Uses cdk.Tags
 });
 ```
 
@@ -189,7 +189,7 @@ bucketName: `${props.environment}-serverless-data-bucket-${Date.now()}`
 ```typescript
 // FIXED: Deterministic bucket naming
 this.s3Bucket = new s3.Bucket(this, 'ServerlessBucket', {
-  bucketName: `${props.environment}-serverless-data-bucket`, // ← REMOVED Date.now()
+  bucketName: `${props.environment}-serverless-data-bucket`, //  REMOVED Date.now()
   encryption: s3.BucketEncryption.KMS,
   encryptionKey: kmsKey,
   // ... other properties
@@ -204,7 +204,7 @@ this.s3Bucket = new s3.Bucket(this, 'ServerlessBucket', {
 
 ---
 
-## 🟡 Major Issues Encountered
+##  Major Issues Encountered
 
 ### **6. Inline Lambda Code in CDK**
 
@@ -292,7 +292,7 @@ this.lambdaFunction = new lambda.Function(this, 'ServerlessFunction', {
   functionName: `${props.environment}-serverless-function`,
   runtime: lambda.Runtime.NODEJS_18_X,
   handler: 'serverless-function.handler',
-  code: lambda.Code.fromAsset('lambda'), // ← Points to external file
+  code: lambda.Code.fromAsset('lambda'), //  Points to external file
   // ... other properties
 });
 ```
@@ -315,7 +315,7 @@ dataResource.addMethod('POST', lambdaIntegration, {
   authorizer: cognitoAuthorizer,
   authorizationType: apigateway.AuthorizationType.COGNITO,
   apiKeyRequired: true
-  // ← MISSING: request validation
+  //  MISSING: request validation
 });
 ```
 
@@ -352,8 +352,8 @@ dataResource.addMethod('POST', lambdaIntegration, {
   authorizer: cognitoAuthorizer,
   authorizationType: apigateway.AuthorizationType.COGNITO,
   apiKeyRequired: true,
-  requestValidator: requestValidator, // ← ADDED
-  requestModels: { // ← ADDED
+  requestValidator: requestValidator, //  ADDED
+  requestModels: { //  ADDED
     'application/json': requestModel
   },
   methodResponses: [
@@ -364,7 +364,7 @@ dataResource.addMethod('POST', lambdaIntegration, {
       },
     },
     {
-      statusCode: '400', // ← ADDED: Validation error response
+      statusCode: '400', //  ADDED: Validation error response
       responseParameters: {
         'method.response.header.Access-Control-Allow-Origin': true,
       },
@@ -387,7 +387,7 @@ dataResource.addMethod('POST', lambdaIntegration, {
 
 ---
 
-## 🟢 Minor Issues Encountered
+##  Minor Issues Encountered
 
 ### **8. Test Environment Detection**
 
@@ -397,7 +397,7 @@ dataResource.addMethod('POST', lambdaIntegration, {
 } catch (error) {
   // In test environment, API might not be deployed
   console.log('CORS test skipped - API not deployed');
-  expect(true).toBe(true); // ← No environment validation
+  expect(true).toBe(true); //  No environment validation
 }
 ```
 
@@ -413,7 +413,7 @@ dataResource.addMethod('POST', lambdaIntegration, {
   // In test environment, API might not be deployed
   console.log('CORS test skipped - API not deployed');
   // Verify we're in a test environment
-  expect(process.env.NODE_ENV).toBe('test'); // ← ADDED
+  expect(process.env.NODE_ENV).toBe('test'); //  ADDED
   expect(true).toBe(true);
 }
 ```
@@ -486,7 +486,7 @@ const environmentSuffix = props?.environmentSuffix || 'dev';
 ```typescript
 // VERIFIED: Variable is properly used
 new ServerlessStack(this, 'ServerlessStack', {
-  environment: environmentSuffix, // ← ACTUALLY USED
+  environment: environmentSuffix, //  ACTUALLY USED
   owner: 'TAP-Project',
   costCenter: 'TAP-CC-001',
   compliance: 'SOX',
