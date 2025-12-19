@@ -223,8 +223,8 @@ describe('EKS Cluster Integration Tests', () => {
   describe('Stack Discovery', () => {
     test('stack should be discovered and exist', () => {
       expect(stackName).toBeDefined();
-      // Accept both TapStack and tap-stack naming patterns (for LocalStack)
-      expect(stackName).toMatch(/^(TapStack|tap-stack)/);
+      // Accept TapStack, tap-stack, and localstack-stack naming patterns
+      expect(stackName).toMatch(/^(TapStack|tap-stack|localstack-stack-)/);
 
       const stack = awsCli(`cloudformation describe-stacks --stack-name ${stackName}`);
       expect(stack.Stacks).toBeDefined();
