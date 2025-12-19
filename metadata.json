@@ -4,11 +4,21 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "534311",
-  "team": "2",
+  "team": "synth",
   "startedAt": "2025-11-25T14:22:16.191Z",
-  "subtask": "IaC Program Optimization",
+  "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "IaC Optimization"
+    "Infrastructure Analysis/Monitoring",
+    "General Infrastructure Tooling QA"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "aws_services": [
+    "EventBridge",
+    "Lambda",
+    "SQS",
+    "SNS",
+    "KMS",
+    "CloudWatch",
+    "IAM"
+  ]
 }
