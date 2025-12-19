@@ -522,14 +522,14 @@ run_pulumi_tests() {
                 exit 1
             fi
             
-            # Run tests from tests/integration/ only
-            cd "$test_dir/integration"
+            # Build files (go.mod) in project root
+            cd "$PROJECT_ROOT"
             
             if [ -f "go.mod" ]; then
                 go mod download
             fi
             
-            go test -v -timeout 30m ./... 2>&1
+            go test -v -timeout 30m ./tests/integration/... 2>&1
             local exit_code=$?
             if [ $exit_code -ne 0 ]; then
                 print_status $RED "❌ Go tests failed with exit code: $exit_code"
@@ -545,8 +545,8 @@ run_pulumi_tests() {
                 exit 1
             fi
             
-            # Run tests from tests/integration/ only
-            cd "$test_dir/integration"
+            # Build files (pom.xml, build.gradle) in project root
+            cd "$PROJECT_ROOT"
             
             if [ -f "pom.xml" ]; then
                 mvn test -B 2>&1
@@ -563,7 +563,7 @@ run_pulumi_tests() {
                     exit $exit_code
                 fi
             else
-                print_status $RED "❌ No Java build file (pom.xml or build.gradle) found in tests/integration/"
+                print_status $RED "❌ No Java build file (pom.xml or build.gradle) found"
                 exit 1
             fi
             ;;
