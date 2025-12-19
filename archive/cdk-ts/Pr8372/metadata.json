@@ -17,5 +17,12 @@
     "lambda",
     "cloudwatch",
     "iam"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
 }
