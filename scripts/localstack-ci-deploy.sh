@@ -351,8 +351,10 @@ deploy_cdk() {
     print_status $BLUE "📌 Environment suffix: $env_suffix"
 
     # Bootstrap CDK for LocalStack
-    print_status $YELLOW "🔧 Bootstrapping CDK..."
-    cdklocal bootstrap -c environmentSuffix="$env_suffix" || true
+    # Note: Skipping bootstrap as it requires ECR (Pro feature) for asset publishing
+    # LocalStack Community edition deployment works without bootstrap
+    print_status $YELLOW "⏩ Skipping CDK bootstrap (not required for LocalStack Community Edition)"
+    print_status $BLUE "   LocalStack does not require CDK Toolkit stack for deployment"
 
     # Deploy based on language
     print_status $YELLOW "🚀 Deploying stacks..."
