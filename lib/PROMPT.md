@@ -1,4 +1,4 @@
-We're running a cost and performance audit on all 45 RDS databases (Aurora, PostgreSQL, MySQL) supporting our SaaS apps in `us-east-1`. Please create a CLI Python script `analyze_rds_performance.py` using **Boto3** and **Pandas** to act as a diagnostic and optimization tool.
+We're running a cost and performance audit on all 45 RDS databases (Aurora, PostgreSQL, MySQL) supporting our SaaS apps in `us-east-1`. Please create a CLI Python script `analyse.py` using **Boto3** and **Pandas** to act as a diagnostic and optimization tool.
 
 **Analysis required:**
 
@@ -40,8 +40,8 @@ We're running a cost and performance audit on all 45 RDS databases (Aurora, Post
 - Python 3.12, Boto3, Pandas, Matplotlib, Moto for testing
 
 **Delivery:**
-- Main script as `analyze_rds_performance.py` (Python code block).
-- Tests as `test_analyze_rds_performance.py` (Python code block).
+- Main script as `analyse.py` (Python code block).
+- Tests as `test_analyse.py` (Python code block).
 - Any templates (HTML, Jinja2) inline or in a separate block.
 
 _Do not omit or reinterpret any requirement or output format—everything above must be implemented as specified._
