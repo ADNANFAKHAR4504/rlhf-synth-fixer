@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: TAP Stack VPC with Public & Private Subnets, NAT Gateway, and EC2 Instances
+Description: TAP Stack VPC with Public & Private Subnets and Internet Gateway (LocalStack Compatible)
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -14,12 +14,6 @@ Metadata:
           - VpcCidrBlock
           - PublicSubnetCidrBlock
           - PrivateSubnetCidrBlock
-      - Label:
-          default: "Instance Configuration"
-        Parameters:
-          - InstanceType
-          - KeyName
-          - SshCidrBlock
     ParameterLabels:
       EnvironmentSuffix:
         default: "Environment Suffix"
@@ -46,23 +40,6 @@ Parameters:
     Type: String
     Default: '10.0.2.0/24'
     Description: CIDR block for the private subnet
-
-  SshCidrBlock:
-    Type: String
-    Description: IP CIDR range allowed to SSH into EC2 (e.g., 203.0.113.0/32)
-    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$'
-    Default: '203.0.2.0/32'
-    ConstraintDescription: Must be a valid IPv4 CIDR block
-
-  InstanceType:
-    Type: String
-    Default: 't2.micro'
-    Description: EC2 instance type
-
-  KeyName:
-    Type: String
-    Default: iac-rlhf-aws-trainer-instance
-    Description: Name of an existing EC2 KeyPair
 
 Resources:
 
@@ -132,25 +109,6 @@ Resources:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicRouteTable
 
-  NatGatewayEIP:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub NatEIP-${EnvironmentSuffix}
-
-  NatGateway:
-    Type: AWS::EC2::NatGateway
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      AllocationId: !GetAtt NatGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet
-      Tags:
-        - Key: Name
-          Value: !Sub NatGateway-${EnvironmentSuffix}
-
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -158,13 +116,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub PrivateRouteTable-${EnvironmentSuffix}
-
-  PrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NatGateway
 
   PrivateSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -175,68 +126,44 @@ Resources:
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable SSH and HTTP access
+      GroupDescription: Default security group for VPC resources
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref SshCidrBlock
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: !Ref SshCidrBlock
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub InstanceSecurityGroup-${EnvironmentSuffix}
-
-  PublicInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
-      ImageId: ami-12345678
-      SecurityGroupIds:
-        - !Ref SecurityGroup
-      SubnetId: !Ref PublicSubnet
-      Tags:
-        - Key: Name
-          Value: !Sub PublicInstance-${EnvironmentSuffix}
-
-  PrivateInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
-      ImageId: ami-12345678
-      SecurityGroupIds:
-        - !Ref SecurityGroup
-      SubnetId: !Ref PrivateSubnet
-      Tags:
-        - Key: Name
-          Value: !Sub PrivateInstance-${EnvironmentSuffix}
+          Value: !Sub DefaultSecurityGroup-${EnvironmentSuffix}
 
 Outputs:
   VPCId:
     Description: ID of the created VPC
     Value: !Ref VPC
+    Export:
+      Name: !Sub ${AWS::StackName}-VPCId
 
   PublicSubnetId:
     Description: ID of the public subnet
     Value: !Ref PublicSubnet
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnetId
 
   PrivateSubnetId:
     Description: ID of the private subnet
     Value: !Ref PrivateSubnet
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnetId
 
-  PublicInstanceId:
-    Description: ID of the EC2 instance in the public subnet
-    Value: !Ref PublicInstance
+  SecurityGroupId:
+    Description: ID of the default security group
+    Value: !Ref SecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-SecurityGroupId
 
-  PrivateInstanceId:
-    Description: ID of the EC2 instance in the private subnet
-    Value: !Ref PrivateInstance
-
-  PublicInstancePublicIP:
-    Description: Public IP of the EC2 instance in the public subnet
-    Value: !GetAtt PublicInstance.PublicIp
+  InternetGatewayId:
+    Description: ID of the Internet Gateway
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub ${AWS::StackName}-InternetGatewayId
