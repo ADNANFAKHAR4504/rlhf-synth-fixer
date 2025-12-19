@@ -129,35 +129,22 @@ install_dependencies() {
 }
 
 # Function to save deployment outputs
-# Fails if no outputs are saved (output_count = 0) UNLESS stack validation is provided
+# Fails if no outputs are saved (output_count = 0)
 save_outputs() {
     local output_json=$1
-    local stack_count=${2:-0}  # Optional: number of successfully deployed stacks
-
+    
     mkdir -p "$PROJECT_ROOT/cfn-outputs"
     echo "$output_json" > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
-
+    
     local output_count=$(echo "$output_json" | jq 'keys | length' 2>/dev/null || echo "0")
-
+    
     if [ "$output_count" -eq 0 ]; then
-        print_status $YELLOW "⚠️  No deployment outputs found in CloudFormation stacks"
-
-        # For LocalStack multi-stack deployments, check if stacks were successfully deployed
-        if [ "$stack_count" -gt 0 ]; then
-            print_status $GREEN "✓ Found $stack_count deployed stack(s) - considering deployment successful"
-            print_status $BLUE "   LocalStack multi-stack deployment validated via stack existence"
-
-            # Write a minimal outputs file to satisfy downstream validation
-            echo '{"DeploymentStatus": "Success", "StacksDeployed": "'"$stack_count"'"}' | tee "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" > /dev/null
-            print_status $GREEN "✅ Deployment validated (no outputs but stacks exist)"
-        else
-            print_status $RED "❌ No deployment outputs found and no stacks validated!"
-            print_status $RED "❌ Deployment must produce at least one output or deployed stack"
-            exit 1
-        fi
-    else
-        print_status $GREEN "✅ Saved $output_count outputs to cfn-outputs/flat-outputs.json"
+        print_status $RED "❌ No deployment outputs found!"
+        print_status $RED "❌ Deployment must produce at least one output"
+        exit 1
     fi
+    
+    print_status $GREEN "✅ Saved $output_count outputs to cfn-outputs/flat-outputs.json"
 }
 
 # Function to describe CDK/CloudFormation deployment failure
@@ -424,93 +411,27 @@ deploy_cdk() {
 
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
-    local stack_prefix="TapStack"
+    local stack_name="TapStack${env_suffix}"
     local output_json="{}"
-    local temp_output_file="/tmp/stack_outputs_$$.json"
-    rm -f "$temp_output_file"
-
-    # Get all stacks that match the pattern (handles multi-region deployments)
-    # Query multiple regions since CDK may deploy to different regions
-    local regions=("us-east-1" "us-west-2" "us-east-2" "eu-west-1")
-    local found_stacks=()
-
-    print_status $BLUE "   Searching for stacks in multiple regions..."
-    for region in "${regions[@]}"; do
-        print_status $BLUE "     Checking region: $region"
-        local region_stacks=$(AWS_DEFAULT_REGION=$region awslocal cloudformation list-stacks \
-            --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
-            --query 'StackSummaries[].StackName' \
-            --output text 2>/dev/null | tr '\t' '\n' | grep "^${stack_prefix}" || echo "")
-
-        if [ -n "$region_stacks" ]; then
-            while IFS= read -r stack; do
-                if [ -n "$stack" ]; then
-                    found_stacks+=("$region:$stack")
-                    print_status $GREEN "       ✓ Found: $stack"
-                fi
-            done <<< "$region_stacks"
-        fi
-    done
-
-    if [ ${#found_stacks[@]} -gt 0 ]; then
-        print_status $BLUE "   Found ${#found_stacks[@]} stack(s) total"
-
-        # Collect outputs from all matching stacks
-        for stack_entry in "${found_stacks[@]}"; do
-            local region="${stack_entry%%:*}"
-            local stack="${stack_entry#*:}"
-
-            print_status $BLUE "   Collecting outputs from: $stack (region: $region)"
-            local stack_outputs=$(AWS_DEFAULT_REGION=$region awslocal cloudformation describe-stacks --stack-name "$stack" \
-                --query 'Stacks[0].Outputs' \
-                --output json 2>/dev/null | python3 -c "
+    
+    if awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
+        output_json=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
+            --query 'Stacks[0].Outputs' \
+            --output json 2>/dev/null | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
     outputs = {}
     if data:
         for output in data:
-            # Keep original key names
-            key = output['OutputKey']
-            outputs[key] = output['OutputValue']
+            outputs[output['OutputKey']] = output['OutputValue']
     print(json.dumps(outputs, indent=2))
 except:
     print('{}')
 " || echo "{}")
-
-            # Append outputs to temporary file
-            if [ -n "$stack_outputs" ] && [ "$stack_outputs" != "{}" ]; then
-                echo "$stack_outputs" >> "$temp_output_file"
-            fi
-        done
-
-        # Merge all collected outputs
-        if [ -f "$temp_output_file" ]; then
-            output_json=$(python3 -c "
-import sys, json
-merged = {}
-try:
-    with open('$temp_output_file', 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line and line != '{}':
-                try:
-                    data = json.loads(line)
-                    merged.update(data)
-                except:
-                    pass
-    print(json.dumps(merged, indent=2))
-except:
-    print('{}')
-")
-            rm -f "$temp_output_file"
-        fi
-    else
-        print_status $YELLOW "   ⚠️  No stacks found matching pattern: ${stack_prefix}* in any region"
     fi
-
-    # Pass stack count to save_outputs for validation
-    save_outputs "$output_json" "${#found_stacks[@]}"
+    
+    save_outputs "$output_json"
 }
 
 # CDKTF deployment
