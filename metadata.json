@@ -1,6 +1,6 @@
 {
   "platform": "cdk",
-  "language": "py",
+  "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "trainr98",
@@ -13,11 +13,9 @@
   ],
   "aws_services": [
     "s3",
-    "dynamodb",
-    "sns",
-    "lambda",
-    "apigateway",
     "iam",
-    "logs"
+    "cloudwatch",
+    "logs",
+    "config"
   ]
 }
