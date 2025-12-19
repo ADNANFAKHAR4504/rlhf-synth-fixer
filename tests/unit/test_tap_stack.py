@@ -1,4 +1,6 @@
+import os
 import unittest
+from unittest import mock
 
 import aws_cdk as cdk
 from aws_cdk.assertions import Template
@@ -55,23 +57,25 @@ class TestTapStack(unittest.TestCase):
             }
         })
 
-    @mark.it("creates RDS MySQL instance with correct settings")
+    @mark.it("creates RDS MySQL instance with correct settings (non-LocalStack)")
     def test_creates_rds_instance(self):
-        stack = TapStack(self.app, "TapStackRdsTest")
-        template = Template.from_stack(stack)
-        template.resource_count_is("AWS::RDS::DBInstance", 1)
-        template.has_resource_properties("AWS::RDS::DBInstance", {
-            "Engine": "mysql",
-            "StorageEncrypted": True,
-            "BackupRetentionPeriod": 7,
-            "DeletionProtection": False
-        })
+        with mock.patch.dict(os.environ, {}, clear=True):
+            stack = TapStack(self.app, "TapStackRdsTest")
+            template = Template.from_stack(stack)
+            template.resource_count_is("AWS::RDS::DBInstance", 1)
+            template.has_resource_properties("AWS::RDS::DBInstance", {
+                "Engine": "mysql",
+                "StorageEncrypted": True,
+                "BackupRetentionPeriod": 7,
+                "DeletionProtection": False
+            })
 
-    @mark.it("creates CloudTrail resource")
+    @mark.it("creates CloudTrail resource (non-LocalStack)")
     def test_creates_cloudtrail(self):
-        stack = TapStack(self.app, "TapStackCloudTrailTest")
-        template = Template.from_stack(stack)
-        template.resource_count_is("AWS::CloudTrail::Trail", 1)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            stack = TapStack(self.app, "TapStackCloudTrailTest")
+            template = Template.from_stack(stack)
+            template.resource_count_is("AWS::CloudTrail::Trail", 1)
 
     @mark.it("creates EC2 bastion host and app servers")
     def test_creates_ec2_instances(self):
@@ -79,12 +83,38 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
         template.resource_count_is("AWS::EC2::Instance", 3)  # 1 Bastion + 2 AppServers
 
-    @mark.it("outputs key resource identifiers")
+    @mark.it("outputs key resource identifiers (non-LocalStack)")
     def test_outputs(self):
-        stack = TapStack(self.app, "TapStackOutputsTest")
-        template = Template.from_stack(stack)
-        outputs = template.to_json().get("Outputs", {})
-        self.assertIn("VpcId", outputs)
-        self.assertIn("BastionHostId", outputs)
-        self.assertIn("DatabaseEndpoint", outputs)
-        self.assertIn("AppDataBucketName", outputs)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            stack = TapStack(self.app, "TapStackOutputsTest")
+            template = Template.from_stack(stack)
+            outputs = template.to_json().get("Outputs", {})
+            self.assertIn("VpcId", outputs)
+            self.assertIn("BastionHostId", outputs)
+            self.assertIn("DatabaseEndpoint", outputs)
+            self.assertIn("AppDataBucketName", outputs)
+
+    @mark.it("skips RDS creation in LocalStack mode")
+    def test_localstack_skips_rds(self):
+        with mock.patch.dict(os.environ, {"AWS_ENDPOINT_URL": "http://localhost:4566"}):
+            stack = TapStack(self.app, "TapStackLocalStackRdsTest")
+            template = Template.from_stack(stack)
+            template.resource_count_is("AWS::RDS::DBInstance", 0)
+
+    @mark.it("skips CloudTrail creation in LocalStack mode")
+    def test_localstack_skips_cloudtrail(self):
+        with mock.patch.dict(os.environ, {"AWS_ENDPOINT_URL": "http://localhost:4566"}):
+            stack = TapStack(self.app, "TapStackLocalStackCloudTrailTest")
+            template = Template.from_stack(stack)
+            template.resource_count_is("AWS::CloudTrail::Trail", 0)
+
+    @mark.it("does not output DatabaseEndpoint in LocalStack mode")
+    def test_localstack_no_database_output(self):
+        with mock.patch.dict(os.environ, {"AWS_ENDPOINT_URL": "http://localhost:4566"}):
+            stack = TapStack(self.app, "TapStackLocalStackOutputsTest")
+            template = Template.from_stack(stack)
+            outputs = template.to_json().get("Outputs", {})
+            self.assertIn("VpcId", outputs)
+            self.assertIn("BastionHostId", outputs)
+            self.assertNotIn("DatabaseEndpoint", outputs)  # Should not exist in LocalStack
+            self.assertIn("AppDataBucketName", outputs)
