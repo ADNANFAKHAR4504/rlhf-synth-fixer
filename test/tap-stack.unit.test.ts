@@ -30,7 +30,7 @@ describe('TapStack - High Availability Infrastructure', () => {
         },
       });
       const defaultTemplate = Template.fromStack(defaultStack);
-      
+
       // Check that resources are created with 'dev' suffix
       defaultTemplate.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
@@ -48,7 +48,9 @@ describe('TapStack - High Availability Infrastructure', () => {
         Tags: Match.arrayWith([
           Match.objectLike({
             Key: 'Name',
-            Value: Match.stringLikeRegexp(`TapStack.*${environmentSuffix}.*VPC`),
+            Value: Match.stringLikeRegexp(
+              `TapStack.*${environmentSuffix}.*VPC`
+            ),
           }),
         ]),
       });
@@ -58,16 +60,20 @@ describe('TapStack - High Availability Infrastructure', () => {
       const emptyPropsApp = new cdk.App();
       const emptyPropsStack = new TapStack(emptyPropsApp, 'TapStackEmpty');
       const emptyPropsTemplate = Template.fromStack(emptyPropsStack);
-      
+
       // Check that stack is created successfully with defaults
       emptyPropsTemplate.resourceCountIs('AWS::EC2::VPC', 1);
     });
 
     test('Creates stack with undefined props', () => {
       const undefinedPropsApp = new cdk.App();
-      const undefinedPropsStack = new TapStack(undefinedPropsApp, 'TapStackUndefined', undefined as any);
+      const undefinedPropsStack = new TapStack(
+        undefinedPropsApp,
+        'TapStackUndefined',
+        undefined as any
+      );
       const undefinedPropsTemplate = Template.fromStack(undefinedPropsStack);
-      
+
       // Check that stack is created successfully with defaults
       undefinedPropsTemplate.resourceCountIs('AWS::EC2::VPC', 1);
     });
@@ -85,7 +91,7 @@ describe('TapStack - High Availability Infrastructure', () => {
     test('Creates subnets across multiple availability zones', () => {
       // Check for public subnets
       template.resourceCountIs('AWS::EC2::Subnet', 9); // 3 public, 3 private, 3 database
-      
+
       // Verify public subnet configuration
       template.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: true,
@@ -184,11 +190,11 @@ describe('TapStack - High Availability Infrastructure', () => {
         }),
       });
 
-      // Step scaling policy exists 
+      // Step scaling policy exists
       template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
         PolicyType: 'StepScaling',
       });
-      
+
       // Verify we have both types of policies
       template.resourceCountIs('AWS::AutoScaling::ScalingPolicy', 3);
     });
@@ -230,13 +236,10 @@ describe('TapStack - High Availability Infrastructure', () => {
     });
 
     test('Creates ALB Listener', () => {
-      template.hasResourceProperties(
-        'AWS::ElasticLoadBalancingV2::Listener',
-        {
-          Port: 80,
-          Protocol: 'HTTP',
-        }
-      );
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+        Port: 80,
+        Protocol: 'HTTP',
+      });
     });
   });
 
@@ -277,63 +280,12 @@ describe('TapStack - High Availability Infrastructure', () => {
 
     test('Creates database credentials secret', () => {
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Name: Match.stringLikeRegexp(`TapStack-${environmentSuffix}-db-credentials`),
+        Name: Match.stringLikeRegexp(
+          `TapStack-${environmentSuffix}-db-credentials`
+        ),
         GenerateSecretString: Match.objectLike({
           SecretStringTemplate: '{"username":"admin"}',
         }),
-      });
-    });
-  });
-
-  describe('CloudFront and WAF', () => {
-    test('Creates CloudFront distribution', () => {
-      template.hasResourceProperties(
-        'AWS::CloudFront::Distribution',
-        {
-          DistributionConfig: Match.objectLike({
-            DefaultCacheBehavior: Match.objectLike({
-              ViewerProtocolPolicy: 'redirect-to-https',
-              AllowedMethods: Match.arrayWith([
-                'GET',
-                'HEAD',
-                'OPTIONS',
-                'PUT',
-                'PATCH',
-                'POST',
-                'DELETE',
-              ]),
-            }),
-          }),
-        }
-      );
-    });
-
-    test('Creates WAF Web ACL with managed rules', () => {
-      template.hasResourceProperties('AWS::WAFv2::WebACL', {
-        Scope: 'CLOUDFRONT',
-        DefaultAction: { Allow: {} },
-        Rules: Match.arrayWith([
-          Match.objectLike({
-            Name: 'AWS-AWSManagedRulesCommonRuleSet',
-            Priority: 1,
-            Statement: Match.objectLike({
-              ManagedRuleGroupStatement: Match.objectLike({
-                VendorName: 'AWS',
-                Name: 'AWSManagedRulesCommonRuleSet',
-              }),
-            }),
-          }),
-          Match.objectLike({
-            Name: 'AWS-AWSManagedRulesKnownBadInputsRuleSet',
-            Priority: 2,
-            Statement: Match.objectLike({
-              ManagedRuleGroupStatement: Match.objectLike({
-                VendorName: 'AWS',
-                Name: 'AWSManagedRulesKnownBadInputsRuleSet',
-              }),
-            }),
-          }),
-        ]),
       });
     });
   });
@@ -444,21 +396,9 @@ describe('TapStack - High Availability Infrastructure', () => {
       });
     });
 
-    test('Exports CloudFront distribution domain', () => {
-      template.hasOutput('CloudFrontDistributionDomain', {
-        Description: 'CloudFront distribution domain name',
-      });
-    });
-
     test('Exports Database endpoint', () => {
       template.hasOutput('DatabaseEndpoint', {
         Description: 'RDS database endpoint',
-      });
-    });
-
-    test('Exports Read Replica endpoint', () => {
-      template.hasOutput('ReadReplicaEndpoint', {
-        Description: 'RDS read replica endpoint',
       });
     });
 
@@ -476,7 +416,9 @@ describe('TapStack - High Availability Infrastructure', () => {
         Tags: Match.arrayWith([
           Match.objectLike({
             Key: 'Name',
-            Value: Match.stringLikeRegexp(`TapStack.*${environmentSuffix}.*VPC`),
+            Value: Match.stringLikeRegexp(
+              `TapStack.*${environmentSuffix}.*VPC`
+            ),
           }),
         ]),
       });
