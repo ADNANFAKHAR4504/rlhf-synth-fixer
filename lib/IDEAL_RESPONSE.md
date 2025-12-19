@@ -305,7 +305,7 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
       InstanceType: !FindInMap [EnvironmentMap, !Ref Environment, InstanceType]
       IamInstanceProfile: !Ref EC2InstanceProfile
       SecurityGroupIds:
