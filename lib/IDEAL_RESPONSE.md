@@ -4,7 +4,7 @@ Platform: cdk/ts
 
 ## Expected Solution
 
-A comprehensive AWS CDK TypeScript implementation that creates an enterprise-level secure network infrastructure with the following components:
+A comprehensive AWS CDK TypeScript implementation using `aws-cdk-lib` that creates an enterprise-level secure network infrastructure with the following components:
 
 ### Core Infrastructure
 - Multi-region VPC deployment (us-east-1 and us-west-2)
@@ -32,10 +32,11 @@ A comprehensive AWS CDK TypeScript implementation that creates an enterprise-lev
 - Skip or conditionally implement AWS Config and CloudTrail (LocalStack limitations)
 
 ### Code Structure
-- Main orchestration stack (tap-stack.ts)
-- Separate secure network stack module (secure-network-stack.ts)
-- Comprehensive unit and integration tests
-- Multi-region deployment support
+- Main orchestration stack (tap-stack.ts) using `aws-cdk-lib.Stack`
+- Separate secure network stack module (secure-network-stack.ts) importing from `aws-cdk-lib`
+- CDK constructs using `@aws-cdk` patterns
+- Comprehensive unit and integration tests with CDK assertions
+- Multi-region deployment support using CDK environments
 
 ### Testing
 - Unit tests covering stack synthesis and resource creation
