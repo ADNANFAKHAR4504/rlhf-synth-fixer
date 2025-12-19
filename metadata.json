@@ -27,5 +27,6 @@
     "Config",
     "GuardDuty",
     "WAFv2"
-  ]
+  ],
+  "training_quality": 9
 }
