@@ -20,5 +20,10 @@
     "CloudWatch Logs"
   ],
   "training_quality": 10,
-  "author": "mayanksethi-turing"
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
