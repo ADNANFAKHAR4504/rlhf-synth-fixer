@@ -1,0 +1,24 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291363",
+  "team": "3",
+  "startedAt": "2025-08-13T10:14:40.349Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "s3",
+    "kms",
+    "ec2",
+    "rds",
+    "vpc",
+    "iam",
+    "logs"
+  ]
+}
