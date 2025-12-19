@@ -2,14 +2,14 @@
   "platform": "cdk",
   "language": "ts",
   "complexity": "expert",
-  "turn_type": null,
+  "turn_type": "single",
   "po_id": "trainr87",
   "team": "synth-2",
   "startedAt": "2025-08-12T11:54:32-05:00",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "S3",
