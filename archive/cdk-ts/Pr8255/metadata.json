@@ -22,5 +22,12 @@
     "IAM",
     "Secrets Manager",
     "Key Pairs"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
 }
