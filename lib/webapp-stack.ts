@@ -169,7 +169,14 @@ export class WebAppStack extends cdk.Stack {
         vpc: this.vpc,
         mixedInstancesPolicy: {
           launchTemplate,
-          launchTemplateOverrides: [{ instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM) }],
+          launchTemplateOverrides: [
+            {
+              instanceType: ec2.InstanceType.of(
+                ec2.InstanceClass.T3,
+                ec2.InstanceSize.MEDIUM
+              ),
+            },
+          ],
         },
         minCapacity: 2,
         maxCapacity: 6,
