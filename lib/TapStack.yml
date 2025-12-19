@@ -201,7 +201,7 @@ Resources:
     Properties:
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyName
-      ImageId: !Ref AmiId
+      ImageId: ami-0871b7e0b83ae16c4
       SecurityGroupIds:
         - !Ref SecurityGroup
       SubnetId: !Ref PublicSubnet
@@ -214,7 +214,7 @@ Resources:
     Properties:
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyName
-      ImageId: !Ref AmiId
+      ImageId: ami-0871b7e0b83ae16c4
       SecurityGroupIds:
         - !Ref SecurityGroup
       SubnetId: !Ref PrivateSubnet
