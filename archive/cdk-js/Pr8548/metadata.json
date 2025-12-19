@@ -1,0 +1,39 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "hard",
+  "team": "synth",
+  "startedAt": "2025-10-28T13:52:00-07:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "6822068523",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "KMS",
+    "Secrets Manager",
+    "Kinesis Data Streams",
+    "RDS Aurora",
+    "EFS",
+    "ElastiCache",
+    "ECS Fargate",
+    "Lambda",
+    "API Gateway",
+    "CodePipeline",
+    "CodeBuild",
+    "S3",
+    "CloudWatch",
+    "IAM"
+  ],
+  "turn_type": "single",
+  "provider": "localstack",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
