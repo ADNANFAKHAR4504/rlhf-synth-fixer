@@ -417,9 +417,22 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/${LambdaFunctionName}-log-exporter'
       RetentionInDays: 7
 
+  # S3 Bucket for Lambda logs (create if not exists)
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Condition: BucketExists
+    Properties:
+      BucketName: !Ref S3BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Condition: BucketExists
+    DependsOn: LogsBucket
     Properties:
       Bucket: !Ref S3BucketName
       PolicyDocument:
