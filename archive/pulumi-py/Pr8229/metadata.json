@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "provider": "localstack",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "po_id": "101912529",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "startedAt": "2025-11-21T09:30:00Z",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "DynamoDB",
+    "KMS",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "adnan-turing",
+  "dockerS3Location": ""
+}

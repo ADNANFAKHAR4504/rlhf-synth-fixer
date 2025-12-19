@@ -1,0 +1,389 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TAP Stack - Secure Task Assignment Platform with S3 and DynamoDB Infrastructure'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9-]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
+
+
+Resources:
+  # IAM Role for TAP access (moved before KMS to avoid circular dependency)
+  TAPAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'TAPAccessRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: TAP-Access
+
+  # KMS Key for DynamoDB encryption
+  TAPDynamoDBKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for TAP DynamoDB table encryption
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow DynamoDB Service
+            Effect: Allow
+            Principal:
+              Service: dynamodb.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+            Resource: '*'
+          - Sid: Allow access for TAP role
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt TAPAccessRole.Arn
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: TAP-DynamoDB-Encryption
+
+  # KMS Key Alias
+  TAPDynamoDBKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/tap-dynamodb-${EnvironmentSuffix}'
+      TargetKeyId: !Ref TAPDynamoDBKMSKey
+
+
+  # S3 Bucket for TAP storage
+  TAPSecureS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'tap-storage-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref TAPS3AccessLogsBucket
+        LogFilePrefix: !Sub 'tap-access-logs-${EnvironmentSuffix}/'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: TAP-Secure-Storage
+
+  # S3 Access Logs Bucket
+  TAPS3AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'tap-access-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: TAP-Access-Logs
+
+  # S3 Bucket Policy
+  TAPSecureS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TAPSecureS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt TAPSecureS3Bucket.Arn
+              - !Sub '${TAPSecureS3Bucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Sid: AllowTAPRoleAccess
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt TAPAccessRole.Arn
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+              - s3:GetBucketVersioning
+              - s3:GetObjectVersion
+            Resource:
+              - !GetAtt TAPSecureS3Bucket.Arn
+              - !Sub '${TAPSecureS3Bucket.Arn}/*'
+
+  # CloudWatch Log Group for S3
+  TAPS3LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/s3/tap-${EnvironmentSuffix}'
+      RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: TAP-S3-Logging
+
+  # Enhanced DynamoDB Table with security features
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: 'id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'id'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref TAPDynamoDBKMSKey
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: TAP-Secure-Storage
+
+  # NOTE: CloudTrail resources commented out due to AWS quota limits (5 trails per region)
+  # Uncomment if you have available CloudTrail quota or delete existing trails
+  
+  # TAPDynamoDBCloudTrail:
+  #   Type: AWS::CloudTrail::Trail
+  #   Properties:
+  #     TrailName: !Sub 'tap-dynamodb-${EnvironmentSuffix}-trail'
+  #     S3BucketName: !Ref TAPCloudTrailLogsBucket
+  #     S3KeyPrefix: !Sub 'tap-dynamodb-logs-${EnvironmentSuffix}/'
+  #     IncludeGlobalServiceEvents: false
+  #     IsMultiRegionTrail: false
+  #     IsLogging: true
+  #     EnableLogFileValidation: true
+  #     EventSelectors:
+  #       - ReadWriteType: All
+  #         IncludeManagementEvents: false
+  #         DataResources:
+  #           - Type: AWS::DynamoDB::Table
+  #             Values:
+  #               - !Sub '${TurnAroundPromptTable}/*'
+  #     Tags:
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+  #       - Key: Purpose
+  #         Value: TAP-DynamoDB-Audit
+  
+  # TAPCloudTrailLogsBucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: !Sub 'tap-cloudtrail-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+  #     BucketEncryption:
+  #       ServerSideEncryptionConfiguration:
+  #         - ServerSideEncryptionByDefault:
+  #             SSEAlgorithm: AES256
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       BlockPublicPolicy: true
+  #       IgnorePublicAcls: true
+  #       RestrictPublicBuckets: true
+  #     LifecycleConfiguration:
+  #       Rules:
+  #         - Id: DeleteOldTrailLogs
+  #           Status: Enabled
+  #           ExpirationInDays: 365
+  #     Tags:
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+  #       - Key: Purpose
+  #         Value: TAP-CloudTrail-Logs
+  
+  # TAPCloudTrailLogsBucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref TAPCloudTrailLogsBucket
+  #     PolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Sid: AWSCloudTrailAclCheck
+  #           Effect: Allow
+  #           Principal:
+  #             Service: cloudtrail.amazonaws.com
+  #           Action: s3:GetBucketAcl
+  #           Resource: !Ref TAPCloudTrailLogsBucket
+  #         - Sid: AWSCloudTrailWrite
+  #           Effect: Allow
+  #           Principal:
+  #             Service: cloudtrail.amazonaws.com
+  #           Action: s3:PutObject
+  #           Resource: !Sub '${TAPCloudTrailLogsBucket}/*'
+  #           Condition:
+  #             StringEquals:
+  #               's3:x-amz-acl': bucket-owner-full-control
+  #         - Sid: DenyInsecureConnections
+  #           Effect: Deny
+  #           Principal: '*'
+  #           Action: 's3:*'
+  #           Resource:
+  #             - !Sub '${TAPCloudTrailLogsBucket}/*'
+  #             - !Ref TAPCloudTrailLogsBucket
+  #           Condition:
+  #             Bool:
+  #               'aws:SecureTransport': 'false'
+
+  # IAM Policy for DynamoDB access
+  TAPDynamoDBAccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub 'TAPSecureDynamoDBAccess-${EnvironmentSuffix}'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+              - dynamodb:Query
+              - dynamodb:Scan
+              - dynamodb:BatchGetItem
+              - dynamodb:BatchWriteItem
+            Resource: !GetAtt TurnAroundPromptTable.Arn
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'true'
+          - Effect: Allow
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+            Resource: !GetAtt TAPDynamoDBKMSKey.Arn
+      Roles:
+        - !Ref TAPAccessRole
+
+Outputs:
+  # S3 Outputs
+  S3BucketName:
+    Description: Name of the secure TAP S3 bucket
+    Value: !Ref TAPSecureS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3Bucket'
+
+  S3BucketArn:
+    Description: ARN of the secure TAP S3 bucket
+    Value: !GetAtt TAPSecureS3Bucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketArn'
+
+  # DynamoDB Outputs
+  TurnAroundPromptTableName:
+    Description: 'Name of the DynamoDB table'
+    Value: !Ref TurnAroundPromptTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
+
+  TurnAroundPromptTableArn:
+    Description: 'ARN of the DynamoDB table'
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
+
+  # KMS Outputs
+  KMSKeyId:
+    Description: KMS Key ID for DynamoDB encryption
+    Value: !Ref TAPDynamoDBKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKey'
+
+  # IAM Role Outputs
+  TAPAccessRoleArn:
+    Description: ARN of the TAP access role
+    Value: !GetAtt TAPAccessRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TAPAccessRole'
+
+  # CloudTrail Outputs (commented out due to quota limits)
+  # CloudTrailArn:
+  #   Description: CloudTrail ARN for DynamoDB logging
+  #   Value: !GetAtt TAPDynamoDBCloudTrail.Arn
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-CloudTrail'
+
+  # Legacy Outputs (maintained for backward compatibility)
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'

@@ -1,0 +1,16 @@
+{
+  "AlbArn": "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/lb-8b6b0438/4023dbea9969d9cb",
+  "AlbDnsName": "lb-8b6b0438.elb.localhost.localstack.cloud",
+  "CloudTrailArn": "trail-c76f5909",
+  "CloudTrailBucketName": "tap-stack-localstack-cloudtrailbucket-4e9a6d0c",
+  "ConfigRecorderName": "default",
+  "FlowLogId": "unknown",
+  "KmsKeyArns": "8e3c3464-1a11-4294-a371-72c28719dfb5,1e70ee9d-f01e-41f2-a8db-fb72816f5a00,2e10dccd-62fd-4e86-8177-487812a1c4b7,abc06277-9c3c-4bb4-b4fd-cc62ede64056",
+  "LoggingBucketName": "tap-stack-localstack-loggingbucket-ac0fb22d",
+  "PrimaryRegionOut": "us-east-1",
+  "PrivateSubnetIds": "subnet-ff08d6c0d23c1e932,subnet-93be6ed6b3450ba4c",
+  "PublicSubnetIds": "subnet-26ab500de8893ecd1,subnet-41272769708a15147",
+  "SecondaryRegionOut": "us-west-2",
+  "SecurityControlsSummary": "WAF=True;SecurityHub=True;GuardDuty=True;CloudTrail=multi-region;Config=enabled;FlowLogs=enabled;S3SSE=KMS;RDS=TLS+KMS",
+  "VpcId": "vpc-da5816bbebf45492c"
+}

@@ -1,0 +1,42 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "po_id": "101000882",
+  "startedAt": "2025-11-10T08:42:47.310393",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "ECS",
+    "RDS",
+    "ALB",
+    "Secrets Manager",
+    "ECR",
+    "CloudWatch",
+    "VPC"
+  ],
+  "aws_services": [
+    "ALB",
+    "CloudWatch",
+    "EC2",
+    "ECR",
+    "ECS",
+    "IAM",
+    "KMS",
+    "Lambda",
+    "RDS",
+    "S3",
+    "Secrets Manager",
+    "Systems Manager",
+    "VPC"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "raghav-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
