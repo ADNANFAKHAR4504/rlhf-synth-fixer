@@ -10,7 +10,7 @@
   "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup",
-    "Multi-Environment Consistency"
+    "Environment Migration"
   ],
   "aws_services": [
     "EC2",
