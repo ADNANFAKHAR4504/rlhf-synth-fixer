@@ -197,7 +197,7 @@ Resources:
           Value: !Ref EnvironmentType
 
   # For LocalStack testing - routing through IGW
-  # In production, you would use NAT Gateway instead
+  # In production, you would use NAT Gateway instead of IGW for private subnets
   PrivateRoute1:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
