@@ -142,17 +142,21 @@ exports.handler = async (event) => {
       logRetention: logs.RetentionDays.ONE_WEEK,
     });
 
-    const scheduledFunction = new lambda.Function(this, 'ScheduledMaintenanceFunction', {
-      functionName: `serverlessApp-maintenance-${environmentSuffix}`,
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'index.handler',
-      role: lambdaRole,
-      code: lambda.Code.fromInline(lambdaCode),
-      environment: { TABLE_NAME: dynamoTable.tableName },
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 512,
-      logRetention: logs.RetentionDays.ONE_WEEK,
-    });
+    const scheduledFunction = new lambda.Function(
+      this,
+      'ScheduledMaintenanceFunction',
+      {
+        functionName: `serverlessApp-maintenance-${environmentSuffix}`,
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: 'index.handler',
+        role: lambdaRole,
+        code: lambda.Code.fromInline(lambdaCode),
+        environment: { TABLE_NAME: dynamoTable.tableName },
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 512,
+        logRetention: logs.RetentionDays.ONE_WEEK,
+      }
+    );
 
     // API Gateway
     const api = new apigateway.RestApi(this, 'ServerlessAppAPI', {
@@ -161,7 +165,12 @@ exports.handler = async (event) => {
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
+        allowHeaders: [
+          'Content-Type',
+          'X-Amz-Date',
+          'Authorization',
+          'X-Api-Key',
+        ],
       },
       deployOptions: {
         stageName: environmentSuffix,
@@ -176,25 +185,45 @@ exports.handler = async (event) => {
     const itemsResource = api.root.addResource('items');
     const itemResource = itemsResource.addResource('{id}');
 
-    itemsResource.addMethod('POST', new apigateway.LambdaIntegration(createItemFunction));
-    itemsResource.addMethod('GET', new apigateway.LambdaIntegration(readItemFunction));
-    itemResource.addMethod('GET', new apigateway.LambdaIntegration(readItemFunction));
-    itemResource.addMethod('PUT', new apigateway.LambdaIntegration(updateItemFunction));
-    itemResource.addMethod('DELETE', new apigateway.LambdaIntegration(deleteItemFunction));
+    itemsResource.addMethod(
+      'POST',
+      new apigateway.LambdaIntegration(createItemFunction)
+    );
+    itemsResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(readItemFunction)
+    );
+    itemResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(readItemFunction)
+    );
+    itemResource.addMethod(
+      'PUT',
+      new apigateway.LambdaIntegration(updateItemFunction)
+    );
+    itemResource.addMethod(
+      'DELETE',
+      new apigateway.LambdaIntegration(deleteItemFunction)
+    );
 
     // CloudFront Distribution
-    const distribution = new cloudfront.Distribution(this, 'ServerlessAppDistribution', {
-      defaultBehavior: {
-        origin: new origins.RestApiOrigin(api),
-        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-        originRequestPolicy: cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN,
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-      },
-      priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
-      enableLogging: true,
-      comment: `CloudFront distribution for serverlessApp ${environmentSuffix}`,
-    });
+    const distribution = new cloudfront.Distribution(
+      this,
+      'ServerlessAppDistribution',
+      {
+        defaultBehavior: {
+          origin: new origins.RestApiOrigin(api),
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        },
+        priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
+        enableLogging: true,
+        comment: `CloudFront distribution for serverlessApp ${environmentSuffix}`,
+      }
+    );
 
     // EventBridge Scheduler Role
     const schedulerRole = new iam.Role(this, 'SchedulerRole', {
