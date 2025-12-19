@@ -106,6 +106,7 @@ eval "$(jq -r '@sh "
   COMPLEXITY=\(.complexity // "unknown")
   SUBTASK=\(.subtask // "")
   TURN_TYPE=\(.turn_type // "")
+  PROVIDER=\(.provider // "aws")
   SUBJECT_LABELS=\(.subject_labels // [] | tojson)
   SUBJECT_LABELS_LENGTH=\(.subject_labels // [] | length)"' metadata.json)"
 
@@ -114,6 +115,7 @@ echo "  Platform: $PLATFORM"
 echo "  Language: $LANGUAGE"
 echo "  PO ID: $PO_ID"
 echo "  Team: $TEAM"
+echo "  Provider: $PROVIDER"
 echo "  Started At: $STARTED_AT"
 echo "  Complexity: $COMPLEXITY"
 echo "  Subtask: $SUBTASK"
@@ -199,6 +201,7 @@ export PLATFORM
 export LANGUAGE
 export PO_ID
 export TEAM
+export PROVIDER
 export STARTED_AT
 export COMPLEXITY
 export SUBTASK
@@ -210,6 +213,7 @@ if [ -n "$GITHUB_OUTPUT" ]; then
   echo "language=$LANGUAGE" >> "$GITHUB_OUTPUT"
   echo "po_id=$PO_ID" >> "$GITHUB_OUTPUT"
   echo "team=$TEAM" >> "$GITHUB_OUTPUT"
+  echo "provider=$PROVIDER" >> "$GITHUB_OUTPUT"
   echo "started_at=$STARTED_AT" >> "$GITHUB_OUTPUT"
   echo "complexity=$COMPLEXITY" >> "$GITHUB_OUTPUT"
   echo "subtask=$SUBTASK" >> "$GITHUB_OUTPUT"

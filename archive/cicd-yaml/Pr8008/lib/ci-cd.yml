@@ -1,0 +1,567 @@
+# lib/ci-cd.yml
+
+# GitHub Actions CI/CD Pipeline for Fintech Microservices
+
+# Features: Automated testing, security scanning, blue-green deployments with ECS Fargate
+
+# Deployment strategy: Dev → Staging → Production with manual approvals
+
+name: Fintech CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'hotfix/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: fintech-payment-service
+  ECS_CLUSTER: fintech-cluster
+  ECS_SERVICE: payment-service
+  DOCKER_BUILDKIT: 1
+  NODE_VERSION: '18'
+
+jobs:
+  # ===================================================
+  # VALIDATION & BUILD STAGE
+  # ===================================================
+  validate-code:
+    name: Code Validation & Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Check code formatting
+        run: npm run format:check
+
+      - name: TypeScript type check
+        run: npm run type-check
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: validate-code
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests with coverage
+        run: npm run test:unit -- --coverage --ci
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+
+  build-docker-image:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      image-tag: ${{ steps.image-info.outputs.image-tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-${{ github.run_id }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Set image info
+        id: image-info
+        run: echo "image-tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  # ===================================================
+  # SECURITY SCANNING STAGE
+  # ===================================================
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: validate-code
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run npm audit
+        run: |
+          npm ci
+          npm audit --audit-level=moderate
+        continue-on-error: true
+
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    needs: build-docker-image
+    permissions:
+      id-token: write
+      security-events: write
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Scan container image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ needs.build-docker-image.outputs.image-tag }}'
+          format: 'sarif'
+          output: 'container-scan-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'container-scan-results.sarif'
+
+  # ===================================================
+  # INTEGRATION TESTS
+  # ===================================================
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build-docker-image
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgresql://postgres:testpass@localhost:5432/testdb
+          REDIS_URL: redis://localhost:6379
+        run: npm run test:integration -- --ci
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: test-results/
+
+  # ===================================================
+  # DEVELOPMENT DEPLOYMENT
+  # ===================================================
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [build-docker-image, integration-tests, security-scan]
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+    environment:
+      name: development
+      url: https://dev-api.fintech.example.com
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update ECS task definition
+        id: task-def
+        env:
+          IMAGE_TAG: ${{ needs.build-docker-image.outputs.image-tag }}
+        run: |
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition payment-service-dev --query 'taskDefinition' --output json)
+          NEW_TASK_DEF=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE')
+          echo "$NEW_TASK_DEF" > task-definition.json
+
+      - name: Deploy to ECS (Blue/Green)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          service: ${{ env.ECS_SERVICE }}-dev
+          cluster: ${{ env.ECS_CLUSTER }}-dev
+          wait-for-service-stability: true
+          codedeploy-appspec: appspec.yaml
+          codedeploy-application: fintech-app-dev
+          codedeploy-deployment-group: fintech-dg-dev
+
+      - name: Send notification
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Development deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  smoke-tests-dev:
+    name: Smoke Tests (Dev)
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run smoke tests
+        run: |
+          npm ci
+          npm run test:smoke -- --env=dev
+
+      - name: Health check
+        run: |
+          curl -f https://dev-api.fintech.example.com/health || exit 1
+
+  # ===================================================
+  # STAGING DEPLOYMENT (WITH APPROVAL)
+  # ===================================================
+  approve-staging:
+    name: Approve Staging Deployment
+    runs-on: ubuntu-latest
+    needs: smoke-tests-dev
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging-approval
+    steps:
+      - name: Wait for approval
+        run: echo "Staging deployment approved"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [approve-staging, build-docker-image]
+    environment:
+      name: staging
+      url: https://staging-api.fintech.example.com
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update ECS task definition
+        id: task-def
+        env:
+          IMAGE_TAG: ${{ needs.build-docker-image.outputs.image-tag }}
+        run: |
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition payment-service-staging --query 'taskDefinition' --output json)
+          NEW_TASK_DEF=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE')
+          echo "$NEW_TASK_DEF" > task-definition.json
+
+      - name: Deploy to ECS (Blue/Green)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          service: ${{ env.ECS_SERVICE }}-staging
+          cluster: ${{ env.ECS_CLUSTER }}-staging
+          wait-for-service-stability: true
+          codedeploy-appspec: appspec.yaml
+          codedeploy-application: fintech-app-staging
+          codedeploy-deployment-group: fintech-dg-staging
+
+      - name: Send notification
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Staging deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  e2e-tests-staging:
+    name: E2E Tests (Staging)
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: Run E2E tests
+        run: npm run test:e2e -- --env=staging
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+
+  # ===================================================
+  # PRODUCTION DEPLOYMENT (WITH APPROVAL)
+  # ===================================================
+  approve-production:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: e2e-tests-staging
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production-approval
+    steps:
+      - name: Wait for approval
+        run: echo "Production deployment approved"
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [approve-production, build-docker-image]
+    environment:
+      name: production
+      url: https://api.fintech.example.com
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update ECS task definition
+        id: task-def
+        env:
+          IMAGE_TAG: ${{ needs.build-docker-image.outputs.image-tag }}
+        run: |
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition payment-service-prod --query 'taskDefinition' --output json)
+          NEW_TASK_DEF=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE')
+          echo "$NEW_TASK_DEF" > task-definition.json
+
+      - name: Deploy to ECS (Blue/Green)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          service: ${{ env.ECS_SERVICE }}-prod
+          cluster: ${{ env.ECS_CLUSTER }}-prod
+          wait-for-service-stability: true
+          codedeploy-appspec: appspec.yaml
+          codedeploy-application: fintech-app-prod
+          codedeploy-deployment-group: fintech-dg-prod
+
+      - name: Create deployment record
+        run: |
+          aws ssm put-parameter \
+            --name "/deployments/payment-service/latest" \
+            --value "${{ github.sha }}" \
+            --type String \
+            --overwrite
+
+      - name: Send SNS notification
+        run: |
+          aws sns publish \
+            --topic-arn arn:aws:sns:${{ env.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:deployment-notifications \
+            --subject "Production Deployment Successful" \
+            --message "Payment service deployed to production. Commit: ${{ github.sha }}"
+
+      - name: Send Slack notification
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Production deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  post-deploy-monitoring:
+    name: Post-Deployment Monitoring
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    steps:
+      - name: Monitor CloudWatch metrics
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check CloudWatch alarms
+        run: |
+          aws cloudwatch describe-alarms \
+            --alarm-names "payment-service-high-error-rate" "payment-service-high-latency" \
+            --state-value ALARM \
+            --query 'MetricAlarms[*].[AlarmName,StateValue]' \
+            --output table
+
+      - name: Validate deployment health
+        run: |
+          curl -f --retry 5 --retry-delay 30 --retry-connrefused https://api.fintech.example.com/health
+          echo "Health check passed"
+
+  # ===================================================
+  # ROLLBACK (MANUAL TRIGGER)
+  # ===================================================
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment != ''
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get previous deployment
+        id: previous
+        run: |
+          PREVIOUS_SHA=$(aws ssm get-parameter \
+            --name "/deployments/payment-service/previous" \
+            --query 'Parameter.Value' \
+            --output text)
+          echo "previous-sha=$PREVIOUS_SHA" >> $GITHUB_OUTPUT
+
+      - name: Rollback ECS service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }}-${{ github.event.inputs.environment }} \
+            --service ${{ env.ECS_SERVICE }}-${{ github.event.inputs.environment }} \
+            --force-new-deployment \
+            --task-definition payment-service-${{ github.event.inputs.environment }}:${{ steps.previous.outputs.previous-sha }}
+
+      - name: Send rollback notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: 'warning'
+          text: 'Rollback initiated for ${{ github.event.inputs.environment }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+

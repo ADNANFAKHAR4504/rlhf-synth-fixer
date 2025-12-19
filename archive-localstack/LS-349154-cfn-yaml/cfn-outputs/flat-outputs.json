@@ -1,0 +1,19 @@
+{
+  "ALBArn": "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/lb-9d1de8db/a03a63d855ea1098",
+  "ALBDNSName": "lb-9d1de8db.elb.localhost.localstack.cloud",
+  "ALBSecurityGroupId": "sg-cda881892ae201c0d",
+  "ALBTargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:000000000000:targetgroup/tg-a56afaa2/c559ef11dad0c2d1",
+  "AppSecurityGroupId": "sg-6838ae4cf54cbcdf0",
+  "ApplicationBucketArn": "arn:aws:s3:::tap-stack-localstack-applicationbucket-2b20321b",
+  "ApplicationBucketName": "tap-stack-localstack-applicationbucket-2b20321b",
+  "KMSKeyAlias": "alias/tapstack-dev-bad30392-b8c1-453f-9deb-b6cca73779c9-data-key",
+  "KMSKeyArn": "arn:aws:kms:us-east-1:000000000000:key/b4ba9873-7c04-47e4-96eb-d22224e96ecd",
+  "LoggingBucketArn": "arn:aws:s3:::tap-stack-localstack-loggingbucket-7e402f25",
+  "LoggingBucketName": "tap-stack-localstack-loggingbucket-7e402f25",
+  "PrivateSubnetAId": "subnet-fa1fb8cad21785b88",
+  "PrivateSubnetBId": "subnet-03bb6f5c96745353c",
+  "PublicSubnetAId": "subnet-55590d622acb878a3",
+  "PublicSubnetBId": "subnet-116082f615635cb2a",
+  "RDSSecurityGroupId": "sg-9a4e40443b44eaf9e",
+  "VPCId": "vpc-3a41f0b7ee4e8b766"
+}

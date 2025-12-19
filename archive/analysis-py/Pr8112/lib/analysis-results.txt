@@ -1,0 +1,146 @@
+Running AWS Infrastructure Analysis...
+Analyzing EBS volumes...
+Analyzing security groups...
+Analyzing CloudWatch logs...
+Analyzing S3 security...
+
+=== S3 Security Audit Results ===
+
+CRITICAL
+--------
+  PUBLIC_ACCESS:
+    - public-bucket-0
+    - public-bucket-1
+    - public-bucket-2
+    - public-bucket-3
+    - public-bucket-4
+    - public-bucket-5
+    - public-bucket-6
+    - public-bucket-7
+    - public-bucket-8
+    - public-bucket-9
+    - multiple-issues-0
+    - multiple-issues-1
+    - multiple-issues-2
+    - multiple-issues-3
+    - multiple-issues-4
+    - multiple-issues-5
+    - multiple-issues-6
+    - multiple-issues-7
+    - multiple-issues-8
+    - multiple-issues-9
+    - multiple-issues-10
+    - multiple-issues-11
+    - multiple-issues-12
+    - multiple-issues-13
+    - multiple-issues-14
+
+HIGH
+----
+  NO_ENCRYPTION:
+    - no-encryption-0
+    - no-encryption-1
+    - no-encryption-2
+    - no-encryption-3
+    - no-encryption-4
+    - no-encryption-5
+    - no-encryption-6
+    - no-encryption-7
+    - no-encryption-8
+    - no-encryption-9
+    - no-encryption-10
+    - no-encryption-11
+    - no-encryption-12
+    - no-encryption-13
+    - no-encryption-14
+    - multiple-issues-0
+    - multiple-issues-1
+    - multiple-issues-2
+    - multiple-issues-3
+    - multiple-issues-4
+    - multiple-issues-5
+    - multiple-issues-6
+    - multiple-issues-7
+    - multiple-issues-8
+    - multiple-issues-9
+    - multiple-issues-10
+    - multiple-issues-11
+    - multiple-issues-12
+    - multiple-issues-13
+    - multiple-issues-14
+
+MEDIUM
+------
+  VERSIONING_DISABLED:
+    - no-version-0
+    - no-version-1
+    - no-version-2
+    - no-version-3
+    - no-version-4
+    - no-version-5
+    - no-version-6
+    - no-version-7
+    - no-version-8
+    - no-version-9
+    - no-version-10
+    - no-version-11
+    - no-version-12
+    - no-version-13
+    - no-version-14
+    - multiple-issues-0
+    - multiple-issues-1
+    - multiple-issues-2
+    - multiple-issues-3
+    - multiple-issues-4
+    - multiple-issues-5
+    - multiple-issues-6
+    - multiple-issues-7
+    - multiple-issues-8
+    - multiple-issues-9
+    - multiple-issues-10
+    - multiple-issues-11
+    - multiple-issues-12
+    - multiple-issues-13
+    - multiple-issues-14
+
+LOW
+---
+  MISSING_TAGS:
+    - no-tags-0
+    - no-tags-1
+    - no-tags-2
+    - no-tags-3
+    - no-tags-4
+    - no-tags-5
+    - no-tags-6
+    - no-tags-7
+    - no-tags-8
+    - no-tags-9
+    - multiple-issues-0
+    - multiple-issues-1
+    - multiple-issues-2
+    - multiple-issues-3
+    - multiple-issues-4
+    - multiple-issues-5
+    - multiple-issues-6
+    - multiple-issues-7
+    - multiple-issues-8
+    - multiple-issues-9
+    - multiple-issues-10
+    - multiple-issues-11
+    - multiple-issues-12
+    - multiple-issues-13
+    - multiple-issues-14
+
+
+Analysis complete!
+- EBS volumes analyzed: 3
+- Security groups with public access: 1
+- CloudWatch log streams: 2
+- S3 buckets analyzed: 85
+- S3 buckets excluded: 25
+
+Reports generated:
+  - aws_audit_results.json
+  - s3_security_audit.json
+  - s3_audit_report.html

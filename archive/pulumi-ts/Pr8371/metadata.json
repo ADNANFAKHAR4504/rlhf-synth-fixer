@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291858",
+  "team": "synth-2",
+  "startedAt": "2025-08-19T12:08:15.424Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "ALB",
+    "ASG",
+    "EC2",
+    "RDS",
+    "S3",
+    "Lambda",
+    "IAM",
+    "WAF",
+    "KMS",
+    "CloudWatch",
+    "NAT Gateway"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
+}

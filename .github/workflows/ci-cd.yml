@@ -61,6 +61,7 @@ jobs:
       language: ${{ steps.metadata.outputs.language }}
       po_id: ${{ steps.metadata.outputs.po_id }}
       team: ${{ steps.metadata.outputs.team }}
+      provider: ${{ steps.metadata.outputs.provider }}
       subtask: ${{ steps.metadata.outputs.subtask }}
       subject_labels: ${{ steps.metadata.outputs.subject_labels }}
       analysis_subject_label: ${{ env.IAC_ANALYSIS_SUBJECT_LABEL }}
@@ -73,6 +74,12 @@ jobs:
 
       - name: Fetch base branch
         run: git fetch origin main:main
+
+      - name: Validate metadata.json
+        uses: cardinalby/schema-validator-action@v3
+        with:
+          file: 'metadata.json'
+          schema: 'config/schemas/metadata.schema.json'
 
       - name: Check Project Files
         id: check-files
@@ -421,6 +428,7 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
+          provider: ${{ needs.detect-metadata.outputs.provider }}
 
       - name: Download build artifacts (dist/)
         if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
@@ -455,7 +463,8 @@ jobs:
 
       # (Removed DynamoDB lock table step per PR review)
 
-      - name: Bootstrap
+      - name: Bootstrap (AWS only)
+        if: ${{ needs.detect-metadata.outputs.provider != 'localstack' }}
         run: ./scripts/bootstrap.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -464,8 +473,38 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+      - name: Skip Bootstrap (LocalStack)
+        if: ${{ needs.detect-metadata.outputs.provider == 'localstack' }}
+        run: |
+          echo "ℹ️ Skipping AWS bootstrap for LocalStack deployment"
+          echo "LocalStack bootstrap will be handled during deployment"
+
+      - name: Start LocalStack (if provider is localstack)
+        if: ${{ needs.detect-metadata.outputs.provider == 'localstack' }}
+        run: ./scripts/localstack-start-ci.sh
+        env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
+
       - name: Deploy
-        run: ./scripts/deploy.sh
+        run: |
+          if [ "${{ needs.detect-metadata.outputs.provider }}" == "localstack" ]; then
+            echo "Deploying to LocalStack..."
+            export AWS_ENDPOINT_URL=http://localhost:4566
+            # Use s3.localhost.localstack.cloud for S3 endpoint to ensure proper bucket name parsing
+            export AWS_ENDPOINT_URL_S3=http://s3.localhost.localstack.cloud:4566
+            export AWS_ACCESS_KEY_ID=test
+            export AWS_SECRET_ACCESS_KEY=test
+            export AWS_DEFAULT_REGION=us-east-1
+            export AWS_REGION=us-east-1
+            export LOCALSTACK_API_KEY="${{ secrets.LOCALSTACK_API_KEY }}"
+            # Force S3 path-style addressing for LocalStack
+            export AWS_S3_FORCE_PATH_STYLE=true
+            export AWS_S3_USE_PATH_STYLE=1
+            ./scripts/localstack-ci-deploy.sh
+          else
+            echo "Deploying to AWS..."
+            ./scripts/deploy.sh
+          fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           REPOSITORY: ${{ github.repository }}
@@ -508,6 +547,7 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
+          provider: ${{ needs.detect-metadata.outputs.provider }}
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
@@ -665,6 +705,7 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
+          provider: ${{ needs.detect-metadata.outputs.provider }}
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
@@ -672,15 +713,40 @@ jobs:
           name: cfn-outputs
           path: .
 
-      - name: Configure AWS
+      - name: Configure AWS (if provider is aws)
+        if: ${{ needs.detect-metadata.outputs.provider == 'aws' || needs.detect-metadata.outputs.provider == '' }}
         uses: ./.github/actions/configure-aws
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
-      - name: Run integration tests against live environment
-        run: ./scripts/integration-tests.sh
+      - name: Start LocalStack (if provider is localstack)
+        if: ${{ needs.detect-metadata.outputs.provider == 'localstack' }}
+        run: ./scripts/localstack-start-ci.sh
+        env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
+
+      - name: Run integration tests
+        run: |
+          if [ "${{ needs.detect-metadata.outputs.provider }}" == "localstack" ]; then
+            echo "Deploying to LocalStack and running integration tests..."
+            export AWS_ENDPOINT_URL=http://localhost:4566
+            # Use s3.localhost.localstack.cloud for S3 endpoint to ensure proper bucket name parsing
+            export AWS_ENDPOINT_URL_S3=http://s3.localhost.localstack.cloud:4566
+            export AWS_ACCESS_KEY_ID=test
+            export AWS_SECRET_ACCESS_KEY=test
+            export AWS_DEFAULT_REGION=us-east-1
+            export AWS_REGION=us-east-1
+            export LOCALSTACK_API_KEY="${{ secrets.LOCALSTACK_API_KEY }}"
+            # Force S3 path-style addressing for LocalStack
+            export AWS_S3_FORCE_PATH_STYLE=true
+            export AWS_S3_USE_PATH_STYLE=1
+            ./scripts/localstack-ci-deploy.sh && ./scripts/localstack-ci-test.sh
+          else
+            echo "Running integration tests against AWS..."
+            ./scripts/integration-tests.sh
+          fi
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

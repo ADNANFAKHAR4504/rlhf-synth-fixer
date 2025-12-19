@@ -1,0 +1,139 @@
+2025-12-09 18:10:23,058 - INFO - Starting FinTech webhook infrastructure analysis in us-east-1
+2025-12-09 18:10:23,058 - INFO - Collecting API Gateway data...
+2025-12-09 18:10:23,079 - INFO - Collecting Lambda function data...
+2025-12-09 18:10:23,084 - INFO - Collecting DynamoDB table data...
+2025-12-09 18:10:23,105 - INFO - Collecting SNS topic data...
+2025-12-09 18:10:23,120 - INFO - Collecting SQS queue data...
+2025-12-09 18:10:23,134 - INFO - Collecting CloudWatch data...
+2025-12-09 18:10:23,146 - INFO - Checking API Gateway security...
+2025-12-09 18:10:23,146 - INFO - Checking Lambda security...
+2025-12-09 18:10:23,146 - INFO - Checking DynamoDB security...
+2025-12-09 18:10:23,146 - INFO - Checking SNS security...
+2025-12-09 18:10:23,146 - INFO - Checking IAM permissions...
+2025-12-09 18:10:23,146 - INFO - Checking Lambda performance...
+2025-12-09 18:10:23,146 - INFO - Checking DynamoDB performance...
+2025-12-09 18:10:23,146 - INFO - Checking API Gateway throttling...
+2025-12-09 18:10:23,146 - INFO - Checking Lambda cost optimization...
+2025-12-09 18:10:23,146 - INFO - Checking DynamoDB cost optimization...
+2025-12-09 18:10:23,146 - INFO - Checking CloudWatch costs...
+2025-12-09 18:10:23,146 - INFO - Checking Dead Letter Queues...
+2025-12-09 18:10:23,146 - INFO - Checking retry configurations...
+2025-12-09 18:10:23,146 - INFO - Checking monitoring alarms...
+2025-12-09 18:10:23,146 - INFO - 
+====================================================================================================
+2025-12-09 18:10:23,146 - INFO - FINTECH WEBHOOK PROCESSOR INFRASTRUCTURE ANALYSIS REPORT
+2025-12-09 18:10:23,146 - INFO - ====================================================================================================
+
+2025-12-09 18:10:23,149 - INFO - 
+====================================================================================================
+2025-12-09 18:10:23,149 - INFO - Analysis complete!
+2025-12-09 18:10:23,149 - INFO - ====================================================================================================
+
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:657: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'timestamp': datetime.utcnow().isoformat(),
+2025-12-09 18:10:23,150 - INFO - JSON report saved to lib/analysis-results.json
+
+INFRASTRUCTURE SUMMARY
++-------------------------+---------+
+| Resource Type           |   Count |
++=========================+=========+
+| Total API Gateways      |       1 |
++-------------------------+---------+
+| Total Lambda Functions  |       3 |
++-------------------------+---------+
+| Total DynamoDB Tables   |       2 |
++-------------------------+---------+
+| Total SNS Topics        |       2 |
++-------------------------+---------+
+| Total SQS Queues        |       2 |
++-------------------------+---------+
+| Total CloudWatch Alarms |       1 |
++-------------------------+---------+
+| Total Findings          |      22 |
++-------------------------+---------+
+
+FINDINGS BY CATEGORY
++-------------+--------+----------+-------+---------+
+| Category    |   High |   Medium |   Low |   Total |
++=============+========+==========+=======+=========+
+| Cost        |      0 |        2 |     3 |       5 |
++-------------+--------+----------+-------+---------+
+| Monitoring  |      0 |        0 |     1 |       1 |
++-------------+--------+----------+-------+---------+
+| Performance |      0 |        3 |     1 |       4 |
++-------------+--------+----------+-------+---------+
+| Resilience  |      2 |        4 |     0 |       6 |
++-------------+--------+----------+-------+---------+
+| Security    |      5 |        1 |     0 |       6 |
++-------------+--------+----------+-------+---------+
+
+DETAILED FINDINGS
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|   # | Severity   | Category    | Resource Type        | Resource ID                       | Issue                                                 |
++=====+============+=============+======================+===================================+=======================================================+
+|   1 | HIGH       | Security    | Lambda Function      | webhook_handler                   | Potential sensitive data in environment variable: ... |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|   2 | MEDIUM     | Performance | Lambda Function      | webhook_handler                   | No reserved concurrency configured                    |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|   3 | HIGH       | Security    | Lambda Function      | transaction_processor             | Potential sensitive data in environment variable: ... |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|   4 | MEDIUM     | Performance | Lambda Function      | transaction_processor             | No reserved concurrency configured                    |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|   5 | HIGH       | Security    | Lambda Function      | audit_logger                      | Potential sensitive data in environment variable: ... |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|   6 | MEDIUM     | Performance | Lambda Function      | audit_logger                      | No reserved concurrency configured                    |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|   7 | HIGH       | Security    | DynamoDB Table       | transactions                      | Encryption at rest not enabled                        |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|   8 | HIGH       | Resilience  | DynamoDB Table       | transactions                      | Point-in-time recovery not enabled                    |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|   9 | HIGH       | Security    | DynamoDB Table       | audit_logs                        | Encryption at rest not enabled                        |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  10 | HIGH       | Resilience  | DynamoDB Table       | audit_logs                        | Point-in-time recovery not enabled                    |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  11 | LOW        | Performance | SNS Topic            | arn:aws:sns:us-east-1:12345678... | No message filtering configured for multiple subsc... |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  12 | MEDIUM     | Security    | IAM Roles            | Lambda Execution Roles            | Review Lambda execution roles for overly permissiv... |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  13 | LOW        | Cost        | Lambda Function      | transaction_processor             | Not using ARM64 architecture                          |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  14 | LOW        | Cost        | Lambda Functions     | All                               | Lambda memory configurations vary                     |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  15 | LOW        | Cost        | DynamoDB Tables      | All                               | All tables using PAY_PER_REQUEST mode                 |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  16 | MEDIUM     | Cost        | CloudWatch Log Group | /aws/lambda/audit_logger          | No retention policy set (logs never expire)           |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  17 | MEDIUM     | Cost        | CloudWatch Log Group | /aws/lambda/transaction_proces... | No retention policy set (logs never expire)           |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  18 | MEDIUM     | Resilience  | SQS/Lambda           | Infrastructure                    | Not all Lambda functions may have DLQ configured      |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  19 | MEDIUM     | Resilience  | Lambda Function      | webhook_handler                   | No DLQ configuration detected                         |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  20 | MEDIUM     | Resilience  | Lambda Function      | transaction_processor             | No DLQ configuration detected                         |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  21 | MEDIUM     | Resilience  | Lambda Function      | audit_logger                      | No DLQ configuration detected                         |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+|  22 | LOW        | Monitoring  | CloudWatch Alarms    | Infrastructure                    | No throttling alarms configured                       |
++-----+------------+-------------+----------------------+-----------------------------------+-------------------------------------------------------+
+
+TOP RECOMMENDATIONS
+
+1. [HIGH] Lambda Function: webhook_handler
+   Issue: Potential sensitive data in environment variable: EXPECTED_API_KEY_HASH
+   Recommendation: Use AWS Secrets Manager or Parameter Store for sensitive data
+
+2. [HIGH] Lambda Function: transaction_processor
+   Issue: Potential sensitive data in environment variable: EXPECTED_API_KEY_HASH
+   Recommendation: Use AWS Secrets Manager or Parameter Store for sensitive data
+
+3. [HIGH] Lambda Function: audit_logger
+   Issue: Potential sensitive data in environment variable: EXPECTED_API_KEY_HASH
+   Recommendation: Use AWS Secrets Manager or Parameter Store for sensitive data
+
+4. [HIGH] DynamoDB Table: transactions
+   Issue: Encryption at rest not enabled
+   Recommendation: Enable encryption at rest with AWS managed or customer managed KMS keys
+
+5. [HIGH] DynamoDB Table: transactions
+   Issue: Point-in-time recovery not enabled
+   Recommendation: Enable PITR for data protection and compliance
