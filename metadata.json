@@ -3,11 +3,11 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "291514",
+  "po_id": "291514_ls",
   "team": "2",
   "startedAt": "2025-08-17T17:54:55.529Z",
   "subtask": "Provisioning of Infrastructure Environments",
-  "provider": "localstack",
+  "provider": "aws",
   "subject_labels": [
     "Cloud Environment Setup"
   ],
