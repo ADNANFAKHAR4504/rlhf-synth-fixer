@@ -416,17 +416,17 @@ aws ssm get-parameter \        },
 
 ### PCI DSS Compliance      }
 
-✅ **Encryption at Rest**: KMS customer-managed keys for S3, SNS, CloudWatch Logs      },
+ **Encryption at Rest**: KMS customer-managed keys for S3, SNS, CloudWatch Logs      },
 
-✅ **Encryption in Transit**: HTTPS/TLS for all AWS service communications      "PrivateSubnet3": {
+ **Encryption in Transit**: HTTPS/TLS for all AWS service communications      "PrivateSubnet3": {
 
-✅ **Network Isolation**: Private subnets only, no internet access        "Type": "AWS::EC2::Subnet",
+ **Network Isolation**: Private subnets only, no internet access        "Type": "AWS::EC2::Subnet",
 
-✅ **Least Privilege**: IAM roles and security groups with minimal permissions        "Properties": {
+ **Least Privilege**: IAM roles and security groups with minimal permissions        "Properties": {
 
-✅ **Audit Logging**: VPC Flow Logs and AWS Config for compliance monitoring          "VpcId": {
+ **Audit Logging**: VPC Flow Logs and AWS Config for compliance monitoring          "VpcId": {
 
-✅ **Secure Storage**: S3 bucket policies enforce encryption and secure transport            "Ref": "VPC"
+ **Secure Storage**: S3 bucket policies enforce encryption and secure transport            "Ref": "VPC"
 
         },
 
@@ -592,31 +592,31 @@ The implementation includes comprehensive Jest unit tests covering:      "Type":
 
 ### Security Validation              "Fn::GetAZs": ""
 
-- ✅ No public subnets or internet gateways            }
+-  No public subnets or internet gateways            }
 
-- ✅ All data encrypted with customer-managed KMS keys          ]
+-  All data encrypted with customer-managed KMS keys          ]
 
-- ✅ S3 bucket policies deny unencrypted uploads        },
+-  S3 bucket policies deny unencrypted uploads        },
 
-- ✅ VPC endpoints provide private AWS service connectivity        "Tags": [
+-  VPC endpoints provide private AWS service connectivity        "Tags": [
 
-- ✅ Security groups enforce least privilege network access          {
+-  Security groups enforce least privilege network access          {
 
-- ✅ IAM roles follow principle of least privilege            "Key": "Name",
+-  IAM roles follow principle of least privilege            "Key": "Name",
 
             "Value": {
 
 ### Compliance Validation              "Fn::Sub": "payment-database-subnet-3-${EnvironmentSuffix}"
 
-- ✅ VPC Flow Logs enabled with 90-day retention            }
+-  VPC Flow Logs enabled with 90-day retention            }
 
-- ✅ AWS Config rule monitors IAM password policy          }
+-  AWS Config rule monitors IAM password policy          }
 
-- ✅ All resources tagged with DataClassification and ComplianceScope        ]
+-  All resources tagged with DataClassification and ComplianceScope        ]
 
-- ✅ CloudWatch Logs encrypted with KMS      }
+-  CloudWatch Logs encrypted with KMS      }
 
-- ✅ SNS topic encrypted for security alerts    },
+-  SNS topic encrypted for security alerts    },
 
     "PublicRouteTable": {
 
