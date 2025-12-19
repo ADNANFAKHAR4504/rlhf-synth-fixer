@@ -4,6 +4,7 @@ import unittest
 import boto3
 from botocore.exceptions import ClientError
 from pytest import mark
+import pytest
 
 # Load outputs from cfn-outputs/flat-outputs.json
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,6 +20,25 @@ else:
 
 REGION = "us-west-2"
 
+# Check if running in LocalStack environment
+IS_LOCALSTACK = os.environ.get('AWS_ENDPOINT_URL', '').startswith('http://localhost') or \
+                os.environ.get('LOCALSTACK_HOSTNAME') is not None
+
+# LocalStack endpoint configuration
+ENDPOINT_URL = os.environ.get('AWS_ENDPOINT_URL', 'http://localhost:4566') if IS_LOCALSTACK else None
+
+def get_boto3_client(service_name, region_name=REGION):
+    """Get a boto3 client configured for LocalStack or AWS"""
+    if IS_LOCALSTACK:
+        return boto3.client(
+            service_name,
+            region_name=region_name,
+            endpoint_url=ENDPOINT_URL,
+            aws_access_key_id='test',
+            aws_secret_access_key='test'
+        )
+    return boto3.client(service_name, region_name=region_name)
+
 @mark.describe("TapStack Integration")
 class TestTapStackIntegration(unittest.TestCase):
     """Integration tests for the deployed TapStack resources using boto3"""
@@ -27,7 +47,7 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_vpc_exists(self):
         vpc_id = flat_outputs.get("VpcId")
         self.assertIsNotNone(vpc_id, "VpcId output is missing")
-        ec2 = boto3.client("ec2", region_name=REGION)
+        ec2 = get_boto3_client("ec2")
         try:
             response = ec2.describe_vpcs(VpcIds=[vpc_id])
             self.assertEqual(len(response["Vpcs"]), 1)
@@ -38,7 +58,7 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_bastion_host_exists(self):
         instance_id = flat_outputs.get("BastionHostId")
         self.assertIsNotNone(instance_id, "BastionHostId output is missing")
-        ec2 = boto3.client("ec2", region_name=REGION)
+        ec2 = get_boto3_client("ec2")
         try:
             response = ec2.describe_instances(InstanceIds=[instance_id])
             self.assertGreaterEqual(len(response["Reservations"]), 1)
@@ -50,7 +70,7 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_app_data_bucket_exists_and_encrypted(self):
         bucket_name = flat_outputs.get("AppDataBucketName")
         self.assertIsNotNone(bucket_name, "AppDataBucketName output is missing")
-        s3 = boto3.client("s3", region_name=REGION)
+        s3 = get_boto3_client("s3")
         try:
             s3.head_bucket(Bucket=bucket_name)
             enc = s3.get_bucket_encryption(Bucket=bucket_name)
@@ -62,11 +82,12 @@ class TestTapStackIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"S3 bucket '{bucket_name}' does not exist or is not encrypted: {e}")
 
+    @pytest.mark.skipif(IS_LOCALSTACK, reason="RDS is not created in LocalStack mode")
     @mark.it("RDS instance endpoint is reachable")
     def test_rds_instance_exists(self):
         endpoint = flat_outputs.get("DatabaseEndpoint")
         self.assertIsNotNone(endpoint, "DatabaseEndpoint output is missing")
-        rds = boto3.client("rds", region_name=REGION)
+        rds = get_boto3_client("rds")
         try:
             instances = rds.describe_db_instances()
             found = any(db["Endpoint"]["Address"] == endpoint for db in instances["DBInstances"])
@@ -78,7 +99,7 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_database_secret_exists(self):
         secret_arn = flat_outputs.get("DatabaseSecretArn")
         self.assertIsNotNone(secret_arn, "DatabaseSecretArn output is missing")
-        sm = boto3.client("secretsmanager", region_name=REGION)
+        sm = get_boto3_client("secretsmanager")
         try:
             response = sm.describe_secret(SecretId=secret_arn)
             self.assertEqual(response["ARN"], secret_arn)
