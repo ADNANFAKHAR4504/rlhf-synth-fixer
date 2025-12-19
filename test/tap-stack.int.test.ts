@@ -58,7 +58,7 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
   beforeAll(async () => {
     // Load outputs from CloudFormation
     const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-    const stackName = `localstack-stack-${envSuffix}`;
+    let stackName = outputs.StackName || `localstack-stack-${envSuffix}`;
     
     try {
       const stackResponse = await cfnClient.send(
@@ -72,11 +72,36 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
         });
       }
     } catch (error: any) {
-      // Continue with file outputs if CloudFormation query fails
+      // Try with constructed name if file stack name failed
+      if (outputs.StackName && stackName !== `localstack-stack-${envSuffix}`) {
+        stackName = `localstack-stack-${envSuffix}`;
+        try {
+          const stackResponse = await cfnClient.send(
+            new DescribeStacksCommand({ StackName: stackName })
+          );
+          if (stackResponse.Stacks && stackResponse.Stacks[0].Outputs) {
+            stackResponse.Stacks[0].Outputs.forEach(output => {
+              if (output.OutputKey && output.OutputValue) {
+                outputs[output.OutputKey] = output.OutputValue;
+              }
+            });
+          }
+        } catch (error2: any) {
+          // Continue with file outputs only
+        }
+      }
     }
 
     bucketName = outputs.S3BucketName || process.env.S3_BUCKET || '';
+    if (!bucketName) {
+      throw new Error(`S3BucketName not found in outputs. Available keys: ${Object.keys(outputs).join(', ')}`);
+    }
+
     snsTopicArn = outputs.SNSTopicArn || process.env.SNS_TOPIC_ARN || '';
+    if (!snsTopicArn || !snsTopicArn.startsWith('arn:')) {
+      throw new Error(`SNSTopicArn not found or invalid. Value: "${snsTopicArn}". Available keys: ${Object.keys(outputs).join(', ')}`);
+    }
+
     logGroupName = outputs.CloudWatchLogGroup || process.env.CLOUDWATCH_LOG_GROUP || '/aws/tap-stack';
     publicSubnet = outputs.PublicSubnetId || '';
     securityGroups = [outputs.ApplicationSecurityGroupId, outputs.DatabaseSecurityGroupId].filter(Boolean);
