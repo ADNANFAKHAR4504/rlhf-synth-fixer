@@ -529,7 +529,7 @@ run_pulumi_tests() {
                 go mod download
             fi
             
-            go test -v -timeout 30m ./tests/integration/... 2>&1
+            go test -tags=integration -v -timeout 30m ./tests/integration/... 2>&1
             local exit_code=$?
             if [ $exit_code -ne 0 ]; then
                 print_status $RED "❌ Go tests failed with exit code: $exit_code"
