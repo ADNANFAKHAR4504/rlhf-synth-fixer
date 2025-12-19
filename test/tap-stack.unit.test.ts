@@ -223,10 +223,11 @@ describe('TapStack', () => {
       });
     });
 
-    test('uses Amazon Linux 2023 AMI', () => {
+    test('uses AMI from SSM parameter', () => {
+      // SSM parameter lookup for AMI (LocalStack compatible)
       template.hasResourceProperties('AWS::EC2::Instance', {
         ImageId: {
-          Ref: Match.stringLikeRegexp('.*al2023.*'),
+          Ref: Match.stringLikeRegexp('.*SsmParameterValue.*'),
         },
       });
     });
