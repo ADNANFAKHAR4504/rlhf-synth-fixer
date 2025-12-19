@@ -3,4 +3,3 @@
 // This is a no-op placeholder that doesn't affect the actual JavaScript CDK code.
 
 export {};
-
