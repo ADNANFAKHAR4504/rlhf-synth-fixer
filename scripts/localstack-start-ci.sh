@@ -58,13 +58,15 @@ if docker ps -a | grep -q localstack; then
     docker rm localstack 2>/dev/null || true
 fi
 
-# LocalStack enables all services by default when SERVICES is not set
-# Only set SERVICES if explicitly provided via environment variable
+# Optimize services list - only load commonly needed services for faster startup
+# Can be overridden via LOCALSTACK_SERVICES environment variable
 if [ -n "$LOCALSTACK_SERVICES" ]; then
     SERVICES="$LOCALSTACK_SERVICES"
-    echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
+    echo -e "${BLUE}📋 Services to enable (custom): ${SERVICES}${NC}"
 else
-    echo -e "${BLUE}📋 All LocalStack services enabled (default)${NC}"
+    # Default optimized list of commonly used services
+    SERVICES="s3,lambda,dynamodb,cloudformation,iam,sqs,sns,events,logs,cloudwatch,apigateway,secretsmanager,ssm,stepfunctions,kinesis,kms,sts"
+    echo -e "${BLUE}📋 Services to enable (optimized default): ${SERVICES}${NC}"
 fi
 
 # Check for LocalStack API Key
@@ -80,20 +82,18 @@ echo -e "${YELLOW}🔧 Starting LocalStack container...${NC}"
 
 # Build docker run command
 # Using LocalStack Pro image with latest version for full AWS service parity
-# CI-optimized settings for GitHub Actions
+# CI-optimized settings for GitHub Actions with performance optimizations
 DOCKER_CMD="docker run -d \
   --name localstack \
   -p 4566:4566 \
-  -e DEBUG=1 \
+  -e DEBUG=${LOCALSTACK_DEBUG:-0} \
   -e DATA_DIR=/tmp/localstack/data \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
-  -e ENFORCE_IAM=0"
-
-# Add SERVICES only if explicitly set
-if [ -n "$SERVICES" ]; then
-    DOCKER_CMD="$DOCKER_CMD \
+  -e ENFORCE_IAM=0 \
+  -e EAGER_SERVICE_LOADING=1 \
+  -e SKIP_INFRA_DOWNLOADS=1 \
+  -e SKIP_SSL_CERT_DOWNLOAD=1 \
   -e SERVICES=\"${SERVICES}\""
-fi
 
 # Add API key if available (required for Pro features)
 if [ -n "$LOCALSTACK_API_KEY" ]; then
@@ -124,9 +124,9 @@ if ! command -v curl &> /dev/null; then
     sudo apt-get update && sudo apt-get install -y curl || true
 fi
 
-# Give LocalStack more time to start before checking (Pro image needs more initialization time)
-echo -e "${BLUE}⏱️  Waiting 10 seconds for LocalStack to initialize...${NC}"
-sleep 60
+# Give LocalStack time to start (reduced from 60s for faster CI)
+echo -e "${BLUE}⏱️  Waiting 30 seconds for LocalStack to initialize...${NC}"
+sleep 30
 
 while [ $attempt -lt $max_attempts ]; do
     # Show logs on first attempt to debug CI issues immediately
