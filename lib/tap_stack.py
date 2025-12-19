@@ -5,6 +5,8 @@ AWS infrastructure with VPCs, ALBs, Auto Scaling Groups, and related resources.
 """
 
 import os
+import json
+from pathlib import Path
 from aws_cdk import (
     Stack,
     aws_ec2 as ec2,
@@ -20,10 +22,28 @@ from aws_cdk import (
 from constructs import Construct
 
 # Detect LocalStack environment
-is_localstack = (
-    "localhost" in os.environ.get("AWS_ENDPOINT_URL", "")
-    or "4566" in os.environ.get("AWS_ENDPOINT_URL", "")
-)
+# Check both environment variable (runtime) and metadata.json (synth time)
+def _is_localstack_environment():
+    """Detect if running in LocalStack environment."""
+    # Check AWS_ENDPOINT_URL environment variable
+    endpoint_url = os.environ.get("AWS_ENDPOINT_URL", "")
+    if "localhost" in endpoint_url or "4566" in endpoint_url:
+        return True
+
+    # Check metadata.json provider field (for CDK synth time)
+    metadata_path = Path(__file__).parent.parent / "metadata.json"
+    if metadata_path.exists():
+        try:
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+                if metadata.get("provider") == "localstack":
+                    return True
+        except Exception:
+            pass
+
+    return False
+
+is_localstack = _is_localstack_environment()
 
 
 class TapStackProps(StackProps):
