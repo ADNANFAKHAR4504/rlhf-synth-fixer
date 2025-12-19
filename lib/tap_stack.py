@@ -238,7 +238,7 @@ class TapStack(Stack):
       default_target_groups=[target_group]
     )
 
-    # Launch Template for EC2
+    # User Data for EC2
     user_data_script = ec2.UserData.for_linux()
     user_data_script.add_commands(
       "yum update -y",
@@ -249,8 +249,10 @@ class TapStack(Stack):
       "echo 'OK' > /var/www/html/health"
     )
 
-    launch_template = ec2.LaunchTemplate(
-      self, f"tap-launch-template-{environment_suffix}",
+    # Auto Scaling Group (using direct properties for LocalStack compatibility)
+    asg = autoscaling.AutoScalingGroup(
+      self, f"tap-asg-{environment_suffix}",
+      vpc=vpc,
       instance_type=ec2.InstanceType.of(
         ec2.InstanceClass.BURSTABLE3,
         ec2.InstanceSize.SMALL
@@ -260,14 +262,7 @@ class TapStack(Stack):
       ),
       security_group=web_sg,
       role=ec2_role,
-      user_data=user_data_script
-    )
-
-    # Auto Scaling Group
-    asg = autoscaling.AutoScalingGroup(
-      self, f"tap-asg-{environment_suffix}",
-      vpc=vpc,
-      launch_template=launch_template,
+      user_data=user_data_script,
       min_capacity=2,
       max_capacity=5,
       desired_capacity=2,
