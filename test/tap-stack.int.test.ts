@@ -75,7 +75,7 @@ async function describeAddressSafe(elasticIp: string) {
     });
     return await ec2Client.send(command);
   } catch (error: any) {
-    if (isLocalStack && error.message?.includes('does not exist')) {
+    if (isLocalStack && (error.name === 'InvalidAddress.NotFound' || error.message?.includes('not found') || error.message?.includes('does not exist'))) {
       console.warn('Elastic IP not found in LocalStack - this is expected behavior');
       return null;
     }
@@ -91,7 +91,7 @@ async function describeSecurityGroupSafe(groupId: string) {
     });
     return await ec2Client.send(command);
   } catch (error: any) {
-    if (isLocalStack && error.message?.includes('does not exist')) {
+    if (isLocalStack && (error.message?.includes('not found') || error.message?.includes('does not exist'))) {
       console.warn('Security Group not found in LocalStack - this is expected behavior');
       return null;
     }
