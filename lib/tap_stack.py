@@ -137,27 +137,27 @@ class TapStack(cdk.Stack):
         is_localstack = "localhost" in str(self.node.try_get_context('AWS_ENDPOINT_URL') or "")
 
         lambda_props = {
-                "runtime": _lambda.Runtime.PYTHON_3_9,
-                "handler": "index.lambda_handler",
-                "code": _lambda.Code.from_inline("def lambda_handler(event, context): return 'ok'"),
-                "role": self.lambda_execution_role,
-                "memory_size": 512,
-                "timeout": cdk.Duration.minutes(1),
-                "environment": {
-                        "LOG_LEVEL": "INFO",
-                        "POWERTOOLS_SERVICE_NAME": "sample-service",
-                        "POWERTOOLS_METRICS_NAMESPACE": "ServerlessPlatform"
-                }
+            "runtime": _lambda.Runtime.PYTHON_3_9,
+            "handler": "index.lambda_handler",
+            "code": _lambda.Code.from_inline("def lambda_handler(event, context): return 'ok'"),
+            "role": self.lambda_execution_role,
+            "memory_size": 512,
+            "timeout": cdk.Duration.minutes(1),
+            "environment": {
+                "LOG_LEVEL": "INFO",
+                "POWERTOOLS_SERVICE_NAME": "sample-service",
+                "POWERTOOLS_METRICS_NAMESPACE": "ServerlessPlatform"
+            }
         }
 
         # Only use ARM64 architecture on AWS, not LocalStack
         if not is_localstack:
-                lambda_props["architecture"] = _lambda.Architecture.ARM_64
+            lambda_props["architecture"] = _lambda.Architecture.ARM_64
 
         self.sample_function = _lambda.Function(
-                self,
-                "SampleFunction",
-                **lambda_props
+            self,
+            "SampleFunction",
+            **lambda_props
         )
 
         # Publish a new version
@@ -165,10 +165,10 @@ class TapStack(cdk.Stack):
 
         # Attach alias without provisioned concurrency for LocalStack compatibility
         _lambda.Alias(
-                self,
-                "SampleFunctionAlias",
-                alias_name="prod",
-                version=version
+            self,
+            "SampleFunctionAlias",
+            alias_name="prod",
+            version=version
         )
 
         return self.sample_function
@@ -181,23 +181,23 @@ class TapStack(cdk.Stack):
         is_localstack = "localhost" in str(self.node.try_get_context('AWS_ENDPOINT_URL') or "")
 
         lambda_props = {
-                "runtime": _lambda.Runtime.PYTHON_3_9,
-                "handler": "index.lambda_handler",
-                "code": _lambda.Code.from_inline("def lambda_handler(event, context): return 'ok'"),
-                "role": self.lambda_execution_role,
-                "memory_size": 512,
-                "timeout": cdk.Duration.seconds(60),
-                "log_group": self.log_group,
-                "environment": {
-                        "DATADOG_API_KEY_PARAM": f"/serverless-platform/datadog/api-key",
-                        "SAMPLE_FUNCTION_NAME": "SampleFunction"
-                },
-                "description": "Monitoring function for third-party integration"
+            "runtime": _lambda.Runtime.PYTHON_3_9,
+            "handler": "index.lambda_handler",
+            "code": _lambda.Code.from_inline("def lambda_handler(event, context): return 'ok'"),
+            "role": self.lambda_execution_role,
+            "memory_size": 512,
+            "timeout": cdk.Duration.seconds(60),
+            "log_group": self.log_group,
+            "environment": {
+                "DATADOG_API_KEY_PARAM": "/serverless-platform/datadog/api-key",
+                "SAMPLE_FUNCTION_NAME": "SampleFunction"
+            },
+            "description": "Monitoring function for third-party integration"
         }
 
         # Only use ARM64 architecture on AWS, not LocalStack
         if not is_localstack:
-                lambda_props["architecture"] = _lambda.Architecture.ARM_64
+            lambda_props["architecture"] = _lambda.Architecture.ARM_64
 
         return _lambda.Function(
             self,
@@ -278,24 +278,24 @@ class TapStack(cdk.Stack):
         # Budget alert for $1000/month (AWS only - not supported in LocalStack)
         is_localstack = "localhost" in str(self.node.try_get_context('AWS_ENDPOINT_URL') or "")
         if not is_localstack:
-                budget = budgets.CfnBudget(
-                        self,
-                        "ServerlessBudget",
-                        budget={
-                                "budgetName": f"ServerlessPlatform-{self.environment_suffix}-Budget",
-                                "budgetLimit": {"amount": 1000, "unit": "USD"},
-                                "timeUnit": "MONTHLY",
-                                "budgetType": "COST"
-                        },
-                        notifications_with_subscribers=[{
-                                "notification": {
-                                        "notificationType": "FORECASTED",
-                                        "comparisonOperator": "GREATER_THAN",
-                                        "threshold": 80  # triggers at 80% usage
-                                },
-                                "subscribers": [{
-                                        "subscriptionType": "EMAIL",
-                                        "address": "admin@company.com"
-                                }]
-                        }]
-                )
+            budget = budgets.CfnBudget(
+                self,
+                "ServerlessBudget",
+                budget={
+                    "budgetName": f"ServerlessPlatform-{self.environment_suffix}-Budget",
+                    "budgetLimit": {"amount": 1000, "unit": "USD"},
+                    "timeUnit": "MONTHLY",
+                    "budgetType": "COST"
+                },
+                notifications_with_subscribers=[{
+                    "notification": {
+                        "notificationType": "FORECASTED",
+                        "comparisonOperator": "GREATER_THAN",
+                        "threshold": 80  # triggers at 80% usage
+                    },
+                    "subscribers": [{
+                        "subscriptionType": "EMAIL",
+                        "address": "admin@company.com"
+                    }]
+                }]
+            )
