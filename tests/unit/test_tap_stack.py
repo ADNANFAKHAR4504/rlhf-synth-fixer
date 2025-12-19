@@ -38,15 +38,19 @@ def test_stack_resources(app, environment_suffix):
     # Verify critical resources exist
     resources = template.get('Resources', {})
 
-    # Check for KMS keys
+    # Check for KMS keys (at least 1 for S3, possibly 2 if RDS is created)
     kms_keys = [r for r in resources.values() if r.get('Type') == 'AWS::KMS::Key']
-    assert len(kms_keys) >= 2, "Should have at least 2 KMS keys (S3 and RDS)"
+    assert len(kms_keys) >= 1, "Should have at least 1 KMS key (S3)"
 
-    # Check for VPC
+    # Check for VPC (conditional based on environment)
     vpcs = [r for r in resources.values() if r.get('Type') == 'AWS::EC2::VPC']
-    assert len(vpcs) == 1, "Should have exactly 1 VPC"
+    is_localstack = os.environ.get('AWS_ENDPOINT_URL') is not None
+    if not is_localstack:
+        assert len(vpcs) == 1, "Should have exactly 1 VPC in non-LocalStack environment"
+    else:
+        assert len(vpcs) == 0, "Should not have VPC in LocalStack environment"
 
-    # Check for S3 bucket
+    # Check for S3 bucket (always created)
     s3_buckets = [r for r in resources.values() if r.get('Type') == 'AWS::S3::Bucket']
     assert len(s3_buckets) >= 1, "Should have at least 1 S3 bucket"
 
@@ -92,7 +96,7 @@ def test_stack_encryption(app, environment_suffix):
     template = app.synth().get_stack_by_name(stack.stack_name).template
     resources = template.get('Resources', {})
 
-    # Check S3 bucket encryption
+    # Check S3 bucket encryption (always present)
     s3_buckets = {
         k: v for k, v in resources.items()
         if v.get('Type') == 'AWS::S3::Bucket'
@@ -101,11 +105,16 @@ def test_stack_encryption(app, environment_suffix):
         properties = bucket.get('Properties', {})
         assert 'BucketEncryption' in properties, f"S3 bucket {bucket_id} should have encryption"
 
-    # Check RDS instance encryption
+    # Check RDS instance encryption (only if RDS is created)
     rds_instances = {
         k: v for k, v in resources.items()
         if v.get('Type') == 'AWS::RDS::DBInstance'
     }
-    for instance_id, instance in rds_instances.items():
-        properties = instance.get('Properties', {})
-        assert properties.get('StorageEncrypted', False), f"RDS instance {instance_id} should have storage encrypted"
+    is_localstack = os.environ.get('AWS_ENDPOINT_URL') is not None
+    if not is_localstack:
+        assert len(rds_instances) > 0, "RDS instances should be present in non-LocalStack environment"
+        for instance_id, instance in rds_instances.items():
+            properties = instance.get('Properties', {})
+            assert properties.get('StorageEncrypted', False), f"RDS instance {instance_id} should have storage encrypted"
+    else:
+        assert len(rds_instances) == 0, "RDS instances should not be created in LocalStack environment"

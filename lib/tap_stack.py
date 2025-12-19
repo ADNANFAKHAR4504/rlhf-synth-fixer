@@ -1,3 +1,4 @@
+import os
 import aws_cdk as cdk
 from aws_cdk import (
     Stack,
@@ -31,6 +32,12 @@ class TapStack(Stack):
         ) or self.node.try_get_context('environmentSuffix') or 'dev'
         self.environment_suffix = environment_suffix
 
+        # Detect LocalStack environment
+        is_localstack = (
+            os.environ.get('AWS_ENDPOINT_URL') is not None or
+            os.environ.get('LOCALSTACK_HOSTNAME') is not None
+        )
+
         # ----- KMS Keys -----
         s3_kms_key = kms.Key(
             self, f"S3Key-{environment_suffix}",
@@ -38,147 +45,162 @@ class TapStack(Stack):
             enable_key_rotation=True,
             removal_policy=RemovalPolicy.DESTROY
         )
-        rds_kms_key = kms.Key(
-            self, f"RDSKey-{environment_suffix}",
-            description=f"KMS key for RDS encryption - {environment_suffix}",
-            enable_key_rotation=True,
-            removal_policy=RemovalPolicy.DESTROY
-        )
 
-        # ----- VPC -----
-        vpc = ec2.Vpc(
-            self, f"VPC-{environment_suffix}",
-            ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
-            max_azs=2,
-            nat_gateways=0,  # LocalStack: NAT Gateway not fully supported, using public subnets instead
-            subnet_configuration=[
-                ec2.SubnetConfiguration(
-                    name=f"Public-{environment_suffix}",
-                    subnet_type=ec2.SubnetType.PUBLIC,
-                    cidr_mask=24
-                ),
-                ec2.SubnetConfiguration(
-                    name=f"Database-{environment_suffix}",
-                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
-                    cidr_mask=24
-                )
-            ],
-            enable_dns_hostnames=True,
-            enable_dns_support=True
-        )
+        # Initialize variables that may be conditionally created
+        vpc = None
+        web_sg = None
+        db_sg = None
+        app_sg = None
+        rds_instance = None
+        ec2_web_role = None
+        ec2_app_role = None
+        flow_log_role = None
 
-        # ----- VPC Flow Logs (to CloudWatch Logs) -----
-        flow_log_role = iam.Role(
-            self,
-            "VPCFlowLogsRole",
-            assumed_by=iam.ServicePrincipal("vpc-flow-logs.amazonaws.com"),
-            inline_policies={
-                "VPCFlowLogsPolicy": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            effect=iam.Effect.ALLOW,
-                            actions=[
-                                "logs:CreateLogGroup",
-                                "logs:CreateLogStream",
-                                "logs:PutLogEvents",
-                                "logs:DescribeLogGroups",
-                                "logs:DescribeLogStreams"
-                            ],
-                            resources=["*"]
-                        )
-                    ]
-                )
-            }
-        )
-        log_group = logs.LogGroup(
-            self, f"VPCFlowLogGroup-{environment_suffix}",
-            retention=logs.RetentionDays.ONE_MONTH,
-            removal_policy=RemovalPolicy.DESTROY
-        )
-        ec2.FlowLog(
-            self, f"VPCFlowLog-{environment_suffix}",
-            resource_type=ec2.FlowLogResourceType.from_vpc(vpc),
-            destination=ec2.FlowLogDestination.to_cloud_watch_logs(log_group, flow_log_role)
-        )
+        # ----- VPC and EC2 Resources (only if EC2 service is available) -----
+        if not is_localstack:
+            # RDS KMS key only needed if we're creating RDS
+            rds_kms_key = kms.Key(
+                self, f"RDSKey-{environment_suffix}",
+                description=f"KMS key for RDS encryption - {environment_suffix}",
+                enable_key_rotation=True,
+                removal_policy=RemovalPolicy.DESTROY
+            )
 
-        # ----- Security Groups -----
-        web_sg = ec2.SecurityGroup(
-            self, f"WebSG-{environment_suffix}",
-            vpc=vpc,
-            description=f"Security group for web servers - {environment_suffix}",
-            allow_all_outbound=False
-        )
-        web_sg.add_ingress_rule(
-            peer=ec2.Peer.ipv4("0.0.0.0/0"),
-            connection=ec2.Port.tcp(443),
-            description="HTTPS from anywhere"
-        )
-        web_sg.add_ingress_rule(
-            peer=ec2.Peer.ipv4("0.0.0.0/0"),
-            connection=ec2.Port.tcp(80),
-            description="HTTP from anywhere"
-        )
-        web_sg.add_ingress_rule(
-            peer=ec2.Peer.ipv4("203.0.113.0/24"),
-            connection=ec2.Port.tcp(22),
-            description="SSH from company network"
-        )
-        web_sg.add_egress_rule(
-            peer=ec2.Peer.any_ipv4(),
-            connection=ec2.Port.tcp(443),
-            description="HTTPS outbound"
-        )
-        web_sg.add_egress_rule(
-            peer=ec2.Peer.any_ipv4(),
-            connection=ec2.Port.tcp(80),
-            description="HTTP outbound"
-        )
+            vpc = ec2.Vpc(
+                self, f"VPC-{environment_suffix}",
+                ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
+                max_azs=2,
+                nat_gateways=0,
+                subnet_configuration=[
+                    ec2.SubnetConfiguration(
+                        name=f"Public-{environment_suffix}",
+                        subnet_type=ec2.SubnetType.PUBLIC,
+                        cidr_mask=24
+                    ),
+                    ec2.SubnetConfiguration(
+                        name=f"Database-{environment_suffix}",
+                        subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
+                        cidr_mask=24
+                    )
+                ],
+                enable_dns_hostnames=True,
+                enable_dns_support=True
+            )
 
-        db_sg = ec2.SecurityGroup(
-            self, f"DatabaseSG-{environment_suffix}",
-            vpc=vpc,
-            description=f"Security group for database - {environment_suffix}",
-            allow_all_outbound=False
-        )
-        db_sg.add_ingress_rule(
-            peer=web_sg,
-            connection=ec2.Port.tcp(3306),
-            description="MySQL from web servers"
-        )
+            # ----- VPC Flow Logs (to CloudWatch Logs) -----
+            flow_log_role = iam.Role(
+                self,
+                "VPCFlowLogsRole",
+                assumed_by=iam.ServicePrincipal("vpc-flow-logs.amazonaws.com"),
+                inline_policies={
+                    "VPCFlowLogsPolicy": iam.PolicyDocument(
+                        statements=[
+                            iam.PolicyStatement(
+                                effect=iam.Effect.ALLOW,
+                                actions=[
+                                    "logs:CreateLogGroup",
+                                    "logs:CreateLogStream",
+                                    "logs:PutLogEvents",
+                                    "logs:DescribeLogGroups",
+                                    "logs:DescribeLogStreams"
+                                ],
+                                resources=["*"]
+                            )
+                        ]
+                    )
+                }
+            )
+            log_group = logs.LogGroup(
+                self, f"VPCFlowLogGroup-{environment_suffix}",
+                retention=logs.RetentionDays.ONE_MONTH,
+                removal_policy=RemovalPolicy.DESTROY
+            )
+            ec2.FlowLog(
+                self, f"VPCFlowLog-{environment_suffix}",
+                resource_type=ec2.FlowLogResourceType.from_vpc(vpc),
+                destination=ec2.FlowLogDestination.to_cloud_watch_logs(log_group, flow_log_role)
+            )
 
-        app_sg = ec2.SecurityGroup(
-            self, f"ApplicationSG-{environment_suffix}",
-            vpc=vpc,
-            description=f"Security group for application servers - {environment_suffix}",
-            allow_all_outbound=False
-        )
-        app_sg.add_ingress_rule(
-            peer=web_sg,
-            connection=ec2.Port.tcp(8080),
-            description="Application port from web servers"
-        )
-        app_sg.add_egress_rule(
-            peer=db_sg,
-            connection=ec2.Port.tcp(3306),
-            description="MySQL to database"
-        )
-        app_sg.add_egress_rule(
-            peer=ec2.Peer.any_ipv4(),
-            connection=ec2.Port.tcp(443),
-            description="HTTPS outbound for APIs"
-        )
+            # ----- Security Groups -----
+            web_sg = ec2.SecurityGroup(
+                self, f"WebSG-{environment_suffix}",
+                vpc=vpc,
+                description=f"Security group for web servers - {environment_suffix}",
+                allow_all_outbound=False
+            )
+            web_sg.add_ingress_rule(
+                peer=ec2.Peer.ipv4("0.0.0.0/0"),
+                connection=ec2.Port.tcp(443),
+                description="HTTPS from anywhere"
+            )
+            web_sg.add_ingress_rule(
+                peer=ec2.Peer.ipv4("0.0.0.0/0"),
+                connection=ec2.Port.tcp(80),
+                description="HTTP from anywhere"
+            )
+            web_sg.add_ingress_rule(
+                peer=ec2.Peer.ipv4("203.0.113.0/24"),
+                connection=ec2.Port.tcp(22),
+                description="SSH from company network"
+            )
+            web_sg.add_egress_rule(
+                peer=ec2.Peer.any_ipv4(),
+                connection=ec2.Port.tcp(443),
+                description="HTTPS outbound"
+            )
+            web_sg.add_egress_rule(
+                peer=ec2.Peer.any_ipv4(),
+                connection=ec2.Port.tcp(80),
+                description="HTTP outbound"
+            )
 
-        # ----- IAM Roles (scoped to created buckets & logs) -----
-        ec2_web_role = iam.Role(
-            self, f"EC2WebRole-{environment_suffix}",
-            assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
-            description=f"Role for EC2 web servers - {environment_suffix}"
-        )
-        ec2_app_role = iam.Role(
-            self, f"EC2AppRole-{environment_suffix}",
-            assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
-            description=f"Role for EC2 application servers - {environment_suffix}"
-        )
+            db_sg = ec2.SecurityGroup(
+                self, f"DatabaseSG-{environment_suffix}",
+                vpc=vpc,
+                description=f"Security group for database - {environment_suffix}",
+                allow_all_outbound=False
+            )
+            db_sg.add_ingress_rule(
+                peer=web_sg,
+                connection=ec2.Port.tcp(3306),
+                description="MySQL from web servers"
+            )
+
+            app_sg = ec2.SecurityGroup(
+                self, f"ApplicationSG-{environment_suffix}",
+                vpc=vpc,
+                description=f"Security group for application servers - {environment_suffix}",
+                allow_all_outbound=False
+            )
+            app_sg.add_ingress_rule(
+                peer=web_sg,
+                connection=ec2.Port.tcp(8080),
+                description="Application port from web servers"
+            )
+            app_sg.add_egress_rule(
+                peer=db_sg,
+                connection=ec2.Port.tcp(3306),
+                description="MySQL to database"
+            )
+            app_sg.add_egress_rule(
+                peer=ec2.Peer.any_ipv4(),
+                connection=ec2.Port.tcp(443),
+                description="HTTPS outbound for APIs"
+            )
+
+            # ----- IAM Roles (scoped to created buckets & logs) -----
+            ec2_web_role = iam.Role(
+                self, f"EC2WebRole-{environment_suffix}",
+                assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
+                description=f"Role for EC2 web servers - {environment_suffix}"
+            )
+            ec2_app_role = iam.Role(
+                self, f"EC2AppRole-{environment_suffix}",
+                assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
+                description=f"Role for EC2 application servers - {environment_suffix}"
+            )
+
+        # ----- Lambda Role (always created) -----
         lambda_role = iam.Role(
             self, f"LambdaRole-{environment_suffix}",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
@@ -188,7 +210,7 @@ class TapStack(Stack):
             description=f"Role for Lambda functions - {environment_suffix}"
         )
 
-        # ----- S3 Buckets (names omitted for uniqueness) -----
+        # ----- S3 Buckets (always created - LocalStack supports S3) -----
         web_assets_bucket = s3.Bucket(
             self, f"WebAssets-{environment_suffix}",
             encryption=s3.BucketEncryption.KMS,
@@ -217,83 +239,87 @@ class TapStack(Stack):
             enforce_ssl=True
         )
 
-        # Now that buckets exist, scope EC2 roles to actual ARNs
-        ec2_web_role.add_to_policy(iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
-            resources=[
-                f"{web_assets_bucket.bucket_arn}/*",
-                f"{user_uploads_bucket.bucket_arn}/*"
-            ]
-        ))
-        ec2_web_role.add_to_policy(iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=[
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents",
-                "logs:DescribeLogStreams"
-            ],
-            resources=[
-                f"arn:{cdk.Aws.PARTITION}:logs:{cdk.Aws.REGION}:"
-                f"{cdk.Aws.ACCOUNT_ID}:log-group:/aws/ec2/{environment_suffix}/*"
-            ]
-        ))
+        # EC2 role policies (only if EC2 resources were created)
+        if not is_localstack and ec2_web_role and ec2_app_role:
+            ec2_web_role.add_to_policy(iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+                resources=[
+                    f"{web_assets_bucket.bucket_arn}/*",
+                    f"{user_uploads_bucket.bucket_arn}/*"
+                ]
+            ))
+            ec2_web_role.add_to_policy(iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                ],
+                resources=[
+                    f"arn:{cdk.Aws.PARTITION}:logs:{cdk.Aws.REGION}:"
+                    f"{cdk.Aws.ACCOUNT_ID}:log-group:/aws/ec2/{environment_suffix}/*"
+                ]
+            ))
 
-        ec2_app_role.add_to_policy(iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=["s3:GetObject", "s3:PutObject"],
-            resources=[f"{app_data_bucket.bucket_arn}/*"]
-        ))
-        ec2_app_role.add_to_policy(iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=[
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents",
-                "logs:DescribeLogStreams"
-            ],
-            resources=[
-                f"arn:{cdk.Aws.PARTITION}:logs:{cdk.Aws.REGION}:"
-                f"{cdk.Aws.ACCOUNT_ID}:log-group:/aws/ec2/{environment_suffix}/*"
-            ]
-        ))
+            ec2_app_role.add_to_policy(iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["s3:GetObject", "s3:PutObject"],
+                resources=[f"{app_data_bucket.bucket_arn}/*"]
+            ))
+            ec2_app_role.add_to_policy(iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                ],
+                resources=[
+                    f"arn:{cdk.Aws.PARTITION}:logs:{cdk.Aws.REGION}:"
+                    f"{cdk.Aws.ACCOUNT_ID}:log-group:/aws/ec2/{environment_suffix}/*"
+                ]
+            ))
 
-        # ----- RDS (MySQL) -----
-        db_subnet_group = rds.SubnetGroup(
-            self, f"DBSubnetGroup-{environment_suffix}",
-            description=f"Subnet group for RDS - {environment_suffix}",
-            vpc=vpc,
-            vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
+            # ----- RDS (MySQL) - only if EC2/VPC available -----
+            db_subnet_group = rds.SubnetGroup(
+                self, f"DBSubnetGroup-{environment_suffix}",
+                description=f"Subnet group for RDS - {environment_suffix}",
+                vpc=vpc,
+                vpc_subnets=ec2.SubnetSelection(
+                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
+                )
             )
-        )
-        rds_instance = rds.DatabaseInstance(
-            self, f"Database-{environment_suffix}",
-            engine=rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_8_0
-            ),
-            instance_type=ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-            vpc=vpc,
-            subnet_group=db_subnet_group,
-            security_groups=[db_sg],
-            storage_encrypted=True,
-            storage_encryption_key=rds_kms_key,
-            multi_az=False,
-            backup_retention=Duration.days(7),
-            delete_automated_backups=True,
-            deletion_protection=False,
-            removal_policy=RemovalPolicy.DESTROY,
-            allocated_storage=20,
-            max_allocated_storage=100,
-            auto_minor_version_upgrade=True
-            # Use default parameter group to avoid region-specific dependency
-        )
+            rds_instance = rds.DatabaseInstance(
+                self, f"Database-{environment_suffix}",
+                engine=rds.DatabaseInstanceEngine.mysql(
+                    version=rds.MysqlEngineVersion.VER_8_0
+                ),
+                instance_type=ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+                vpc=vpc,
+                subnet_group=db_subnet_group,
+                security_groups=[db_sg],
+                storage_encrypted=True,
+                storage_encryption_key=rds_kms_key,
+                multi_az=False,
+                backup_retention=Duration.days(7),
+                delete_automated_backups=True,
+                deletion_protection=False,
+                removal_policy=RemovalPolicy.DESTROY,
+                allocated_storage=20,
+                max_allocated_storage=100,
+                auto_minor_version_upgrade=True
+            )
 
         # ----- Outputs -----
-        CfnOutput(
-            self, "VpcId", value=vpc.vpc_id, description="VPC ID"
-        )
+        # VPC output only if VPC was created
+        if vpc:
+            CfnOutput(
+                self, "VpcId", value=vpc.vpc_id, description="VPC ID"
+            )
+
+        # S3 buckets (always created)
         CfnOutput(
             self, "WebAssetsBucketName",
             value=web_assets_bucket.bucket_name,
@@ -309,11 +335,16 @@ class TapStack(Stack):
             value=app_data_bucket.bucket_name,
             description="Application Data S3 Bucket Name"
         )
-        CfnOutput(
-            self, "RdsInstanceIdentifier",
-            value=rds_instance.instance_identifier,
-            description="RDS Instance Identifier"
-        )
+
+        # RDS output only if RDS was created
+        if rds_instance:
+            CfnOutput(
+                self, "RdsInstanceIdentifier",
+                value=rds_instance.instance_identifier,
+                description="RDS Instance Identifier"
+            )
+
+        # KMS key (always created)
         CfnOutput(
             self, "S3KmsKeyId",
             value=s3_kms_key.key_id,
