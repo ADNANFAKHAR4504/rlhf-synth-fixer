@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349324",
+  "team": "3",
+  "startedAt": "2025-08-29T18:58:33.288Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nikhilturing",
+  "dockerS3Location": ""
+}

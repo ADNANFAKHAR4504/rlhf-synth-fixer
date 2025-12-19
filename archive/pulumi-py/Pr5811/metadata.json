@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-05T00:00:00.000Z",
+  "po_id": "101000836",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ECR",
+    "Secrets Manager",
+    "CloudWatch",
+    "ALB",
+    "IAM",
+    "Application Auto Scaling"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

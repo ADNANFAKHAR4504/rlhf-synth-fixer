@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-18T08:05:32+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "101912487",
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "IAM",
+    "CloudWatch",
+    "EventBridge",
+    "SQS",
+    "SNS"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000200",
+  "team": "6",
+  "startedAt": "2025-10-28T13:31:08.233Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "SQS",
+    "EventBridge",
+    "CloudWatch Logs",
+    "IAM Role",
+    "IAM Policy",
+    "X-Ray"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

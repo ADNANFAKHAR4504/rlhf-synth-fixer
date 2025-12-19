@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-17T02:29:44+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "1u8k2i",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "SSM",
+    "KMS",
+    "Lambda",
+    "EventBridge",
+    "S3",
+    "Config",
+    "CloudWatch",
+    "IAM"
+  ],
+  "region": "us-east-2",
+  "training_quality": 9,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

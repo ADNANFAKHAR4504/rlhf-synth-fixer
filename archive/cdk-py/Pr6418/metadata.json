@@ -1,0 +1,40 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth-2",
+  "startedAt": "2025-11-13T00:11:36+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Implement IRSA (IAM Roles for Service Accounts) for pod-level permissions",
+    "Configure OIDC provider for external authentication integration",
+    "Create separate node groups for GPU workloads using g4dn instances",
+    "Deploy cluster across exactly 3 availability zones",
+    "Implement pod security standards with restricted baseline",
+    "Use EKS version 1.28 or higher with IPv6 enabled",
+    "Set up AWS Load Balancer Controller as a managed add-on",
+    "Use AWS KMS for envelope encryption of Kubernetes secrets",
+    "Enable cluster autoscaler with tagging strategy for node groups",
+    "Node groups must use Bottlerocket AMI for enhanced security"
+  ],
+  "po_id": "0q7vr8",
+  "aws_services": [
+    "EKS",
+    "EC2",
+    "VPC",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "Elastic Load Balancing"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "4090",
+  "team": "5",
+  "startedAt": "2025-10-10T10:58:44.773Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS Aurora",
+    "DynamoDB",
+    "ElastiCache",
+    "Secrets Manager",
+    "CloudWatch",
+    "EventBridge",
+    "Lambda",
+    "Route53",
+    "Security Hub",
+    "KMS",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}

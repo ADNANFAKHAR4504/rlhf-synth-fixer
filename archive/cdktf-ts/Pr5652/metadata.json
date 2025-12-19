@@ -1,0 +1,33 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000229",
+  "team": "1",
+  "startedAt": "2025-11-03T13:24:14.057Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "\"ALB\"",
+    "\"Auto Scaling Group\"",
+    "\"CloudWatch\"",
+    "\"Lambda\"",
+    "\"DynamoDB\"",
+    "\"EventBridge\"",
+    "\"VPC\"",
+    "\"EC2\"",
+    "\"IAM\"",
+    "\"EIP\"",
+    "\"NAT Gateway\""
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

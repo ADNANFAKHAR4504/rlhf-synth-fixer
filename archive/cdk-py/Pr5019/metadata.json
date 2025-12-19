@@ -1,0 +1,21 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000578",
+  "team": "1",
+  "startedAt": "2025-10-22T05:46:03.485Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "\"lambda\",    \"s3\",    \"cloudwatch\",    \"apigateway\",    \"iam\"",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

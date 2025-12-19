@@ -1,0 +1,31 @@
+{
+  "po_id": "u99i8g",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T23:10:44+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "VPC Endpoints",
+    "KMS",
+    "IAM",
+    "S3",
+    "CloudWatch Logs",
+    "Lambda",
+    "Security Groups"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "training_quality_rationale": "Excellent training value with critical architecture fix (S3 Gateway endpoint route table configuration) and complex zero-trust security implementation across 8 AWS services. The model error required deep understanding of VPC networking to resolve.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

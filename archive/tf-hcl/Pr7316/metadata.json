@@ -1,0 +1,33 @@
+{
+  "task_id": "l6p3z2w4",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "po_id": "l6p3z2w4",
+  "training_quality": 9,
+  "startedAt": "2025-11-25T23:23:00Z",
+  "subtask": "Failure Recovery and High Availability",
+  "aws_services": [
+    "RDS Aurora",
+    "Route 53",
+    "S3",
+    "Lambda",
+    "AWS Backup",
+    "CloudWatch",
+    "KMS",
+    "Secrets Manager",
+    "SNS",
+    "VPC"
+  ],
+  "subject_labels": [
+    "Failure Recovery"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

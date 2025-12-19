@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "313927",
+  "team": "6",
+  "startedAt": "2025-10-03T03:43:24.750Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "RDS",
+    "KMS",
+    "WAF",
+    "ELB",
+    "DynamoDB"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
+}

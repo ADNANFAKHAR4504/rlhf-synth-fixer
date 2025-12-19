@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "349693",
+  "team": "5",
+  "startedAt": "2025-09-09T13:58:20.313Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Database Management",
+    "Network Configuration",
+    "Security Configuration",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "S3",
+    "Systems Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

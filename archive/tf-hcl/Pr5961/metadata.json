@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-06T19:07:07+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "czfjv",
+  "aws_services": [
+    "ECS",
+    "Fargate",
+    "ALB",
+    "ECR",
+    "CloudWatch",
+    "Cloud Map",
+    "IAM",
+    "VPC",
+    "Auto Scaling"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

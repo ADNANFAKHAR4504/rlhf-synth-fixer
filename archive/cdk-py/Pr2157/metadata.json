@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr153cdkpy",
+  "team": "synth",
+  "startedAt": "2025-08-25T09:29:45+05:30",
+  "subtask": "Network Infrastructure Design",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Resource Scaling",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "InternetGateway",
+    "NATGateway",
+    "SecurityGroup",
+    "KeyPair",
+    "IAM",
+    "Route53",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

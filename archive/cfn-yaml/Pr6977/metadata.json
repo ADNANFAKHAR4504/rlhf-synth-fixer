@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349074",
+  "team": "3",
+  "startedAt": "2025-11-19T17:18:49.941Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM Role",
+    "S3 Bucket",
+    "RDS Instance",
+    "CloudTrail",
+    "KMS Key",
+    "EC2 Instance",
+    "CloudWatch Alarm",
+    "VPC",
+    "Public Subnet",
+    "Private Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Security Group",
+    "WAF Web ACL"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

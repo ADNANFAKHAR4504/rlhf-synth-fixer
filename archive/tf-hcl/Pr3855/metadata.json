@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291286",
+  "team": "5",
+  "startedAt": "2025-10-08T10:42:12.930Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AWS Organizations",
+    "AWS Config",
+    "AWS Security Hub",
+    "AWS GuardDuty",
+    "AWS CloudTrail",
+    "AWS Lambda",
+    "Amazon EventBridge",
+    "Amazon DynamoDB",
+    "Amazon QuickSight",
+    "Amazon S3",
+    "AWS KMS",
+    "Amazon SNS",
+    "Amazon CloudWatch",
+    "AWS IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

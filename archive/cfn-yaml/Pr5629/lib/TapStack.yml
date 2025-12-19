@@ -1,0 +1,1364 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Multi-Account Replication Framework - S3, DynamoDB, Lambda, EventBridge"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - Environment
+          - ApplicationName
+      - Label:
+          default: "Account Configuration"
+        Parameters:
+          - AccountIdDev
+          - AccountIdStaging
+          - AccountIdProd
+      - Label:
+          default: "Resource Configuration"
+        Parameters:
+          - ReplicationRoleName
+          - DynamoDBTableName
+          - ReplicationBucketName
+          - SSMPathPrefix
+
+# ===========================
+# Parameters
+# ===========================
+Parameters:
+  Environment:
+    Type: String
+    Description: Current environment name
+    AllowedValues: [dev, staging, prod]
+    Default: dev
+
+  ApplicationName:
+    Type: String
+    Description: Application name for resource naming
+    Default: multi-env-replication
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+
+  AccountIdDev:
+    Type: String
+    Description: AWS Account ID for Development
+    AllowedPattern: "[0-9]{12}"
+    Default: "111111111111"
+
+  AccountIdStaging:
+    Type: String
+    Description: AWS Account ID for Staging
+    AllowedPattern: "[0-9]{12}"
+    Default: "222222222222"
+
+  AccountIdProd:
+    Type: String
+    Description: AWS Account ID for Production
+    AllowedPattern: "[0-9]{12}"
+    Default: "333333333333"
+
+  ReplicationRoleName:
+    Type: String
+    Default: "multi-env-replication-role"
+    Description: Name for the cross-account replication role
+
+  DynamoDBTableName:
+    Type: String
+    Default: "ConfigurationMetadata"
+    Description: DynamoDB table name for metadata synchronization
+
+  ReplicationBucketName:
+    Type: String
+    Default: "configuration-artifacts"
+    Description: Base name for S3 replication buckets
+
+  SSMPathPrefix:
+    Type: String
+    Default: "/app"
+    Description: SSM Parameter Store path prefix
+
+# ===========================
+# Conditions
+# ===========================
+Conditions:
+  EnableReplicationToStaging: !Equals [!Ref Environment, "dev"]
+  EnableReplicationToProd: !Equals [!Ref Environment, "staging"]
+  EnableReplication: !Or
+    - !Condition EnableReplicationToStaging
+    - !Condition EnableReplicationToProd
+
+# ===========================
+# Resources
+# ===========================
+Resources:
+  # ===========================
+  # S3 Configuration Artifacts Bucket
+  # ===========================
+  ConfigurationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ReplicationBucketName}-${Environment}-${AWS::Region}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-config-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # ===========================
+  # S3 Bucket Policy - Simplified for Initial Deployment
+  # ===========================
+  ConfigurationBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ConfigurationBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCurrentAccountAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action:
+              - "s3:GetObject"
+              - "s3:GetObjectVersion"
+              - "s3:ListBucket"
+              - "s3:ListBucketVersions"
+              - "s3:PutObject"
+              - "s3:DeleteObject"
+            Resource:
+              - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
+              - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
+
+  # ===========================
+  # IAM Role for S3 Replication
+  # ===========================
+  S3ReplicationRole:
+    Type: AWS::IAM::Role
+    Condition: EnableReplication
+    DependsOn: ConfigurationBucket
+    Properties:
+      RoleName: !Sub "${ReplicationRoleName}-s3-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: S3ReplicationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetReplicationConfiguration"
+                  - "s3:ListBucket"
+                Resource: !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
+              - Effect: Allow
+                Action:
+                  - "s3:GetObjectVersionForReplication"
+                  - "s3:GetObjectVersionAcl"
+                  - "s3:GetObjectVersionTagging"
+                Resource: !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
+              - Effect: Allow
+                Action:
+                  - "s3:ReplicateObject"
+                  - "s3:ReplicateDelete"
+                  - "s3:ReplicateTags"
+                Resource:
+                  - !If
+                    - EnableReplicationToStaging
+                    - !Sub "arn:aws:s3:::${ReplicationBucketName}-staging-${AWS::Region}/*"
+                    - !Ref AWS::NoValue
+                  - !If
+                    - EnableReplicationToProd
+                    - !Sub "arn:aws:s3:::${ReplicationBucketName}-prod-${AWS::Region}/*"
+                    - !Ref AWS::NoValue
+      Tags:
+        - Key: Name
+          Value: !Sub "${ReplicationRoleName}-s3-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref ApplicationName
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # ===========================
+  # DynamoDB Global Table
+  # ===========================
+  MetadataTable:
+    Type: AWS::DynamoDB::GlobalTable
+    Properties:
+      TableName: !Sub "${DynamoDBTableName}-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: ConfigId
+          AttributeType: S
+        - AttributeName: ConfigType
+          AttributeType: S
+        - AttributeName: UpdatedAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ConfigId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ConfigTypeIndex
+          KeySchema:
+            - AttributeName: ConfigType
+              KeyType: HASH
+            - AttributeName: UpdatedAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      Replicas:
+        - Region: !Ref AWS::Region
+          GlobalSecondaryIndexes:
+            - IndexName: ConfigTypeIndex
+          Tags:
+            - Key: Name
+              Value: !Sub "${ApplicationName}-metadata-${Environment}"
+            - Key: Environment
+              Value: !Ref Environment
+            - Key: Application
+              Value: !Ref ApplicationName
+            - Key: ManagedBy
+              Value: CloudFormation
+            - Key: iac-rlhf-amazon
+              Value: "true"
+
+  # ===========================
+  # Lambda Execution Role
+  # ===========================
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    DependsOn:
+      - ConfigurationBucket
+      - MetadataTable
+    Properties:
+      RoleName: !Sub "${ApplicationName}-lambda-role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ReplicationAccessPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                  - "s3:GetBucketLocation"
+                  - "s3:GetBucketVersioning"
+                  - "s3:GetReplicationConfiguration"
+                Resource:
+                  - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
+                  - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
+              - Effect: Allow
+                Action:
+                  - "dynamodb:DescribeTable"
+                  - "dynamodb:GetItem"
+                  - "dynamodb:PutItem"
+                  - "dynamodb:Query"
+                  - "dynamodb:Scan"
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:DescribeStream"
+                  - "dynamodb:GetRecords"
+                  - "dynamodb:GetShardIterator"
+                  - "dynamodb:ListStreams"
+                Resource:
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}-${Environment}"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}-${Environment}/stream/*"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}-${Environment}/index/*"
+              - Effect: Allow
+                Action:
+                  - "ssm:GetParameter"
+                  - "ssm:GetParameters"
+                  - "ssm:PutParameter"
+                  - "ssm:DescribeParameters"
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMPathPrefix}/*"
+              - Effect: Allow
+                Action:
+                  - "cloudwatch:PutMetricData"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-lambda-role-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref ApplicationName
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # ===========================
+  # Lambda Function - Replication Monitor
+  # ===========================
+  ReplicationMonitorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ApplicationName}-replication-monitor-${Environment}"
+      Runtime: python3.11
+      Handler: index.handler
+      MemorySize: 256
+      Timeout: 60
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          BUCKET_NAME: !Ref ConfigurationBucket
+          TABLE_NAME: !Ref MetadataTable
+          METRIC_NAMESPACE: "MultiAccountReplication"
+          APPLICATION_NAME: !Ref ApplicationName
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          from botocore.exceptions import ClientError
+
+          s3 = boto3.client('s3')
+          dynamodb = boto3.resource('dynamodb')
+          cloudwatch = boto3.client('cloudwatch')
+
+          def handler(event, context):
+              """Monitor replication events and track metrics"""
+              
+              environment = os.environ.get('ENVIRONMENT', 'unknown')
+              bucket_name = os.environ.get('BUCKET_NAME')
+              table_name = os.environ.get('TABLE_NAME')
+              namespace = os.environ.get('METRIC_NAMESPACE', 'MultiAccountReplication')
+              
+              if not bucket_name or not table_name:
+                  raise ValueError("Required environment variables BUCKET_NAME and TABLE_NAME must be set")
+              
+              try:
+                  table = dynamodb.Table(table_name)
+                  
+                  if 'Records' in event:
+                      for record in event['Records']:
+                          if record.get('eventName', '').startswith('ObjectCreated'):
+                              object_key = record['s3']['object']['key']
+                              
+                              table.put_item(
+                                  Item={
+                                      'ConfigId': f"s3-{object_key}",
+                                      'ConfigType': 'S3_REPLICATION',
+                                      'UpdatedAt': datetime.utcnow().isoformat(),
+                                      'Environment': environment,
+                                      'ObjectKey': object_key,
+                                      'Status': 'PENDING_REPLICATION'
+                                  }
+                              )
+                              
+                              cloudwatch.put_metric_data(
+                                  Namespace=namespace,
+                                  MetricData=[
+                                      {
+                                          'MetricName': 'ReplicationEvents',
+                                          'Value': 1,
+                                          'Unit': 'Count',
+                                          'Dimensions': [
+                                              {'Name': 'Environment', 'Value': environment},
+                                              {'Name': 'EventType', 'Value': 'S3_OBJECT_CREATED'}
+                                          ]
+                                      }
+                                  ]
+                              )
+                  
+                  try:
+                      response = s3.get_bucket_replication(Bucket=bucket_name)
+                      
+                      if 'ReplicationConfiguration' in response:
+                          for rule in response['ReplicationConfiguration'].get('Rules', []):
+                              if rule.get('Status') == 'Enabled':
+                                  cloudwatch.put_metric_data(
+                                      Namespace=namespace,
+                                      MetricData=[
+                                          {
+                                              'MetricName': 'ReplicationHealth',
+                                              'Value': 1,
+                                              'Unit': 'None',
+                                              'Dimensions': [
+                                                  {'Name': 'Environment', 'Value': environment},
+                                                  {'Name': 'RuleId', 'Value': rule['ID']}
+                                              ]
+                                          }
+                                      ]
+                                  )
+                  except ClientError as e:
+                      if e.response['Error']['Code'] != 'ReplicationConfigurationNotFoundError':
+                          raise
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'Replication monitoring completed',
+                          'environment': environment
+                      })
+                  }
+                  
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  
+                  cloudwatch.put_metric_data(
+                      Namespace=namespace,
+                      MetricData=[
+                          {
+                              'MetricName': 'ReplicationErrors',
+                              'Value': 1,
+                              'Unit': 'Count',
+                              'Dimensions': [
+                                  {'Name': 'Environment', 'Value': environment},
+                                  {'Name': 'ErrorType', 'Value': type(e).__name__}
+                              ]
+                          }
+                      ]
+                  )
+                  
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-replication-monitor-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref ApplicationName
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # ===========================
+  # Lambda Function - Configuration Validator
+  # ===========================
+  ConfigValidatorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ApplicationName}-config-validator-${Environment}"
+      Runtime: python3.11
+      Handler: index.handler
+      MemorySize: 256
+      Timeout: 300
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          TABLE_NAME: !Ref MetadataTable
+          SSM_PREFIX: !Ref SSMPathPrefix
+          ACCOUNT_IDS: !Sub "${AccountIdDev},${AccountIdStaging},${AccountIdProd}"
+          APPLICATION_NAME: !Ref ApplicationName
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          from botocore.exceptions import ClientError
+
+          dynamodb = boto3.resource('dynamodb')
+          ssm = boto3.client('ssm')
+          cloudwatch = boto3.client('cloudwatch')
+
+          def handler(event, context):
+              """Validate configuration consistency across environments"""
+              
+              environment = os.environ.get('ENVIRONMENT', 'unknown')
+              table_name = os.environ.get('TABLE_NAME')
+              ssm_prefix = os.environ.get('SSM_PREFIX', '/app')
+              
+              if not table_name:
+                  raise ValueError("TABLE_NAME environment variable must be set")
+              
+              validation_results = {
+                  'timestamp': datetime.utcnow().isoformat(),
+                  'environment': environment,
+                  'validations': []
+              }
+              
+              try:
+                  table = dynamodb.Table(table_name)
+                  
+                  try:
+                      parameters_response = ssm.describe_parameters(
+                          ParameterFilters=[
+                              {
+                                  'Key': 'Path',
+                                  'Option': 'Recursive',
+                                  'Values': [ssm_prefix]
+                              }
+                          ],
+                          MaxResults=10
+                      )
+                      
+                      for param in parameters_response.get('Parameters', []):
+                          param_name = param['Name']
+                          
+                          value_response = ssm.get_parameter(Name=param_name)
+                          
+                          table.put_item(
+                              Item={
+                                  'ConfigId': f"ssm-{param_name}",
+                                  'ConfigType': 'SSM_PARAMETER',
+                                  'UpdatedAt': datetime.utcnow().isoformat(),
+                                  'Environment': environment,
+                                  'ParameterName': param_name,
+                                  'ValidationStatus': 'VALIDATED',
+                                  'LastValidated': datetime.utcnow().isoformat()
+                              }
+                          )
+                          
+                          validation_results['validations'].append({
+                              'type': 'SSM_PARAMETER',
+                              'name': param_name,
+                              'status': 'VALIDATED'
+                          })
+                  except ClientError as e:
+                      print(f"SSM parameter error: {e}")
+                  
+                  table_description = table.meta.client.describe_table(TableName=table_name)
+                  
+                  required_attributes = ['ConfigId', 'ConfigType', 'UpdatedAt']
+                  existing_attributes = [attr['AttributeName'] for attr in table_description['Table']['AttributeDefinitions']]
+                  
+                  schema_valid = all(attr in existing_attributes for attr in required_attributes)
+                  
+                  validation_results['validations'].append({
+                      'type': 'DYNAMODB_SCHEMA',
+                      'table': table_name,
+                      'status': 'VALID' if schema_valid else 'INVALID',
+                      'attributes': existing_attributes
+                  })
+                  
+                  cloudwatch.put_metric_data(
+                      Namespace='MultiAccountReplication',
+                      MetricData=[
+                          {
+                              'MetricName': 'ValidationSuccess',
+                              'Value': len([v for v in validation_results['validations'] if 'VALID' in v.get('status', '')]),
+                              'Unit': 'Count',
+                              'Dimensions': [
+                                  {'Name': 'Environment', 'Value': environment}
+                              ]
+                          }
+                      ]
+                  )
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps(validation_results)
+                  }
+                  
+              except Exception as e:
+                  print(f"Validation error: {str(e)}")
+                  
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'error': str(e),
+                          'environment': environment
+                      })
+                  }
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-config-validator-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref ApplicationName
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # ===========================
+  # Lambda Function - DynamoDB Stream Processor
+  # ===========================
+  StreamProcessorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ApplicationName}-stream-processor-${Environment}"
+      Runtime: python3.11
+      Handler: index.handler
+      MemorySize: 256
+      Timeout: 60
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          SSM_PREFIX: !Ref SSMPathPrefix
+          APPLICATION_NAME: !Ref ApplicationName
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          from botocore.exceptions import ClientError
+
+          ssm = boto3.client('ssm')
+          cloudwatch = boto3.client('cloudwatch')
+
+          def handler(event, context):
+              """Process DynamoDB stream events for schema changes"""
+              
+              environment = os.environ.get('ENVIRONMENT', 'unknown')
+              ssm_prefix = os.environ.get('SSM_PREFIX', '/app')
+              
+              processed_count = 0
+              
+              try:
+                  for record in event.get('Records', []):
+                      if record.get('eventName') in ['INSERT', 'MODIFY']:
+                          new_image = record.get('dynamodb', {}).get('NewImage', {})
+                          
+                          if new_image.get('ConfigType', {}).get('S') == 'SCHEMA_CHANGE':
+                              config_id = new_image.get('ConfigId', {}).get('S', '')
+                              schema_details_str = new_image.get('SchemaDetails', {}).get('S', '{}')
+                              
+                              try:
+                                  schema_details = json.loads(schema_details_str)
+                              except json.JSONDecodeError:
+                                  schema_details = {'raw': schema_details_str}
+                              
+                              param_name = f"{ssm_prefix}/{environment}/schema/{config_id}"
+                              
+                              ssm.put_parameter(
+                                  Name=param_name,
+                                  Value=json.dumps(schema_details),
+                                  Type='String',
+                                  Overwrite=True,
+                                  Tier='Standard',
+                                  Tags=[
+                                      {'Key': 'Environment', 'Value': environment},
+                                      {'Key': 'ConfigType', 'Value': 'SCHEMA_CHANGE'},
+                                      {'Key': 'LastUpdated', 'Value': datetime.utcnow().isoformat()},
+                                      {'Key': 'iac-rlhf-amazon', 'Value': 'true'}
+                                  ]
+                              )
+                              
+                              processed_count += 1
+                              
+                              cloudwatch.put_metric_data(
+                                  Namespace='MultiAccountReplication',
+                                  MetricData=[
+                                      {
+                                          'MetricName': 'SchemaChangesProcessed',
+                                          'Value': 1,
+                                          'Unit': 'Count',
+                                          'Dimensions': [
+                                              {'Name': 'Environment', 'Value': environment}
+                                          ]
+                                      }
+                                  ]
+                              )
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': f"Processed {processed_count} schema changes",
+                          'environment': environment
+                      })
+                  }
+                  
+              except Exception as e:
+                  print(f"Stream processing error: {str(e)}")
+                  
+                  cloudwatch.put_metric_data(
+                      Namespace='MultiAccountReplication',
+                      MetricData=[
+                          {
+                              'MetricName': 'StreamProcessorErrors',
+                              'Value': 1,
+                              'Unit': 'Count',
+                              'Dimensions': [
+                                  {'Name': 'Environment', 'Value': environment},
+                                  {'Name': 'ErrorType', 'Value': type(e).__name__}
+                              ]
+                          }
+                      ]
+                  )
+                  
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'error': str(e),
+                          'environment': environment
+                      })
+                  }
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-stream-processor-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref ApplicationName
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # ===========================
+  # Event Source Mapping for DynamoDB Streams
+  # ===========================
+  StreamEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt MetadataTable.StreamArn
+      FunctionName: !GetAtt StreamProcessorLambda.Arn
+      StartingPosition: LATEST
+      MaximumBatchingWindowInSeconds: 5
+
+  # ===========================
+  # EventBridge Rules - Comprehensive Event Handling
+  # ===========================
+
+  # CloudFormation Stack Events
+  StackUpdateEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ApplicationName}-stack-update-${Environment}"
+      Description: Trigger replication on CloudFormation stack updates
+      EventPattern:
+        source:
+          - aws.cloudformation
+        detail-type:
+          - CloudFormation Stack Status Change
+        detail:
+          status-details:
+            status:
+              - UPDATE_COMPLETE
+              - CREATE_COMPLETE
+              - UPDATE_ROLLBACK_COMPLETE
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ConfigValidatorLambda.Arn
+          Id: "StackUpdateTarget"
+          InputTransformer:
+            InputPathsMap:
+              stack-id: "$.detail.stack-id"
+              status: "$.detail.status-details.status"
+            InputTemplate: !Sub |
+              {
+                "eventType": "STACK_UPDATE",
+                "stackId": "<stack-id>",
+                "status": "<status>",
+                "environment": "${Environment}",
+                "timestamp": "$.time"
+              }
+
+  # S3 Configuration Changes
+  S3ConfigChangeEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ApplicationName}-s3-config-change-${Environment}"
+      Description: Trigger replication on S3 configuration artifact changes
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+          - Object Deleted
+        detail:
+          bucket:
+            name:
+              - !Ref ConfigurationBucket
+          object:
+            key:
+              - prefix: "configurations/"
+              - prefix: "schemas/"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ReplicationMonitorLambda.Arn
+          Id: "S3ConfigTarget"
+          InputTransformer:
+            InputPathsMap:
+              bucket: "$.detail.bucket.name"
+              key: "$.detail.object.key"
+              eventName: "$.detail.eventName"
+            InputTemplate: !Sub |
+              {
+                "eventType": "S3_CONFIG_CHANGE",
+                "bucket": "<bucket>",
+                "objectKey": "<key>",
+                "eventName": "<eventName>",
+                "environment": "${Environment}",
+                "timestamp": "$.time"
+              }
+
+  # SSM Parameter Changes
+  SSMParameterChangeEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ApplicationName}-ssm-param-change-${Environment}"
+      Description: Trigger replication on SSM parameter changes
+      EventPattern:
+        source:
+          - aws.ssm
+        detail-type:
+          - Parameter Store Change
+        detail:
+          name:
+            - prefix: !Sub "${SSMPathPrefix}/"
+          operation:
+            - Create
+            - Update
+            - Delete
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ReplicationMonitorLambda.Arn
+          Id: "SSMParameterTarget"
+        - Arn: !GetAtt ConfigValidatorLambda.Arn
+          Id: "SSMValidationTarget"
+
+  # DynamoDB Table Changes
+  DynamoDBChangeEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ApplicationName}-dynamodb-change-${Environment}"
+      Description: Trigger cross-environment sync on DynamoDB metadata changes
+      EventPattern:
+        source:
+          - aws.dynamodb
+        detail-type:
+          - DynamoDB Table State Change
+        detail:
+          table-name:
+            - !Ref MetadataTable
+          state:
+            - ACTIVE
+            - UPDATING
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt StreamProcessorLambda.Arn
+          Id: "DynamoDBChangeTarget"
+
+  # Cross-Account Replication Events (Custom Events)
+  CrossAccountReplicationEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ApplicationName}-cross-account-replication-${Environment}"
+      Description: Handle custom cross-account replication events
+      EventPattern:
+        source:
+          - !Sub "${ApplicationName}.replication"
+        detail-type:
+          - Configuration Sync Request
+          - Schema Update Request
+          - Environment Promotion
+        detail:
+          sourceEnvironment:
+            - !Ref Environment
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ReplicationMonitorLambda.Arn
+          Id: "CrossAccountTarget"
+          RoleArn: !GetAtt EventBridgeExecutionRole.Arn
+
+  # Scheduled Configuration Validation (Daily)
+  ScheduledValidationEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ApplicationName}-scheduled-validation-${Environment}"
+      Description: Daily configuration consistency validation
+      ScheduleExpression: "cron(0 2 * * ? *)" # Daily at 2 AM UTC
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ConfigValidatorLambda.Arn
+          Id: "ScheduledValidationTarget"
+          Input: !Sub |
+            {
+              "eventType": "SCHEDULED_VALIDATION",
+              "environment": "${Environment}",
+              "validationType": "FULL_CONSISTENCY_CHECK"
+            }
+
+  # ===========================
+  # EventBridge Execution Role
+  # ===========================
+  EventBridgeExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ApplicationName}-eventbridge-role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CrossAccountEventBridgePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutEvents
+                Resource:
+                  - !Sub "arn:aws:events:*:${AccountIdDev}:event-bus/*"
+                  - !Sub "arn:aws:events:*:${AccountIdStaging}:event-bus/*"
+                  - !Sub "arn:aws:events:*:${AccountIdProd}:event-bus/*"
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ReplicationMonitorLambda.Arn
+                  - !GetAtt ConfigValidatorLambda.Arn
+                  - !GetAtt StreamProcessorLambda.Arn
+
+  # ===========================
+  # Lambda Permissions for EventBridge
+  # ===========================
+  StackUpdateLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ConfigValidatorLambda
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt StackUpdateEventRule.Arn
+
+  ScheduledValidationLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ConfigValidatorLambda
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScheduledValidationEventRule.Arn
+
+  S3ConfigChangeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ReplicationMonitorLambda
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt S3ConfigChangeEventRule.Arn
+
+  SSMParameterChangeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ReplicationMonitorLambda
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt SSMParameterChangeEventRule.Arn
+
+  SSMValidationLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ConfigValidatorLambda
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt SSMParameterChangeEventRule.Arn
+
+  DynamoDBChangeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref StreamProcessorLambda
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DynamoDBChangeEventRule.Arn
+
+  CrossAccountReplicationLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ReplicationMonitorLambda
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CrossAccountReplicationEventRule.Arn
+
+  # ===========================
+  # SSM Parameter Store Hierarchical Configuration
+  # ===========================
+
+  # Application Configuration Parameters
+  ApplicationConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/config/application"
+      Type: String
+      Value: !Sub |
+        {
+          "environment": "${Environment}",
+          "version": "1.0.0",
+          "features": {
+            "replication": true,
+            "monitoring": true,
+            "crossAccountSync": true,
+            "schemaValidation": true
+          },
+          "application": "${ApplicationName}",
+          "lastUpdated": "2025-11-04T00:00:00Z"
+        }
+      Description: Application configuration for multi-account sync
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Database Configuration Parameters
+  DatabaseConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/config/database"
+      Type: String
+      Value: !Sub |
+        {
+          "table": "${MetadataTable}",
+          "tableArn": "${MetadataTable.Arn}",
+          "region": "${AWS::Region}",
+          "replication": "GLOBAL",
+          "billingMode": "PAY_PER_REQUEST",
+          "streamArn": "${MetadataTable.StreamArn}",
+          "pointInTimeRecovery": true
+        }
+      Description: Database configuration for multi-account sync
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Infrastructure Configuration Parameters
+  InfrastructureConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/config/infrastructure"
+      Type: String
+      Value: !Sub
+        - |
+          {
+            "s3Bucket": "${ConfigurationBucket}",
+            "s3BucketRegion": "${AWS::Region}",
+            "kmsKeyId": "alias/aws/s3",
+            "lambdaFunctions": {
+              "monitor": "${ReplicationMonitorLambda.Arn}",
+              "validator": "${ConfigValidatorLambda.Arn}",
+              "processor": "${StreamProcessorLambda.Arn}"
+            },
+            "iamRole": "${ReplicationRoleArn}",
+            "cloudwatchDashboard": "${ReplicationDashboard}"
+          }
+        - ReplicationRoleArn:
+            !If [EnableReplication, !GetAtt S3ReplicationRole.Arn, "N/A"]
+      Description: Infrastructure resource identifiers
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Cross-Account Configuration Parameters
+  CrossAccountConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/config/cross-account"
+      Type: String
+      Value: !Sub |
+        {
+          "accounts": {
+            "dev": "${AccountIdDev}",
+            "staging": "${AccountIdStaging}",
+            "prod": "${AccountIdProd}"
+          },
+          "currentAccount": "${AWS::AccountId}",
+          "replicationRole": "${ReplicationRoleName}",
+          "targetEnvironments": {
+            "dev": ["staging"],
+            "staging": ["prod"],
+            "prod": []
+          },
+          "syncEnabled": true
+        }
+      Description: Cross-account replication configuration
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Security Configuration Parameters
+  SecurityConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/config/security"
+      Type: String
+      Value: !Sub
+        - |
+          {
+            "encryptionInTransit": true,
+            "encryptionAtRest": true,
+            "iamPrinciples": {
+              "replicationRole": "${ReplicationRoleArn}",
+              "lambdaExecutionRole": "${LambdaExecutionRole.Arn}"
+            },
+            "accessControl": {
+              "crossAccountAccess": true,
+              "allowedActions": ["s3:GetObject", "s3:PutObject", "dynamodb:Query", "ssm:GetParameter"]
+            }
+          }
+        - ReplicationRoleArn:
+            !If [EnableReplication, !GetAtt S3ReplicationRole.Arn, "N/A"]
+      Description: Security and access control configuration (encrypted)
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Environment-Specific Schema Configuration
+  SchemaConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/schema/configuration"
+      Type: String
+      Value: |
+        {
+          "schemaVersion": "1.0",
+          "configurationSchema": {
+            "properties": {
+              "environment": {"type": "string", "enum": ["dev", "staging", "prod"]},
+              "application": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+              "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"}
+            },
+            "required": ["environment", "application", "version"]
+          },
+          "validationEnabled": true,
+          "strictMode": true
+        }
+      Description: Schema configuration for environment validation
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Monitoring and Alerting Configuration
+  MonitoringConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/config/monitoring"
+      Type: String
+      Value: !Sub |
+        {
+          "cloudwatchDashboard": "${ReplicationDashboard}",
+          "alarms": {
+            "lambdaErrors": "${LambdaErrorAlarm}",
+            "replicationFailures": "arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ApplicationName}-replication-failures-${Environment}"
+          },
+          "metrics": {
+            "namespace": "MultiAccountReplication",
+            "retentionDays": 30,
+            "detailedMonitoring": true
+          },
+          "notifications": {
+            "snsTopicArn": "",
+            "emailAlerts": true,
+            "slackWebhook": ""
+          }
+        }
+      Description: Monitoring and alerting configuration
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Runtime Configuration (Changeable)
+  RuntimeConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/runtime/config"
+      Type: String
+      Value: |
+        {
+          "syncInterval": "300",
+          "batchSize": "10",
+          "retryAttempts": "3",
+          "timeoutSeconds": "60",
+          "enableDetailedLogging": true,
+          "maintenanceWindow": {
+            "start": "02:00",
+            "end": "04:00",
+            "timezone": "UTC"
+          },
+          "featureFlags": {
+            "enableCrossRegionReplication": false,
+            "enableAutomaticRollback": true,
+            "enableSchemaEvolution": true
+          }
+        }
+      Description: Runtime configuration parameters (modifiable)
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # ===========================
+  # CloudWatch Alarms
+  # ===========================
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ApplicationName}-lambda-errors-${Environment}"
+      AlarmDescription: Alert on Lambda function errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ReplicationMonitorLambda
+
+  # ===========================
+  # CloudWatch Dashboard
+  # ===========================
+  ReplicationDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${ApplicationName}-replication-${Environment}"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "MultiAccountReplication", "ReplicationEvents", { "stat": "Sum" } ],
+                  [ ".", "ValidationSuccess", { "stat": "Sum" } ],
+                  [ ".", "SchemaChangesProcessed", { "stat": "Sum" } ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Replication Metrics",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${ReplicationMonitorLambda}", { "stat": "Sum" } ],
+                  [ ".", "Duration", ".", ".", { "stat": "Average" } ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Lambda Performance"
+              }
+            }
+          ]
+        }
+
+# ===========================
+# Outputs
+# ===========================
+Outputs:
+  ReplicationStatusEndpoint:
+    Description: Endpoint for checking replication status
+    Value: !Sub "https://console.aws.amazon.com/lambda/home?region=${AWS::Region}#/functions/${ReplicationMonitorLambda}"
+
+  S3BucketName:
+    Description: Configuration artifacts S3 bucket
+    Value: !Ref ConfigurationBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-bucket-name"
+
+  DynamoDBTableArn:
+    Description: DynamoDB global table ARN
+    Value: !GetAtt MetadataTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-table-arn"
+
+  DynamoDBTableName:
+    Description: DynamoDB global table name
+    Value: !Ref MetadataTable
+    Export:
+      Name: !Sub "${AWS::StackName}-table-name"
+
+  ReplicationRoleArn:
+    Description: S3 replication role ARN
+    Value: !If
+      - EnableReplication
+      - !GetAtt S3ReplicationRole.Arn
+      - "N/A - No replication enabled for this environment"
+
+  CloudWatchDashboardUrl:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ReplicationDashboard}"
+
+  LambdaMonitorArn:
+    Description: Replication Monitor Lambda ARN
+    Value: !GetAtt ReplicationMonitorLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-monitor-lambda-arn"
+
+  LambdaValidatorArn:
+    Description: Config Validator Lambda ARN
+    Value: !GetAtt ConfigValidatorLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-validator-lambda-arn"
+
+  LambdaStreamProcessorArn:
+    Description: Stream Processor Lambda ARN
+    Value: !GetAtt StreamProcessorLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-stream-processor-lambda-arn"
+
+  StackName:
+    Description: Name of this CloudFormation stack
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub "${AWS::StackName}-StackName"
+
+  Environment:
+    Description: Environment for this deployment
+    Value: !Ref Environment
+    Export:
+      Name: !Sub "${AWS::StackName}-Environment"

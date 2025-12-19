@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349299",
+  "team": "3",
+  "startedAt": "2025-09-08T12:45:11.440Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "Serverless Architecture Implementation",
+    "Database Management",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "IAM",
+    "CloudWatch",
+    "X-Ray"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "shreyaspturing",
+  "dockerS3Location": ""
+}

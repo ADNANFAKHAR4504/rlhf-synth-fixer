@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000949",
+  "team": "synth",
+  "startedAt": "2025-12-02T00:00:00+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "ALB",
+    "AutoScaling",
+    "SecretsManager",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

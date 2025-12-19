@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348929",
+  "team": "6",
+  "startedAt": "2025-09-23T17:43:02.246Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Network Configuration",
+    "Security Configuration",
+    "Database Management",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "IAM",
+    "Systems Manager Parameter Store",
+    "CloudWatch Logs",
+    "VPC Flow Logs",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Security Groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "enyachoke-turing",
+  "dockerS3Location": ""
+}

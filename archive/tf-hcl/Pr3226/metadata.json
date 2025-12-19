@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "40475061",
+  "team": "3",
+  "startedAt": "2025-10-01T13:49:38.922Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Subnets",
+    "Route Tables",
+    "Security Groups",
+    "RDS PostgreSQL",
+    "DB Subnet Group",
+    "KMS",
+    "S3",
+    "Application Load Balancer (ALB)",
+    "Target Group",
+    "WAF v2",
+    "CloudWatch Logs",
+    "VPC Flow Logs",
+    "IAM Roles",
+    "IAM Policies",
+    "EC2 Launch Template"
+  ],
+  "training_quality": 3,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
+}

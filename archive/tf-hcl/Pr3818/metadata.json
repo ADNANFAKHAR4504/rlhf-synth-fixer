@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "87153620",
+  "team": "synth",
+  "startedAt": "2025-10-08T12:07:38+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "S3 Express One Zone",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "Application Insights",
+    "Resource Groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

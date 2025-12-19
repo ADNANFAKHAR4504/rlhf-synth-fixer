@@ -1,0 +1,7 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Multi-environment infrastructure with drift detection
+main: bin/tap.ts
+backend:
+  url: file://./pulumi-state

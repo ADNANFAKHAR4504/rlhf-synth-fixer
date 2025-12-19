@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "356256",
+  "team": "2",
+  "startedAt": "2025-10-17T08:51:34.218Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "background": "Smart agriculture platform data pipeline for IoT sensor telemetry processing",
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "S3",
+    "DynamoDB",
+    "Kinesis",
+    "SQS",
+    "KMS",
+    "CloudWatch",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

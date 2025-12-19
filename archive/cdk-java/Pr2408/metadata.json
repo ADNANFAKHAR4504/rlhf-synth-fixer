@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348782",
+  "team": "3",
+  "startedAt": "2025-08-28T12:20:52.318Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "misra-s-turing",
+  "dockerS3Location": ""
+}

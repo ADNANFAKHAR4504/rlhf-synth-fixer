@@ -1,0 +1,9 @@
+{
+  "name": "score-api-lambdas",
+  "version": "1.0.0",
+  "description": "Lambda functions for score management API",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/util-dynamodb": "^3.600.0"
+  }
+}

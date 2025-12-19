@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350094",
+  "team": "4",
+  "startedAt": "2025-11-09T14:06:24.261Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudTrail",
+    "IAM",
+    "EC2",
+    "RDS",
+    "AWS Config",
+    "KMS",
+    "VPC",
+    "Secrets Manager"
+  ],
+  "training_quality": 10,
+  "background": "Implementing a comprehensive secure AWS infrastructure using Terraform with industry best practices for encryption, compliance monitoring, access control, and network security. The solution includes 160 unit tests and 52 integration tests (212 total, 100% pass rate), demonstrating production-ready code with AWS Secrets Manager integration, multi-region CloudTrail, AWS Config compliance rules, and complete security hardening across all services.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,22 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "AT4I75000",
+  "team": "6",
+  "startedAt": "2025-10-15T09:45:23.736Z",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "Design and implement a fault-tolerant, multi-region serverless event processing pipeline for a global financial trading platform using AWS CDK. The system must process real-time trading events, maintain transaction consistency, and provide disaster recovery capabilities.",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": "DynamoDB, Lambda, EventBridge, CloudWatch, SNS, IAM, DynamoDB Global Tables",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

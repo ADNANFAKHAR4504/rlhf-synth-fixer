@@ -1,0 +1,13 @@
+{
+  "name": "fraud-scorer",
+  "version": "1.0.0",
+  "description": "Fraud scorer Lambda function",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-sns": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "aws-xray-sdk-core": "^3.5.0"
+  }
+}

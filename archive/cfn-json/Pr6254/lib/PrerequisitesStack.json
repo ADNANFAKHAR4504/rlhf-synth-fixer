@@ -1,0 +1,185 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Prerequisites VPC Infrastructure for Aurora Database Testing",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "synth101000894",
+      "Description": "Environment suffix for resource naming"
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "vpc-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "igw-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Aurora PostgreSQL database access",
+        "GroupName": {
+          "Fn::Sub": "aurora-sg-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "CidrIp": "10.0.0.0/16",
+            "Description": "PostgreSQL access from VPC"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "VpcId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VpcId"
+        }
+      }
+    },
+    "SubnetId1": {
+      "Description": "First private subnet ID",
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SubnetId1"
+        }
+      }
+    },
+    "SubnetId2": {
+      "Description": "Second private subnet ID",
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SubnetId2"
+        }
+      }
+    },
+    "SecurityGroupId": {
+      "Description": "Database security group ID",
+      "Value": {
+        "Ref": "DatabaseSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecurityGroupId"
+        }
+      }
+    }
+  }
+}

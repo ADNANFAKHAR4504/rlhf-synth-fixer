@@ -1,0 +1,1814 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production-ready multi-region AWS infrastructure stack for company migration initiative. Supports us-east-1 and us-west-2 with high availability, security, and compliance features.",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "CompanyIPRange"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Database Configuration"
+                    },
+                    "Parameters": [
+                        "DBUsername",
+                        "DBPassword"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Compute Configuration"
+                    },
+                    "Parameters": [
+                        "InstanceType",
+                        "KeyPairName"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "CompanyIPRange": {
+            "Type": "String",
+            "Default": "203.0.113.0/24",
+            "Description": "Company IP range for restricted access",
+            "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$"
+        },
+        "DBUsername": {
+            "Type": "String",
+            "Default": "admin",
+            "Description": "RDS MySQL master username",
+            "MinLength": 4,
+            "MaxLength": 16,
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
+        },
+        "DBPassword": {
+            "Type": "String",
+            "NoEcho": true,
+            "Default": "TempPassword123",
+            "Description": "RDS MySQL master password",
+            "MinLength": 8,
+            "MaxLength": 41,
+            "AllowedPattern": "[a-zA-Z0-9]*"
+        },
+        "InstanceType": {
+            "Type": "String",
+            "Default": "t3.medium",
+            "AllowedValues": [
+                "t3.micro",
+                "t3.small",
+                "t3.medium",
+                "t3.large",
+                "m5.large",
+                "m5.xlarge"
+            ],
+            "Description": "EC2 instance type for application servers"
+        },
+        "KeyPairName": {
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Default": "tap-keypair",
+            "Description": "EC2 Key Pair for SSH access"
+        },
+        "DomainName": {
+            "Type": "String",
+            "Default": "failoverdemo.com",
+            "Description": "Domain name for Route 53 hosted zone"
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "us-east-1": {
+                "AMI": "ami-0c02fb55956c7d316",
+                "AZ1": "us-east-1a",
+                "AZ2": "us-east-1b",
+                "AZ3": "us-east-1c"
+            },
+            "us-west-2": {
+                "AMI": "ami-0c2d3e23602d8ba5d",
+                "AZ1": "us-west-2a",
+                "AZ2": "us-west-2b",
+                "AZ3": "us-west-2c"
+            }
+        },
+        "SubnetConfig": {
+            "VPC": {
+                "CIDR": "10.0.0.0/16"
+            },
+            "PublicSubnet1": {
+                "CIDR": "10.0.1.0/24"
+            },
+            "PublicSubnet2": {
+                "CIDR": "10.0.2.0/24"
+            },
+            "PrivateSubnet1": {
+                "CIDR": "10.0.10.0/24"
+            },
+            "PrivateSubnet2": {
+                "CIDR": "10.0.20.0/24"
+            },
+            "DatabaseSubnet1": {
+                "CIDR": "10.0.100.0/24"
+            },
+            "DatabaseSubnet2": {
+                "CIDR": "10.0.200.0/24"
+            }
+        }
+    },
+    "Conditions": {
+        "IsProduction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnvironmentSuffix"
+                },
+                "production"
+            ]
+        },
+        "CreateMultiAZ": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnvironmentSuffix"
+                },
+                "production"
+            ]
+        }
+    },
+    "Resources": {
+        "KMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS Key for infrastructure encryption",
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudWatch Logs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": {
+                                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                                }
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-kms-key-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "KMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${AWS::StackName}-key-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "KMSKey"
+                }
+            }
+        },
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "VPC",
+                        "CIDR"
+                    ]
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-igw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "InternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AZ1"
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicSubnet1",
+                        "CIDR"
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-public-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AZ2"
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicSubnet2",
+                        "CIDR"
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-public-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AZ1"
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateSubnet1",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AZ2"
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateSubnet2",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    }
+                ]
+            }
+        },
+        "DatabaseSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AZ1"
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "DatabaseSubnet1",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-db-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Database"
+                    }
+                ]
+            }
+        },
+        "DatabaseSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AZ2"
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "DatabaseSubnet2",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-db-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Database"
+                    }
+                ]
+            }
+        },
+        "NatGateway1EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-nat-eip-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "NatGateway2EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-nat-eip-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "NatGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway1EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-nat-gateway-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "NatGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway2EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-nat-gateway-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-public-routes-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "DefaultPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                }
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-private-routes-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute1": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway1"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-private-routes-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute2": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway2"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                }
+            }
+        },
+        "LoadBalancerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${AWS::StackName}-alb-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Security group for Application Load Balancer",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": {
+                            "Ref": "CompanyIPRange"
+                        },
+                        "Description": "HTTP access from company IP range"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": {
+                            "Ref": "CompanyIPRange"
+                        },
+                        "Description": "HTTPS access from company IP range"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-alb-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "WebServerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${AWS::StackName}-web-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Security group for web servers",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "LoadBalancerSecurityGroup"
+                        },
+                        "Description": "HTTP from ALB"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "SourceSecurityGroupId": {
+                            "Ref": "LoadBalancerSecurityGroup"
+                        },
+                        "Description": "HTTPS from ALB"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "CompanyIPRange"
+                        },
+                        "Description": "SSH from company IP range"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-web-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${AWS::StackName}-db-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Security group for RDS database",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebServerSecurityGroup"
+                        },
+                        "Description": "MySQL access from web servers"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-db-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "EC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-ec2-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${S3Bucket}"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "${AWS::StackName}-ec2-profile-${EnvironmentSuffix}"
+                },
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "KMSKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-bucket-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-db-password-${EnvironmentSuffix}"
+                },
+                "Description": "RDS MySQL master password",
+                "SecretString": {
+                    "Fn::Sub": "{\n  \"username\": \"${DBUsername}\",\n  \"password\": \"${DBPassword}\"\n}\n"
+                },
+                "KmsKeyId": {
+                    "Ref": "KMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-db-password-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "${AWS::StackName}-db-subnet-group-${EnvironmentSuffix}"
+                },
+                "DBSubnetGroupDescription": "Subnet group for RDS database",
+                "SubnetIds": [
+                    {
+                        "Ref": "DatabaseSubnet1"
+                    },
+                    {
+                        "Ref": "DatabaseSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-db-subnet-group-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "DBParameterGroup": {
+            "Type": "AWS::RDS::DBParameterGroup",
+            "Properties": {
+                "DBParameterGroupName": {
+                    "Fn::Sub": "${AWS::StackName}-db-params-${EnvironmentSuffix}"
+                },
+                "Description": "Parameter group for MySQL database",
+                "Family": "mysql8.0",
+                "Parameters": {
+                    "innodb_buffer_pool_size": "{DBInstanceClassMemory*3/4}",
+                    "max_connections": "1000"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-db-params-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "RDSInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${AWS::StackName}-mysql-${EnvironmentSuffix}"
+                },
+                "DBInstanceClass": "db.t3.medium",
+                "Engine": "mysql",
+                "EngineVersion": "8.0.37",
+                "AllocatedStorage": 100,
+                "StorageType": "gp2",
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "KMSKey"
+                },
+                "MasterUsername": {
+                    "Ref": "DBUsername"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "DatabaseSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "DBParameterGroupName": {
+                    "Ref": "DBParameterGroup"
+                },
+                "BackupRetentionPeriod": {
+                    "Fn::If": [
+                        "IsProduction",
+                        7,
+                        3
+                    ]
+                },
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "MultiAZ": {
+                    "Fn::If": [
+                        "CreateMultiAZ",
+                        true,
+                        false
+                    ]
+                },
+                "EnablePerformanceInsights": true,
+                "PerformanceInsightsKMSKeyId": {
+                    "Ref": "KMSKey"
+                },
+                "DeletionProtection": {
+                    "Fn::If": [
+                        "IsProduction",
+                        true,
+                        false
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-mysql-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-alb-${EnvironmentSuffix}"
+                },
+                "Scheme": "internet-facing",
+                "Type": "application",
+                "IpAddressType": "ipv4",
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "LoadBalancerSecurityGroup"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-alb-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "ALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-tg-${EnvironmentSuffix}"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "HealthCheckEnabled": true,
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/health",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "TargetType": "instance",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-tg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    }
+                ]
+            }
+        },
+        "ALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${AWS::StackName}-lt-${EnvironmentSuffix}"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Fn::FindInMap": [
+                            "RegionMap",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            "AMI"
+                        ]
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "KeyName": {
+                        "Ref": "KeyPairName"
+                    },
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "WebServerSecurityGroup"
+                        }
+                    ],
+                    "DisableApiTermination": true,
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd mysql\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Hello from ${AWS::Region} - ${EnvironmentSuffix}</h1>\" > /var/www/html/index.html\necho \"OK\" > /var/www/html/health\n"
+                        }
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${AWS::StackName}-web-server-${EnvironmentSuffix}"
+                                    }
+                                },
+                                {
+                                    "Key": "Project",
+                                    "Value": "Migration"
+                                },
+                                {
+                                    "Key": "Creator",
+                                    "Value": "CloudEngineer"
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${AWS::StackName}-asg-${EnvironmentSuffix}"
+                },
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": 2,
+                "MaxSize": 10,
+                "DesiredCapacity": 2,
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "ALBTargetGroup"
+                    }
+                ],
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-asg-${EnvironmentSuffix}"
+                        },
+                        "PropagateAtLaunch": false
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration",
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer",
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "ScaleUpPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "Cooldown": 300,
+                "ScalingAdjustment": 1,
+                "PolicyType": "SimpleScaling"
+            }
+        },
+        "ScaleDownPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "Cooldown": 300,
+                "ScalingAdjustment": -1,
+                "PolicyType": "SimpleScaling"
+            }
+        },
+        "WebServerLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ec2/${AWS::StackName}/webserver-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 14,
+                "KmsKeyId": {
+                    "Ref": "KMSKey"
+                }
+            }
+        },
+        "HighCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-high-cpu-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when CPU exceeds 80%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleUpPolicy"
+                    }
+                ]
+            }
+        },
+        "LowCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-low-cpu-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when CPU is below 10%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 10,
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleDownPolicy"
+                    }
+                ]
+            }
+        },
+        "HostedZone": {
+            "Type": "AWS::Route53::HostedZone",
+            "Properties": {
+                "Name": {
+                    "Ref": "DomainName"
+                },
+                "HostedZoneConfig": {
+                    "Comment": {
+                        "Fn::Sub": "Hosted zone for ${DomainName} - ${EnvironmentSuffix}"
+                    }
+                },
+                "HostedZoneTags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-hosted-zone-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Migration"
+                    },
+                    {
+                        "Key": "Creator",
+                        "Value": "CloudEngineer"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "DNSRecord": {
+            "Type": "AWS::Route53::RecordSet",
+            "Properties": {
+                "HostedZoneId": {
+                    "Ref": "HostedZone"
+                },
+                "Name": {
+                    "Fn::Sub": "www.${DomainName}"
+                },
+                "Type": "A",
+                "AliasTarget": {
+                    "DNSName": {
+                        "Fn::GetAtt": [
+                            "ApplicationLoadBalancer",
+                            "DNSName"
+                        ]
+                    },
+                    "HostedZoneId": {
+                        "Fn::GetAtt": [
+                            "ApplicationLoadBalancer",
+                            "CanonicalHostedZoneID"
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "ID of the VPC",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "ID of the first public subnet",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet1-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "ID of the second public subnet",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet2-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "ID of the first private subnet",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet1-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "ID of the second private subnet",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet2-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "LoadBalancerDNS": {
+            "Description": "DNS name of the Application Load Balancer",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LoadBalancerDNS-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "DatabaseEndpoint": {
+            "Description": "RDS MySQL database endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RDSInstance",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DatabaseEndpoint-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "Name of the S3 bucket",
+            "Value": {
+                "Ref": "S3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3Bucket-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "ID of the KMS key",
+            "Value": {
+                "Ref": "KMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKey-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "WebsiteURL": {
+            "Description": "Website URL",
+            "Value": {
+                "Fn::Sub": "http://www.${DomainName}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebsiteURL-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        }
+    }
+}

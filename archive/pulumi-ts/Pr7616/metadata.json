@@ -1,0 +1,21 @@
+{
+  "po_id": "u1b8t4r2",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "category": "CI/CD Pipeline Integration",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-01T22:30:00Z",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

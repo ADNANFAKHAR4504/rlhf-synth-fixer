@@ -1,0 +1,3 @@
+Your code failed at deploy stage with following error:
+
+Resource handler returned message: "Access Denied for bucket: tapstack-alb-logs-718240086340-us-east-1. Please check S3bucket permission (Service: ElasticLoadBalancingV2, Status Code: 400, Request ID: 66183b9f-96a6-4e0f-a489-934b9891c1f6) (SDK Attempt Count: 1)" (RequestToken: 04841c1d-d836-a4fb-bb05-7c59a99729bf, HandlerErrorCode: InvalidRequest)

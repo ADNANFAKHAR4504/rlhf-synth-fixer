@@ -1,0 +1,23 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "Ref-Task-1",
+  "team": "5",
+  "startedAt": "2025-09-26T17:23:28.001Z",
+  "task_sub_category": "IaC-Security-Hardening",
+  "use_case_category": "Security, Compliance, and Governance",
+  "aws_services": [
+    "IAM",
+    "Lambda",
+    "EC2"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}

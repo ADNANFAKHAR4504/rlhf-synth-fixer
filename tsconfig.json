@@ -1,3 +1,4 @@
+
 {
   "compilerOptions": {
     "target": "ES2022",
@@ -22,13 +23,20 @@
     "types": ["node", "jest"],
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "outDir": "dist"
   },
   "exclude": [
     "node_modules",
     "cdk.out",
     "templates",
     "archive",
-    "worktree"
+    "archive-localstack",
+    "subcategory-references",
+    "worktree",
+    "test",
+    "tests",
+    "cli",
+    "**/*.d.ts"
   ]
 }

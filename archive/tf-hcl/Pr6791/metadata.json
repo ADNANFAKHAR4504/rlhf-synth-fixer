@@ -1,0 +1,30 @@
+{
+  "task_id": "101912457",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "po_id": "101912457",
+  "turn_type": "single",
+  "startedAt": "2025-11-18T13:05:02Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "container-orchestration"
+  ],
+  "aws_services": [
+    "EKS",
+    "VPC",
+    "IAM",
+    "EC2"
+  ],
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

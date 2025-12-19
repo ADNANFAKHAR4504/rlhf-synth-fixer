@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-10T16:08:30+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "po_id": "ubmsq",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "S3",
+    "ALB",
+    "ACM",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

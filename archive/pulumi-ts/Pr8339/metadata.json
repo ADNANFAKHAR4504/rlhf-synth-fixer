@@ -1,0 +1,38 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "292004",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T13:19:54.414Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "KMS",
+    "Auto Scaling",
+    "Application Load Balancer (ALB)",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "CloudTrail",
+    "S3",
+    "SNS",
+    "WAF",
+    "VPC Flow Logs"
+  ],
+  "provider": "localstack",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
+}

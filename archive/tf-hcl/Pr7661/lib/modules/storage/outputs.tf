@@ -1,0 +1,29 @@
+output "bucket_name" {
+  description = "S3 bucket name"
+  value       = aws_s3_bucket.main.id
+}
+
+output "bucket_arn" {
+  description = "S3 bucket ARN"
+  value       = aws_s3_bucket.main.arn
+}
+
+output "bucket_domain_name" {
+  description = "S3 bucket domain name"
+  value       = aws_s3_bucket.main.bucket_domain_name
+}
+
+output "bucket_regional_domain_name" {
+  description = "S3 bucket regional domain name"
+  value       = aws_s3_bucket.main.bucket_regional_domain_name
+}
+
+output "logs_bucket_name" {
+  description = "Logs bucket name"
+  value       = aws_s3_bucket.logs.id
+}
+
+output "logs_bucket_arn" {
+  description = "Logs bucket ARN"
+  value       = aws_s3_bucket.logs.arn
+}

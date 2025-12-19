@@ -1,0 +1,44 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-27T22:49:59+05:30",
+  "po_id": "6719388248",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::SecurityGroup",
+    "AWS::RDS::DBInstance",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::EFS::FileSystem",
+    "AWS::EFS::MountTarget",
+    "AWS::ElastiCache::ReplicationGroup",
+    "AWS::ElastiCache::SubnetGroup",
+    "AWS::ECS::Cluster",
+    "AWS::ECS::Service",
+    "AWS::ECS::TaskDefinition",
+    "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    "AWS::ElasticLoadBalancingV2::TargetGroup",
+    "AWS::ElasticLoadBalancingV2::Listener",
+    "AWS::IAM::Role",
+    "AWS::KMS::Key",
+    "AWS::KMS::Alias",
+    "AWS::Logs::LogGroup"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

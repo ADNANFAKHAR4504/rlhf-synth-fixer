@@ -1,0 +1,12 @@
+# Terraform plan files (binary)
+*.tfplan
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Terraform lock files
+.terraform.lock.hcl
+
+# Terraform directories
+.terraform/

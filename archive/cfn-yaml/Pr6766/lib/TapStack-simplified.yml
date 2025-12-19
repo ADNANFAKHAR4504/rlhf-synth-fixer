@@ -1,0 +1,222 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Simplified multi-environment payment processing infrastructure (no ECS)'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Unique suffix for environment resources (e.g., dev-001, staging-001, prod-001)'
+    AllowedPattern: '^[a-z0-9]+-[0-9]{3}$|^[a-z0-9]+[0-9]+$'
+    ConstraintDescription: 'Must be in format: environment-### or alphanumeric'
+
+  Environment:
+    Type: String
+    Description: 'Environment name'
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+
+  VpcCidr:
+    Type: String
+    Description: 'CIDR block for VPC'
+    Default: '10.0.0.0/16'
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+
+  ReplicaRegion:
+    Type: String
+    Description: 'Replica AWS region for DR'
+    Default: 'eu-west-1'
+
+  DevOpsEmail:
+    Type: String
+    Description: 'Email address for DevOps team notifications'
+    Default: 'devops@example.com'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+  Application:
+    Type: String
+    Description: 'Application name'
+    Default: 'payment-processing'
+
+  CostCenter:
+    Type: String
+    Description: 'Cost center for billing'
+    Default: 'fintech-payments'
+
+  TransitGatewayId:
+    Type: String
+    Description: 'Transit Gateway ID for cross-account connectivity'
+    Default: ''
+
+Conditions:
+  IsDevelopment: !Equals [!Ref Environment, 'dev']
+
+Resources:
+  # Network Stack
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/network-stack.yml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        Environment: !Ref Environment
+        VpcCidr: !Ref VpcCidr
+        TransitGatewayId: !Ref TransitGatewayId
+        Application: !Ref Application
+        CostCenter: !Ref CostCenter
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Security Stack
+  SecurityStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/security-stack.yml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        Environment: !Ref Environment
+        VpcId: !GetAtt NetworkStack.Outputs.VpcId
+        Application: !Ref Application
+        CostCenter: !Ref CostCenter
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Database Stack
+  DatabaseStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/database-stack.yml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        Environment: !Ref Environment
+        VpcId: !GetAtt NetworkStack.Outputs.VpcId
+        PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
+        DatabaseSecurityGroupId: !GetAtt SecurityStack.Outputs.DatabaseSecurityGroupId
+        DBInstanceClass: !If
+          - IsDevelopment
+          - 'db.t3.medium'
+          - 'db.r5.large'
+        Application: !Ref Application
+        CostCenter: !Ref CostCenter
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Storage Stack
+  StorageStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: NetworkStack
+    Properties:
+      TemplateURL: !Sub 'https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/storage-stack.yml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        Environment: !Ref Environment
+        ReplicaRegion: !Ref ReplicaRegion
+        Application: !Ref Application
+        CostCenter: !Ref CostCenter
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Monitoring Stack
+  MonitoringStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/monitoring-stack.yml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        Environment: !Ref Environment
+        DevOpsEmail: !Ref DevOpsEmail
+        ComplianceLambdaRoleArn: !GetAtt SecurityStack.Outputs.ComplianceLambdaRoleArn
+        Application: !Ref Application
+        CostCenter: !Ref CostCenter
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Parameter Store Setup
+  EnvironmentParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${Environment}/config/environment-name'
+      Description: 'Environment name parameter'
+      Type: String
+      Value: !Ref Environment
+      Tags:
+        Environment: !Ref Environment
+        Application: !Ref Application
+        CostCenter: !Ref CostCenter
+
+  ApplicationParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${Environment}/config/application-name'
+      Description: 'Application name parameter'
+      Type: String
+      Value: !Ref Application
+      Tags:
+        Environment: !Ref Environment
+        Application: !Ref Application
+        CostCenter: !Ref CostCenter
+
+Outputs:
+  StackName:
+    Description: 'Master stack name'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-master-stack-name'
+
+  VpcId:
+    Description: 'VPC ID'
+    Value: !GetAtt NetworkStack.Outputs.VpcId
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-vpc-id'
+
+  AuroraClusterEndpoint:
+    Description: 'Aurora cluster endpoint'
+    Value: !GetAtt DatabaseStack.Outputs.ClusterEndpoint
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-aurora-endpoint'
+
+  DynamoDBTableName:
+    Description: 'DynamoDB table name'
+    Value: !GetAtt StorageStack.Outputs.DynamoDBTableName
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-dynamodb-table'
+
+  S3BucketName:
+    Description: 'S3 bucket name'
+    Value: !GetAtt StorageStack.Outputs.S3BucketName
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-s3-bucket'
+
+  SNSTopicArn:
+    Description: 'SNS topic ARN for alerts'
+    Value: !GetAtt MonitoringStack.Outputs.SNSTopicArn
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-sns-topic'

@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000081",
+  "team": "synth",
+  "startedAt": "2025-10-20T11:51:37.008Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "Financial services company requires standardized, secure multi-region AWS network architecture with isolated VPCs and controlled inter-VPC communication through central hub",
+  "aws_services": [
+    "VPC",
+    "EC2 Transit Gateway",
+    "S3 Bucket",
+    "Route53",
+    "CloudWatch Alarms",
+    "CloudWatch Logs",
+    "IAM Role",
+    "VPC Interface Endpoints"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}

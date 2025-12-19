@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "292003",
+  "team": "5",
+  "startedAt": "2025-08-26T19:10:41.606Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Database Management",
+    "Network Configuration",
+    "Security Configuration",
+    "Resource Scaling",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancer",
+    "RDS",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "AmbitiousSam",
+  "dockerS3Location": ""
+}

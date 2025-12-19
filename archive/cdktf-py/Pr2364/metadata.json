@@ -1,0 +1,43 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291533",
+  "team": "1",
+  "startedAt": "2025-08-27T12:55:34.776Z",
+  "subject_labels": [
+    "cdktf",
+    "go",
+    "high-availability",
+    "security",
+    "vpc",
+    "multi-az",
+    "elbv2",
+    "ec2",
+    "autoscaling",
+    "iam",
+    "s3",
+    "cloudwatch",
+    "rds",
+    "encryption",
+    "least-privilege"
+  ],
+  "training_quality": 10,
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "elbv2",
+    "autoscaling",
+    "iam",
+    "s3",
+    "cloudwatch",
+    "rds"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "akshat-jain355",
+  "dockerS3Location": ""
+}

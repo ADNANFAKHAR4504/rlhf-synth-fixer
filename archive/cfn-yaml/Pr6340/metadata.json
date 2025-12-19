@@ -1,0 +1,27 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912261",
+  "team": "6",
+  "startedAt": "2025-11-12T05:51:35.582Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "IAM Role",
+    "Lambda",
+    "EventBridge",
+    "SNS",
+    "CloudWatch Dashboard"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
+}

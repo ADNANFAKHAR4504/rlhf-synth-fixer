@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Pulumi infrastructure for payment application deployment
+main: lib/tap-stack.ts

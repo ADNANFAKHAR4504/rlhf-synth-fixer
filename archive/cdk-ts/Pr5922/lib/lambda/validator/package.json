@@ -1,0 +1,10 @@
+{
+  "name": "transaction-validator",
+  "version": "1.0.0",
+  "description": "Transaction validator",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.400.0",
+    "@aws-sdk/client-dynamodb": "^3.400.0"
+  }
+}

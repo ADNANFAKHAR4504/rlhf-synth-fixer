@@ -1,0 +1,1 @@
+The template is still incomplete. Please refer to the prompt I gave you earlier and generate the complete ready to use template.

@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349000",
+  "team": "6",
+  "startedAt": "2025-10-10T14:22:20.047Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "S3",
+    "RDS",
+    "IAM",
+    "CloudTrail",
+    "WAFv2",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "Secrets Manager",
+    "Systems Manager"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
+}

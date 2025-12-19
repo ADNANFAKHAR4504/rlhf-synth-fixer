@@ -1,0 +1,39 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "356252",
+  "team": "2",
+  "startedAt": "2025-10-17T11:21:18.597Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "Serverless payment webhook processing system for MarketGrid multi-vendor e-commerce platform handling 10,000+ webhooks/min with API Gateway, Lambda, SQS, DynamoDB, EventBridge Pipes, and comprehensive security via WAF",
+  "training_quality": 9,
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "SQS",
+    "DynamoDB",
+    "S3",
+    "SNS",
+    "EventBridge Pipes",
+    "WAF",
+    "KMS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SSM Parameter Store",
+    "Application Auto Scaling",
+    "Route53",
+    "Certificate Manager",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

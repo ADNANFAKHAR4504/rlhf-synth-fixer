@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912220",
+  "team": "3",
+  "startedAt": "2025-11-12T11:34:33.770Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Security Groups",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
+}

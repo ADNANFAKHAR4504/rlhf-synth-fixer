@@ -1,5 +1,5 @@
 ---
-## 📝 Serverless File Processing Application on AWS
+## Serverless File Processing Application on AWS
 ---
 
 ### Objective

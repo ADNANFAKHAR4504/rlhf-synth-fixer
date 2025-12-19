@@ -1,4 +1,38 @@
-```terraform
+# Terraform Infrastructure Code
+
+## provider.tf
+
+```hcl
+# provider.tf
+
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.0"
+    }
+  }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
+
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
+
+```
+
+## tap_stack.tf
+
+```hcl
 # =============================================================================
 # ENTERPRISE TERRAFORM INFRASTRUCTURE GOVERNANCE AUDIT
 # =============================================================================
@@ -859,4 +893,5 @@ output "cost_estimation" {
     total_estimated = (length(aws_instance.application) * 8.47) + 12.41 + 16.20 + 45.00
   }
 }
+
 ```

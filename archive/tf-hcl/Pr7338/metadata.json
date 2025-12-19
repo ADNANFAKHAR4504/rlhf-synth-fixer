@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912649",
+  "team": "synth",
+  "startedAt": "2025-11-26T05:32:07+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Kubernetes",
+    "Security Configuration",
+    "Container Infrastructure"
+  ],
+  "aws_services": [
+    "EKS",
+    "VPC",
+    "IAM",
+    "S3",
+    "ECR",
+    "CloudWatch",
+    "ELB",
+    "EC2"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

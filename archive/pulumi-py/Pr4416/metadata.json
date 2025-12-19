@@ -1,0 +1,37 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-14T20:13:10+05:30",
+  "subtask": "Application Deployment",
+  "background": "An educational technology company needs to deploy a student management system that handles sensitive student data. They require a robust CI/CD pipeline with proper staging environments and database management that complies with educational data protection standards.",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Security Configuration as Code"
+  ],
+  "po_id": "3976438092",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ElastiCache",
+    "KMS",
+    "S3",
+    "CodePipeline",
+    "CodeBuild",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 8.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

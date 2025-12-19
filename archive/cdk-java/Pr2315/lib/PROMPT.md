@@ -1,0 +1,9 @@
+We’re switching this build to AWS CDK in Java. For this stack, only one file needs to be populated: lib/src/main/java/app/Main.java. When the model replies, it must return only the code for that file — no explanations, no comments, nothing extra.
+
+Architecture and requirements remain the same as before, just implemented with CDK/Java. Multi-region target: everything runs in us-east-1 and us-west-2. Use the company naming rule <Service>-<Environment>-<Region> and tag every resource with Environment, Project, and Owner. Use the default VPCs in each region; if inter-region peering fails due to overlapping CIDRs, create the smallest non-overlapping pair just to enable peering, leaving the rest as-is.
+
+What needs to exist: EC2 application layer in both regions behind an Application Load Balancer, with Auto Scaling Groups for scaling. Centralized logging to a single S3 bucket in the primary region, encrypted with KMS, with ALB access logs and app logs sent there. Networking should include inter-region VPC peering, updated route tables so VPCs can communicate, and tight security groups (public traffic only on ports 80/443 to the ALBs). Databases: an RDS instance in the primary region with Multi-AZ and encrypted storage; a read replica in the secondary region if supported. DynamoDB tables with point-in-time recovery enabled and cross-region replication (global tables or backup copy). IAM roles and policies must be least-privilege, scoped only to autoscaling, logging, replication, backup, S3, and app operations.
+
+Include an environment setting (staging vs production) that drives names, tags, and right-sized defaults. Use KMS everywhere for encryption at rest across S3, RDS, and DynamoDB. Make sure both regions are declared in the app and instantiated consistently.
+
+Return only the code for lib/src/main/java/app/Main.java.

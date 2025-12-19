@@ -1,0 +1,15 @@
+1. There is requirement to have resources deployed in this region us-east-1 . So Please create proper VPC and set specific CIDR for the VPC. VPCs with CIDR blocks: 10.0.0.0/16.
+2. VPCs should have 2 private and 2 public subnets in VPC. Also  crate necessary Nat gateway, internet gateway, route table and route table association as per the network infrastructure requirements. Implement high availability with at least three availability zones, automatic failover, and robust redundancy plans. Use NAT Gateways to allow internet access for resources in private subnets. 
+3. Implement Identity and Access Management (IAM) Roles for EC2 and Lambda services that adhere to the least privilege principle
+4. Create ec2 instance unit amazon linux2 latest AMI behind auto scaling group with minimum 2 instance always at a time.
+5. Configure an Internet Gateway to allow public internet access only for resources within the public subnet
+6. Integrate an Elastic Load Balancer to distribute incoming HTTP/HTTPS traffic across the EC2 instances allowing from the VPC CIDRs specifics only.
+7. Implement Individual RDS in each region but with multiple AZ support. Add read replica for the DB. Use random master user name of length 8 without special characters and it should start with alphabet. and master random password of length 16 with special characters. Make sure not to use any special characters which aws doesn't allow for RDS. Also snapshot or deletion protection is not needed for RDS. Use AWS secrete manager to store these username and password in each regions respectively. Ensure that all RDS instances are set to not be publicly accessible. Configure RDS instances for automatic minor version upgrades to maintain database efficiency and security. Configure Multi-AZ deployments for RDS instances to ensure high availability. Encrypt data at rest in the RDS instance. Store RDS username and password in AWS system manager parameter store insecure string using AWS managed KMS key.Apply at-rest encryption on all RDS instances using KMS.
+8. Deploy a Lambda function which is triggered by events from an S3 bucket.   with a Lambda function for data processing on upload events. But dont rely on any zip file infact use the basic code in the tap_stack.tf file itself for this lambda. But please ensure that  I dont need zip file for the lambda function just create it with inline code. so please create tap_stack.tf file accordingly
+9. Ensure that encryption at rest is enabled for all storage resources including EBS and RDS volumes. 
+10. Apply all relevant security best practices during this setup.
+11. There is no need of Add VPC Flow Logs, CloudTrail, AWS Config rules
+12. there is no need of CloudWatch dashboards, X-Ray tracing, SNS notifications
+13. Automated backup/recovery, disaster recovery procedures is not required as per the requirements.
+14. S3 lifecycle policies, resource tagging strategy are not required as per the original task requriements.
+15. Systems Manager Session Manager, enhanced IAM policies are not requried for this task.

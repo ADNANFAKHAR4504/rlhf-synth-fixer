@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "5896",
+  "team": "5",
+  "startedAt": "2025-11-06T06:06:45.079Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "Healthcare compliance infrastructure with HIPAA audit logging, CloudTrail event monitoring, automated compliance checking, and network isolation for patient data security",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "Lambda",
+    "CloudTrail",
+    "CloudWatch",
+    "KMS",
+    "SNS",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

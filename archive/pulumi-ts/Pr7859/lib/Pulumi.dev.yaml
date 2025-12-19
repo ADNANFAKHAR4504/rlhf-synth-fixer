@@ -1,0 +1,7 @@
+config:
+  lambda-optimization:environmentSuffix: "dev"
+  lambda-optimization:environment: "development"
+  lambda-optimization:region: "us-east-1"
+  lambda-optimization:costCenter: "engineering"
+  lambda-optimization:owner: "platform-team"
+encryptionsalt: v1:T3e7iDf3/s8=:v1:1mcAn1G6F64knuXd:amalcps/HSxexn7qC6mDOo67GGNBJw==

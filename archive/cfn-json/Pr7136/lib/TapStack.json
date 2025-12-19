@@ -1,0 +1,1432 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Zero-Trust Security Infrastructure for Payment Processing - PCI-DSS Compliant",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource names to ensure uniqueness across deployments",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "TransitGatewayId": {
+      "Type": "String",
+      "Description": "Transit Gateway ID for network connectivity (leave empty to skip attachment)",
+      "Default": "tgw-00dad9d3a7e4da66b"
+    },
+    "VpcCidr": {
+      "Type": "String",
+      "Description": "CIDR block for VPC",
+      "Default": "10.0.0.0/16",
+      "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
+    }
+  },
+  "Conditions": {
+    "HasTransitGateway": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "TransitGatewayId"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VpcCidr"
+        },
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "vpc-zero-trust-v1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnetAZ1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "VpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-az1-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnetAZ2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "VpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-az2-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnetAZ3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "VpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-az3-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "FirewallSubnetAZ1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            3,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "VpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "firewall-subnet-az1-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "FirewallSubnetAZ2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            4,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "VpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "firewall-subnet-az2-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "FirewallSubnetAZ3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            5,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "VpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "firewall-subnet-az3-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-route-table-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnetAZ1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnetAZ1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateSubnetAZ2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnetAZ2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateSubnetAZ3RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnetAZ3"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "TransitGatewayAttachment": {
+      "Type": "AWS::EC2::TransitGatewayAttachment",
+      "Condition": "HasTransitGateway",
+      "Properties": {
+        "TransitGatewayId": {
+          "Ref": "TransitGatewayId"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnetAZ1"
+          },
+          {
+            "Ref": "PrivateSubnetAZ2"
+          },
+          {
+            "Ref": "PrivateSubnetAZ3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "tgw-attachment-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NetworkFirewallRuleGroup": {
+      "Type": "AWS::NetworkFirewall::RuleGroup",
+      "Properties": {
+        "RuleGroupName": {
+          "Fn::Sub": "stateful-rules-v1-${EnvironmentSuffix}"
+        },
+        "Type": "STATEFUL",
+        "Capacity": 100,
+        "RuleGroup": {
+          "RulesSource": {
+            "StatefulRules": [
+              {
+                "Action": "PASS",
+                "Header": {
+                  "Direction": "FORWARD",
+                  "Protocol": "TCP",
+                  "Source": "10.0.0.0/16",
+                  "SourcePort": "ANY",
+                  "Destination": "ANY",
+                  "DestinationPort": "443"
+                },
+                "RuleOptions": [
+                  {
+                    "Keyword": "sid:1"
+                  }
+                ]
+              },
+              {
+                "Action": "DROP",
+                "Header": {
+                  "Direction": "ANY",
+                  "Protocol": "IP",
+                  "Source": "ANY",
+                  "SourcePort": "ANY",
+                  "Destination": "ANY",
+                  "DestinationPort": "ANY"
+                },
+                "RuleOptions": [
+                  {
+                    "Keyword": "sid:2"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "stateful-rules-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NetworkFirewallPolicy": {
+      "Type": "AWS::NetworkFirewall::FirewallPolicy",
+      "Properties": {
+        "FirewallPolicyName": {
+          "Fn::Sub": "firewall-policy-v1-${EnvironmentSuffix}"
+        },
+        "FirewallPolicy": {
+          "StatelessDefaultActions": [
+            "aws:forward_to_sfe"
+          ],
+          "StatelessFragmentDefaultActions": [
+            "aws:forward_to_sfe"
+          ],
+          "StatefulRuleGroupReferences": [
+            {
+              "ResourceArn": {
+                "Fn::GetAtt": [
+                  "NetworkFirewallRuleGroup",
+                  "RuleGroupArn"
+                ]
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "firewall-policy-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NetworkFirewall": {
+      "Type": "AWS::NetworkFirewall::Firewall",
+      "Properties": {
+        "FirewallName": {
+          "Fn::Sub": "network-firewall-v1-${EnvironmentSuffix}"
+        },
+        "FirewallPolicyArn": {
+          "Fn::GetAtt": [
+            "NetworkFirewallPolicy",
+            "FirewallPolicyArn"
+          ]
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SubnetMappings": [
+          {
+            "SubnetId": {
+              "Ref": "FirewallSubnetAZ1"
+            }
+          },
+          {
+            "SubnetId": {
+              "Ref": "FirewallSubnetAZ2"
+            }
+          },
+          {
+            "SubnetId": {
+              "Ref": "FirewallSubnetAZ3"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "network-firewall-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NetworkFirewallLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/networkfirewall/${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "NetworkFirewallLogging": {
+      "Type": "AWS::NetworkFirewall::LoggingConfiguration",
+      "Properties": {
+        "FirewallArn": {
+          "Ref": "NetworkFirewall"
+        },
+        "LoggingConfiguration": {
+          "LogDestinationConfigs": [
+            {
+              "LogType": "FLOW",
+              "LogDestinationType": "CloudWatchLogs",
+              "LogDestination": {
+                "logGroup": {
+                  "Ref": "NetworkFirewallLogGroup"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "EBSKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for EBS encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow EBS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "ebs-kms-key-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "EBSKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/ebs-v1-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "EBSKMSKey"
+        }
+      }
+    },
+    "S3KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for S3 encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow S3 to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow VPC Flow Logs",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "vpc-flow-logs.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow Config",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "s3-kms-key-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "S3KMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/s3-v1-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "S3KMSKey"
+        }
+      }
+    },
+    "RDSKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for RDS encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow RDS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "rds.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-kms-key-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "RDSKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/rds-v1-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "RDSKMSKey"
+        }
+      }
+    },
+    "EC2InstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "ec2-instance-role-v1-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3AccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::payment-processing-${EnvironmentSuffix}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::payment-processing-v1-${EnvironmentSuffix}"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "KMSAccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:GenerateDataKey"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "EBSKMSKey",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "S3KMSKey",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "ec2-instance-role-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "EC2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName": {
+          "Fn::Sub": "ec2-instance-profile-v1-${EnvironmentSuffix}"
+        },
+        "Roles": [
+          {
+            "Ref": "EC2InstanceRole"
+          }
+        ]
+      }
+    },
+    "VPCFlowLogsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "vpc-flow-logs-${AWS::AccountId}-v1-${EnvironmentSuffix}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": [
+                    "S3KMSKey",
+                    "Arn"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldLogs",
+              "Status": "Enabled",
+              "ExpirationInDays": 90
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "vpc-flow-logs-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "VPCFlowLogsBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "VPCFlowLogsBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSLogDeliveryWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "delivery.logs.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${VPCFlowLogsBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            },
+            {
+              "Sid": "AWSLogDeliveryAclCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "delivery.logs.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "VPCFlowLogsBucket",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "VPCFlowLog": {
+      "Type": "AWS::EC2::FlowLog",
+      "DependsOn": "VPCFlowLogsBucketPolicy",
+      "Properties": {
+        "ResourceType": "VPC",
+        "ResourceId": {
+          "Ref": "VPC"
+        },
+        "TrafficType": "ALL",
+        "LogDestinationType": "s3",
+        "LogDestination": {
+          "Fn::GetAtt": [
+            "VPCFlowLogsBucket",
+            "Arn"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "vpc-flow-log-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "ConfigBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "aws-config-${AWS::AccountId}-v1-${EnvironmentSuffix}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": [
+                    "S3KMSKey",
+                    "Arn"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aws-config-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "ConfigBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ConfigBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSConfigBucketPermissionsCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ConfigBucket",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "AWSConfigBucketExistenceCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "s3:ListBucket",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ConfigBucket",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "AWSConfigBucketPutObject",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${ConfigBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ConfigRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "aws-config-role-v1-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ConfigS3Policy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketVersioning",
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "ConfigBucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${ConfigBucket.Arn}/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aws-config-role-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "ConfigRecorder": {
+      "Type": "AWS::Config::ConfigurationRecorder",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "config-recorder-v1-${EnvironmentSuffix}"
+        },
+        "RoleARN": {
+          "Fn::GetAtt": [
+            "ConfigRole",
+            "Arn"
+          ]
+        },
+        "RecordingGroup": {
+          "AllSupported": true,
+          "IncludeGlobalResourceTypes": true
+        }
+      }
+    },
+    "ConfigDeliveryChannel": {
+      "Type": "AWS::Config::DeliveryChannel",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "config-delivery-v1-${EnvironmentSuffix}"
+        },
+        "S3BucketName": {
+          "Ref": "ConfigBucket"
+        }
+      }
+    },
+    "ConfigRuleEncryptedVolumes": {
+      "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "encrypted-volumes-v1-${EnvironmentSuffix}"
+        },
+        "Description": "Checks whether EBS volumes are encrypted",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "ENCRYPTED_VOLUMES"
+        }
+      }
+    },
+    "ConfigRuleIAMPasswordPolicy": {
+      "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "iam-password-policy-v1-${EnvironmentSuffix}"
+        },
+        "Description": "Checks whether the account password policy meets specified requirements",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "IAM_PASSWORD_POLICY"
+        }
+      }
+    },
+    "SSMEndpointSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "ssm-endpoints-sg-v1-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for Systems Manager VPC endpoints",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": {
+              "Ref": "VpcCidr"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "ssm-endpoints-sg-v1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SSMEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.ssm"
+        },
+        "VpcEndpointType": "Interface",
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnetAZ1"
+          },
+          {
+            "Ref": "PrivateSubnetAZ2"
+          },
+          {
+            "Ref": "PrivateSubnetAZ3"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "SSMEndpointSecurityGroup"
+          }
+        ]
+      }
+    },
+    "SSMMessagesEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.ssmmessages"
+        },
+        "VpcEndpointType": "Interface",
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnetAZ1"
+          },
+          {
+            "Ref": "PrivateSubnetAZ2"
+          },
+          {
+            "Ref": "PrivateSubnetAZ3"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "SSMEndpointSecurityGroup"
+          }
+        ]
+      }
+    },
+    "EC2MessagesEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.ec2messages"
+        },
+        "VpcEndpointType": "Interface",
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnetAZ1"
+          },
+          {
+            "Ref": "PrivateSubnetAZ2"
+          },
+          {
+            "Ref": "PrivateSubnetAZ3"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "SSMEndpointSecurityGroup"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
+      }
+    },
+    "PrivateSubnetAZ1Id": {
+      "Description": "Private Subnet AZ1 ID",
+      "Value": {
+        "Ref": "PrivateSubnetAZ1"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnetAZ1"
+        }
+      }
+    },
+    "PrivateSubnetAZ2Id": {
+      "Description": "Private Subnet AZ2 ID",
+      "Value": {
+        "Ref": "PrivateSubnetAZ2"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnetAZ2"
+        }
+      }
+    },
+    "PrivateSubnetAZ3Id": {
+      "Description": "Private Subnet AZ3 ID",
+      "Value": {
+        "Ref": "PrivateSubnetAZ3"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnetAZ3"
+        }
+      }
+    },
+    "NetworkFirewallArn": {
+      "Description": "Network Firewall ARN",
+      "Value": {
+        "Ref": "NetworkFirewall"
+      }
+    },
+    "EBSKMSKeyArn": {
+      "Description": "EBS KMS Key ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "EBSKMSKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EBSKMSKeyArn"
+        }
+      }
+    },
+    "S3KMSKeyArn": {
+      "Description": "S3 KMS Key ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "S3KMSKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3KMSKeyArn"
+        }
+      }
+    },
+    "RDSKMSKeyArn": {
+      "Description": "RDS KMS Key ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "RDSKMSKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSKMSKeyArn"
+        }
+      }
+    },
+    "EC2InstanceRoleArn": {
+      "Description": "EC2 Instance Role ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "EC2InstanceRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EC2InstanceRoleArn"
+        }
+      }
+    },
+    "EC2InstanceProfileArn": {
+      "Description": "EC2 Instance Profile ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "EC2InstanceProfile",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EC2InstanceProfileArn"
+        }
+      }
+    },
+    "VPCFlowLogsBucketName": {
+      "Description": "VPC Flow Logs S3 Bucket Name",
+      "Value": {
+        "Ref": "VPCFlowLogsBucket"
+      }
+    },
+    "ConfigBucketName": {
+      "Description": "AWS Config S3 Bucket Name",
+      "Value": {
+        "Ref": "ConfigBucket"
+      }
+    },
+    "SSMEndpointDNS": {
+      "Description": "SSM Endpoint DNS Name",
+      "Value": {
+        "Fn::Select": [
+          0,
+          {
+            "Fn::GetAtt": [
+              "SSMEndpoint",
+              "DnsEntries"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

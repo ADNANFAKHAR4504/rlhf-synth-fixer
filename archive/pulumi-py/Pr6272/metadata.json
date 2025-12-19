@@ -1,0 +1,42 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-11T13:43:07+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "po_id": "7up57r",
+  "aws_services": [
+    "API Gateway",
+    "Aurora",
+    "CloudWatch",
+    "DMS",
+    "EC2",
+    "IAM",
+    "Internet Gateway",
+    "Lambda",
+    "NAT Gateway",
+    "RDS",
+    "S3",
+    "SNS",
+    "Secrets Manager",
+    "Step Functions",
+    "Systems Manager",
+    "Transit Gateway",
+    "VPC",
+    "X-Ray"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,235 @@
+# CI/CD Pipeline Configuration for Containerized Applications
+# AWS CDK TypeScript Stack
+
+name: Container CI/CD Pipeline
+
+# Pipeline orchestration (workflow simulation)
+workflow:
+  stages:
+    - validate
+    - build
+    - test
+    - deploy
+    - integration-test
+    - monitoring
+
+# Job Definitions
+jobs:
+  # Validation Stage
+  validate-infrastructure:
+    stage: validate
+    description: "Validate CDK infrastructure code and configuration"
+    steps:
+      - name: "Validate CDK syntax"
+        command: "cdk synth --validate-only"
+      - name: "Run TypeScript linting"
+        command: "npm run lint"
+      - name: "Run type checking"
+        command: "npx tsc --noEmit"
+      - name: "Validate metadata"
+        command: "node -e \"JSON.parse(require('fs').readFileSync('metadata.json'))\""
+
+  security-scan:
+    stage: validate
+    description: "Security and vulnerability scanning"
+    steps:
+      - name: "Scan dependencies"
+        command: "npm audit"
+      - name: "Check for secrets"
+        command: "trufflehog scan ."
+      - name: "Scan container images"
+        command: "trivy image --severity HIGH,CRITICAL"
+
+  # Build Stage
+  build-infrastructure:
+    stage: build
+    dependencies:
+      - validate-infrastructure
+    description: "Build and synthesize CDK stack"
+    steps:
+      - name: "Install dependencies"
+        command: "npm ci"
+      - name: "Compile TypeScript"
+        command: "npm run build"
+      - name: "Synthesize CDK stack"
+        command: "cdk synth"
+      - name: "Generate CloudFormation template"
+        command: "cdk synth > cdk.out/template.yaml"
+
+  build-container:
+    stage: build
+    description: "Build Docker container image"
+    steps:
+      - name: "Build Docker image"
+        command: "docker build -t app:latest ."
+      - name: "Tag Docker image"
+        command: "docker tag app:latest ${ECR_REPOSITORY}:${IMAGE_TAG}"
+      - name: "Scan container image"
+        command: "trivy image ${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+  # Test Stage
+  unit-tests:
+    stage: test
+    dependencies:
+      - build-infrastructure
+    description: "Run unit tests with coverage"
+    steps:
+      - name: "Run Jest with coverage"
+        command: "npm test -- --coverage --coverageReporters=json-summary"
+      - name: "Validate coverage threshold"
+        command: "node -e \"const c=require('./coverage/coverage-summary.json'); if(c.total.lines.pct<100) process.exit(1)\""
+    coverage_threshold: 100
+
+  # Deploy Stage
+  deploy-infrastructure:
+    stage: deploy
+    dependencies:
+      - unit-tests
+      - build-container
+    description: "Deploy CDK stack to AWS"
+    environment: pr7908
+    steps:
+      - name: "CDK bootstrap (if needed)"
+        command: "cdk bootstrap"
+      - name: "Deploy stack"
+        command: "cdk deploy --require-approval never --context environmentSuffix=pr7908"
+      - name: "Capture outputs"
+        command: "cdk deploy --outputs-file cfn-outputs/outputs.json"
+      - name: "Push container to ECR"
+        command: "docker push ${ECR_REPOSITORY}:${IMAGE_TAG}"
+    outputs:
+      - VpcId
+      - ClusterArn
+      - ServiceName
+      - LoadBalancerDns
+      - EcrRepositoryUri
+      - PipelineName
+      - BuildProjectName
+      - AlarmTopicArn
+
+  # Integration Test Stage
+  integration-tests:
+    stage: integration-test
+    dependencies:
+      - deploy-infrastructure
+    description: "Run integration tests against deployed infrastructure"
+    steps:
+      - name: "Wait for ECS service stabilization"
+        command: "aws ecs wait services-stable --cluster ${ClusterArn} --services ${ServiceName}"
+      - name: "Test VPC configuration"
+        command: "aws ec2 describe-vpcs --vpc-ids ${VpcId}"
+      - name: "Test ECS cluster"
+        command: "aws ecs describe-clusters --clusters ${ClusterArn}"
+      - name: "Test ECS service"
+        command: "aws ecs describe-services --cluster ${ClusterArn} --services ${ServiceName}"
+      - name: "Test Load Balancer"
+        command: "aws elbv2 describe-load-balancers --query 'LoadBalancers[?DNSName==`${LoadBalancerDns}`]'"
+      - name: "Test ECR repository"
+        command: "aws ecr describe-repositories --repository-names ${EcrRepositoryUri##*/}"
+      - name: "Test CodePipeline"
+        command: "aws codepipeline get-pipeline --name ${PipelineName}"
+      - name: "Test CodeBuild project"
+        command: "aws codebuild batch-get-projects --names ${BuildProjectName}"
+      - name: "Test SNS topic"
+        command: "aws sns get-topic-attributes --topic-arn ${AlarmTopicArn}"
+      - name: "Test Application health endpoint"
+        command: "curl -s http://${LoadBalancerDns}/health || echo 'Health endpoint not ready'"
+      - name: "Verify container deployment"
+        command: "aws ecs list-tasks --cluster ${ClusterArn} --service-name ${ServiceName}"
+      - name: "Check CloudWatch Logs"
+        command: "aws logs describe-log-groups --log-group-name-prefix /aws/ecs"
+
+  # Monitoring Setup
+  setup-monitoring:
+    stage: monitoring
+    dependencies:
+      - integration-tests
+    description: "Configure CloudWatch monitoring and alarms"
+    steps:
+      - name: "Verify CloudWatch alarms"
+        command: "aws cloudwatch describe-alarms --alarm-name-prefix cicd-"
+      - name: "Check ECS task health"
+        command: "aws ecs describe-tasks --cluster ${ClusterArn}"
+      - name: "Verify SNS notifications"
+        command: "aws sns list-subscriptions-by-topic --topic-arn ${AlarmTopicArn}"
+      - name: "Test pipeline monitoring"
+        command: "aws cloudwatch get-metric-statistics --namespace AWS/CodePipeline"
+
+# Environment Configuration
+environments:
+  pr7908:
+    region: us-east-1
+    account: ${{ secrets.AWS_ACCOUNT_ID }}
+    variables:
+      ENVIRONMENT_SUFFIX: "pr7908"
+      AWS_REGION: "us-east-1"
+      IMAGE_TAG: "latest"
+
+# Quality Gates
+quality_gates:
+  - name: "Code Coverage"
+    threshold: 100
+    metric: "coverage.percent_covered"
+
+  - name: "Security Score"
+    threshold: 0
+    metric: "vulnerabilities.high"
+
+  - name: "Build Success"
+    threshold: 0
+    metric: "build.failed_steps"
+
+  - name: "Deployment Success"
+    threshold: 0
+    metric: "deployment.errors"
+
+  - name: "Container Security"
+    threshold: 0
+    metric: "container.critical_vulnerabilities"
+
+# Notification Configuration
+notifications:
+  on_success:
+    - type: github-comment
+      message: "CI/CD Pipeline completed successfully"
+    - type: sns
+      topic_arn: "${AlarmTopicArn}"
+
+  on_failure:
+    - type: github-comment
+      message: "CI/CD Pipeline failed - check logs"
+    - type: sns
+      topic_arn: "${AlarmTopicArn}"
+
+# Rollback Strategy
+rollback:
+  automatic: true
+  conditions:
+    - deployment_failure
+    - integration_test_failure
+    - security_scan_failure
+  steps:
+    - name: "Destroy failed deployment"
+      command: "cdk destroy --force"
+    - name: "Clean up resources"
+      command: "aws cloudformation delete-stack --stack-name TapStack-pr7908"
+    - name: "Remove container images"
+      command: "aws ecr batch-delete-image --repository-name ${EcrRepositoryUri##*/}"
+
+# Resource Tags
+tags:
+  Environment: "pr7908"
+  ManagedBy: "CDK"
+  Project: "ContainerCICD"
+  Application: "AutomatedPipeline"
+  CostCenter: "Engineering"
+
+# Pipeline Features
+features:
+  - automated_container_builds
+  - continuous_deployment
+  - infrastructure_as_code
+  - automated_testing
+  - security_scanning
+  - monitoring_and_alerting
+  - rollback_capability

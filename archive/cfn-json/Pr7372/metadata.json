@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-26T11:56:42.231431",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "101912705",
+  "aws_services": [
+    "EC2",
+    "ELB",
+    "Auto Scaling",
+    "CloudWatch",
+    "IAM",
+    "VPC",
+    "SSM",
+    "ACM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

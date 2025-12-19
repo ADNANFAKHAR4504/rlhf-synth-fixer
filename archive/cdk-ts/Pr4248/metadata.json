@@ -1,0 +1,60 @@
+{
+  "po_id": "7973446690",
+  "task_id": "7973446690",
+  "platform": "cdk",
+  "language": "typescript",
+  "turn_type": "single",
+  "complexity": "hard",
+  "team": "synth",
+  "difficulty": "hard",
+  "subtask": "Failure Recovery and High Availability",
+  "startedAt": "2025-13-03T17:20:04+05:30",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "background": "FinTech startup PaySecure needs to process credit card transactions in South America. They require a containerized architecture that maintains PCI-DSS compliance while handling sensitive payment data. The solution must scale automatically during high-traffic periods and ensure data encryption at rest and in transit.",
+  "problem": "Design and implement a PCI-DSS compliant payment processing infrastructure using CDK (TypeScript) that processes financial transactions through containerized microservices. The system must handle credit card transactions securely while maintaining high availability and data encryption requirements.",
+  "environment": {
+    "required_services": [
+      "Amazon ECS (Fargate)",
+      "Amazon RDS (Multi-AZ, encrypted)",
+      "Amazon ElastiCache Redis (encrypted)",
+      "AWS Secrets Manager",
+      "Amazon EFS (encrypted)",
+      "Amazon API Gateway",
+      "Amazon Kinesis Data Streams"
+    ],
+    "setup_requirements": "CDK v2.x with TypeScript, AWS CLI configured for us-west-1 region"
+  },
+  "constraints": "All data must be encrypted at rest and in transit using AWS KMS keys with automatic rotation; Network architecture must implement network segmentation with no direct internet access from container tasks, all egress traffic must route through NAT Gateway",
+  "region": "us-west-1",
+  "training_quality": 7,
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon ECS (Fargate)",
+    "Amazon RDS (PostgreSQL)",
+    "Amazon ElastiCache (Redis)",
+    "Amazon EFS",
+    "AWS KMS",
+    "AWS Secrets Manager",
+    "Amazon API Gateway",
+    "AWS WAF",
+    "Amazon Kinesis Data Streams",
+    "AWS X-Ray",
+    "Amazon CloudWatch",
+    "AWS SNS",
+    "AWS Config",
+    "Elastic Load Balancing (ALB)",
+    "AWS IAM",
+    "VPC Flow Logs",
+    "NAT Gateway"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,40 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350019",
+  "team": "3",
+  "startedAt": "2025-09-02T12:14:10.736Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "S3",
+    "KMS",
+    "IAM",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "CloudWatch",
+    "SNS",
+    "Route 53"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chiragp-turing",
+  "dockerS3Location": ""
+}

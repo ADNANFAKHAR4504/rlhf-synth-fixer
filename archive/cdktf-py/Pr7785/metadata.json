@@ -1,0 +1,37 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "69639564",
+  "team": "synth",
+  "startedAt": "2025-12-03T07:38:40+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2 Transit Gateway",
+    "RDS Aurora PostgreSQL",
+    "DMS",
+    "Lambda",
+    "Step Functions",
+    "API Gateway",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager",
+    "Systems Manager Parameter Store"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

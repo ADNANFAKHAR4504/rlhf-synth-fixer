@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "356228",
+  "team": "1",
+  "startedAt": "2025-10-02T11:39:00.766Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "IAM",
+    "SNS",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Dashboard"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "satyapal-lab",
+  "dockerS3Location": ""
+}

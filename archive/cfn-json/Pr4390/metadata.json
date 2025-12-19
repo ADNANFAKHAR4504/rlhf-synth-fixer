@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349027",
+  "team": "6",
+  "startedAt": "2025-10-14T13:23:41.588Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "VPC",
+    "CloudTrail",
+    "CloudWatch",
+    "Config",
+    "EC2",
+    "KMS",
+    "CloudWatch Logs",
+    "S3",
+    "Secrets Manager"
+  ],
+  "training_quality": 9,
+  "background": "Security baseline CloudFormation template implementing IAM roles, VPC security with flow logs, CloudTrail audit logging, CloudWatch alarms for console sign-in failures, KMS encryption, private S3 buckets with CIDR restrictions, Secrets Manager for credentials, and AWS Config compliance rules",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
+}

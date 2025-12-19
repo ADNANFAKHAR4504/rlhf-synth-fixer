@@ -1,0 +1,24 @@
+{
+  "name": "financeapp-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function for FinanceApp API",
+  "main": "api-handler.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-ssm": "^3.0.0",
+    "express": "^4.18.2",
+    "serverless-http": "^3.2.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

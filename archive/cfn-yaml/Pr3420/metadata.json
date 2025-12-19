@@ -1,0 +1,24 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "92146380",
+  "team": "synth",
+  "startedAt": "2025-10-03T14:05:38+05:30",
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

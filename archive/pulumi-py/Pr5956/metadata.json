@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349269",
+  "team": "6",
+  "startedAt": "2025-11-06T10:55:44.819Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "The AWS Pulumi for CI/CD pipeline typically involves using AWS services such as CodePipeline, CodeBuild, and Lambda, which facilitates continuous integration and delivery of software applications on the cloud. Using AWS Pulumi allows you to define your cloud application resources using familiar programming languages like Python, enabling efficient configuration and management of AWS resources as part of the infrastructure code.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "IAM",
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

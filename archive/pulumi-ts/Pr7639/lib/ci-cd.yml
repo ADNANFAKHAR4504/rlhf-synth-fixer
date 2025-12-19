@@ -1,0 +1,138 @@
+# CI/CD Pipeline Configuration for Infrastructure Automation
+# This file defines the CI/CD pipeline stages and configuration for automated infrastructure deployment
+
+version: 1.0
+
+pipeline:
+  name: infrastructure-automation-pipeline
+  description: Automated CI/CD pipeline for infrastructure deployment using Pulumi
+
+stages:
+  - name: Source
+    type: source
+    provider: S3
+    configuration:
+      bucket_key: infrastructure-source.zip
+      poll_for_changes: true
+      trigger_on_upload: true
+
+  - name: Build
+    type: build
+    provider: CodeBuild
+    configuration:
+      project: pulumi-preview-build
+      compute_type: BUILD_GENERAL1_SMALL
+      image: aws/codebuild/standard:7.0
+      privileged_mode: false
+      buildspec: |
+        version: 0.2
+        phases:
+          install:
+            commands:
+              - npm install
+              - curl -fsSL https://get.pulumi.com | sh
+              - export PATH=$PATH:$HOME/.pulumi/bin
+          pre_build:
+            commands:
+              - pulumi login s3://pulumi-state-bucket
+              - pulumi stack select dev --create
+          build:
+            commands:
+              - pulumi preview --stack dev
+              - pulumi up --yes --stack dev
+        artifacts:
+          files:
+            - '**/*'
+      environment_variables:
+        - name: AWS_DEFAULT_REGION
+          type: PLAINTEXT
+        - name: PULUMI_ACCESS_TOKEN
+          type: PLAINTEXT
+        - name: PULUMI_STACK_NAME
+          type: PLAINTEXT
+        - name: ENVIRONMENT_SUFFIX
+          type: PLAINTEXT
+
+  - name: ManualApproval
+    type: approval
+    provider: Manual
+    configuration:
+      custom_data: |
+        Please review the Pulumi preview output and approve for production deployment.
+        Changes will be applied to production environment.
+      notification_arn: arn:aws:sns:us-east-1:${AWS::AccountId}:pipeline-approvals
+
+  - name: Deploy
+    type: build
+    provider: CodeBuild
+    configuration:
+      project: pulumi-production-deploy
+      compute_type: BUILD_GENERAL1_SMALL
+      image: aws/codebuild/standard:7.0
+      environment_variables:
+        - name: AWS_DEFAULT_REGION
+          type: PLAINTEXT
+        - name: PULUMI_ACCESS_TOKEN
+          type: PLAINTEXT
+        - name: PULUMI_STACK_NAME
+          value: production
+          type: PLAINTEXT
+        - name: ENVIRONMENT_SUFFIX
+          type: PLAINTEXT
+
+artifacts:
+  type: S3
+  encryption: aws:kms
+  versioning: true
+  lifecycle:
+    expiration_days: 30
+    transition_to_ia_days: 7
+
+logging:
+  cloudwatch:
+    enabled: true
+    group_name: /aws/codebuild/pulumi-pipeline
+    stream_name: ${BUILD_ID}
+  s3:
+    enabled: true
+    encryption: true
+
+iam:
+  least_privilege: true
+  no_wildcard_permissions: true
+  roles:
+    - codebuild_pulumi_preview
+    - codebuild_pulumi_deploy
+    - codepipeline_service
+  policies:
+    codebuild:
+      - s3:GetObject
+      - s3:PutObject
+      - logs:CreateLogGroup
+      - logs:CreateLogStream
+      - logs:PutLogEvents
+      - cloudformation:DescribeStacks
+      - cloudformation:CreateStack
+      - cloudformation:UpdateStack
+    codepipeline:
+      - codebuild:StartBuild
+      - codebuild:BatchGetBuilds
+      - s3:GetObject
+      - s3:PutObject
+
+notifications:
+  type: SNS
+  events:
+    - pipeline_execution_started
+    - pipeline_execution_failed
+    - pipeline_execution_succeeded
+    - stage_execution_failed
+    - manual_approval_needed
+  format: json
+
+tags:
+  Environment: ${environmentSuffix}
+  Project: infrastructure-automation
+  ManagedBy: pulumi
+  AutomationType: CI/CD
+  Pipeline: InfrastructureDeployment

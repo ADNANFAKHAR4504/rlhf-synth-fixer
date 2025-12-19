@@ -1,0 +1,23 @@
+{
+  "task_id": "c0a6u6",
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance, and Governance"
+  ],
+  "team": "synth",
+  "turn_type": "single",
+  "po_id": "c0a6u6",
+  "startedAt": "2025-11-24T13:54:00Z",
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "IAM",
+    "EC2",
+    "RDS",
+    "CloudWatch"
+  ],
+  "training_quality": 10
+}

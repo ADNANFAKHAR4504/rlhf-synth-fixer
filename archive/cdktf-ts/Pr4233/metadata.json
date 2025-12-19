@@ -1,0 +1,21 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "9A48EA",
+  "team": "1",
+  "startedAt": "2025-10-11T16:59:13.416Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, EKS, App Mesh, Route53, CloudWatch, Lambda, IAM, CloudWatch LogGroup, CloudFormation",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "akshat-jain355",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "4082",
+  "team": "5",
+  "startedAt": "2025-10-10T10:15:58.269Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "CloudTrail",
+    "S3",
+    "KMS",
+    "CloudWatch Logs",
+    "CloudWatch Metric Filter",
+    "CloudWatch Metric Alarm",
+    "SNS",
+    "Lambda",
+    "EventBridge",
+    "VPC Flow Logs",
+    "IAM Role",
+    "IAM Policy"
+  ],
+  "training_quality": 6,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}

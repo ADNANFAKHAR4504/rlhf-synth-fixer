@@ -1,0 +1,29 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "h0w9y5o7",
+  "team": "synth",
+  "startedAt": "2025-12-01T20:29:22+05:30",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "s3",
+    "ecr",
+    "codebuild",
+    "codepipeline",
+    "iam",
+    "sns",
+    "cloudwatch"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

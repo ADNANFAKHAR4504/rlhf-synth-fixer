@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000847",
+  "team": "synth",
+  "startedAt": "2025-11-06T12:10:52+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "migration",
+    "multi-environment",
+    "rds",
+    "lambda",
+    "vpc",
+    "security"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "Lambda",
+    "S3",
+    "SQS",
+    "IAM",
+    "CloudWatch",
+    "SecurityGroups",
+    "CodeBuild",
+    "CodePipeline"
+  ],
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

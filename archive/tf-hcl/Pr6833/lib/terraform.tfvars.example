@@ -1,0 +1,17 @@
+# Example Terraform Variables Configuration
+# Copy this file to terraform.tfvars and customize for your environment
+
+resource_suffix   = "dev"
+db_username       = "admin"
+db_name           = "mydb"
+db_instance_class = "db.t3.micro"
+ec2_instance_type = "t3.micro"
+
+# SSH Access Configuration
+# IMPORTANT: Restrict to your specific IP address or VPC CIDR
+# Example: ["203.0.113.0/32"] for single IP
+# Example: ["10.0.0.0/16"] for VPC-only access
+ssh_cidr_blocks   = []  # Must be explicitly configured
+
+# SSH Public Key (Optional - leave empty if using SSM only)
+ssh_public_key    = ""

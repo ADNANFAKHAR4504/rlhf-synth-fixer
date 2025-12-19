@@ -12,8 +12,8 @@ Requirements:
 3. Configure CORS settings on API Gateway to ensure secure cross-origin access.
 4. Create IAM roles and policies for the Lambda function using the principle of least privilege.
 5. Enable logging and monitoring via CloudWatch, capturing metrics such as:
-   - Execution time
-   - Error counts
+- Execution time
+- Error counts
 
 6. Tag **all** AWS resources with the key-value tag: `Environment: Production`.
 
@@ -23,7 +23,7 @@ Constraints:
 - The deployment must occur in **us-east-1**.
 - Code must pass tests validating resource creation, tagging, IAM scoping, and monitoring configuration.
 - The solution must follow a modular, readable, and maintainable structure.
-- Hardcoded credentials must be avoided. Use Pulumi’s secrets management or AWS IAM roles for auth.
+- Hardcoded credentials must be avoided. Use Pulumis secrets management or AWS IAM roles for auth.
 
 Expected Output:
 

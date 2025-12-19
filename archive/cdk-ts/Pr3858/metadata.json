@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "76593012",
+  "team": "synth",
+  "startedAt": "2025-10-08T16:23:18+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "Amazon S3",
+    "AWS Lambda",
+    "Amazon DynamoDB",
+    "Amazon SNS",
+    "Amazon SQS",
+    "AWS Step Functions",
+    "Amazon CloudWatch",
+    "AWS IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

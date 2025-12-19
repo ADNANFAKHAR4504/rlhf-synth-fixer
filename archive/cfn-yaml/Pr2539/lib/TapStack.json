@@ -1,0 +1,4280 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production-grade secure AWS environment in us-west-2 with comprehensive security controls",
+    "Metadata": {
+        "cfn-lint": {
+            "config": {
+                "ignore_checks": [
+                    "W1030"
+                ]
+            }
+        }
+    },
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "production",
+            "AllowedValues": [
+                "production",
+                "staging",
+                "development"
+            ],
+            "Description": "Deployment environment"
+        },
+        "Owner": {
+            "Type": "String",
+            "Default": "security-team",
+            "Description": "Owner/team for tagging"
+        },
+        "TrustedCIDR": {
+            "Type": "String",
+            "Default": "10.0.0.0/8",
+            "Description": "CIDR block for trusted SSH access",
+            "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$"
+        },
+        "VpcCIDR": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for VPC",
+            "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$"
+        },
+        "KeyPairName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "EC2 Key Pair for SSH access (optional)"
+        },
+        "SecondAvailabilityZone": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional explicit second Availability Zone (e.g., us-east-1b). If empty, fallback is used."
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64",
+            "Description": "Latest Amazon Linux 2023 AMI"
+        },
+        "DBUsername": {
+            "Type": "String",
+            "Default": "dbadmin",
+            "Description": "Database administrator username",
+            "MinLength": 1,
+            "MaxLength": 16,
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
+        },
+        "ExistingKMSKeyArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing KMS Key ARN to reuse"
+        },
+        "ExistingVPCId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing VPC ID to reuse"
+        },
+        "ExistingInternetGatewayId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Internet Gateway ID to reuse"
+        },
+        "ExistingPublicSubnetId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Public Subnet ID to reuse"
+        },
+        "ExistingPrivateSubnetId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Private Subnet ID to reuse"
+        },
+        "ExistingNatGatewayId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing NAT Gateway ID to reuse"
+        },
+        "ExistingDatabaseSubnet1Id": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Database Subnet 1 ID to reuse"
+        },
+        "ExistingDatabaseSubnet2Id": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Database Subnet 2 ID to reuse"
+        },
+        "ExistingDatabaseSubnetGroupName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Database Subnet Group name to reuse"
+        },
+        "ExistingDatabaseSecretArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Database Secret ARN to reuse"
+        },
+        "ExistingDatabaseInstanceId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Database Instance ID to reuse"
+        },
+        "ExistingBackupVaultName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Backup Vault name to reuse"
+        },
+        "ExistingCloudTrailName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing CloudTrail name to reuse"
+        },
+        "ExistingCloudTrailBucketName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing CloudTrail Bucket name to reuse"
+        },
+        "ExistingConfigBucketName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Config Bucket name to reuse"
+        },
+        "ExistingGuardDutyDetectorId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing GuardDuty Detector ID to reuse"
+        },
+        "ExistingLambdaFunctionName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Lambda Function name to reuse"
+        },
+        "ExistingEC2InstanceId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing EC2 Instance ID to reuse"
+        },
+        "ExistingBillingAlarmName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing CloudWatch Billing Alarm name to reuse"
+        },
+        "ExistingConfigDeliveryChannelName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing AWS Config Delivery Channel name to reuse"
+        },
+        "ExistingConfigRecorderName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing AWS Config Configuration Recorder name to reuse"
+        },
+        "EnableConfigDeliveryChannel": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Set to 'true' to create a new Config Delivery Channel if none exists"
+        },
+        "EnableConfigRecorder": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Set to 'true' to create a new Config Configuration Recorder if none exists"
+        },
+        "EnableEBSEncryption": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Whether to enable EBS encryption by default (true/false)"
+        },
+        "ExistingWebServerSecurityGroupId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Web Server Security Group ID to reuse"
+        },
+        "ExistingDatabaseSecurityGroupId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Database Security Group ID to reuse"
+        },
+        "ExistingLambdaSecurityGroupId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Lambda Security Group ID to reuse"
+        },
+        "ExistingEC2RoleArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing EC2 Role ARN to reuse"
+        },
+        "ExistingEC2InstanceProfileArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing EC2 Instance Profile ARN to reuse"
+        },
+        "ExistingLambdaExecutionRoleArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Lambda Execution Role ARN to reuse"
+        },
+        "ExistingSecureS3BucketName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Secure S3 Bucket name to reuse"
+        },
+        "ExistingS3AccessLogsBucketName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing S3 Access Logs Bucket name to reuse"
+        }
+    },
+    "Conditions": {
+        "UseExistingKMS": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingKMSKeyArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateKMS": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingKMSKeyArn"
+                },
+                ""
+            ]
+        },
+        "HasSecondAZ": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "SecondAvailabilityZone"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasTwoSubnetAZs": {
+            "Fn::Or": [
+                {
+                    "Condition": "HasSecondAZ"
+                },
+                {
+                    "Condition": "UseExistingDatabaseSubnet1"
+                },
+                {
+                    "Condition": "UseExistingDatabaseSubnet2"
+                }
+            ]
+        },
+        "CreateVPC": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingVPCId"
+                },
+                ""
+            ]
+        },
+        "UseExistingInternetGateway": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingInternetGatewayId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateInternetGateway": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingInternetGatewayId"
+                },
+                ""
+            ]
+        },
+        "UseExistingPublicSubnet": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingPublicSubnetId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreatePublicSubnet": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingPublicSubnetId"
+                },
+                ""
+            ]
+        },
+        "UseExistingPrivateSubnet": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingPrivateSubnetId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreatePrivateSubnet": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingPrivateSubnetId"
+                },
+                ""
+            ]
+        },
+        "UseExistingDatabaseSubnet1": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingDatabaseSubnet1Id"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateDatabaseSubnet1": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingDatabaseSubnet1Id"
+                },
+                ""
+            ]
+        },
+        "UseExistingDatabaseSubnet2": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingDatabaseSubnet2Id"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateDatabaseSubnet2": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingDatabaseSubnet2Id"
+                },
+                ""
+            ]
+        },
+        "UseExistingNatGateway": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingNatGatewayId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateNatGateway": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingNatGatewayId"
+                },
+                ""
+            ]
+        },
+        "UseExistingWebServerSecurityGroup": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingWebServerSecurityGroupId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateWebServerSecurityGroup": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingWebServerSecurityGroupId"
+                },
+                ""
+            ]
+        },
+        "UseExistingDatabaseSecurityGroup": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingDatabaseSecurityGroupId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateDatabaseSecurityGroup": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingDatabaseSecurityGroupId"
+                },
+                ""
+            ]
+        },
+        "UseExistingLambdaSecurityGroup": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingLambdaSecurityGroupId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateLambdaSecurityGroup": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingLambdaSecurityGroupId"
+                },
+                ""
+            ]
+        },
+        "UseExistingEC2Role": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingEC2RoleArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateEC2Role": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingEC2RoleArn"
+                },
+                ""
+            ]
+        },
+        "UseExistingEC2InstanceProfile": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingEC2InstanceProfileArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateEC2InstanceProfile": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingEC2InstanceProfileArn"
+                },
+                ""
+            ]
+        },
+        "UseExistingLambdaExecutionRole": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingLambdaExecutionRoleArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateLambdaExecutionRole": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingLambdaExecutionRoleArn"
+                },
+                ""
+            ]
+        },
+        "UseExistingSecureS3Bucket": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingSecureS3BucketName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateSecureS3Bucket": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingSecureS3BucketName"
+                },
+                ""
+            ]
+        },
+        "UseExistingS3AccessLogsBucket": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingS3AccessLogsBucketName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateS3AccessLogsBucket": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingS3AccessLogsBucketName"
+                },
+                ""
+            ]
+        },
+        "UseExistingDatabaseSubnetGroup": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingDatabaseSubnetGroupName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "UseExistingDatabaseSecret": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingDatabaseSecretArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateDatabaseSecret": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingDatabaseSecretArn"
+                },
+                ""
+            ]
+        },
+        "UseExistingDatabaseInstance": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingDatabaseInstanceId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "UseExistingBackupVault": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingBackupVaultName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateBackupVault": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingBackupVaultName"
+                },
+                ""
+            ]
+        },
+        "EnableBackup": {
+            "Fn::Or": [
+                {
+                    "Condition": "CreateBackupVault"
+                },
+                {
+                    "Condition": "UseExistingBackupVault"
+                }
+            ]
+        },
+        "UseExistingCloudTrail": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingCloudTrailName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateCloudTrail": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingCloudTrailName"
+                },
+                ""
+            ]
+        },
+        "UseExistingCloudTrailBucket": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingCloudTrailBucketName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateCloudTrailBucket": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingCloudTrailBucketName"
+                },
+                ""
+            ]
+        },
+        "CreateCloudTrailBucketPolicy": {
+            "Fn::And": [
+                {
+                    "Condition": "CreateCloudTrailBucket"
+                },
+                {
+                    "Condition": "CreateCloudTrail"
+                }
+            ]
+        },
+        "UseExistingConfigBucket": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingConfigBucketName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateConfigBucket": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingConfigBucketName"
+                },
+                ""
+            ]
+        },
+        "UseExistingConfigRecorder": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingConfigRecorderName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateConfigRecorder": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingConfigRecorderName"
+                        },
+                        ""
+                    ]
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableConfigRecorder"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Condition": "CreateConfigBucket"
+                }
+            ]
+        },
+        "CreateConfigDeliveryChannel": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingConfigDeliveryChannelName"
+                        },
+                        ""
+                    ]
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingConfigBucketName"
+                        },
+                        ""
+                    ]
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableConfigDeliveryChannel"
+                        },
+                        "true"
+                    ]
+                }
+            ]
+        },
+        "UseExistingGuardDutyDetector": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingGuardDutyDetectorId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateGuardDutyDetector": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingGuardDutyDetectorId"
+                },
+                ""
+            ]
+        },
+        "UseExistingLambdaFunction": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingLambdaFunctionName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateLambdaFunction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingLambdaFunctionName"
+                },
+                ""
+            ]
+        },
+        "UseExistingEC2Instance": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingEC2InstanceId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateEC2Instance": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingEC2InstanceId"
+                },
+                ""
+            ]
+        },
+        "UseExistingBillingAlarm": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingBillingAlarmName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateBillingAlarm": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingBillingAlarmName"
+                },
+                ""
+            ]
+        },
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "EnableBackupAndHasTwoAZs": {
+            "Fn::And": [
+                {
+                    "Condition": "EnableBackup"
+                },
+                {
+                    "Condition": "HasTwoSubnetAZs"
+                }
+            ]
+        },
+        "ShouldEnableEBSEncryption": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableEBSEncryption"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "SecureKMSKey": {
+            "Condition": "CreateKMS",
+            "Type": "AWS::KMS::Key",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "Description": "KMS Key for secure environment encryption",
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowRoot",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "AllowServices",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "cloudtrail.amazonaws.com",
+                                    "s3.amazonaws.com",
+                                    "rds.amazonaws.com",
+                                    "backup.amazonaws.com",
+                                    "lambda.amazonaws.com",
+                                    {
+                                        "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                                    }
+                                ]
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureKMSKeyAlias": {
+            "Condition": "CreateKMS",
+            "Type": "AWS::KMS::Alias",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": [
+                        "alias/secure-environment-key-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "TargetKeyId": {
+                    "Ref": "SecureKMSKey"
+                }
+            }
+        },
+        "SecureVPC": {
+            "Condition": "CreateVPC",
+            "Type": "AWS::EC2::VPC",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCIDR"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "SecureVPC-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Condition": "CreateInternetGateway",
+            "Type": "AWS::EC2::InternetGateway",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "SecureVPC-IGW-${Environment}-${AWS::StackName}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGatewayAttachment": {
+            "Condition": "CreateVPC",
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Fn::If": [
+                        "UseExistingInternetGateway",
+                        {
+                            "Ref": "ExistingInternetGatewayId"
+                        },
+                        {
+                            "Ref": "InternetGateway"
+                        }
+                    ]
+                },
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                }
+            }
+        },
+        "PublicSubnet": {
+            "Condition": "CreatePublicSubnet",
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "SecureVPC"
+                        },
+                        {
+                            "Ref": "ExistingVPCId"
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "Public Subnet-${Environment}-${AWS::StackName}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet": {
+            "Condition": "CreatePrivateSubnet",
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "SecureVPC"
+                        },
+                        {
+                            "Ref": "ExistingVPCId"
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "Private Subnet-${Environment}-${AWS::StackName}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSubnet1": {
+            "Condition": "CreateDatabaseSubnet1",
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "SecureVPC"
+                        },
+                        {
+                            "Ref": "ExistingVPCId"
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "Database Subnet 1-${Environment}-${AWS::StackName}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSubnet2": {
+            "Condition": "CreateDatabaseSubnet2",
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "SecureVPC"
+                        },
+                        {
+                            "Ref": "ExistingVPCId"
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::If": [
+                        "HasSecondAZ",
+                        {
+                            "Ref": "SecondAvailabilityZone"
+                        },
+                        {
+                            "Fn::Select": [
+                                0,
+                                {
+                                    "Fn::GetAZs": ""
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        4,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "Database Subnet 2-${Environment}-${AWS::StackName}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGatewayEIP": {
+            "Condition": "CreateNatGateway",
+            "Type": "AWS::EC2::EIP",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway": {
+            "Condition": "CreateNatGateway",
+            "Type": "AWS::EC2::NatGateway",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Fn::If": [
+                        "UseExistingPublicSubnet",
+                        {
+                            "Ref": "ExistingPublicSubnetId"
+                        },
+                        {
+                            "Ref": "PublicSubnet"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NAT Gateway-${Environment}-${AWS::StackName}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Condition": "CreateVPC",
+            "Type": "AWS::EC2::RouteTable",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "Public Route Table-${Environment}-${AWS::StackName}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultPublicRoute": {
+            "Condition": "CreateVPC",
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "InternetGatewayAttachment",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Fn::If": [
+                        "UseExistingInternetGateway",
+                        {
+                            "Ref": "ExistingInternetGatewayId"
+                        },
+                        {
+                            "Ref": "InternetGateway"
+                        }
+                    ]
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation": {
+            "Condition": "CreateVPC",
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Fn::If": [
+                        "UseExistingPublicSubnet",
+                        {
+                            "Ref": "ExistingPublicSubnetId"
+                        },
+                        {
+                            "Ref": "PublicSubnet"
+                        }
+                    ]
+                }
+            }
+        },
+        "PrivateRouteTable": {
+            "Condition": "CreateVPC",
+            "Type": "AWS::EC2::RouteTable",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "Private Route Table-${Environment}-${AWS::StackName}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute": {
+            "Condition": "CreateVPC",
+            "Type": "AWS::EC2::Route",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Fn::If": [
+                        "UseExistingNatGateway",
+                        {
+                            "Ref": "ExistingNatGatewayId"
+                        },
+                        {
+                            "Ref": "NatGateway"
+                        }
+                    ]
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation": {
+            "Condition": "CreateVPC",
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "SubnetId": {
+                    "Fn::If": [
+                        "UseExistingPrivateSubnet",
+                        {
+                            "Ref": "ExistingPrivateSubnetId"
+                        },
+                        {
+                            "Ref": "PrivateSubnet"
+                        }
+                    ]
+                }
+            }
+        },
+        "VPCFlowLogRole": {
+            "Condition": "CreateVPC",
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "vpc-flow-logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "flowlogsDeliveryRolePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCFlowLogGroup": {
+            "Condition": "CreateVPC",
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": [
+                        "/aws/vpc/flowlogs/${Environment}-${AWS::StackName}-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "RetentionInDays": 30,
+                "KmsKeyId": {
+                    "Fn::If": [
+                        "CreateKMS",
+                        {
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "ExistingKMSKeyArn"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCFlowLog": {
+            "Condition": "CreateVPC",
+            "Type": "AWS::EC2::FlowLog",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "ResourceType": "VPC",
+                "ResourceId": {
+                    "Ref": "SecureVPC"
+                },
+                "TrafficType": "ALL",
+                "LogDestinationType": "cloud-watch-logs",
+                "LogGroupName": {
+                    "Ref": "VPCFlowLogGroup"
+                },
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogRole",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebServerSecurityGroup": {
+            "Condition": "CreateWebServerSecurityGroup",
+            "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "WebServerSecurityGroup-${Environment}-${AWS::StackName}"
+                },
+                "GroupDescription": "Security group for web servers",
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "SecureVPC"
+                        },
+                        {
+                            "Ref": "ExistingVPCId"
+                        }
+                    ]
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "TrustedCIDR"
+                        },
+                        "Description": "SSH access from trusted CIDR"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTP access"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS access"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "WebServerSecurityGroup-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Condition": "CreateDatabaseSecurityGroup",
+            "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "DatabaseSecurityGroup-${Environment}-${AWS::StackName}"
+                },
+                "GroupDescription": "Security group for database servers",
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "SecureVPC"
+                        },
+                        {
+                            "Ref": "ExistingVPCId"
+                        }
+                    ]
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Fn::If": [
+                                "UseExistingWebServerSecurityGroup",
+                                {
+                                    "Ref": "ExistingWebServerSecurityGroupId"
+                                },
+                                {
+                                    "Ref": "WebServerSecurityGroup"
+                                }
+                            ]
+                        },
+                        "Description": "MySQL access from web servers"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "DatabaseSecurityGroup-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaSecurityGroup": {
+            "Condition": "CreateLambdaSecurityGroup",
+            "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "LambdaSecurityGroup-${Environment}-${AWS::StackName}"
+                },
+                "GroupDescription": "Security group for Lambda functions",
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "SecureVPC"
+                        },
+                        {
+                            "Ref": "ExistingVPCId"
+                        }
+                    ]
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS outbound"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "DestinationSecurityGroupId": {
+                            "Fn::If": [
+                                "UseExistingDatabaseSecurityGroup",
+                                {
+                                    "Ref": "ExistingDatabaseSecurityGroupId"
+                                },
+                                {
+                                    "Ref": "DatabaseSecurityGroup"
+                                }
+                            ]
+                        },
+                        "Description": "Database access"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "LambdaSecurityGroup-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2Role": {
+            "Condition": "CreateEC2Role",
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::If": [
+                                            "UseExistingSecureS3Bucket",
+                                            {
+                                                "Fn::Sub": "arn:aws:s3:::${ExistingSecureS3BucketName}/*"
+                                            },
+                                            {
+                                                "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Condition": "CreateEC2InstanceProfile",
+            "Type": "AWS::IAM::InstanceProfile",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Fn::If": [
+                            "UseExistingEC2Role",
+                            {
+                                "Ref": "ExistingEC2RoleArn"
+                            },
+                            {
+                                "Ref": "EC2Role"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Condition": "CreateLambdaExecutionRole",
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "KMSAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::If": [
+                                            "UseExistingKMS",
+                                            {
+                                                "Ref": "ExistingKMSKeyArn"
+                                            },
+                                            {
+                                                "Fn::GetAtt": [
+                                                    "SecureKMSKey",
+                                                    "Arn"
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureS3Bucket": {
+            "Condition": "CreateSecureS3Bucket",
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": [
+                        "secure-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Fn::If": [
+                            "UseExistingS3AccessLogsBucket",
+                            {
+                                "Ref": "ExistingS3AccessLogsBucketName"
+                            },
+                            {
+                                "Ref": "S3AccessLogsBucket"
+                            }
+                        ]
+                    },
+                    "LogFilePrefix": "access-logs/"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "SecureS3Bucket-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3AccessLogsBucket": {
+            "Condition": "CreateS3AccessLogsBucket",
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": [
+                        "logs-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "S3AccessLogsBucket-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "Bucket": {
+                    "Fn::If": [
+                        "UseExistingSecureS3Bucket",
+                        {
+                            "Ref": "ExistingSecureS3BucketName"
+                        },
+                        {
+                            "Ref": "SecureS3Bucket"
+                        }
+                    ]
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "EnforceTLS",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::If": [
+                                        "UseExistingSecureS3Bucket",
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${ExistingSecureS3BucketName}"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "SecureS3Bucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Fn::If": [
+                                        "UseExistingSecureS3Bucket",
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${ExistingSecureS3BucketName}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "DatabaseSubnetGroup": {
+            "Condition": "HasTwoSubnetAZs",
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "DatabaseSubnetGroup-${Environment}-${AWS::StackName}"
+                },
+                "DBSubnetGroupDescription": "Subnet group for RDS database",
+                "SubnetIds": [
+                    {
+                        "Fn::If": [
+                            "UseExistingDatabaseSubnet1",
+                            {
+                                "Ref": "ExistingDatabaseSubnet1Id"
+                            },
+                            {
+                                "Ref": "DatabaseSubnet1"
+                            }
+                        ]
+                    },
+                    {
+                        "Fn::If": [
+                            "UseExistingDatabaseSubnet2",
+                            {
+                                "Ref": "ExistingDatabaseSubnet2Id"
+                            },
+                            {
+                                "Ref": "DatabaseSubnet2"
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "DatabaseSubnetGroup-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSecret": {
+            "Condition": "CreateDatabaseSecret",
+            "Type": "AWS::SecretsManager::Secret",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": [
+                        "production-database-password-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Description": "Database password for secure environment",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\",
+                    "RequireEachIncludedType": true
+                },
+                "KmsKeyId": {
+                    "Fn::If": [
+                        "CreateKMS",
+                        {
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "ExistingKMSKeyArn"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseInstance": {
+            "Condition": "HasTwoSubnetAZs",
+            "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "DBInstanceIdentifier": "secure-database-production-tapstack",
+                "DBInstanceClass": "db.t3.micro",
+                "Engine": "mysql",
+                "EngineVersion": "8.0.43",
+                "MasterUsername": {
+                    "Ref": "DBUsername"
+                },
+                "MasterUserPassword": {
+                    "Fn::If": [
+                        "UseExistingDatabaseSecret",
+                        {
+                            "Fn::Sub": "{{resolve:secretsmanager:${ExistingDatabaseSecretArn}:SecretString:password}}"
+                        },
+                        {
+                            "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+                        }
+                    ]
+                },
+                "AllocatedStorage": 20,
+                "StorageType": "gp2",
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Fn::If": [
+                        "CreateKMS",
+                        {
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "ExistingKMSKeyArn"
+                        }
+                    ]
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Fn::If": [
+                            "UseExistingDatabaseSecurityGroup",
+                            {
+                                "Ref": "ExistingDatabaseSecurityGroupId"
+                            },
+                            {
+                                "Ref": "DatabaseSecurityGroup"
+                            }
+                        ]
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Fn::If": [
+                        "UseExistingDatabaseSubnetGroup",
+                        {
+                            "Ref": "ExistingDatabaseSubnetGroupName"
+                        },
+                        {
+                            "Ref": "DatabaseSubnetGroup"
+                        }
+                    ]
+                },
+                "BackupRetentionPeriod": 7,
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "MultiAZ": false,
+                "PubliclyAccessible": false,
+                "DeletionProtection": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "SecureDatabase-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "BackupVault": {
+            "Condition": "CreateBackupVault",
+            "Type": "AWS::Backup::BackupVault",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "BackupVaultName": {
+                    "Fn::Sub": [
+                        "SecureBackupVault-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "EncryptionKeyArn": {
+                    "Fn::If": [
+                        "CreateKMS",
+                        {
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "ExistingKMSKeyArn"
+                        }
+                    ]
+                },
+                "BackupVaultTags": {
+                    "Name": {
+                        "Fn::Sub": "SecureBackupVault-${Environment}"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "Owner": {
+                        "Ref": "Owner"
+                    }
+                }
+            }
+        },
+        "BackupPlan": {
+            "Condition": "EnableBackup",
+            "Type": "AWS::Backup::BackupPlan",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "BackupPlan": {
+                    "BackupPlanName": {
+                        "Fn::Sub": [
+                            "SecureBackupPlan-production-tapstack-${Suffix}",
+                            {
+                                "Suffix": {
+                                    "Fn::Select": [
+                                        0,
+                                        {
+                                            "Fn::Split": [
+                                                "-",
+                                                {
+                                                    "Fn::Select": [
+                                                        2,
+                                                        {
+                                                            "Fn::Split": [
+                                                                "/",
+                                                                {
+                                                                    "Ref": "AWS::StackId"
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    },
+                    "BackupPlanRule": [
+                        {
+                            "RuleName": "DailyBackups",
+                            "TargetBackupVault": {
+                                "Fn::If": [
+                                    "UseExistingBackupVault",
+                                    {
+                                        "Ref": "ExistingBackupVaultName"
+                                    },
+                                    {
+                                        "Ref": "BackupVault"
+                                    }
+                                ]
+                            },
+                            "ScheduleExpression": "cron(0 2 ? * * *)",
+                            "StartWindowMinutes": 60,
+                            "CompletionWindowMinutes": 120,
+                            "Lifecycle": {
+                                "DeleteAfterDays": 30
+                            },
+                            "RecoveryPointTags": {
+                                "Environment": {
+                                    "Ref": "Environment"
+                                },
+                                "Owner": {
+                                    "Ref": "Owner"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "BackupSelection": {
+            "Condition": "EnableBackupAndHasTwoAZs",
+            "Type": "AWS::Backup::BackupSelection",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "BackupPlanId": {
+                    "Ref": "BackupPlan"
+                },
+                "BackupSelection": {
+                    "SelectionName": "DatabaseBackupSelection",
+                    "IamRoleArn": {
+                        "Fn::GetAtt": [
+                            "BackupRole",
+                            "Arn"
+                        ]
+                    },
+                    "Resources": [
+                        {
+                            "Fn::If": [
+                                "UseExistingDatabaseInstance",
+                                {
+                                    "Ref": "ExistingDatabaseInstanceId"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DatabaseInstance}"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "BackupRole": {
+            "Condition": "EnableBackup",
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "backup.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+                    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudTrailLogGroup": {
+            "Condition": "CreateCloudTrail",
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": [
+                        "/aws/cloudtrail/${Environment}-${AWS::StackName}-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "RetentionInDays": 90,
+                "KmsKeyId": {
+                    "Fn::If": [
+                        "CreateKMS",
+                        {
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "ExistingKMSKeyArn"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudTrailRole": {
+            "Condition": "CreateCloudTrail",
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudTrailLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "CloudTrailLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudTrail": {
+            "Condition": "CreateCloudTrail",
+            "Type": "AWS::CloudTrail::Trail",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "TrailName": {
+                    "Fn::Sub": [
+                        "SecureEnvironmentTrail-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "S3BucketName": {
+                    "Fn::If": [
+                        "UseExistingCloudTrailBucket",
+                        {
+                            "Ref": "ExistingCloudTrailBucketName"
+                        },
+                        {
+                            "Ref": "CloudTrailBucket"
+                        }
+                    ]
+                },
+                "IncludeGlobalServiceEvents": true,
+                "IsMultiRegionTrail": true,
+                "EnableLogFileValidation": true,
+                "CloudWatchLogsLogGroupArn": {
+                    "Fn::GetAtt": [
+                        "CloudTrailLogGroup",
+                        "Arn"
+                    ]
+                },
+                "CloudWatchLogsRoleArn": {
+                    "Fn::GetAtt": [
+                        "CloudTrailRole",
+                        "Arn"
+                    ]
+                },
+                "KMSKeyId": {
+                    "Fn::If": [
+                        "CreateKMS",
+                        {
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "ExistingKMSKeyArn"
+                        }
+                    ]
+                },
+                "IsLogging": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "SecureEnvironmentTrail-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudTrailBucket": {
+            "Condition": "CreateCloudTrailBucket",
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": [
+                        "trail-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "CloudTrailBucket-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudTrailBucketPolicy": {
+            "Condition": "CreateCloudTrailBucketPolicy",
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudTrailBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": [
+                                            "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/SecureEnvironmentTrail-production-tapstack-${Suffix}",
+                                            {
+                                                "Suffix": {
+                                                    "Fn::Select": [
+                                                        0,
+                                                        {
+                                                            "Fn::Split": [
+                                                                "-",
+                                                                {
+                                                                    "Fn::Select": [
+                                                                        2,
+                                                                        {
+                                                                            "Fn::Split": [
+                                                                                "/",
+                                                                                {
+                                                                                    "Ref": "AWS::StackId"
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CloudTrailBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": [
+                                            "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/SecureEnvironmentTrail-production-tapstack-${Suffix}",
+                                            {
+                                                "Suffix": {
+                                                    "Fn::Select": [
+                                                        0,
+                                                        {
+                                                            "Fn::Split": [
+                                                                "-",
+                                                                {
+                                                                    "Fn::Select": [
+                                                                        2,
+                                                                        {
+                                                                            "Fn::Split": [
+                                                                                "/",
+                                                                                {
+                                                                                    "Ref": "AWS::StackId"
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ConfigRole": {
+            "Condition": "CreateConfigBucket",
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "ConfigBucketPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketAcl",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ConfigBucket",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${ConfigBucket.Arn}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "AWSConfigCorePermissions",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "config:BatchGet*",
+                                        "config:Get*",
+                                        "config:Describe*",
+                                        "config:Put*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "ConfigBucket": {
+            "Condition": "CreateConfigBucket",
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": [
+                        "config-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "ConfigBucket-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "ConfigBucketPolicy": {
+            "Condition": "CreateConfigBucket",
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ConfigBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSConfigBucketPermissionsCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketExistenceCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketDelivery",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${ConfigBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ConfigurationRecorder": {
+            "Condition": "CreateConfigRecorder",
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": [
+                        "SecureEnvironmentRecorder-${Environment}-${AWS::StackName}-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Condition": "CreateConfigDeliveryChannel",
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": [
+                        "SecureEnvironmentDeliveryChannel-${Environment}-${AWS::StackName}-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "S3BucketName": {
+                    "Ref": "ConfigBucket"
+                }
+            }
+        },
+        "S3BucketPublicAccessProhibitedRule": {
+            "Condition": "CreateConfigRecorder",
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "s3-bucket-public-access-prohibited-${Environment}-${AWS::StackName}"
+                },
+                "Description": "Checks that your Amazon S3 buckets do not allow public read access",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"
+                }
+            }
+        },
+        "RootAccessKeyCheckRule": {
+            "Condition": "CreateConfigRecorder",
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "root-access-key-check-${Environment}-${AWS::StackName}"
+                },
+                "Description": "Checks whether the root user access key is available",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "ROOT_ACCESS_KEY_CHECK"
+                }
+            }
+        },
+        "EBSEncryptionByDefaultRule": {
+            "Condition": "CreateConfigRecorder",
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "ec2-ebs-encryption-by-default-${Environment}-${AWS::StackName}"
+                },
+                "Description": "Check that Amazon Elastic Block Store (EBS) encryption is enabled by default",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "EC2_EBS_ENCRYPTION_BY_DEFAULT"
+                }
+            }
+        },
+        "GuardDutyDetector": {
+            "Condition": "CreateGuardDutyDetector",
+            "Type": "AWS::GuardDuty::Detector",
+            "Properties": {
+                "Enable": true,
+                "FindingPublishingFrequency": "FIFTEEN_MINUTES",
+                "DataSources": {
+                    "S3Logs": {
+                        "Enable": true
+                    },
+                    "MalwareProtection": {
+                        "ScanEc2InstanceWithFindings": {
+                            "EbsVolumes": true
+                        }
+                    },
+                    "Kubernetes": {
+                        "AuditLogs": {
+                            "Enable": true
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "GuardDutyDetector-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureLambdaFunction": {
+            "Condition": "CreateLambdaFunction",
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "SecureFunction-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::If": [
+                        "UseExistingLambdaExecutionRole",
+                        {
+                            "Ref": "ExistingLambdaExecutionRoleArn"
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "LambdaExecutionRole",
+                                "Arn"
+                            ]
+                        }
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    # Example of using KMS key from environment\n    kms_key_id = os.environ.get('KMS_KEY_ID')\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps({\n            'message': 'Hello from secure Lambda!',\n            'kms_key': kms_key_id\n        })\n    }\n"
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Fn::If": [
+                                "UseExistingLambdaSecurityGroup",
+                                {
+                                    "Ref": "ExistingLambdaSecurityGroupId"
+                                },
+                                {
+                                    "Ref": "LambdaSecurityGroup"
+                                }
+                            ]
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Fn::If": [
+                                "UseExistingPrivateSubnet",
+                                {
+                                    "Ref": "ExistingPrivateSubnetId"
+                                },
+                                {
+                                    "Ref": "PrivateSubnet"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "KMS_KEY_ID": {
+                            "Fn::If": [
+                                "UseExistingKMS",
+                                {
+                                    "Ref": "ExistingKMSKeyArn"
+                                },
+                                {
+                                    "Fn::GetAtt": [
+                                        "SecureKMSKey",
+                                        "Arn"
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                },
+                "KmsKeyArn": {
+                    "Fn::If": [
+                        "UseExistingKMS",
+                        {
+                            "Ref": "ExistingKMSKeyArn"
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
+                        }
+                    ]
+                },
+                "Timeout": 30,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "SecureLambdaFunction-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2Instance": {
+            "Condition": "CreateEC2Instance",
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "InstanceType": "t3.micro",
+                "KeyName": {
+                    "Fn::If": [
+                        "HasKeyPair",
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": false,
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Fn::If": [
+                                    "UseExistingWebServerSecurityGroup",
+                                    {
+                                        "Ref": "ExistingWebServerSecurityGroupId"
+                                    },
+                                    {
+                                        "Ref": "WebServerSecurityGroup"
+                                    }
+                                ]
+                            }
+                        ],
+                        "SubnetId": {
+                            "Fn::If": [
+                                "UseExistingPrivateSubnet",
+                                {
+                                    "Ref": "ExistingPrivateSubnetId"
+                                },
+                                {
+                                    "Ref": "PrivateSubnet"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "IamInstanceProfile": {
+                    "Fn::If": [
+                        "UseExistingEC2InstanceProfile",
+                        {
+                            "Ref": "ExistingEC2InstanceProfileArn"
+                        },
+                        {
+                            "Ref": "EC2InstanceProfile"
+                        }
+                    ]
+                },
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "VolumeSize": 20,
+                            "VolumeType": "gp3",
+                            "Encrypted": true,
+                            "KmsKeyId": {
+                                "Fn::If": [
+                                    "UseExistingKMS",
+                                    {
+                                        "Ref": "ExistingKMSKeyArn"
+                                    },
+                                    {
+                                        "Fn::GetAtt": [
+                                            "SecureKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "DeleteOnTermination": true
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "EC2Instance-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "IAMPasswordPolicyRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "IAMPasswordPolicyAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "iam:UpdateAccountPasswordPolicy",
+                                        "iam:GetAccountPasswordPolicy"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "IAMPasswordPolicyFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "IAMPasswordPolicy-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "IAMPasswordPolicyRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import boto3\nimport cfnresponse\nimport json\n\ndef lambda_handler(event, context):\n    try:\n        iam = boto3.client('iam')\n        \n        if event['RequestType'] == 'Delete':\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n            return\n        \n        # Update account password policy\n        iam.update_account_password_policy(\n            MinimumPasswordLength=12,\n            RequireSymbols=True,\n            RequireNumbers=True,\n            RequireUppercaseCharacters=True,\n            RequireLowercaseCharacters=True,\n            AllowUsersToChangePassword=True,\n            MaxPasswordAge=90,\n            PasswordReusePrevention=24\n        )\n        \n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        cfnresponse.send(event, context, cfnresponse.FAILED, {})\n"
+                }
+            }
+        },
+        "IAMPasswordPolicy": {
+            "Type": "AWS::CloudFormation::CustomResource",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "IAMPasswordPolicyFunction",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "EBSEncryptionRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "EBSEncryptionAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:EnableEbsEncryptionByDefault",
+                                        "ec2:DisableEbsEncryptionByDefault",
+                                        "ec2:GetEbsEncryptionByDefault",
+                                        "ec2:ModifyEbsDefaultKmsKeyId",
+                                        "ec2:GetEbsDefaultKmsKeyId",
+                                        "ec2:ResetEbsDefaultKmsKeyId"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "EBSEncryptionFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "EBSEncryption-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "EBSEncryptionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import boto3\nimport cfnresponse\nimport json\n\ndef lambda_handler(event, context):\n    try:\n        ec2 = boto3.client('ec2')\n        \n        if event['RequestType'] == 'Delete':\n            # Optionally disable encryption by default on delete\n            # ec2.disable_ebs_encryption_by_default()\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n            return\n        \n        # Enable EBS encryption by default\n        ec2.enable_ebs_encryption_by_default()\n        \n        # Set default KMS key\n        kms_key_id = event['ResourceProperties'].get('KmsKeyId')\n        if kms_key_id:\n            ec2.modify_ebs_default_kms_key_id(KmsKeyId=kms_key_id)\n        \n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        cfnresponse.send(event, context, cfnresponse.FAILED, {})\n"
+                }
+            }
+        },
+        "EBSEncryptionByDefault": {
+            "Condition": "ShouldEnableEBSEncryption",
+            "Type": "AWS::CloudFormation::CustomResource",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "EBSEncryptionFunction",
+                        "Arn"
+                    ]
+                },
+                "KmsKeyId": {
+                    "Fn::If": [
+                        "CreateKMS",
+                        {
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "ExistingKMSKeyArn"
+                        }
+                    ]
+                }
+            }
+        },
+        "BillingAlarm": {
+            "Condition": "CreateBillingAlarm",
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": [
+                        "HighBillingAlarm-${Environment}-${AWS::StackName}-${AWS::Region}-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    2,
+                                    {
+                                        "Fn::Split": [
+                                            "/",
+                                            {
+                                                "Ref": "AWS::StackId"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "AlarmDescription": "Alarm for high billing costs",
+                "MetricName": "EstimatedCharges",
+                "Namespace": "AWS/Billing",
+                "Statistic": "Maximum",
+                "Period": 86400,
+                "EvaluationPeriods": 1,
+                "Threshold": 100,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "Currency",
+                        "Value": "USD"
+                    }
+                ],
+                "TreatMissingData": "notBreaching",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Fn::If": [
+                    "CreateVPC",
+                    {
+                        "Ref": "SecureVPC"
+                    },
+                    {
+                        "Ref": "ExistingVPCId"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                }
+            }
+        },
+        "KMSKeyArn": {
+            "Description": "KMS Key ARN",
+            "Value": {
+                "Fn::If": [
+                    "CreateKMS",
+                    {
+                        "Fn::GetAtt": [
+                            "SecureKMSKey",
+                            "Arn"
+                        ]
+                    },
+                    {
+                        "Ref": "ExistingKMSKeyArn"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMS-Key-ARN"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "S3 Bucket Name",
+            "Value": {
+                "Fn::If": [
+                    "UseExistingSecureS3Bucket",
+                    {
+                        "Ref": "ExistingSecureS3BucketName"
+                    },
+                    {
+                        "Ref": "SecureS3Bucket"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3-Bucket-Name"
+                }
+            }
+        },
+        "RDSInstanceId": {
+            "Condition": "HasTwoSubnetAZs",
+            "Description": "RDS Instance ID",
+            "Value": {
+                "Fn::If": [
+                    "UseExistingDatabaseInstance",
+                    {
+                        "Ref": "ExistingDatabaseInstanceId"
+                    },
+                    {
+                        "Ref": "DatabaseInstance"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RDS-Instance-ID"
+                }
+            }
+        },
+        "EC2InstanceId": {
+            "Description": "EC2 Instance ID",
+            "Value": {
+                "Fn::If": [
+                    "UseExistingEC2Instance",
+                    {
+                        "Ref": "ExistingEC2InstanceId"
+                    },
+                    {
+                        "Ref": "EC2Instance"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2-Instance-ID"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Lambda Function Name",
+            "Value": {
+                "Fn::If": [
+                    "UseExistingLambdaFunction",
+                    {
+                        "Ref": "ExistingLambdaFunctionName"
+                    },
+                    {
+                        "Ref": "SecureLambdaFunction"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Lambda-Function-Name"
+                }
+            }
+        },
+        "CloudTrailName": {
+            "Description": "CloudTrail Name",
+            "Value": {
+                "Fn::If": [
+                    "UseExistingCloudTrail",
+                    {
+                        "Ref": "ExistingCloudTrailName"
+                    },
+                    {
+                        "Ref": "CloudTrail"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrail-Name"
+                }
+            }
+        },
+        "GuardDutyDetectorId": {
+            "Description": "GuardDuty Detector ID",
+            "Value": {
+                "Fn::If": [
+                    "UseExistingGuardDutyDetector",
+                    {
+                        "Ref": "ExistingGuardDutyDetectorId"
+                    },
+                    {
+                        "Ref": "GuardDutyDetector"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-GuardDuty-Detector-ID"
+                }
+            }
+        },
+        "ConfigBucketName": {
+            "Description": "AWS Config Bucket Name",
+            "Value": {
+                "Fn::If": [
+                    "UseExistingConfigBucket",
+                    {
+                        "Ref": "ExistingConfigBucketName"
+                    },
+                    {
+                        "Ref": "ConfigBucket"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Config-Bucket-Name"
+                }
+            }
+        },
+        "ConfigRecorderName": {
+            "Description": "AWS Config Recorder Name",
+            "Value": {
+                "Fn::If": [
+                    "UseExistingConfigRecorder",
+                    {
+                        "Ref": "ExistingConfigRecorderName"
+                    },
+                    {
+                        "Fn::If": [
+                            "CreateConfigRecorder",
+                            {
+                                "Ref": "ConfigurationRecorder"
+                            },
+                            {
+                                "Fn::Sub": "NoConfigRecorder-${AWS::StackName}"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Config-Recorder-Name"
+                }
+            }
+        },
+        "BillingAlarmName": {
+            "Description": "Billing Alarm Name",
+            "Value": {
+                "Fn::If": [
+                    "UseExistingBillingAlarm",
+                    {
+                        "Ref": "ExistingBillingAlarmName"
+                    },
+                    {
+                        "Ref": "BillingAlarm"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Billing-Alarm-Name"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291855",
+  "team": "4",
+  "startedAt": "2025-08-25T17:08:07.633Z",
+  "subtask": "Security Infrastructure Design",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Database Management",
+    "Monitoring Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "IAM",
+    "Security Groups",
+    "KMS",
+    "CloudWatch",
+    "NAT Gateway",
+    "Route Tables",
+    "Elastic IP"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

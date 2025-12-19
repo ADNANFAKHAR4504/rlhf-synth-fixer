@@ -1,0 +1,13 @@
+# Terraform variables for QA testing
+# Using test environment for cost-optimized deployment
+
+environment               = "test"
+environment_suffix        = "qa-test"
+primary_region            = "us-east-1"
+dr_region                 = "us-west-2"
+primary_vpc_cidr          = "10.0.0.0/16"
+dr_vpc_cidr               = "10.1.0.0/16"
+db_name                   = "appdb"
+db_username               = "dbadmin"
+replication_lag_threshold = 60
+backup_retention_period   = 7

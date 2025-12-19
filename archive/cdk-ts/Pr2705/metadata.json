@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349624",
+  "team": "3",
+  "startedAt": "2025-09-04T07:00:33.027Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

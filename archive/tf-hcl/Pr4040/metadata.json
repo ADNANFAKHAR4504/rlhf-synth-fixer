@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "3775",
+  "team": "5",
+  "startedAt": "2025-10-09T15:01:38.852Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "RDS",
+    "KMS",
+    "VPC",
+    "EC2 (Security Groups)",
+    "Secrets Manager",
+    "CloudWatch",
+    "SNS",
+    "Lambda",
+    "EventBridge",
+    "IAM"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}

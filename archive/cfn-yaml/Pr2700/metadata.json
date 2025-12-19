@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292058",
+  "team": "4",
+  "author": "balasl342",
+  "startedAt": "2025-09-04T07:30:09.996Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "KMS",
+    "EC2",
+    "VPC",
+    "IAM",
+    "S3"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

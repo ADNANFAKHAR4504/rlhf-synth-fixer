@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291472",
+  "team": "1",
+  "startedAt": "2025-08-21T18:18:56.894Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Network Configuration",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

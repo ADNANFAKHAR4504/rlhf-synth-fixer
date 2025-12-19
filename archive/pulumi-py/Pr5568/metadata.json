@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349226",
+  "team": "6",
+  "startedAt": "2025-10-31T13:04:39.321Z",
+  "subtask": "Application Deployment",
+  "background": "Pulumiallows developers to define cloud resources using programming languages like Python, enabling infrastructure as code with constructs and high-level abstractions. This challenge will require not only familiarity with the AWS services but also adeptness in using Pulumito translate infrastructure requirements into code.",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "API Gateway",
+    "Step Functions",
+    "S3",
+    "CloudFront",
+    "KMS",
+    "Secrets Manager",
+    "SQS",
+    "CloudWatch",
+    "VPC",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

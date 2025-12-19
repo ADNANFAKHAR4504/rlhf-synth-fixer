@@ -1,0 +1,31 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-11-24T05:52:17+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "a4w0l1",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Lambda",
+    "ALB",
+    "Kinesis",
+    "S3",
+    "IAM",
+    "CloudWatch"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

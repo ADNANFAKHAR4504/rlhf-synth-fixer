@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349030",
+  "team": "3",
+  "startedAt": "2025-09-30T10:57:58.297Z",
+  "task_sub_category": "IaC-Security-Hardening",
+  "use_case_category": "Security, Compliance, and Governance",
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "IAM",
+    "VPC",
+    "EC2",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}

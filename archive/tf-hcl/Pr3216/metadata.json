@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "348974",
+  "team": "5",
+  "startedAt": "2025-10-01T12:53:01.656Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "Amazon RDS",
+    "Amazon VPC",
+    "Amazon EC2",
+    "AWS KMS",
+    "Amazon CloudWatch",
+    "Amazon S3",
+    "AWS IAM"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,101 @@
+======================================================================
+AWS Compliance Monitoring Infrastructure Analysis
+======================================================================
+
+📊 Running Compliance Scan...
+Scan ID: scan-20251203-055524
+Timestamp: 2025-12-03T05:55:24.918262
+
+======================================================================
+COMPLIANCE SUMMARY
+======================================================================
+Total Resources Scanned: 83
+Compliant Resources: 72
+Total Violations: 11
+Overall Compliance Score: 86.75%
+
+Service Compliance Scores:
+  ⚠️ ec2: 80.0%
+  ⚠️ securityGroups: 87.5%
+  ⚠️ s3: 83.33%
+  ✅ iam: 92.0%
+  ⚠️ ebs: 83.33%
+  ✅ vpc: 100.0%
+
+======================================================================
+VIOLATIONS BY SERVICE
+======================================================================
+
+EC2 (3 violations):
+  • EC2 instance i-abc123 using unapproved instance type t3.2xlarge
+  • EC2 instance i-def456 missing required tags
+  • EC2 instance i-ghi789 in non-compliant availability zone
+
+SECURITYGROUPS (1 violations):
+  • Security group sg-abc123 allows unrestricted ingress on port 22
+
+S3 (2 violations):
+  • S3 bucket example-bucket-1 does not have encryption enabled
+  • S3 bucket example-bucket-2 has public read access enabled
+
+IAM (2 violations):
+  • IAM user john.doe has not rotated access keys in 90+ days
+  • IAM role AdminRole has overly permissive policy attached
+
+EBS (3 violations):
+  • EBS volume vol-abc123 is not encrypted
+  • EBS volume vol-def456 is not encrypted
+  • EBS volume vol-ghi789 has no snapshot configured
+
+======================================================================
+AWS CONFIG RULES ANALYSIS
+======================================================================
+Total Rules: 4
+Active Rules: 4
+Average Compliance: 86.65%
+
+Rule Details:
+  • ec2-approved-instance-types: 80.0% compliant
+  • s3-bucket-encryption-enabled: 83.3% compliant
+  • rds-backup-retention-enabled: 100.0% compliant
+  • ebs-volumes-encrypted: 83.3% compliant
+
+======================================================================
+LAMBDA FUNCTIONS ANALYSIS
+======================================================================
+Total Functions: 3
+Deployed Functions: 3
+
+Function Details:
+  • compliance-processing-lambda
+    Purpose: Process Config rule evaluation events
+    Status: DEPLOYED
+  • compliance-aggregation-lambda
+    Purpose: Aggregate compliance data from multiple sources
+    Status: DEPLOYED
+  • compliance-remediation-lambda
+    Purpose: Automatically remediate compliance violations
+    Status: DEPLOYED
+
+======================================================================
+CLOUDWATCH DASHBOARD ANALYSIS
+======================================================================
+Dashboard: ComplianceMonitoring
+Status: ACTIVE
+Widgets: 5
+Metrics Tracked: 5
+
+======================================================================
+OVERALL ASSESSMENT
+======================================================================
+⚠️  GOOD: Infrastructure is mostly compliant with some improvements needed
+
+Recommendations:
+  1. Enable encryption on all S3 buckets and EBS volumes
+  2. Enforce approved EC2 instance types across all deployments
+  3. Implement automated remediation for critical violations
+  4. Review and rotate IAM access keys regularly
+  5. Configure SNS notifications for high-priority violations
+
+✅ Analysis complete. Results saved to /home/runner/work/iac-test-automations/iac-test-automations/lib/analysis-results.txt
+

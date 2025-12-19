@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912429",
+  "team": "synth",
+  "startedAt": "2025-11-17T04:12:51+00:00",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "iac-program-optimization-&-fixes"
+  ],
+  "aws_services": [
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "RDS",
+    "S3",
+    "IAM",
+    "VPC"
+  ],
+  "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,45 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-27T22:34:34+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "6501407126",
+  "aws_services": [
+    "ECS",
+    "RDS",
+    "ElastiCache",
+    "EFS",
+    "API Gateway",
+    "Kinesis",
+    "CodePipeline",
+    "SecretsManager",
+    "NAT Gateway",
+    "VPC",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "S3",
+    "ECR",
+    "CodeCommit",
+    "CodeBuild",
+    "Application Load Balancer",
+    "Lambda"
+  ],
+  "region": "eu-west-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

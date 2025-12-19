@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "8k3zn9",
+  "team": "synth",
+  "startedAt": "2025-11-17T14:00:00.000Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "VPC",
+    "Lambda",
+    "IAM",
+    "API Gateway",
+    "WAF",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "EventBridge",
+    "SNS",
+    "EC2"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,21 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "10000099",
+  "team": "1",
+  "startedAt": "2025-10-07T07:43:38.383Z",
+  "training_quality": "8",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": "S3, Random",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

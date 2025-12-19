@@ -1,4 +1,11 @@
-﻿AWSTemplateFormatVersion: '2010-09-09'
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0abcdef1234567890
+    eu-west-1:
+      AMI: ami-0123456789abcdef0
+
+AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Financial Services Security Infrastructure with Multi-Region Support'
 
 Metadata:

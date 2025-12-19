@@ -1,0 +1,15 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "292093",
+  "team": "6",
+  "startedAt": "2025-08-22T13:10:19.661Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "enyachoke-turing",
+  "dockerS3Location": ""
+}

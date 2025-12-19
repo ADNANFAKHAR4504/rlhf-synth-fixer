@@ -26,14 +26,41 @@ export PULUMI_BACKEND_URL=${PULUMI_BACKEND_URL:-}
 export PULUMI_ORG=${PULUMI_ORG:-organization}
 export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
 
+# Provide non-interactive defaults for TF variables if not set (CI safe)
+export TF_VAR_db_username=${TF_VAR_db_username:-temp_admin}
+export TF_VAR_db_password=${TF_VAR_db_password:-TempPassword123!}
+
 echo "Environment configuration:"
 echo "  Environment suffix: $ENVIRONMENT_SUFFIX"
 echo "  Repository: $REPOSITORY"
 echo "  Commit author: $COMMIT_AUTHOR"
 
+echo "Using TF_VAR_db_username: (set)"
+echo "Using TF_VAR_db_password: (set)"
+
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK bootstrap..."
-  npm run cdk:bootstrap
+  export CURRENT_ACCOUNT_ID=${CURRENT_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}
+
+  # Define all target regions
+  REGIONS=("us-east-1" "us-west-2" "ap-southeast-2" "eu-central-1" "eu-central-2" "eu-west-2")
+
+  echo "🏗️ Bootstrapping Account: $CURRENT_ACCOUNT_ID"
+  echo "Regions: ${REGIONS[*]}"
+
+  for REGION in "${REGIONS[@]}"; do
+    if aws cloudformation describe-stacks --stack-name CDKToolkit --region "$REGION" >/dev/null 2>&1; then
+      echo "✅ CDKToolkit exists in $REGION — skipping bootstrap."
+    else
+      echo "🚀 Bootstrapping $REGION..."
+      npx cdk bootstrap aws://$CURRENT_ACCOUNT_ID/$REGION \
+        --cloudformation-execution-policies arn:aws:iam::aws:policy/AdministratorAccess \
+        --require-approval never
+    fi
+  done
+
+  echo "✅ All target regions checked and bootstrapped where needed."
+  # npm run cdk:bootstrap
 
 elif [ "$PLATFORM" = "pulumi" ]; then
   echo "✅ Pulumi project detected, setting up environment..."
@@ -67,12 +94,12 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   cd lib
   
-  # Set up backend configuration with PR-specific settings (no DynamoDB; use lockfile)
+  # Set up backend configuration with PR-specific settings
   export TF_INIT_OPTS="-backend-config=bucket=${TERRAFORM_STATE_BUCKET} \
       -backend-config=key=$STATE_KEY \
       -backend-config=region=${TERRAFORM_STATE_BUCKET_REGION} \
-      -backend-config=encrypt=true \
-      -backend-config=use_lockfile=true"
+      -backend-config=encrypt=true"
+
   
   # Initialize Terraform (no fallback init without backend)
   echo "Initializing Terraform with PR-specific backend..."
@@ -93,11 +120,23 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   # Run terraform plan
   echo "Running Terraform plan..."
-  if npm run tf:plan; then
-    echo "✅ Terraform plan succeeded"
+  # If task_sub_category indicates multi-env mgmt, read deploy_env from metadata.json
+  # and pass it as -var-file to terraform plan via TF_CLI_ARGS_plan
+  if [ "$(jq -r '.subtask // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
+    DEPLOY_ENV_FILE=$(jq -r '.task_config.deploy_env // ""' ../metadata.json)
+    if [ -n "$DEPLOY_ENV_FILE" ]; then
+      export TF_CLI_ARGS_plan="-var-file=${DEPLOY_ENV_FILE} ${TF_CLI_ARGS_plan:-}"
+      echo "Using metadata var-file: ${DEPLOY_ENV_FILE}"
+      cd .. && npm run tf:plan -var-file=${DEPLOY_ENV_FILE} --silent
+    fi
   else
-    echo "⚠️ Terraform plan failed, but continuing..."
+    if (cd .. && npm run tf:plan --silent); then
+      echo "✅ Terraform plan succeeded"
+    else
+      echo "⚠️ Terraform plan failed, but continuing..."
+    fi
   fi
+  
   
   # Verify the plan was created
   if [ -f "tfplan" ]; then

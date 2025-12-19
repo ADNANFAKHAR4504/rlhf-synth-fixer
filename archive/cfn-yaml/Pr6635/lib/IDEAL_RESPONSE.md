@@ -1,0 +1,613 @@
+# Infrastructure Compliance Validation System - Ideal Solution
+
+## Solution Overview
+
+This document describes the ideal implementation for an infrastructure compliance validation system using AWS CloudFormation with YAML. The solution automatically monitors AWS resources for compliance violations, sends notifications when issues are detected, and maintains comprehensive audit trails.
+
+### File lib/TapStack.yml
+
+```yml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Infrastructure Compliance Validation System
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Unique suffix for resource naming to ensure uniqueness across deployments
+    Default: dev
+    AllowedPattern: ^[a-z0-9-]+$
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+
+  NotificationEmail:
+    Type: String
+    Description: Email address for compliance notifications
+    Default: compliance-team@example.com
+    AllowedPattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+
+Resources:
+  # KMS Key for encryption
+  ComplianceKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub KMS key for compliance validation system encryption ${EnvironmentSuffix}
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow Config to use the key
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              ArnLike:
+                kms:EncryptionContext:aws:logs:arn: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+
+  ComplianceKmsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/compliance-validation-${EnvironmentSuffix}
+      TargetKeyId: !Ref ComplianceKmsKey
+
+  # S3 Bucket for Config data storage
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub config-compliance-data-${EnvironmentSuffix}-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt ComplianceKmsKey.Arn
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldConfigData
+            Status: Enabled
+            ExpirationInDays: 90
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub config-bucket-${EnvironmentSuffix}
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: ComplianceValidation
+
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt ConfigBucket.Arn
+          - Sid: AWSConfigBucketExistenceCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:ListBucket
+            Resource: !GetAtt ConfigBucket.Arn
+          - Sid: AWSConfigBucketPutObject
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub ${ConfigBucket.Arn}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub ${ConfigBucket.Arn}/*
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: aws:kms
+
+  # SNS Topic for compliance notifications
+  ComplianceNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub compliance-notifications-${EnvironmentSuffix}
+      DisplayName: Compliance Validation Notifications
+      KmsMasterKeyId: !Ref ComplianceKmsKey
+      Subscription:
+        - Endpoint: !Ref NotificationEmail
+          Protocol: email
+      Tags:
+        - Key: Name
+          Value: !Sub compliance-topic-${EnvironmentSuffix}
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ComplianceNotificationTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref ComplianceNotificationTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowConfigToPublish
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: SNS:Publish
+            Resource: !Ref ComplianceNotificationTopic
+
+  # Note: AWS Config Recorder and Delivery Channel already exist in this account
+  # Using existing Config setup: config-recorder-pr6611 and config-delivery-pr6611
+  # Config Rules below will use the existing Config infrastructure
+
+  # CloudWatch Log Group for Lambda functions
+  ComplianceLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/compliance-validator-${EnvironmentSuffix}
+      RetentionInDays: 14
+      KmsKeyId: !GetAtt ComplianceKmsKey.Arn
+
+  # IAM Role for Lambda functions
+  ComplianceLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub compliance-lambda-role-${EnvironmentSuffix}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSConfigRulesExecutionRole
+      Policies:
+        - PolicyName: LambdaLogging
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt ComplianceLambdaLogGroup.Arn
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt ComplianceKmsKey.Arn
+        - PolicyName: ConfigCompliance
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:PutEvaluations
+                  - config:GetResourceConfigHistory
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ec2:Describe*
+                  - s3:GetEncryptionConfiguration
+                  - s3:GetBucketPublicAccessBlock
+                  - s3:GetBucketVersioning
+                  - rds:Describe*
+                  - kms:DescribeKey
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub compliance-lambda-role-${EnvironmentSuffix}
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda function for custom compliance validation
+  CustomComplianceValidatorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub compliance-validator-${EnvironmentSuffix}
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt ComplianceLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          ENVIRONMENT_SUFFIX: !Ref EnvironmentSuffix
+          SNS_TOPIC_ARN: !Ref ComplianceNotificationTopic
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          from datetime import datetime
+
+          config = boto3.client('config')
+          ec2 = boto3.client('ec2')
+          s3 = boto3.client('s3')
+
+          def lambda_handler(event, context):
+              """
+              Custom compliance validator for AWS resources.
+              Evaluates resource configurations and returns compliance status.
+              """
+              print(f"Received event: {json.dumps(event)}")
+
+              # Extract parameters from event
+              invoking_event = json.loads(event['invokingEvent'])
+              rule_parameters = json.loads(event.get('ruleParameters', '{}'))
+              configuration_item = invoking_event.get('configurationItem', {})
+
+              # Resource details
+              resource_type = configuration_item.get('resourceType')
+              resource_id = configuration_item.get('resourceId')
+
+              print(f"Evaluating {resource_type}: {resource_id}")
+
+              # Initialize compliance status
+              compliance_type = 'COMPLIANT'
+              annotation = 'Resource is compliant'
+
+              try:
+                  # Evaluate based on resource type
+                  if resource_type == 'AWS::S3::Bucket':
+                      compliance_type, annotation = evaluate_s3_bucket(resource_id, configuration_item)
+                  elif resource_type == 'AWS::EC2::SecurityGroup':
+                      compliance_type, annotation = evaluate_security_group(resource_id, configuration_item)
+                  elif resource_type == 'AWS::EC2::Instance':
+                      compliance_type, annotation = evaluate_ec2_instance(resource_id, configuration_item)
+                  else:
+                      compliance_type = 'NOT_APPLICABLE'
+                      annotation = f'No custom validation for {resource_type}'
+
+              except Exception as e:
+                  print(f"Error evaluating resource: {str(e)}")
+                  compliance_type = 'NON_COMPLIANT'
+                  annotation = f'Error during evaluation: {str(e)}'
+
+              # Submit evaluation result
+              evaluation = {
+                  'ComplianceResourceType': resource_type,
+                  'ComplianceResourceId': resource_id,
+                  'ComplianceType': compliance_type,
+                  'Annotation': annotation,
+                  'OrderingTimestamp': datetime.now()
+              }
+
+              response = config.put_evaluations(
+                  Evaluations=[evaluation],
+                  ResultToken=event['resultToken']
+              )
+
+              print(f"Evaluation result: {compliance_type} - {annotation}")
+              return response
+
+          def evaluate_s3_bucket(bucket_name, config_item):
+              """Evaluate S3 bucket compliance"""
+              try:
+                  # Check encryption
+                  try:
+                      s3.get_bucket_encryption(Bucket=bucket_name)
+                  except s3.exceptions.ServerSideEncryptionConfigurationNotFoundError:
+                      return 'NON_COMPLIANT', 'S3 bucket does not have encryption enabled'
+
+                  # Check public access block
+                  try:
+                      public_access = s3.get_public_access_block(Bucket=bucket_name)
+                      block_config = public_access['PublicAccessBlockConfiguration']
+                      if not all([
+                          block_config.get('BlockPublicAcls'),
+                          block_config.get('BlockPublicPolicy'),
+                          block_config.get('IgnorePublicAcls'),
+                          block_config.get('RestrictPublicBuckets')
+                      ]):
+                          return 'NON_COMPLIANT', 'S3 bucket does not have all public access blocks enabled'
+                  except:
+                      return 'NON_COMPLIANT', 'S3 bucket does not have public access block configured'
+
+                  # Check versioning
+                  try:
+                      versioning = s3.get_bucket_versioning(Bucket=bucket_name)
+                      if versioning.get('Status') != 'Enabled':
+                          return 'NON_COMPLIANT', 'S3 bucket does not have versioning enabled'
+                  except:
+                      return 'NON_COMPLIANT', 'Could not verify S3 bucket versioning'
+
+                  return 'COMPLIANT', 'S3 bucket meets all compliance requirements'
+              except Exception as e:
+                  return 'NON_COMPLIANT', f'Error evaluating S3 bucket: {str(e)}'
+
+          def evaluate_security_group(sg_id, config_item):
+              """Evaluate Security Group compliance"""
+              try:
+                  configuration = config_item.get('configuration', {})
+                  ip_permissions = configuration.get('ipPermissions', [])
+
+                  # Check for unrestricted inbound rules
+                  for rule in ip_permissions:
+                      for ip_range in rule.get('ipv4Ranges', []):
+                          if ip_range.get('cidrIp') == '0.0.0.0/0':
+                              from_port = rule.get('fromPort', 0)
+                              to_port = rule.get('toPort', 65535)
+                              # Allow only specific ports to be open to internet
+                              if from_port not in [80, 443]:
+                                  return 'NON_COMPLIANT', f'Security group has unrestricted access on port {from_port}'
+
+                  return 'COMPLIANT', 'Security group has appropriate restrictions'
+              except Exception as e:
+                  return 'NON_COMPLIANT', f'Error evaluating security group: {str(e)}'
+
+          def evaluate_ec2_instance(instance_id, config_item):
+              """Evaluate EC2 instance compliance"""
+              try:
+                  configuration = config_item.get('configuration', {})
+
+                  # Check if instance has required tags
+                  tags = configuration.get('tags', [])
+                  required_tags = ['Environment', 'Owner', 'CostCenter']
+                  existing_tag_keys = [tag.get('key') for tag in tags]
+
+                  missing_tags = [tag for tag in required_tags if tag not in existing_tag_keys]
+                  if missing_tags:
+                      return 'NON_COMPLIANT', f'EC2 instance missing required tags: {", ".join(missing_tags)}'
+
+                  # Check if monitoring is enabled
+                  monitoring = configuration.get('monitoring', {}).get('state')
+                  if monitoring != 'enabled':
+                      return 'NON_COMPLIANT', 'EC2 instance does not have detailed monitoring enabled'
+
+                  return 'COMPLIANT', 'EC2 instance meets all compliance requirements'
+              except Exception as e:
+                  return 'NON_COMPLIANT', f'Error evaluating EC2 instance: {str(e)}'
+      Tags:
+        - Key: Name
+          Value: !Sub compliance-validator-${EnvironmentSuffix}
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Permission for Config to invoke Lambda
+  ComplianceLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CustomComplianceValidatorFunction
+      Action: lambda:InvokeFunction
+      Principal: config.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+
+  # AWS Managed Config Rule - S3 Bucket Encryption
+  S3BucketEncryptionRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub s3-bucket-encryption-${EnvironmentSuffix}
+      Description: Checks that S3 buckets have encryption enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+
+  # AWS Managed Config Rule - S3 Bucket Public Access
+  S3BucketPublicAccessRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub s3-bucket-public-access-${EnvironmentSuffix}
+      Description: Checks that S3 buckets do not allow public access
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
+
+  # AWS Managed Config Rule - RDS Encryption
+  RDSEncryptionRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub rds-encryption-enabled-${EnvironmentSuffix}
+      Description: Checks that RDS instances have encryption enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: RDS_STORAGE_ENCRYPTED
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::RDS::DBInstance
+
+  # AWS Managed Config Rule - EBS Encryption
+  EBSEncryptionRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub ec2-ebs-encryption-${EnvironmentSuffix}
+      Description: Checks that EBS volumes are encrypted
+      Source:
+        Owner: AWS
+        SourceIdentifier: ENCRYPTED_VOLUMES
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::EC2::Volume
+
+  # AWS Managed Config Rule - Required Tags
+  RequiredTagsRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub required-tags-${EnvironmentSuffix}
+      Description: Checks that resources have required tags
+      InputParameters:
+        tag1Key: Environment
+        tag2Key: Owner
+        tag3Key: CostCenter
+      Source:
+        Owner: AWS
+        SourceIdentifier: REQUIRED_TAGS
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::EC2::Instance
+          - AWS::S3::Bucket
+          - AWS::RDS::DBInstance
+
+  # AWS Managed Config Rule - VPC Flow Logs
+  VPCFlowLogsRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub vpc-flow-logs-enabled-${EnvironmentSuffix}
+      Description: Checks that VPC Flow Logs are enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: VPC_FLOW_LOGS_ENABLED
+
+  # Custom Config Rule using Lambda
+  CustomComplianceRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ComplianceLambdaPermission
+    Properties:
+      ConfigRuleName: !Sub custom-compliance-validation-${EnvironmentSuffix}
+      Description: Custom compliance validation for resources
+      Source:
+        Owner: CUSTOM_LAMBDA
+        SourceIdentifier: !GetAtt CustomComplianceValidatorFunction.Arn
+        SourceDetails:
+          - EventSource: aws.config
+            MessageType: ConfigurationItemChangeNotification
+          - EventSource: aws.config
+            MessageType: OversizedConfigurationItemChangeNotification
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+          - AWS::EC2::SecurityGroup
+          - AWS::EC2::Instance
+
+  # CloudWatch Alarm for non-compliant resources
+  NonCompliantResourcesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub compliance-violations-${EnvironmentSuffix}
+      AlarmDescription: Alert when non-compliant resources are detected
+      MetricName: NonCompliantResources
+      Namespace: AWS/Config
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref ComplianceNotificationTopic
+
+  # CloudWatch Alarm for Config Recorder
+  ConfigRecorderFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub config-recorder-failure-${EnvironmentSuffix}
+      AlarmDescription: Alert when Config Recorder fails
+      MetricName: ConfigurationRecorderError
+      Namespace: AWS/Config
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref ComplianceNotificationTopic
+
+Outputs:
+  ConfigBucketName:
+    Description: S3 bucket for Config data storage
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-ConfigBucket
+
+  ComplianceNotificationTopicArn:
+    Description: SNS topic ARN for compliance notifications
+    Value: !Ref ComplianceNotificationTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-NotificationTopic
+
+  CustomComplianceFunctionArn:
+    Description: Lambda function ARN for custom compliance validation
+    Value: !GetAtt CustomComplianceValidatorFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-ComplianceFunction
+
+  KmsKeyId:
+    Description: KMS Key ID for encryption
+    Value: !Ref ComplianceKmsKey
+    Export:
+      Name: !Sub ${AWS::StackName}-KmsKey
+
+  ComplianceRuleNames:
+    Description: List of Config Rule names
+    Value: !Sub |
+      - ${S3BucketEncryptionRule}
+      - ${S3BucketPublicAccessRule}
+      - ${RDSEncryptionRule}
+      - ${EBSEncryptionRule}
+      - ${RequiredTagsRule}
+      - ${VPCFlowLogsRule}
+      - ${CustomComplianceRule}
+```
+
+## Architecture
+
+### System Components
+
+1. **AWS Config** - Core compliance monitoring service
+   - Configuration Recorder: Continuously records resource configurations
+   - Delivery Channel: Delivers configuration snapshots and changes to S3 and SNS
+   - Recording Scope: All supported resource types including global resources
+
+2. **Compliance Rules** - Automated compliance checks
+   - 6 AWS-managed Config Rules for standard compliance checks
+   - 1 Custom Lambda-backed Config Rule for organization-specific validations
+   - Covers S3, EC2, RDS, EBS, VPC, and tagging compliance
+
+3. **Lambda Function** - Custom compliance validation logic
+   - Python 3.11 runtime for modern language features
+   - Evaluates S3 buckets, Security Groups, and EC2 instances
+   - Extensible design for adding new validation types
+
+4. **Storage and Notifications**
+   - S3 bucket with encryption, versioning, and lifecycle policies
+   - SNS topic with KMS encryption for real-time notifications
+   - Email subscriptions for compliance team alerts
+
+5. **Security Layer**
+   - KMS key with automatic rotation for data encryption
+   - IAM roles with least-privilege permissions
+   - All data encrypted in transit and at rest
+
+6. **Monitoring and Alerting**
+   - CloudWatch Logs for Lambda execution logs (14-day retention)
+   - CloudWatch Alarms for compliance violations and system failures
+   - Integrated with SNS for immediate notification

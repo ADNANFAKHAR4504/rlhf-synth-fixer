@@ -1,0 +1,22 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350097",
+  "team": "3",
+  "startedAt": "2025-10-14T10:11:26.497Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "kms, s3, vpc, nacl, rds, waf, cloudtrail, alb, ebs, iam",
+  "training_quality": 8,
+  "background": "Create production-grade AWS CloudFormation template with comprehensive security controls including VPC, ALB, EC2, RDS, WAF, CloudTrail, AWS Config, KMS encryption, automated backups, and IAM key rotation for Security, Compliance and Governance",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "misra-s-turing",
+  "dockerS3Location": ""
+}

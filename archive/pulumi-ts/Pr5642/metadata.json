@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-03T00:00:00Z",
+  "po_id": "ivgp2a",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Lambda",
+    "SecretsManager",
+    "SNS",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "NetworkFirewall",
+    "Transfer",
+    "AppRunner",
+    "FIS",
+    "RAM"
+  ],
+  "training_quality": 9,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

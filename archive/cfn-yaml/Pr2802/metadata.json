@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348904",
+  "team": "5",
+  "startedAt": "2025-09-05T15:56:25.165Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA",
+    "Database Management"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "IAM",
+    "Lambda",
+    "EventBridge",
+    "Auto Scaling",
+    "NAT Gateway",
+    "Internet Gateway",
+    "RDS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "waqara-turing",
+  "dockerS3Location": ""
+}

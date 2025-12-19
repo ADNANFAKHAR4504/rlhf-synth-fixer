@@ -1,7 +1,7 @@
 locals {
   # Add environment suffix to project name for unique naming
   project_prefix = "${var.project_name}-${var.environment_suffix}"
-  
+
   common_tags = {
     environment = "multi"
     owner       = var.owner

@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912094",
+  "team": "4",
+  "startedAt": "2025-11-25T19:23:35.048Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Transit Gateway",
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "VPC Peering",
+    "Transit Gateway Peering",
+    "Network ACLs",
+    "Flow Logs",
+    "CloudWatch Logs",
+    "Elastic IPs",
+    "IAM Roles/Policies",
+    "CloudWatch Log Groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

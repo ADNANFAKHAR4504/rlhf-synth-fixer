@@ -1,0 +1,44 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912118",
+  "team": "4",
+  "startedAt": "2025-11-17T06:23:37.952Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "KMS",
+    "VPC",
+    "S3",
+    "CloudTrail",
+    "Config",
+    "GuardDuty",
+    "WAF",
+    "SNS",
+    "CloudWatch",
+    "IAM",
+    "ALB",
+    "SSM",
+    "Secrets Manager",
+    "VPC Flow Logs",
+    "Security Groups",
+    "Subnets",
+    "Route Tables",
+    "Internet Gateway",
+    "NAT Gateway",
+    "EIP",
+    "EventBridge"
+  ],
+  "training_quality": 9,
+  "background": "A financial services company requires a PCI-DSS compliant payment processing platform on AWS. The infrastructure must implement zero-trust security architecture with complete network isolation, encryption at rest and in transit, comprehensive audit logging, threat detection, and compliance monitoring across multiple AWS regions (us-east-1 and us-west-2).",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

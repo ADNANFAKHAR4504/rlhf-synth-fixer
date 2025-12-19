@@ -1,0 +1,1107 @@
+**ideal_response.md**
+
+# Objective
+
+Produce a single, production-ready `TapStack.yml` CloudFormation template (YAML only) that builds a brand-new, corp-compliant security baseline using best practices, without referencing or depending on pre-existing resources.
+
+# Functional scope (build everything new):
+
+* Create a new VPC with private subnets by default, optional public subnets via parameter, VPC Flow Logs to CloudWatch, and conditional NAT.
+* Provision a default-deny EC2 security group, an EC2 launch template with no public IPs and IMDSv2 required.
+* Create encrypted S3 buckets (logs and data) with versioning, ownership controls, and public-access blocks; enforce TLS and safe server-side encryption posture.
+* Stand up multi-region CloudTrail writing to the logs bucket and (optionally) CloudWatch Logs, using a CMK with correct service permissions.
+* Enable AWS Config with a working recorder→channel sequence and baseline managed rules for S3, EC2 IMDSv2, and RDS encryption.
+* Deploy an encrypted RDS PostgreSQL instance (engine selected by AWS, parameter group family set to `postgres17`), auto minor upgrades on, deletion protection configurable, password managed by Secrets Manager.
+* Enable GuardDuty in the region with recommended data sources.
+
+# Constraints & security baseline
+
+* All S3 buckets must be encrypted at rest by default.
+* IAM roles adhere to least-privilege while enabling required service operations.
+* EC2 instances must not receive public IPs.
+* Subnets are private by default; public subnets created only when explicitly requested.
+* Enforce IMDSv2 and disable IMDSv1 token behavior on EC2.
+* RDS must have automatic minor version upgrades enabled.
+* CloudTrail must be enabled for all applicable regions and write to an encrypted destination with correct S3/KMS permissions.
+* AWS Config rules must exist and the service must be fully wired (recorder + channel) as part of the stack.
+* Default security groups must deny inbound traffic.
+* GuardDuty must be enabled with appropriate detector and data sources.
+* Parameters must include validation (patterns, ranges), with safe defaults to avoid deployment prompts.
+
+# Environment & naming
+
+* Regions limited to `us-east-1` and `us-west-2` via a Rule.
+* All logical resource names and tags follow `corp-*` convention and include `ENVIRONMENT_SUFFIX` in tag values to avoid cross-deployment conflicts.
+* No explicit physical names (e.g., `BucketName`, `DBInstanceIdentifier`) to avoid EarlyValidation resource-existence collisions.
+
+# Parameterization & validation
+
+* Provide initialized parameters for network CIDRs, RDS class/storage, Multi-AZ and deletion protection toggles, egress CIDR, and CloudTrail→CloudWatch toggle.
+* Validate `EnvironmentSuffix` via a safe regex (no hard AllowedValues).
+* Validate CIDR formats and instance class patterns with constraints.
+* Do not require CLI parameter injection; every parameter must have a sane default compatible with first-attempt deployment.
+
+# Implementation requirements (YAML only)
+
+* Use Conditions to control creation of public subnets, NAT gateway, CloudTrail→CloudWatch wiring, RDS Multi-AZ, and deletion protection.
+* Use a single KMS CMK with rotation enabled and explicit statements for CloudTrail encryption context.
+* S3 bucket policies must allow CloudTrail and AWS Config to write with bucket-owner-full-control ACL and enforce TLS.
+* AWS Config role must allow `PutObject`/`PutObjectAcl` to the logs bucket prefix; delivery channel and recorder must be created in a safe order that avoids circular availability failures.
+* RDS engine version is not hard-pinned; parameter group family is set to `postgres17` to match current regional defaults.
+
+# Deliverable
+
+* One file: `TapStack.yml` (pure YAML) containing parameters, conditions, resources, and outputs for the full baseline.
+* No code snippets outside YAML, no external dependencies, and no references to existing resources.
+
+# Acceptance criteria
+
+* Passes cfn-lint with no errors and only acceptable warnings.
+* Succeeds in first deployment via pipeline with EarlyValidation enabled (no physical-name collisions).
+* Produces working CloudTrail, AWS Config (recorder + delivery channel + rules), RDS, GuardDuty, and VPC/EC2 hardening as specified.
+
+```yaml
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  TapStack — corp-* security-hardened baseline. Creates a new VPC (private subnets
+  by default), security-first EC2 launch template (no public IP, IMDSv2 required),
+  encrypted S3 buckets, least-privilege IAM roles, encrypted RDS with auto minor
+  upgrades, multi-region CloudTrail, AWS Config recorder + rules, GuardDuty
+  detector, and default-deny security groups. Designed for us-east-1 / us-west-2.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Project and Environment"
+        Parameters:
+          - ProjectName
+          - EnvironmentSuffix
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - VpcCidr
+          - PrivateSubnetACidr
+          - PrivateSubnetBCidr
+          - PublicSubnetACidr
+          - PublicSubnetBCidr
+          - CreatePublicSubnets
+          - EnableNatGateway
+      - Label:
+          default: "RDS Configuration"
+        Parameters:
+          - RdsInstanceClass
+          - RdsAllocatedStorage
+          - RdsMultiAZ
+          - RdsDeletionProtection
+          - RdsMasterUsername
+      - Label:
+          default: "Security and Logging"
+        Parameters:
+          - AllowedEgressCidr
+          - CloudTrailToCloudWatch
+    ParameterLabels:
+      ProjectName:
+        default: "Project name (used in tags only)"
+      EnvironmentSuffix:
+        default: "Environment suffix (e.g., prod-us, production, qa)"
+      VpcCidr:
+        default: "VPC CIDR"
+      PrivateSubnetACidr:
+        default: "Private Subnet A CIDR"
+      PrivateSubnetBCidr:
+        default: "Private Subnet B CIDR"
+      PublicSubnetACidr:
+        default: "Public Subnet A CIDR (optional)"
+      PublicSubnetBCidr:
+        default: "Public Subnet B CIDR (optional)"
+      CreatePublicSubnets:
+        default: "Create public subnets"
+      EnableNatGateway:
+        default: "Enable NAT gateway for private subnets"
+      RdsInstanceClass:
+        default: "RDS instance class"
+      RdsAllocatedStorage:
+        default: "RDS allocated storage (GiB)"
+      RdsMultiAZ:
+        default: "Enable Multi-AZ for RDS"
+      RdsDeletionProtection:
+        default: "Enable deletion protection for RDS"
+      AllowedEgressCidr:
+        default: "Default egress CIDR for security groups"
+      CloudTrailToCloudWatch:
+        default: "Send CloudTrail to CloudWatch Logs"
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: tapstack
+    AllowedPattern: '^[a-z0-9-]{3,20}$'
+    ConstraintDescription: "Lowercase letters, numbers, and hyphens; 3–20 characters."
+    Description: "Logical project name used in tags and descriptions (corp-* naming applied via tags)."
+
+  EnvironmentSuffix:
+    Type: String
+    Default: prod-us
+    AllowedPattern: '^[a-z0-9](?:[a-z0-9-]{0,18}[a-z0-9])$'
+    ConstraintDescription: "Lowercase alphanumeric, may contain hyphens, 1–20 characters, no trailing hyphen."
+    Description: "Safe environment suffix (examples: prod-us, production, qa, dev-usw2)."
+
+  VpcCidr:
+    Type: String
+    Default: 10.50.0.0/16
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    ConstraintDescription: "Must be a valid IPv4 CIDR block, e.g. 10.50.0.0/16."
+    Description: "Primary CIDR block for the VPC."
+
+  PrivateSubnetACidr:
+    Type: String
+    Default: 10.50.1.0/24
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    ConstraintDescription: "Must be a valid IPv4 CIDR block."
+    Description: "CIDR block for private subnet A (AZ 0)."
+
+  PrivateSubnetBCidr:
+    Type: String
+    Default: 10.50.2.0/24
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    ConstraintDescription: "Must be a valid IPv4 CIDR block."
+    Description: "CIDR block for private subnet B (AZ 1)."
+
+  PublicSubnetACidr:
+    Type: String
+    Default: 10.50.101.0/24
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    ConstraintDescription: "Must be a valid IPv4 CIDR block."
+    Description: "CIDR block for public subnet A (optional, AZ 0)."
+
+  PublicSubnetBCidr:
+    Type: String
+    Default: 10.50.102.0/24
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    ConstraintDescription: "Must be a valid IPv4 CID4 block."
+    Description: "CIDR block for public subnet B (optional, AZ 1)."
+
+  CreatePublicSubnets:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: "Controls creation of public subnets. Private-only by default."
+
+  EnableNatGateway:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: "Controls NAT gateway for private subnet egress. Ignored if no public subnets."
+
+  RdsInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    AllowedPattern: '^db\.[a-z0-9]+\.[a-z0-9]+$'
+    ConstraintDescription: "Must be a valid RDS instance class, e.g. db.t3.micro."
+    Description: "RDS instance class for the primary database."
+
+  RdsAllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    MaxValue: 6144
+    Description: "Allocated storage in GiB for the RDS instance."
+
+  RdsMultiAZ:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: "Enables Multi-AZ deployment for RDS."
+
+  RdsDeletionProtection:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: "Protects the RDS instance from accidental deletion."
+
+  RdsMasterUsername:
+    Type: String
+    Default: tapstackadmin
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]*$'
+    ConstraintDescription: "Must start with a letter, contain only letters, digits, or underscore, and be 1–16 characters."
+    Description: "RDS master username. Password will be managed automatically by RDS in Secrets Manager."
+
+  AllowedEgressCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    ConstraintDescription: "Must be a valid IPv4 CIDR block."
+    Description: "Default outbound CIDR for security groups (locked down inbound only)."
+
+  CloudTrailToCloudWatch:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: "If 'true', sends CloudTrail events to CloudWatch Logs in addition to S3."
+
+Rules:
+  RegionRule:
+    Assertions:
+      - Assert:
+          'Fn::Or':
+            - 'Fn::Equals':
+                - !Ref 'AWS::Region'
+                - us-east-1
+            - 'Fn::Equals':
+                - !Ref 'AWS::Region'
+                - us-west-2
+        AssertDescription: "Template can only be deployed in us-east-1 or us-west-2."
+
+Conditions:
+  CreatePublicSubnetsCondition: !Equals [!Ref CreatePublicSubnets, 'true']
+  CreateNatGatewayCondition: !And
+    - !Equals [!Ref EnableNatGateway, 'true']
+    - !Condition CreatePublicSubnetsCondition
+  UseMultiAzRds: !Equals [!Ref RdsMultiAZ, 'true']
+  UseRdsDeletionProtection: !Equals [!Ref RdsDeletionProtection, 'true']
+  UseCloudWatchForTrail: !Equals [!Ref CloudTrailToCloudWatch, 'true']
+
+Resources:
+
+  KmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "corp-${ProjectName}-${EnvironmentSuffix} shared encryption key for S3, RDS, CloudTrail"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: AllowCloudTrailEncrypt
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:Encrypt
+            Resource: "*"
+            Condition:
+              StringLike:
+                "kms:EncryptionContext:aws:cloudtrail:arn": !Sub "arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*"
+          - Sid: AllowCloudTrailDescribe
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:DescribeKey
+            Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-kms"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  KmsAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/corp-${ProjectName}-${EnvironmentSuffix}-primary"
+      TargetKeyId: !Ref KmsKey
+
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-vpc"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  VpcFlowLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 365
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-vpc-flowlogs"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  VpcFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: VpcFlowLogsToCloudWatch
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-vpc-flowlogs-role"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  VpcFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId: !Ref Vpc
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref VpcFlowLogsLogGroup
+      DeliverLogsPermissionArn: !GetAtt VpcFlowLogRole.Arn
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PrivateSubnetACidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-private-a"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PrivateSubnetBCidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-private-b"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-private-rt-a"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-private-rt-b"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnetRouteTableAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTableA
+
+  PrivateSubnetRouteTableAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTableB
+
+  InternetGateway:
+    Condition: CreatePublicSubnetsCondition
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-igw"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  VpcGatewayAttachment:
+    Condition: CreatePublicSubnetsCondition
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnetA:
+    Condition: CreatePublicSubnetsCondition
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnetACidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-public-a"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnetB:
+    Condition: CreatePublicSubnetsCondition
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnetBCidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-public-b"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  PublicRouteTable:
+    Condition: CreatePublicSubnetsCondition
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-public-rt"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  PublicRoute:
+    Condition: CreatePublicSubnetsCondition
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociationA:
+    Condition: CreatePublicSubnetsCondition
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociationB:
+    Condition: CreatePublicSubnetsCondition
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  NatEipA:
+    Condition: CreateNatGatewayCondition
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGatewayA:
+    Condition: CreateNatGatewayCondition
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipA.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-nat-a"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  NatRoutePrivateA:
+    Condition: CreateNatGatewayCondition
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayA
+
+  NatRoutePrivateB:
+    Condition: CreateNatGatewayCondition
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayA
+
+  AppSecurityGroupDefaultDeny:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Default-deny SG for application instances (no inbound)."
+      VpcId: !Ref Vpc
+      SecurityGroupIngress: []
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: !Ref AllowedEgressCidr
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-sg-app-default-deny"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  Ec2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: Ec2LimitedAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - "arn:aws:s3:::*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-ec2-role"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  Ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref Ec2InstanceRole
+
+  AppLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt Ec2InstanceProfile.Arn
+        InstanceType: t3.micro
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: false
+            Groups:
+              - !Ref AppSecurityGroupDefaultDeny
+        MetadataOptions:
+          HttpTokens: required
+          HttpEndpoint: enabled
+          HttpPutResponseHopLimit: 1
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+              KmsKeyId: !GetAtt KmsKey.Arn
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-app"
+              - Key: ProjectName
+                Value: !Ref ProjectName
+              - Key: EnvironmentSuffix
+                Value: !Ref EnvironmentSuffix
+
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt KmsKey.Arn
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-logs-bucket"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  LoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LoggingBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudTrailGetBucketAcl
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub "arn:aws:s3:::${LoggingBucket}"
+          - Sid: AllowCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${LoggingBucket}/cloudtrail/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          # AWS Config access to this bucket (when using service principal fallback)
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+              - s3:ListBucket
+            Resource: !Sub "arn:aws:s3:::${LoggingBucket}"
+          - Sid: AWSConfigBucketDelivery
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${LoggingBucket}/AWSLogs/*/*"
+          - Sid: EnforceTLS
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !Sub "arn:aws:s3:::${LoggingBucket}"
+              - !Sub "arn:aws:s3:::${LoggingBucket}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt KmsKey.Arn
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-data-bucket"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  DataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnforceTLS
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !Sub "arn:aws:s3:::${DataBucket}"
+              - !Sub "arn:aws:s3:::${DataBucket}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+          - Sid: EnforceSseKms
+            Effect: Deny
+            Principal: "*"
+            Action:
+              - s3:PutObject
+            Resource:
+              - !Sub "arn:aws:s3:::${DataBucket}/*"
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: aws:kms
+
+  TrailLogGroup:
+    Condition: UseCloudWatchForTrail
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 365
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-cloudtrail"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  CloudTrailRole:
+    Condition: UseCloudWatchForTrail
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudTrailToCloudWatch
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-cloudtrail-role"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - LoggingBucketPolicy
+    Properties:
+      S3BucketName: !Ref LoggingBucket
+      S3KeyPrefix: cloudtrail
+      IsLogging: true
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      EnableLogFileValidation: true
+      KMSKeyId: !GetAtt KmsKey.Arn
+      CloudWatchLogsLogGroupArn: !If
+        - UseCloudWatchForTrail
+        - !GetAtt TrailLogGroup.Arn
+        - !Ref "AWS::NoValue"
+      CloudWatchLogsRoleArn: !If
+        - UseCloudWatchForTrail
+        - !GetAtt CloudTrailRole.Arn
+        - !Ref "AWS::NoValue"
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-trail"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  RdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "corp-${ProjectName}-${EnvironmentSuffix} RDS subnet group"
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-rds-subnets"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  RdsParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: !Sub "corp-${ProjectName}-${EnvironmentSuffix} RDS parameter group"
+      Family: postgres17
+      Parameters:
+        max_connections: '100'
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-rds-params"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  RdsInstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "RDS SG (no inbound by default)."
+      VpcId: !Ref Vpc
+      SecurityGroupIngress: []
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: !Ref AllowedEgressCidr
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-sg-rds"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  RdsInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: postgres
+      DBSubnetGroupName: !Ref RdsSubnetGroup
+      DBParameterGroupName: !Ref RdsParameterGroup
+      VPCSecurityGroups:
+        - !Ref RdsInstanceSecurityGroup
+      AllocatedStorage: !Ref RdsAllocatedStorage
+      DBInstanceClass: !Ref RdsInstanceClass
+      MasterUsername: !Ref RdsMasterUsername
+      ManageMasterUserPassword: true
+      MultiAZ: !If [UseMultiAzRds, true, false]
+      AutoMinorVersionUpgrade: true
+      StorageEncrypted: true
+      KmsKeyId: !GetAtt KmsKey.Arn
+      DeletionProtection: !If [UseRdsDeletionProtection, true, false]
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      CopyTagsToSnapshot: true
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-rds"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  ConfigServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AwsConfigDeliveryPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # IAM role permissions to write to the logging bucket
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource:
+                  - !Sub "arn:aws:s3:::${LoggingBucket}/AWSLogs/*/*"
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketAcl
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${LoggingBucket}"
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-config-role"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      RoleARN: !GetAtt ConfigServiceRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      S3BucketName: !Ref LoggingBucket
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
+  ConfigRuleS3BucketEncryptionEnabled:
+    Type: AWS::Config::ConfigRule
+    DependsOn:
+      - ConfigRecorder
+      - ConfigDeliveryChannel
+    Properties:
+      ConfigRuleName: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-s3-encryption"
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+      Scope:
+        ComplianceResourceTypes:
+          - "AWS::S3::Bucket"
+
+  ConfigRuleEc2Imdsv2Required:
+    Type: AWS::Config::ConfigRule
+    DependsOn:
+      - ConfigRecorder
+      - ConfigDeliveryChannel
+    Properties:
+      ConfigRuleName: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-ec2-imdsv2"
+      Source:
+        Owner: AWS
+        SourceIdentifier: EC2_IMDSV2_CHECK
+      Scope:
+        ComplianceResourceTypes:
+          - "AWS::EC2::Instance"
+
+  ConfigRuleRdsStorageEncrypted:
+    Type: AWS::Config::ConfigRule
+    DependsOn:
+      - ConfigRecorder
+      - ConfigDeliveryChannel
+    Properties:
+      ConfigRuleName: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-rds-encrypted"
+      Source:
+        Owner: AWS
+        SourceIdentifier: RDS_STORAGE_ENCRYPTED
+      Scope:
+        ComplianceResourceTypes:
+          - "AWS::RDS::DBInstance"
+
+  GuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+      DataSources:
+        S3Logs:
+          Enable: true
+        Kubernetes:
+          AuditLogs:
+            Enable: true
+        MalwareProtection:
+          ScanEc2InstanceWithFindings:
+            EbsVolumes: true
+      Tags:
+        - Key: Name
+          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-guardduty"
+        - Key: ProjectName
+          Value: !Ref ProjectName
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+Outputs:
+  VpcId:
+    Description: "ID of the created VPC."
+    Value: !Ref Vpc
+    Export:
+      Name: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-vpc-id"
+
+  PrivateSubnetIds:
+    Description: "Private subnet IDs."
+    Value: !Join
+      - ","
+      - - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+
+  AppLaunchTemplateId:
+    Description: "EC2 launch template ID with IMDSv2 and no public IP."
+    Value: !Ref AppLaunchTemplate
+
+  AppSecurityGroupId:
+    Description: "Default-deny application security group ID."
+    Value: !Ref AppSecurityGroupDefaultDeny
+
+  DataBucketName:
+    Description: "S3 data bucket with enforced encryption and BPA."
+    Value: !Ref DataBucket
+
+  LoggingBucketName:
+    Description: "Centralized logging bucket used by CloudTrail and Config."
+    Value: !Ref LoggingBucket
+
+  RdsEndpointAddress:
+    Description: "RDS instance endpoint address."
+    Value: !GetAtt RdsInstance.Endpoint.Address
+
+  CloudTrailArn:
+    Description: "ARN of the multi-region CloudTrail."
+    Value: !GetAtt CloudTrail.Arn
+
+  AwsConfigRecorderName:
+    Description: "Name of the AWS Config configuration recorder."
+    Value: !Ref ConfigRecorder
+
+  GuardDutyDetectorId:
+    Description: "GuardDuty detector ID for this region."
+    Value: !Ref GuardDutyDetector
+
+  KmsKeyArn:
+    Description: "Primary KMS key ARN used for S3, RDS, and CloudTrail encryption."
+    Value: !GetAtt KmsKey.Arn
+```

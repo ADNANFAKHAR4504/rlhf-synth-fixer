@@ -1,0 +1,40 @@
+{
+  "po_id": "101912843",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-28T05:11:45.334857Z",
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "RDS",
+    "ELB",
+    "S3",
+    "CloudFront",
+    "WAF",
+    "EventBridge",
+    "CloudWatch",
+    "KMS",
+    "ACM",
+    "IAM",
+    "SecretsManager",
+    "AutoScaling",
+    "SNS",
+    "ServiceDiscovery"
+  ],
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,36 @@
+{
+  "task_id": "101912414",
+  "po_id": "101912414",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T07:02:28Z",
+  "subtask": "Failure Recovery and High Availability",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "failure-recovery-and-high-availability"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "Lambda",
+    "Route53",
+    "CloudWatch",
+    "S3",
+    "KMS",
+    "IAM",
+    "EC2",
+    "SNS"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

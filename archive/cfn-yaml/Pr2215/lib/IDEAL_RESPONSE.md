@@ -1,0 +1,791 @@
+## Ideal Response
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure AWS Environment Baseline Template - Production-ready security controls with least privilege principles'
+
+# =============================================================================
+# PARAMETERS - Making the template flexible for different environments
+# =============================================================================
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: 'Existing VPC ID where resources will be deployed'
+    Default: vpc-002dd1e7eb944d35a
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: 'List of private subnet IDs for RDS and secure resources'
+    Default: subnet-02a3baa16b423a792,subnet-09735fed2035623ff
+  PublicSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: 'Public subnet ID for Network ACL demonstration'
+    Default: subnet-00ec7eee49db50d76
+  SecurityTeamEmail:
+    Type: String
+    Description: 'Email address for security team notifications'
+    AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    ConstraintDescription: 'Must be a valid email address'
+    Default: security@example.com
+  EnvironmentName:
+    Type: String
+    Default: 'production'
+    Description: 'Environment name for resource tagging'
+    AllowedValues: ['production', 'staging', 'development']
+  StackPrefix:
+    Type: String
+    Default: 'tapstack2215'
+    Description: 'Unique stack prefix for resource names'
+
+# =============================================================================
+# RESOURCES - Core security infrastructure components
+# =============================================================================
+Resources:
+
+  # =============================================================================
+  # IDENTITY & ACCESS MANAGEMENT
+  # =============================================================================
+  
+  # Secure IAM Role for EC2 instances with minimal permissions
+  EC2SecurityRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${StackPrefix}-${EnvironmentName}-ec2-security-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # Only essential AWS managed policies
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        # Custom policy with minimal required permissions
+        - PolicyName: MinimalEC2Permissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*'
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeTags
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'ec2:Region': !Ref AWS::Region
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Secure EC2 Instance Role'
+
+  # Instance Profile for EC2 instances
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${StackPrefix}-${EnvironmentName}-ec2-security-profile'
+      Roles:
+        - !Ref EC2SecurityRole
+
+  # IAM Group that enforces MFA for all actions
+  MFAEnforcedGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Sub '${StackPrefix}-${EnvironmentName}-mfa-required-group'
+      Policies:
+        - PolicyName: EnforceMFAPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Allow users to manage their own MFA devices
+              - Effect: Allow
+                Action:
+                  - iam:ListMFADevices
+                  - iam:ListVirtualMFADevices
+                  - iam:CreateVirtualMFADevice
+                  - iam:EnableMFADevice
+                  - iam:ResyncMFADevice
+                  - iam:DeleteVirtualMFADevice
+                Resource: '*'
+              # Allow users to change their own passwords
+              - Effect: Allow
+                Action:
+                  - iam:ChangePassword
+                  - iam:GetUser
+                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:user/*'
+              # Deny all other actions unless MFA is present
+              - Effect: Deny
+                NotAction:
+                  - iam:ListMFADevices
+                  - iam:ListVirtualMFADevices
+                  - iam:CreateVirtualMFADevice
+                  - iam:EnableMFADevice
+                  - iam:ResyncMFADevice
+                  - iam:DeleteVirtualMFADevice
+                  - iam:ChangePassword
+                  - iam:GetUser
+                Resource: '*'
+                Condition:
+                  BoolIfExists:
+                    'aws:MultiFactorAuthPresent': 'false'
+
+  # =============================================================================
+  # DATA PROTECTION - S3 SECURITY
+  # =============================================================================
+  
+  # Secure S3 bucket for logging with encryption and versioning
+  SecureLoggingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${StackPrefix}-${EnvironmentName}-secure-logging-${AWS::AccountId}-${AWS::Region}'
+      # Enable versioning for audit trail integrity
+      VersioningConfiguration:
+        Status: Enabled
+      # Server-side encryption with AES-256
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      # Block all public access
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      # Lifecycle configuration for cost optimization
+      LifecycleConfiguration:
+        Rules:
+          - Id: LogRetentionRule
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+              - TransitionInDays: 365
+                StorageClass: DEEP_ARCHIVE
+      # Enable access logging
+      LoggingConfiguration:
+        DestinationBucketName: !Ref AccessLogsBucket
+        LogFilePrefix: 'secure-logging-bucket-access/'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Secure Logging Storage'
+
+  # Separate bucket for access logs
+  AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${StackPrefix}-${EnvironmentName}-access-logs-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # =============================================================================
+  # AUDITING, LOGGING, AND ALERTING
+  # =============================================================================
+  
+  # CloudWatch Log Group for S3 access monitoring
+  S3AccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/s3/${StackPrefix}-${EnvironmentName}-access-logs'
+      RetentionInDays: 90
+
+  # CloudWatch Log Group for VPC Flow Logs
+  VPCFlowLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${StackPrefix}-${EnvironmentName}-2'
+      RetentionInDays: 30
+
+  # IAM Role for VPC Flow Logs
+  VPCFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsDeliveryRolePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+
+  # VPC Flow Logs to capture all network traffic
+  VPCFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId: !Ref VpcId
+      TrafficType: ALL  # Capture both ACCEPT and REJECT traffic
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref VPCFlowLogsGroup
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
+      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${action}'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Network Traffic Monitoring'
+
+  # SNS Topic for security alerts
+  SecurityAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${StackPrefix}-${EnvironmentName}-security-alerts'
+      DisplayName: 'Security Team Alerts'
+      # Enable encryption at rest
+      KmsMasterKeyId: alias/aws/sns
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Security Alerting'
+
+  # Email subscription for security team
+  SecurityAlertsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref SecurityAlertsTopic
+      Endpoint: !Ref SecurityTeamEmail
+
+  # EventBridge Rule to monitor GuardDuty findings
+  GuardDutyHighSeverityRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${StackPrefix}-${EnvironmentName}-guardduty-high-severity'
+      Description: 'Trigger alerts for GuardDuty findings with severity >= 7.0'
+      EventPattern:
+        source:
+          - aws.guardduty
+        detail-type:
+          - GuardDuty Finding
+        detail:
+          severity:
+            - numeric:
+                - '>='
+                - 7.0
+      State: ENABLED
+      Targets:
+        - Arn: !Ref SecurityAlertsTopic
+          Id: SecurityAlertsTarget
+          SqsParameters:
+            MessageGroupId: 'guardduty-alerts'
+
+  # IAM Role for EventBridge to publish to SNS
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SNSPublishPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref SecurityAlertsTopic
+
+  # =============================================================================
+  # NETWORK & INFRASTRUCTURE SECURITY
+  # =============================================================================
+  
+  # Network ACL with restrictive rules
+  RestrictiveNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackPrefix}-${EnvironmentName}-restrictive-nacl'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Network Security Controls'
+
+  # Network ACL Rules - Allow HTTPS outbound
+  NetworkAclEntryHTTPSOutbound:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref RestrictiveNetworkAcl
+      RuleNumber: 100
+      Protocol: 6  # TCP
+      RuleAction: allow
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 443
+        To: 443
+
+  # Network ACL Rules - Allow HTTP outbound (for package updates)
+  NetworkAclEntryHTTPOutbound:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref RestrictiveNetworkAcl
+      RuleNumber: 110
+      Protocol: 6  # TCP
+      RuleAction: allow
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 80
+        To: 80
+
+  # Network ACL Rules - Allow ephemeral ports inbound for return traffic
+  NetworkAclEntryEphemeralInbound:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref RestrictiveNetworkAcl
+      RuleNumber: 200
+      Protocol: 6  # TCP
+      RuleAction: allow
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 1024
+        To: 65535
+
+  # Network ACL Rules - Deny SSH from internet
+  NetworkAclEntryDenySSH:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref RestrictiveNetworkAcl
+      RuleNumber: 300
+      Protocol: 6  # TCP
+      RuleAction: deny
+      CidrBlock: '0.0.0.0/0'
+      PortRange:
+        From: 22
+        To: 22
+
+  # Associate Network ACL with public subnet
+  NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetId
+      NetworkAclId: !Ref RestrictiveNetworkAcl
+
+  # DB Subnet Group using only private subnets
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${StackPrefix}-${EnvironmentName}-private-db-subnet-group'
+      DBSubnetGroupDescription: 'Subnet group for RDS instances in private subnets only'
+      SubnetIds: !Ref PrivateSubnetIds
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Database Network Isolation'
+
+  # Security Group for RDS - restrictive access
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${StackPrefix}-${EnvironmentName}-database-sg'
+      GroupDescription: 'Security group for RDS instances - private access only'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        # Only allow MySQL/Aurora access from application security group
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref ApplicationSecurityGroup
+          Description: 'MySQL access from application tier'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Database Access Control'
+
+  # Security Group for application instances
+  ApplicationSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${StackPrefix}-${EnvironmentName}-application-sg'
+      GroupDescription: 'Security group for application instances'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        # Allow HTTPS from anywhere (for ALB)
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS access'
+        # Allow HTTP from anywhere (for ALB)
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP access'
+      SecurityGroupEgress:
+        # Allow all outbound traffic for updates and external API calls
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Application Access Control'
+
+  # Sample RDS instance with security best practices
+  SecureRDSInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot  # Always take snapshot before deletion
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub '${StackPrefix}-${EnvironmentName}-secure-db'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0.37'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true  # Enable encryption at rest
+      # Database credentials - use Secrets Manager in production
+      MasterUsername: admin
+      ManageMasterUserPassword: true  # Let RDS manage the password in Secrets Manager
+      # Network configuration - private only
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      PubliclyAccessible: false  # Critical: no public access
+      # Backup and maintenance
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      # Monitoring and logging
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
+      # Enable all log types for security monitoring
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+      # Security settings
+      DeletionProtection: false
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Secure Database Instance'
+
+  # IAM Role for RDS Enhanced Monitoring
+  RDSMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+
+  # Sample EC2 instance with security best practices
+  SecureEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      InstanceType: t3.micro
+      # Use the secure IAM instance profile
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      # Launch in private subnet - no public IP
+      SubnetId: !Select [0, !Ref PrivateSubnetIds]
+      SecurityGroupIds:
+        - !Ref ApplicationSecurityGroup
+      # Disable public IP assignment
+      # AssociatePublicIpAddress: false
+      # Enable detailed monitoring
+      Monitoring: true
+      # User data for basic security hardening
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum update -y
+          # Install CloudWatch agent
+          yum install -y amazon-cloudwatch-agent
+          # Install SSM agent (should be pre-installed)
+          yum install -y amazon-ssm-agent
+          systemctl enable amazon-ssm-agent
+          systemctl start amazon-ssm-agent
+          # Basic security hardening
+          echo "net.ipv4.conf.all.send_redirects = 0" >> /etc/sysctl.conf
+          echo "net.ipv4.conf.default.send_redirects = 0" >> /etc/sysctl.conf
+          sysctl -p
+      # Enable termination protection (set to false for stack delete compatibility)
+      DisableApiTermination: false
+      # Use encrypted EBS volumes
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 20
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-secure-instance'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Secure Application Server'
+
+  # =============================================================================
+  # CONTINUOUS COMPLIANCE - AWS CONFIG
+  # =============================================================================
+  
+  # S3 bucket for Config service
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${StackPrefix}-${EnvironmentName}-config-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ConfigRetentionRule
+            Status: Enabled
+            ExpirationInDays: 2555  # 7 years retention
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 365
+                StorageClass: GLACIER
+
+  # Bucket policy for Config service
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::${ConfigBucket}'
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref AWS::AccountId
+          - Sid: AWSConfigBucketExistenceCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:ListBucket
+            Resource: !Sub 'arn:aws:s3:::${ConfigBucket}'
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref AWS::AccountId
+          - Sid: AWSConfigBucketDelivery
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${ConfigBucket}/AWSLogs/${AWS::AccountId}/Config/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+                'AWS:SourceAccount': !Ref AWS::AccountId
+
+  # IAM Role for AWS Config
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ConfigBucketAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketAcl
+                  - s3:ListBucket
+                Resource: !Sub 'arn:aws:s3:::${ConfigBucket}'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${ConfigBucket}/*'
+
+  # AWS Config Configuration Recorder
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: !Sub '${StackPrefix}-${EnvironmentName}-config-recorder'
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+        ResourceTypes: []
+
+  # AWS Config Delivery Channel
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      Name: !Sub '${StackPrefix}-${EnvironmentName}-config-delivery-channel'
+      S3BucketName: !Ref ConfigBucket
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
+  # Config Rule: S3 bucket public read prohibited
+  ConfigRuleS3PublicRead:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: s3-bucket-public-read-prohibited
+      Description: 'Checks if S3 buckets allow public read access'
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+
+  # Config Rule: EC2 instance no public IP
+  ConfigRuleEC2NoPublicIP:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: ec2-instance-no-public-ip
+      Description: 'Checks if EC2 instances have public IP addresses'
+      Source:
+        Owner: AWS
+        SourceIdentifier: EC2_INSTANCE_NO_PUBLIC_IP
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::EC2::Instance
+
+  # Config Rule: RDS instance public access check
+  ConfigRuleRDSPublicAccess:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: rds-instance-public-access-check
+      Description: 'Checks if RDS instances are publicly accessible'
+      Source:
+        Owner: AWS
+        SourceIdentifier: RDS_INSTANCE_PUBLIC_ACCESS_CHECK
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::RDS::DBInstance
+
+  # Config Rule: CloudTrail enabled
+  ConfigRuleCloudTrailEnabled:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: cloudtrail-enabled
+      Description: 'Checks if CloudTrail is enabled'
+      Source:
+        Owner: AWS
+        SourceIdentifier: CLOUD_TRAIL_ENABLED
+
+# =============================================================================
+# OUTPUTS - Important resource identifiers and endpoints
+# =============================================================================
+Outputs:
+  SecurityAlertsTopicArn:
+    Description: 'ARN of the SNS topic for security alerts'
+    Value: !Ref SecurityAlertsTopic
+    Export:
+      Name: !Sub '${EnvironmentName}-security-alerts-topic'
+
+  EC2InstanceProfileArn:
+    Description: 'ARN of the secure EC2 instance profile'
+    Value: !GetAtt EC2InstanceProfile.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-ec2-instance-profile'
+
+  DatabaseSubnetGroupName:
+    Description: 'Name of the database subnet group'
+    Value: !Ref DatabaseSubnetGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-db-subnet-group'
+
+  ApplicationSecurityGroupId:
+    Description: 'Security Group ID for application instances'
+    Value: !Ref ApplicationSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-application-sg'
+
+  DatabaseSecurityGroupId:
+    Description: 'Security Group ID for RDS instances'
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-database-sg'
+
+  VPCFlowLogsGroupName:
+    Description: 'Name of the CloudWatch Log Group for VPC Flow Logs'
+    Value: !Ref VPCFlowLogsGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-vpc-flow-logs-group'
+
+  S3AccessLogGroupName:
+    Description: 'Name of the CloudWatch Log Group for S3 access logs'
+    Value: !Ref S3AccessLogGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-s3-access-log-group'
+
+  ConfigBucketName:
+    Description: 'Name of the S3 bucket for AWS Config'
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-config-bucket'
+
+  ConfigRoleArn:
+    Description: 'ARN of the IAM Role for AWS Config'
+    Value: !GetAtt ConfigRole.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-config-role'

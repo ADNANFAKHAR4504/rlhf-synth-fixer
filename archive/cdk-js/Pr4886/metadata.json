@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "CDK_JS_MED_CLOUDFRONT_ACM_4f5g6h_7c8d9e1fWX",
+  "team": "5",
+  "startedAt": "2025-10-21T04:22:33.333Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "s3",
+    "cloudfront",
+    "route53",
+    "acm",
+    "cloudwatch",
+    "iam"
+  ],
+  "training_quality": 6.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

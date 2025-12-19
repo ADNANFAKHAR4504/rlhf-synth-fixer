@@ -1,0 +1,1 @@
+"""lib package for disaster recovery CDK application."""

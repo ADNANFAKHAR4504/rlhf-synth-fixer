@@ -1,0 +1,1041 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Production EKS Cluster with Managed Node Groups",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to avoid conflicts",
+      "Default": "prod"
+    },
+    "KubernetesVersion": {
+      "Type": "String",
+      "Description": "Kubernetes version for EKS cluster",
+      "Default": "1.32",
+      "AllowedValues": ["1.33", "1.32", "1.34"]
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-vpc-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-igw-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-public-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-public-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-public-subnet-3-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.11.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.12.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.13.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-private-subnet-3-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway1EIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-nat-eip-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway2EIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-nat-eip-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway3EIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-nat-eip-3-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway1": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway1EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-nat-gateway-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway2": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway2EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-nat-gateway-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway3": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway3EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-nat-gateway-3-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-public-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnet3RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PrivateRouteTable1": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-private-rt-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRoute1": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway1"
+        }
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        }
+      }
+    },
+    "PrivateRouteTable2": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-private-rt-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRoute2": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway2"
+        }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        }
+      }
+    },
+    "PrivateRouteTable3": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-private-rt-3-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRoute3": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable3"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway3"
+        }
+      }
+    },
+    "PrivateSubnet3RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet3"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable3"
+        }
+      }
+    },
+    "EKSClusterRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "eks-cluster-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "eks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+          "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "ClusterSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "eks-cluster-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for EKS cluster control plane",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "10.0.0.0/8",
+            "Description": "Allow HTTPS access from internal CIDR"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-cluster-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "EKSCluster": {
+      "Type": "AWS::EKS::Cluster",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "eks-cluster-${EnvironmentSuffix}"
+        },
+        "Version": {
+          "Ref": "KubernetesVersion"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": ["EKSClusterRole", "Arn"]
+        },
+        "ResourcesVpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "ClusterSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            },
+            {
+              "Ref": "PrivateSubnet3"
+            }
+          ],
+          "EndpointPrivateAccess": true,
+          "EndpointPublicAccess": false
+        },
+        "Logging": {
+          "ClusterLogging": {
+            "EnabledTypes": [
+              {
+                "Type": "api"
+              },
+              {
+                "Type": "audit"
+              },
+              {
+                "Type": "authenticator"
+              },
+              {
+                "Type": "controllerManager"
+              },
+              {
+                "Type": "scheduler"
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "OIDCProvider": {
+      "Type": "AWS::IAM::OIDCProvider",
+      "Properties": {
+        "Url": {
+          "Fn::GetAtt": ["EKSCluster", "OpenIdConnectIssuerUrl"]
+        },
+        "ClientIdList": [
+          "sts.amazonaws.com"
+        ],
+        "ThumbprintList": [
+          "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "NodeGroupRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "eks-nodegroup-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+          "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+          "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "GeneralNodeGroup": {
+      "Type": "AWS::EKS::Nodegroup",
+      "Properties": {
+        "NodegroupName": {
+          "Fn::Sub": "general-nodegroup-${EnvironmentSuffix}"
+        },
+        "ClusterName": {
+          "Ref": "EKSCluster"
+        },
+        "NodeRole": {
+          "Fn::GetAtt": ["NodeGroupRole", "Arn"]
+        },
+        "Subnets": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "ScalingConfig": {
+          "MinSize": 2,
+          "MaxSize": 6,
+          "DesiredSize": 2
+        },
+        "InstanceTypes": [
+          "t3.large"
+        ],
+        "AmiType": "AL2_x86_64",
+        "Tags": {
+          "Environment": "Production",
+          "ManagedBy": "CloudFormation",
+          "NodeGroup": "General"
+        }
+      }
+    },
+    "ComputeNodeGroup": {
+      "Type": "AWS::EKS::Nodegroup",
+      "Properties": {
+        "NodegroupName": {
+          "Fn::Sub": "compute-nodegroup-${EnvironmentSuffix}"
+        },
+        "ClusterName": {
+          "Ref": "EKSCluster"
+        },
+        "NodeRole": {
+          "Fn::GetAtt": ["NodeGroupRole", "Arn"]
+        },
+        "Subnets": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "ScalingConfig": {
+          "MinSize": 1,
+          "MaxSize": 4,
+          "DesiredSize": 1
+        },
+        "InstanceTypes": [
+          "c5.xlarge"
+        ],
+        "AmiType": "AL2_x86_64",
+        "Tags": {
+          "Environment": "Production",
+          "ManagedBy": "CloudFormation",
+          "NodeGroup": "Compute"
+        }
+      }
+    },
+    "ALBControllerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "eks-alb-controller-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Federated": {
+                  "Fn::GetAtt": ["OIDCProvider", "Arn"]
+                }
+              },
+              "Action": "sts:AssumeRoleWithWebIdentity"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ALBControllerPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "elasticloadbalancing:CreateLoadBalancer",
+                    "elasticloadbalancing:CreateTargetGroup",
+                    "elasticloadbalancing:AddTags",
+                    "elasticloadbalancing:DescribeLoadBalancers",
+                    "elasticloadbalancing:DescribeTargetGroups",
+                    "ec2:DescribeSubnets",
+                    "ec2:DescribeSecurityGroups"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "EBSCSIDriverRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "eks-ebs-csi-driver-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Federated": {
+                  "Fn::GetAtt": ["OIDCProvider", "Arn"]
+                }
+              },
+              "Action": "sts:AssumeRoleWithWebIdentity"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "FargateProfile": {
+      "Type": "AWS::EKS::FargateProfile",
+      "Properties": {
+        "FargateProfileName": {
+          "Fn::Sub": "system-pods-${EnvironmentSuffix}"
+        },
+        "ClusterName": {
+          "Ref": "EKSCluster"
+        },
+        "PodExecutionRoleArn": {
+          "Fn::GetAtt": ["FargatePodExecutionRole", "Arn"]
+        },
+        "Subnets": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "Selectors": [
+          {
+            "Namespace": "kube-system"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "FargatePodExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "eks-fargate-pod-execution-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "eks-fargate-pods.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ClusterName": {
+      "Description": "EKS Cluster Name",
+      "Value": {
+        "Ref": "EKSCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterName"
+        }
+      }
+    },
+    "ClusterEndpoint": {
+      "Description": "EKS Cluster API Endpoint",
+      "Value": {
+        "Fn::GetAtt": ["EKSCluster", "Endpoint"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterEndpoint"
+        }
+      }
+    },
+    "ClusterArn": {
+      "Description": "EKS Cluster ARN",
+      "Value": {
+        "Fn::GetAtt": ["EKSCluster", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterArn"
+        }
+      }
+    },
+    "OIDCIssuerURL": {
+      "Description": "OIDC Provider Issuer URL for IRSA",
+      "Value": {
+        "Fn::GetAtt": ["EKSCluster", "OpenIdConnectIssuerUrl"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OIDCIssuerURL"
+        }
+      }
+    },
+    "OIDCProviderArn": {
+      "Description": "OIDC Provider ARN",
+      "Value": {
+        "Fn::GetAtt": ["OIDCProvider", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OIDCProviderArn"
+        }
+      }
+    },
+    "GeneralNodeGroupArn": {
+      "Description": "General Workload Node Group ARN",
+      "Value": {
+        "Fn::GetAtt": ["GeneralNodeGroup", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GeneralNodeGroupArn"
+        }
+      }
+    },
+    "ComputeNodeGroupArn": {
+      "Description": "Compute-Intensive Workload Node Group ARN",
+      "Value": {
+        "Fn::GetAtt": ["ComputeNodeGroup", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ComputeNodeGroupArn"
+        }
+      }
+    },
+    "ALBControllerRoleArn": {
+      "Description": "ALB Controller IAM Role ARN for IRSA",
+      "Value": {
+        "Fn::GetAtt": ["ALBControllerRole", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALBControllerRoleArn"
+        }
+      }
+    },
+    "EBSCSIDriverRoleArn": {
+      "Description": "EBS CSI Driver IAM Role ARN for IRSA",
+      "Value": {
+        "Fn::GetAtt": ["EBSCSIDriverRole", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EBSCSIDriverRoleArn"
+        }
+      }
+    }
+  }
+}

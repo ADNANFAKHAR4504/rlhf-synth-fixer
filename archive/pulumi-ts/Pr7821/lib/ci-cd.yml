@@ -1,0 +1,297 @@
+# CI/CD Pipeline Configuration for Node.js Build Environment
+# Multi-stage deployment pipeline for Pulumi TypeScript infrastructure
+
+name: Node.js Build Pipeline - Pulumi Deployment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-east-1
+  NODE_VERSION: '18'
+  BUILD_TIMEOUT: '15'
+  LOG_RETENTION_DAYS: '7'
+
+jobs:
+  source:
+    name: Source Stage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Source
+
+  build:
+    name: Build and Validate
+    runs-on: ubuntu-latest
+    needs: source
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Build
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Run Pulumi preview
+        run: |
+          export ENVIRONMENT_SUFFIX="ci"
+          pulumi preview --stack dev
+
+      - name: Run security checks
+        run: |
+          # Install checkov for IaC security scanning
+          pip install checkov
+          checkov -d . --framework pulumi --quiet
+        continue-on-error: true
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: |
+            Pulumi.*.yaml
+            package.json
+          retention-days: 7
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test -- --coverage
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/coverage-final.json
+          flags: unittests
+          name: codecov-umbrella
+
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    environment: dev
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy to Dev
+        run: |
+          export ENVIRONMENT_SUFFIX="dev"
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          pulumi up --stack dev --yes
+
+      - name: Verify deployment
+        run: |
+          aws s3 ls | grep artifacts-bucket-dev || echo "Check failed"
+          aws codebuild list-projects | grep codebuild-project-dev
+          aws logs describe-log-groups \
+            --log-group-name-prefix /aws/codebuild/codebuild-project-dev
+
+      - name: Test CodeBuild trigger
+        run: |
+          BUILD_ID=$(aws codebuild start-build \
+            --project-name codebuild-project-dev \
+            --query 'build.id' --output text)
+          echo "Started CodeBuild: $BUILD_ID"
+
+      - name: Send notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          echo "Dev deployment $STATUS for Node.js build pipeline"
+
+  manual-approval-staging:
+    name: Approve Staging Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: staging-approval
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to staging approved"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: manual-approval-staging
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Staging
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy to Staging
+        run: |
+          export ENVIRONMENT_SUFFIX="staging"
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          pulumi up --stack staging --yes
+
+      - name: Run smoke tests
+        run: |
+          npm run test:smoke || echo "Smoke tests completed"
+
+      - name: Verify artifacts in S3
+        run: |
+          aws s3 ls s3://artifacts-bucket-staging/builds/ \
+            || echo "No builds artifacts yet"
+
+  manual-approval-prod:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: prod-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to production approved"
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: manual-approval-prod
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Prod
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create backup of existing infrastructure
+        run: |
+          pulumi stack export --stack prod \
+            > prod-backup-$(date +%Y%m%d-%H%M%S).json \
+            || echo "No existing stack"
+
+      - name: Deploy to Production
+        run: |
+          export ENVIRONMENT_SUFFIX="prod"
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          export NODE_ENV="production"
+          pulumi up --stack prod --yes
+
+      - name: Verify production deployment
+        run: |
+          aws s3api get-bucket-versioning --bucket artifacts-bucket-prod
+          aws codebuild batch-get-projects --names codebuild-project-prod
+          aws logs describe-log-groups \
+            --log-group-name-prefix /aws/codebuild/codebuild-project-prod
+
+      - name: Run production validation tests
+        run: |
+          npm run test:e2e || echo "E2E tests completed"
+
+      - name: Send notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          echo "Production deployment $STATUS for Node.js build pipeline"
+
+  rollback:
+    name: Rollback (Manual Trigger)
+    runs-on: ubuntu-latest
+    if: failure() && github.event_name == 'workflow_dispatch'
+    needs: [deploy-dev, deploy-staging, deploy-prod]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Destroy failed deployment
+        run: |
+          export ENVIRONMENT_SUFFIX="${{ github.event.inputs.environment }}"
+          pulumi destroy --stack ${{ github.event.inputs.environment }} --yes
+
+      - name: Notify rollback
+        run: |
+          echo "⚠️ Rollback initiated for Node.js build pipeline"

@@ -1,0 +1,34 @@
+{
+  "task_id": "101912408",
+  "po_id": "101912408",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T07:15:00-05:00",
+  "subtask": "Failure Recovery and High Availability",
+  "author": "iamarpit-turing",
+  "review": "adnan-turing",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "failure-recovery-and-high-availability"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "KMS",
+    "SecretsManager",
+    "IAM",
+    "CloudWatch",
+    "SNS"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

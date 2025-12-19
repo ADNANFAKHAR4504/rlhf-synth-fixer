@@ -1,0 +1,243 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Storage Stack - DynamoDB Tables and S3 Buckets",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource names",
+      "AllowedPattern": "^[a-z0-9]{6,12}$"
+    }
+  },
+  "Resources": {
+    "SessionTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": { "Fn::Sub": "sessions-${EnvironmentSuffix}" },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "session_id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "user_id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "session_id",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "UserIdIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "user_id",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false,
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "sessions-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "TransactionTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": { "Fn::Sub": "transactions-${EnvironmentSuffix}" },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "transaction_id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "transaction_id",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false,
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "transactions-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "AuditLogBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "BucketName": { "Fn::Sub": "audit-logs-${EnvironmentSuffix}-${AWS::AccountId}" },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionExpirationInDays": 30
+            },
+            {
+              "Id": "TransitionToIA",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "TransitionInDays": 30,
+                  "StorageClass": "STANDARD_IA"
+                },
+                {
+                  "TransitionInDays": 90,
+                  "StorageClass": "GLACIER"
+                }
+              ]
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "audit-logs-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "AuditLogBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": { "Ref": "AuditLogBucket" },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyUnencryptedObjectUploads",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${AuditLogBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:x-amz-server-side-encryption": "AES256"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "SessionTableName": {
+      "Description": "DynamoDB Session Table Name",
+      "Value": { "Ref": "SessionTable" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-SessionTableName" }
+      }
+    },
+    "SessionTableArn": {
+      "Description": "DynamoDB Session Table ARN",
+      "Value": { "Fn::GetAtt": ["SessionTable", "Arn"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-SessionTableArn" }
+      }
+    },
+    "TransactionTableName": {
+      "Description": "DynamoDB Transaction Table Name",
+      "Value": { "Ref": "TransactionTable" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-TransactionTableName" }
+      }
+    },
+    "TransactionTableArn": {
+      "Description": "DynamoDB Transaction Table ARN",
+      "Value": { "Fn::GetAtt": ["TransactionTable", "Arn"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-TransactionTableArn" }
+      }
+    },
+    "TransactionTableStreamArn": {
+      "Description": "DynamoDB Transaction Table Stream ARN",
+      "Value": { "Fn::GetAtt": ["TransactionTable", "StreamArn"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-TransactionTableStreamArn" }
+      }
+    },
+    "AuditLogBucketName": {
+      "Description": "S3 Audit Log Bucket Name",
+      "Value": { "Ref": "AuditLogBucket" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-AuditLogBucketName" }
+      }
+    },
+    "AuditLogBucketArn": {
+      "Description": "S3 Audit Log Bucket ARN",
+      "Value": { "Fn::GetAtt": ["AuditLogBucket", "Arn"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-AuditLogBucketArn" }
+      }
+    }
+  }
+}

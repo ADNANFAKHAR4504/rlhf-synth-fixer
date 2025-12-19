@@ -1,0 +1,31 @@
+{
+  "po_id": "k9e1k5n7",
+  "subtask": "Infrastructure QA and Management",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-12-02T11:16:45-08:00",
+  "training_quality": 10,
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "Step Functions",
+    "SQS",
+    "SNS",
+    "CloudWatch",
+    "EventBridge",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

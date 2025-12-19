@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349620",
+  "team": "3",
+  "startedAt": "2025-10-01T11:05:46.385Z",
+  "subtask": "CI/CD Pipeline Implementation",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "S3",
+    "CodeBuild",
+    "CodeDeploy",
+    "CodePipeline",
+    "EC2",
+    "VPC",
+    "Auto Scaling",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch",
+    "SNS",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

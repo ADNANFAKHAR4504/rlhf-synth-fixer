@@ -1,0 +1,41 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291739",
+  "team": "2",
+  "startedAt": "2025-08-14T11:29:31.087Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "Serverless Architecture",
+    "Security Configuration",
+    "Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Database Management",
+    "Access Control",
+    "Performance Optimization",
+    "Monitoring Setup",
+    "Encryption Implementation",
+    "CI/CD Pipeline Infrastructure"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS CDK",
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "Amazon DynamoDB",
+    "Amazon S3",
+    "AWS KMS",
+    "AWS Secrets Manager",
+    "AWS IAM",
+    "Amazon CloudWatch Logs",
+    "AWS CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "souravk91",
+  "dockerS3Location": ""
+}

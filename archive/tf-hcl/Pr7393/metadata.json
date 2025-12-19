@@ -1,0 +1,36 @@
+{
+  "po_id": "101912726",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "turn_type": "single",
+  "startedAt": "2025-11-26T17:51:33+00:00",
+  "subtask": "ECS Fargate Optimization",
+  "subject_labels": [
+    "Compute Optimization",
+    "Cost Optimization",
+    "Auto Scaling"
+  ],
+  "aws_services": [
+    "ECS",
+    "ALB",
+    "CloudWatch",
+    "EventBridge",
+    "VPC",
+    "IAM",
+    "EC2",
+    "Auto Scaling",
+    "Service Discovery",
+    "S3",
+    "ECR"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-13T03:06:55+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "po_id": "3g9fg9",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "ALB",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "SSM",
+    "Secrets Manager"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

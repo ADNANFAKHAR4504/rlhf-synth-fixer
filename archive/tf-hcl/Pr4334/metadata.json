@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350084",
+  "team": "4",
+  "startedAt": "2025-10-14T00:29:49.759Z",
+  "subtask": "Security, Compliance and Governance",
+  "background": "Design a secure AWS VPC architecture using Terraform with comprehensive security controls, including VPC networking, IAM permissions, CloudTrail auditing, and EC2 compute resources following AWS security best practices and compliance requirements.",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "CloudTrail",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Tables",
+    "Security Groups",
+    "EBS",
+    "Instance Profile"
+  ],
+  "training_quality": 10,
+  "training_quality_justification": "Excellent implementation demonstrating complete requirement fulfillment, comprehensive security best practices, proper Terraform conventions, and extensive test coverage (107 tests). Minor naming inconsistency in IAM role provides valuable learning opportunity. Implementation is production-ready and suitable for positive training examples.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

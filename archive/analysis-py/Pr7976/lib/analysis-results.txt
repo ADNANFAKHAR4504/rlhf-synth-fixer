@@ -1,0 +1,28 @@
+Running full security audit...
+
+============================================================
+AWS INFRASTRUCTURE SECURITY AUDIT REPORT
+============================================================
+Environment: all
+Region: us-east-1
+Timestamp: 2025-12-05T18:50:36.699752+00:00
+
+Total Resources Scanned: 1
+Compliant Resources: 1
+Non-Compliant Resources: 0
+Total Findings: 0
+Compliance Score: 100.0/100
+
+Findings by Severity:
+  Critical: 0
+  High: 0
+  Medium: 0
+  Low: 0
+
+Resources by Service:
+  EC2: 0
+  RDS: 0
+  S3: 0
+  IAM: 0
+  SecurityGroup: 1
+============================================================

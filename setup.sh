@@ -35,7 +35,7 @@ fi
 echo "✅ Node.js version is correct: $CURRENT_NODE_VERSION"
 
 # Check if we have the required Python version
-REQUIRED_PYTHON_VERSION="Python 3.12.11"
+REQUIRED_PYTHON_VERSION="Python 3.13"
 CURRENT_PYTHON_VERSION=$(python --version 2>/dev/null || python3 --version 2>/dev/null || echo "not installed")
 
 if [ "$CURRENT_PYTHON_VERSION" != "$REQUIRED_PYTHON_VERSION" ]; then
@@ -43,17 +43,17 @@ if [ "$CURRENT_PYTHON_VERSION" != "$REQUIRED_PYTHON_VERSION" ]; then
     echo "   Required: $REQUIRED_PYTHON_VERSION"
     echo "   Current:  $CURRENT_PYTHON_VERSION"
     echo ""
-    echo "Please install Python 3.12.11 using one of these methods:"
+    echo "Please install Python 3.13 using one of these methods:"
     echo ""
     echo "📋 Using pyenv (recommended):"
-    echo "   pyenv install 3.12.11"
-    echo "   pyenv local 3.12.11"
+    echo "   pyenv install 3.13"
+    echo "   pyenv local 3.13"
     echo ""
     echo "📋 Using conda:"
-    echo "   conda install python=3.12.11"
+    echo "   conda install python=3.13"
     echo ""
     echo "� Direct download:"
-    echo "   Visit: https://www.python.org/downloads/release/python-31211/"
+    echo "   Visit: https://www.python.org/downloads/"
     echo ""
     exit 1
 fi

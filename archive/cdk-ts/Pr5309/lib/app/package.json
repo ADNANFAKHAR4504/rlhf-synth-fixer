@@ -1,0 +1,21 @@
+{
+  "name": "hono-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hono TypeScript app for AWS Lambda (API Gateway)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.6.8"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.129",
+    "typescript": "~5.2.2"
+  }
+}

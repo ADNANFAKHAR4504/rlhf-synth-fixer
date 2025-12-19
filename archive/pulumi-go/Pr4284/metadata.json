@@ -1,0 +1,47 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-13T23:15:46",
+  "subtask": "Application Deployment",
+  "background": "A manufacturing company needs to modernize their factory monitoring system. They have multiple assembly lines with IoT sensors that generate data every 30 seconds. The data needs to be collected, processed, and stored securely while maintaining audit trails for compliance purposes.",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "1114439400",
+  "training_quality": 8,
+  "qa_status": "blocked",
+  "qa_blocker": "AWS EIP quota limit exceeded in ap-northeast-1",
+  "qa_completed_at": "2025-10-13T23:45:00",
+  "fixes_applied": 6,
+  "deployment_attempts": 1,
+  "resources_validated": 7,
+  "code_quality_score": 9,
+  "aws_services": [
+    "VPC",
+    "EC2 (Subnets, NAT Gateway, Internet Gateway)",
+    "VPC Endpoints (S3, Secrets Manager, ECR, CloudWatch)",
+    "Elastic Load Balancing (ALB)",
+    "ECS Fargate",
+    "RDS PostgreSQL",
+    "ElastiCache Redis",
+    "Secrets Manager",
+    "API Gateway",
+    "IAM",
+    "CloudWatch Logs",
+    "ECR"
+  ],
+  "enhancement_applied": true,
+  "enhancement_date": "2025-10-13T23:50:00",
+  "total_resources": 65,
+  "total_services": 12,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

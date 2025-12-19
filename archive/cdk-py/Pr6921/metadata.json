@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "m8l9x7",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-11-19T21:15:57+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Amazon Kinesis Data Streams",
+    "AWS Lambda",
+    "Amazon DynamoDB",
+    "Amazon S3",
+    "Amazon S3 Lifecycle",
+    "AWS Systems Manager Parameter Store",
+    "Amazon CloudWatch",
+    "Amazon CloudWatch Alarms",
+    "Amazon CloudWatch Logs",
+    "Amazon SNS",
+    "AWS IAM",
+    "AWS X-Ray"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

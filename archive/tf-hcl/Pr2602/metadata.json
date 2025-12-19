@@ -1,0 +1,46 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "350257",
+  "team": "2",
+  "startedAt": "2025-09-02T13:03:46.799Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "IaC Optimization",
+    "Monitoring Setup",
+    "Access Control",
+    "Web Application Deployment",
+    "Database Management",
+    "Network Configuration",
+    "Resource Scaling"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Security Groups",
+    "S3",
+    "KMS",
+    "IAM",
+    "RDS",
+    "CloudTrail",
+    "CloudWatch",
+    "SNS",
+    "Elastic Load Balancing (ALB)",
+    "WAFv2",
+    "GuardDuty"
+  ],
+  "author": "Olatunjym",
+  "dockerS3Location": "",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
+}

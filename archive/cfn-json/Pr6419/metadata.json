@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-12T18:48:26+00:00",
+  "subtask": "AWS CloudFormation",
+  "subject_labels": [
+    "AWS CloudFormation"
+  ],
+  "po_id": "101912431",
+  "aws_services": [
+    "DynamoDB",
+    "EC2",
+    "IAM",
+    "Lambda",
+    "Logs",
+    "RDS"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

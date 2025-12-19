@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "typescript",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000348",
+  "team": "1",
+  "startedAt": "2025-11-03T04:12:40.160Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "S3",
+    "SNS",
+    "Lambda",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "EventBridge",
+    "KMS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

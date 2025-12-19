@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350187",
+  "team": "3",
+  "startedAt": "2025-09-09T12:05:42.697Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Performance Optimization",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "DynamoDB",
+    "S3",
+    "IAM",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "VPC"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,19 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and fill in your values
+
+aws_region          = "us-east-1"
+environment_suffix  = "dev-001"  # Change this to a unique value
+vpc_cidr            = "10.0.0.0/16"
+
+# AMI ID for Amazon Linux 2 in us-east-1
+# Find latest: aws ec2 describe-images --owners amazon --filters "Name=name,Values=amzn2-ami-hvm-*-x86_64-gp2" --query 'Images[*].[ImageId,CreationDate]' --output text | sort -k2 -r | head -n1
+ami_id = "ami-0c55b159cbfafe1f0"  # Update with latest Amazon Linux 2 AMI
+
+# ACM Certificate ARN - MUST be created manually first
+# Create certificate: aws acm request-certificate --domain-name "*.example.com" --validation-method DNS
+acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+
+# Database credentials - use secure values in production
+db_username       = "dbadmin"
+db_password       = "ChangeMe123!"  # CHANGE THIS
+db_max_connections = 100

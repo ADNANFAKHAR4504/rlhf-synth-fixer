@@ -1,0 +1,36 @@
+2025-12-08 06:45:13,139 - INFO - Starting EFS analysis in us-east-1
+2025-12-08 06:45:13,179 - INFO - Found 5 eligible file systems
+2025-12-08 06:45:13,179 - INFO - Analyzing file system: fs-008f8716
+2025-12-08 06:45:20,760 - INFO - Analyzing file system: fs-acbe5892
+2025-12-08 06:45:20,767 - WARNING - Error getting mount targets for fs-acbe5892: 'SecurityGroupsIds'
+2025-12-08 06:45:29,901 - INFO - Analyzing file system: fs-2037aa2d
+2025-12-08 06:45:37,273 - INFO - Analyzing file system: fs-3012aed8
+2025-12-08 06:45:53,711 - INFO - Analyzing file system: fs-d59f5b51
+
+EFS Analysis Summary
+========================================================================================================================
++------------------+---------------------------+-----------+--------+------------+--------+----------+-----------------------------------+-------------------+
+| File System ID   | Name                      | State     | Size   |   Critical |   High |   Medium | Categories                        | Monthly Savings   |
++==================+===========================+===========+========+============+========+==========+===================================+===================+
+| fs-008f8716      | test-unencrypted-fs       | available | 0.0 GB |          1 |      1 |        2 | security, operational, resilience | $0.00             |
++------------------+---------------------------+-----------+--------+------------+--------+----------+-----------------------------------+-------------------+
+| fs-acbe5892      | test-insecure-mount-fs    | available | 0.0 GB |          0 |      2 |        2 | security, operational, resilience | $0.00             |
++------------------+---------------------------+-----------+--------+------------+--------+----------+-----------------------------------+-------------------+
+| fs-2037aa2d      | test-production-single-az | available | 0.0 GB |          1 |      0 |        2 | security, operational, resilience | $0.00             |
++------------------+---------------------------+-----------+--------+------------+--------+----------+-----------------------------------+-------------------+
+| fs-3012aed8      | test-critical-no-backup   | available | 0.0 GB |          0 |      2 |        2 | security, operational, resilience | $0.00             |
++------------------+---------------------------+-----------+--------+------------+--------+----------+-----------------------------------+-------------------+
+| fs-d59f5b51      | test-no-lifecycle-policy  | available | 0.0 GB |          0 |      1 |        2 | security, operational, resilience | $0.00             |
++------------------+---------------------------+-----------+--------+------------+--------+----------+-----------------------------------+-------------------+
+
+Total Findings: 18
+   Critical: 2
+   High: 6
+   Medium: 10
+   Total Potential Monthly Savings: $0.00
+
+Top Recommendations:
+1. [fs-008f8716] Missing Encryption at Rest: Enable KMS encryption for data at rest
+2. [fs-2037aa2d] Production System Using Single AZ Storage: Migrate to Regional (Multi-AZ) storage class for production workloads
+
+Detailed report written to: efs_analysis.json

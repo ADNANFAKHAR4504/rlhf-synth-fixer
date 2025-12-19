@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "b9u3l4s9",
+  "team": "synth",
+  "startedAt": "2025-11-26T04:11:27+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "EKS",
+    "IAM",
+    "VPC",
+    "EC2",
+    "CloudWatch",
+    "EBS",
+    "S3",
+    "ECR",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "Systems Manager"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

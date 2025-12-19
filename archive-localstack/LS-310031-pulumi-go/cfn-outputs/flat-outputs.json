@@ -1,0 +1,10 @@
+{
+  "bucketName": "prod-infrastructure-bucket-tapstackprdev",
+  "iamRoleArn": "arn:aws:iam::000000000000:role/ec2-s3-role-2e42e4c",
+  "instanceId": "skipped-for-localstack",
+  "instancePublicIp": "N/A",
+  "securityGroupId": "sg-e28fafd60da1f75be",
+  "subnetAId": "subnet-7c4f78666bd0d8529",
+  "subnetBId": "subnet-73a6fb1dd7bf06f2f",
+  "vpcId": "vpc-b6a51d96df8da59ba"
+}

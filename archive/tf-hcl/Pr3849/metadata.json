@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "40819236",
+  "team": "synth",
+  "startedAt": "2025-10-08T15:14:11+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "API Gateway",
+    "Step Functions",
+    "Secrets Manager",
+    "SES",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

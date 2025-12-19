@@ -1,0 +1,32 @@
+{
+  "author": "mayanksethi-turing",
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "m54an1",
+  "team": "synth-2",
+  "startedAt": "2025-11-13T03:52:00.000Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "ALB",
+    "EC2",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "WAF",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,11 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node lib/app.ts",
+  "projectId": "fintech-trading-infrastructure",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {}
+}

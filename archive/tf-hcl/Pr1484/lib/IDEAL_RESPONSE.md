@@ -1,3 +1,46 @@
+# Infrastructure as Code Solution
+
+## Terraform Configuration Files
+
+
+### provider.tf
+
+```hcl
+# provider.tf
+
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
+
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
+provider "aws" {
+  alias  = "us_east_2"
+  region = "us-east-2"
+}
+
+provider "aws" {
+  alias  = "us_west_1"
+  region = "us-west-1"
+}
+```
+
+
+### tap_stack.tf
+
+```hcl
 # tap_stack.tf - Complete Infrastructure Stack for Multi-Region Deployment
 # ==========================================================
 # = VARIABLES =
@@ -872,3 +915,123 @@ output "route53_record" {
   value       = "${var.subdomain}.${var.domain_name}"
   description = "Route53 DNS Failover Record"
 }
+
+output "primary_internet_gateway_id" {
+  value       = aws_internet_gateway.primary.id
+  description = "Primary region Internet Gateway ID"
+}
+output "secondary_internet_gateway_id" {
+  value       = aws_internet_gateway.secondary.id
+  description = "Secondary region Internet Gateway ID"
+}
+output "primary_nat_gateway_ids" {
+  value       = aws_nat_gateway.primary[*].id
+  description = "List of NAT Gateway IDs in primary region"
+}
+output "secondary_nat_gateway_ids" {
+  value       = aws_nat_gateway.secondary[*].id
+  description = "List of NAT Gateway IDs in secondary region"
+}
+output "primary_public_route_table_id" {
+  value       = aws_route_table.primary_public.id
+  description = "Primary region public route table ID"
+}
+output "primary_private_route_table_ids" {
+  value       = aws_route_table.primary_private[*].id
+  description = "Primary region private route table IDs"
+}
+output "secondary_public_route_table_id" {
+  value       = aws_route_table.secondary_public.id
+  description = "Secondary region public route table ID"
+}
+output "secondary_private_route_table_ids" {
+  value       = aws_route_table.secondary_private[*].id
+  description = "Secondary region private route table IDs"
+}
+output "primary_to_secondary_peering_routes" {
+  value = [
+    aws_route.primary_public_to_secondary.id,
+    aws_route.primary_private_to_secondary[*].id
+  ]
+  description = "Route IDs in primary region pointing to secondary via peering"
+}
+output "secondary_to_primary_peering_routes" {
+  value = [
+    aws_route.secondary_public_to_primary.id,
+    aws_route.secondary_private_to_primary[*].id
+  ]
+  description = "Route IDs in secondary region pointing to primary via peering"
+}
+
+# Security: Security group IDs and rule counts for primary and secondary regions
+output "primary_ec2_security_group_id" {
+  value       = aws_security_group.primary_ec2.id
+  description = "Primary region EC2 Security Group ID"
+}
+output "primary_ec2_security_group_rule_count" {
+  value       = length(aws_security_group.primary_ec2.ingress) + length(aws_security_group.primary_ec2.egress)
+  description = "Number of ingress/egress rules in primary EC2 SG"
+}
+output "secondary_ec2_security_group_id" {
+  value       = aws_security_group.secondary_ec2.id
+  description = "Secondary region EC2 Security Group ID"
+}
+output "secondary_ec2_security_group_rule_count" {
+  value       = length(aws_security_group.secondary_ec2.ingress) + length(aws_security_group.secondary_ec2.egress)
+  description = "Number of ingress/egress rules in secondary EC2 SG"
+}
+output "vpc_cidr_overlap_warning" {
+  value       = var.primary_vpc_cidr == var.secondary_vpc_cidr ? "Warning: VPC CIDRs overlap!" : "No CIDR overlap detected"
+  description = "Basic check for overlapping VPC CIDRs"
+}
+
+# S3 replication/KMS: Buckets, versioning, replication role ARN, and KMS keys ARNs
+output "primary_s3_bucket_name" {
+  value       = aws_s3_bucket.primary.bucket
+  description = "Primary S3 bucket name"
+}
+output "secondary_s3_bucket_name" {
+  value       = aws_s3_bucket.secondary.bucket
+  description = "Secondary S3 bucket name"
+}
+output "s3_replication_role_arn" {
+  value       = aws_iam_role.s3_replication.arn
+  description = "IAM Role ARN used for S3 cross-region replication"
+}
+output "primary_kms_key_arn" {
+  value       = aws_kms_key.primary.arn
+  description = "Primary region KMS key ARN"
+}
+output "secondary_kms_key_arn" {
+  value       = aws_kms_key.secondary.arn
+  description = "Secondary region KMS key ARN"
+}
+
+# IAM wiring: Instance profile and role names attached to EC2 instances
+output "ec2_iam_instance_profile_name" {
+  value       = aws_iam_instance_profile.ec2_profile.name
+  description = "IAM instance profile name attached to EC2 instances"
+}
+output "ec2_iam_role_name" {
+  value       = aws_iam_role.ec2_role.name
+  description = "IAM role name attached to EC2 instances"
+}
+
+# Public vs Private subnets: Validate per VPC counts
+output "primary_public_subnet_count" {
+  value       = length(aws_subnet.primary_public)
+  description = "Number of public subnets in primary VPC"
+}
+output "primary_private_subnet_count" {
+  value       = length(aws_subnet.primary_private)
+  description = "Number of private subnets in primary VPC"
+}
+output "secondary_public_subnet_count" {
+  value       = length(aws_subnet.secondary_public)
+  description = "Number of public subnets in secondary VPC"
+}
+output "secondary_private_subnet_count" {
+  value       = length(aws_subnet.secondary_private)
+  description = "Number of private subnets in secondary VPC"
+}
+```

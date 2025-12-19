@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350264",
+  "team": "2",
+  "startedAt": "2025-10-15T10:36:02.606Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "AWS Config",
+    "IAM",
+    "Secrets Manager",
+    "Certificate Manager",
+    "Elastic Load Balancing",
+    "WAF"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912476",
+  "team": "synth",
+  "startedAt": "2025-11-13T08:04:30Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "serverless-infrastructure"
+  ],
+  "aws_services": [
+    "CloudWatch Logs",
+    "DynamoDB",
+    "IAM",
+    "Lambda",
+    "SQS"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

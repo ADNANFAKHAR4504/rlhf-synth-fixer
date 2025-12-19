@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "4675",
+  "team": "5",
+  "startedAt": "2025-10-18T04:36:45.422Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "Secure e-book delivery infrastructure with CloudFront CDN, S3 storage, KMS encryption, and comprehensive monitoring for 10K daily deliveries",
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Route53",
+    "ACM",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "WAFv2"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}

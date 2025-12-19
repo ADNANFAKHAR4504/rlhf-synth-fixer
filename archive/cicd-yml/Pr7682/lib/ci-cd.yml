@@ -1,0 +1,147 @@
+# CI/CD Pipeline for Node.js Application
+# Build and deployment workflow using AWS services
+---
+name: Node.js CI/CD Pipeline
+
+"on":
+  workflow_dispatch:
+    inputs:
+      environment_suffix:
+        description: 'Environment suffix for resource naming'
+        required: true
+        default: 'dev'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - '.github/workflows/**'
+
+env:
+  AWS_REGION: us-east-1
+  ENVIRONMENT_SUFFIX: ${{ github.event.inputs.environment_suffix || 'dev' }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  source-validation:
+    name: Source Validation
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate version
+        id: version
+        run: |
+          VERSION=$(date +%Y%m%d%H%M%S)-${GITHUB_SHA::8}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Validate package.json
+        run: |
+          [ -f package.json ] && echo "package.json found" || exit 1
+          node -e "JSON.parse(require('fs').readFileSync('package.json'))"
+
+      - name: Check for secrets in code
+        run: |
+          SECRETS_PATTERN="(password|secret|api_key|access_key)"
+          SECRETS_PATTERN="${SECRETS_PATTERN}\s*=\s*['\"][^'\"]+['\"]"
+          ! grep -rE "$SECRETS_PATTERN" \
+            --include="*.js" --include="*.ts" --include="*.json" \
+            src/ 2>/dev/null
+
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: source-validation
+    outputs:
+      artifact_path: ${{ steps.build.outputs.artifact_path }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build application
+        id: build
+        run: |
+          npm run build
+          echo "artifact_path=dist" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: Build-${{ env.ENVIRONMENT_SUFFIX }}
+
+      - name: Upload artifacts to S3
+        env:
+          VERSION: ${{ needs.source-validation.outputs.version }}
+        run: |
+          BUCKET="nodeapp-artifacts-${ENVIRONMENT_SUFFIX}"
+          aws s3 cp dist/ "s3://${BUCKET}/${VERSION}/" --recursive
+
+  deploy:
+    name: Deploy Application
+    runs-on: ubuntu-latest
+    needs: [source-validation, build]
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: Deploy-${{ env.ENVIRONMENT_SUFFIX }}
+
+      - name: Download artifacts from S3
+        env:
+          VERSION: ${{ needs.source-validation.outputs.version }}
+        run: |
+          mkdir -p deploy
+          BUCKET="nodeapp-artifacts-${ENVIRONMENT_SUFFIX}"
+          aws s3 cp "s3://${BUCKET}/${VERSION}/" deploy/ --recursive
+
+      - name: Verify deployment artifacts
+        run: |
+          [ -d deploy ] && echo "Artifacts downloaded" || exit 1
+          ls -la deploy/
+
+      - name: Deploy to S3 bucket
+        run: |
+          BUCKET="nodeapp-deploy-${ENVIRONMENT_SUFFIX}"
+          aws s3 sync deploy/ "s3://${BUCKET}/" --delete
+
+      - name: Verify deployment
+        run: |
+          BUCKET="nodeapp-deploy-${ENVIRONMENT_SUFFIX}"
+          aws s3 ls "s3://${BUCKET}/" && echo "Deployment verified"
+
+      - name: Send notification
+        if: always()
+        env:
+          VERSION: ${{ needs.source-validation.outputs.version }}
+        run: |
+          echo "Deployment status: ${{ job.status }}"
+          echo "Version: ${VERSION}"

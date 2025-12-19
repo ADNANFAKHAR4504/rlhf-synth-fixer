@@ -1,0 +1,810 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure AWS Infrastructure - CloudFormation Template with IAM roles, encrypted S3, CloudTrail, and VPC Flow Logs",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Cross-Account Access Configuration"
+                    },
+                    "Parameters": [
+                        "TrustedAccountId"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VpcCidr"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "TrustedAccountId": {
+            "Type": "String",
+            "Default": "123456789012",
+            "Description": "AWS Account ID that will be trusted for cross-account access",
+            "AllowedPattern": "^[0-9]{12}$",
+            "ConstraintDescription": "Must be a 12-digit AWS Account ID"
+        },
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for the VPC",
+            "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$",
+            "ConstraintDescription": "Must be a valid CIDR range"
+        }
+    },
+    "Conditions": {
+        "UseSameAccount": {
+            "Fn::Equals": [
+                {
+                    "Ref": "TrustedAccountId"
+                },
+                "123456789012"
+            ]
+        }
+    },
+    "Resources": {
+        "S3EncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for S3 bucket encryption - ${EnvironmentSuffix}"
+                },
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudTrail to encrypt logs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow VPC Flow Logs to encrypt logs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "S3EncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/secure-infrastructure-s3-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "S3EncryptionKey"
+                }
+            }
+        },
+        "CloudTrailLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "cloudtrail-logs-${AWS::AccountId}-${EnvironmentSuffix}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "S3EncryptionKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90,
+                            "NoncurrentVersionExpirationInDays": 30
+                        }
+                    ]
+                }
+            }
+        },
+        "VpcFlowLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "vpc-flow-logs-${AWS::AccountId}-${EnvironmentSuffix}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "S3EncryptionKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldFlowLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 30
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudTrailBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudTrailLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailLogsBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CloudTrailLogsBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "VpcFlowLogsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "VpcFlowLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "AWSVPCFlowLogsAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "VpcFlowLogsBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSVPCFlowLogsWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${VpcFlowLogsBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSVPCFlowLogsListBucket",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "VpcFlowLogsBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "CrossAccountRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "SecureInfrastructureCrossAccountRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::If": [
+                                        "UseSameAccount",
+                                        {
+                                            "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:iam::${TrustedAccountId}:root"
+                                        }
+                                    ]
+                                }
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "StringEquals": {
+                                    "sts:ExternalId": {
+                                        "Fn::Sub": "secure-infra-${EnvironmentSuffix}"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/ReadOnlyAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "LimitedS3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "CloudTrailLogsBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${CloudTrailLogsBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "VpcFlowLogsBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${VpcFlowLogsBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudTrailRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "CloudTrailRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudTrailLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetBucketAcl"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "CloudTrailLogsBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${CloudTrailLogsBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCFlowLogRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "VPCFlowLogRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "FlowLogsDeliveryRolePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetBucketAcl",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "VpcFlowLogsBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${VpcFlowLogsBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "SecurityCloudTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": "CloudTrailBucketPolicy",
+            "Properties": {
+                "TrailName": {
+                    "Fn::Sub": "SecurityCloudTrail-${EnvironmentSuffix}"
+                },
+                "S3BucketName": {
+                    "Ref": "CloudTrailLogsBucket"
+                },
+                "S3KeyPrefix": "cloudtrail-logs",
+                "IncludeGlobalServiceEvents": true,
+                "IsLogging": true,
+                "IsMultiRegionTrail": true,
+                "EnableLogFileValidation": true,
+                "KMSKeyId": {
+                    "Ref": "S3EncryptionKey"
+                },
+                "EventSelectors": [
+                    {
+                        "ReadWriteType": "All",
+                        "IncludeManagementEvents": true,
+                        "DataResources": [
+                            {
+                                "Type": "AWS::S3::Object",
+                                "Values": [
+                                    {
+                                        "Fn::Sub": "${CloudTrailLogsBucket.Arn}/*"
+                                    },
+                                    {
+                                        "Fn::Sub": "${VpcFlowLogsBucket.Arn}/*"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "SecureVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "SecureVPC-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCidr"
+                                },
+                                4,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "PublicSubnet-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCidr"
+                                },
+                                4,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "PrivateSubnet-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "IGW-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "VPCFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "DependsOn": [
+                "VpcFlowLogsBucketPolicy",
+                "VPCFlowLogRole"
+            ],
+            "Properties": {
+                "ResourceId": {
+                    "Ref": "SecureVPC"
+                },
+                "ResourceType": "VPC",
+                "TrafficType": "ALL",
+                "LogDestination": {
+                    "Fn::GetAtt": [
+                        "VpcFlowLogsBucket",
+                        "Arn"
+                    ]
+                },
+                "LogDestinationType": "s3",
+                "LogFormat": "${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}",
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogRole",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "VPCFlowLog-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "S3EncryptionKeyId": {
+            "Description": "KMS Key ID for S3 encryption",
+            "Value": {
+                "Ref": "S3EncryptionKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3EncryptionKeyId"
+                }
+            }
+        },
+        "S3EncryptionKeyArn": {
+            "Description": "KMS Key ARN for S3 encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "S3EncryptionKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3EncryptionKeyArn"
+                }
+            }
+        },
+        "CloudTrailLogsBucketName": {
+            "Description": "Name of the CloudTrail logs S3 bucket",
+            "Value": {
+                "Ref": "CloudTrailLogsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrailLogsBucketName"
+                }
+            }
+        },
+        "VpcFlowLogsBucketName": {
+            "Description": "Name of the VPC Flow Logs S3 bucket",
+            "Value": {
+                "Ref": "VpcFlowLogsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VpcFlowLogsBucketName"
+                }
+            }
+        },
+        "CrossAccountRoleArn": {
+            "Description": "ARN of the cross-account IAM role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CrossAccountRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CrossAccountRoleArn"
+                }
+            }
+        },
+        "CloudTrailArn": {
+            "Description": "ARN of the CloudTrail",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecurityCloudTrail",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrailArn"
+                }
+            }
+        },
+        "VPCId": {
+            "Description": "ID of the secure VPC",
+            "Value": {
+                "Ref": "SecureVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCId"
+                }
+            }
+        },
+        "VPCFlowLogId": {
+            "Description": "ID of the VPC Flow Log",
+            "Value": {
+                "Ref": "VPCFlowLog"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCFlowLogId"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        }
+    }
+}

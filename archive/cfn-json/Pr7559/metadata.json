@@ -1,0 +1,29 @@
+{
+  "po_id": "101912926",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-01T04:19:38+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "EC2",
+    "IAM",
+    "S3",
+    "SSM",
+    "VPC"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

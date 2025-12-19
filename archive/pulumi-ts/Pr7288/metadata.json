@@ -1,0 +1,46 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "p0k8w0t1",
+  "team": "iac-synth",
+  "startedAt": "2025-11-25T12:52:53.000Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "dynamodb",
+    "lambda",
+    "eventbridge",
+    "sns",
+    "sqs",
+    "iam",
+    "kms",
+    "cloudwatch"
+  ],
+  "deployment_status": "success",
+  "deployment_region": "us-east-1",
+  "resources_created": 22,
+  "test_results": {
+    "unit_tests": {
+      "total": 108,
+      "passed": 108,
+      "failed": 0,
+      "coverage": "100% (structural validation)"
+    },
+    "integration_tests": {
+      "total": 25,
+      "passed": 25,
+      "failed": 0
+    }
+  },
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

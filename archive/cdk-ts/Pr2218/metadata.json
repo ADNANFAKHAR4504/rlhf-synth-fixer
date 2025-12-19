@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291486",
+  "team": "1",
+  "startedAt": "2025-08-22T16:45:25.439Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "satyapal-lab",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "4549",
+  "team": "5",
+  "startedAt": "2025-10-15T18:01:04.014Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "S3, CloudFront, Route 53, ACM, CloudWatch, KMS, IAM",
+  "background": "A media platform needs to deliver licensed video content to about twenty thousand daily users while enforcing geo-restrictions to comply with regional distribution agreements. The system should maintain low latency, secure content at rest and in transit, and provide detailed access logging for compliance and analytics.",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}

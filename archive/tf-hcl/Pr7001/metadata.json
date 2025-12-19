@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "6959",
+  "team": "5",
+  "startedAt": "2025-11-20T14:45:34.771Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "Secure, segmented network infrastructure for payment platform requiring PCI DSS compliance",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Transit Gateway",
+    "S3",
+    "IAM",
+    "SSM"
+  ],
+  "training_quality": 9.8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

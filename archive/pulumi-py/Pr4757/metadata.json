@@ -1,0 +1,22 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349303",
+  "team": "6",
+  "startedAt": "2025-10-17T15:30:41.351Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "This task involves setting up a serverless architecture with an emphasis on security, scalability, and monitoring. You are required to use AWS CloudFormation in Python, implying the use of AWS SDK (boto3) or AWS CDK for Python to implement the infrastructure.",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": "S3 Bucket, Lambda, IAM Role, SSM Parameter Store, Secrets Manager, CloudWatch LogGroup, CloudWatch Metric Alarm, SNS Topic",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

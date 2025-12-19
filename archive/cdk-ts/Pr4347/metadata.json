@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "356245",
+  "team": "2",
+  "startedAt": "2025-10-10T12:45:04.319Z",
+  "subtask": "Application Deployment",
+  "background": "Design infrastructure for a real-time trading event processing system with multi-region disaster recovery using EventBridge Global Endpoint, Lambda with X-Ray tracing and Powertools, and DynamoDB Global Tables",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "EventBridge",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "SQS",
+    "SNS",
+    "Route53",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

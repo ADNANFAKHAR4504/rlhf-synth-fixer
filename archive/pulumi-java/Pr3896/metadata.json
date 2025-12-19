@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "java",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "13946728",
+  "team": "synth",
+  "startedAt": "2025-10-08T18:41:05+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 6,
+  "aws_services": [
+    "S3",
+    "Kinesis Data Streams",
+    "Lambda",
+    "IAM",
+    "CloudWatch",
+    "Glue",
+    "Athena",
+    "Timestream",
+    "QuickSight"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

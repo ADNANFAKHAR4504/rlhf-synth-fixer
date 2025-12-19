@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349522",
+  "team": "6",
+  "startedAt": "2025-10-14T07:29:52.656Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "S3",
+    "DynamoDB",
+    "IAM",
+    "CloudWatch",
+    "Auto Scaling"
+  ],
+  "training_quality": 9,
+  "training_quality_justification": "Excellent training value with significant model improvements: (1) Critical architectural fix - MODEL_RESPONSE attempted single-stack multi-region deployment which is impossible in CDK, IDEAL_RESPONSE correctly implements separate regional stacks; (2) API modernization - fixed deprecated DynamoDB Table to TableV2 with proper Global Table replication; (3) Multiple runtime/validation errors resolved (naming conventions, ALB logs configuration, health checks); (4) Security best practices implemented (encryption, least privilege IAM, network isolation); (5) Complex multi-region, multi-service integration with proper cross-region replication patterns; (6) All requirements met (HA across 2 regions, security groups, S3, DynamoDB Global Tables, IAM, tagging). Minor deduction: some hardcoded 'Production' environment values and broad outbound security rules. Overall demonstrates substantial model knowledge gaps in CDK multi-region patterns and modern AWS API usage.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshit-at-turing",
+  "dockerS3Location": ""
+}

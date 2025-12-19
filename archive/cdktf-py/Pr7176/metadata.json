@@ -1,0 +1,31 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-01-24T14:16:00-08:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "c6h5t5",
+  "aws_services": [
+    "VPC",
+    "Lambda",
+    "S3",
+    "KMS",
+    "Secrets Manager",
+    "IAM",
+    "CloudWatch Logs",
+    "VPC Endpoints"
+  ],
+  "region": "eu-central-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

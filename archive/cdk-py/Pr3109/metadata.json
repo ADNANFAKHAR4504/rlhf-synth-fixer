@@ -1,0 +1,19 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350246",
+  "team": "3",
+  "startedAt": "2025-09-29T12:22:07.151Z",
+  "task_sub_category": "IaC-Serverless-Architecture",
+  "use_case_category": "Serverless Infrastructure (Functions as Code)",
+  "aws_services": "AWS Lambda, Amazon API Gateway, Amazon DynamoDB, Amazon VPC, Amazon SQS, Amazon CloudWatch, Amazon CloudWatch Alarms, Amazon CloudFront, AWS WAF, AWS IAM, AWS X-Ray, Amazon Route 53",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}

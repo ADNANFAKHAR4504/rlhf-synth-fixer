@@ -1,0 +1,39 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-14T14:20:36+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "Infrastructure task for CDKTF",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "po_id": "3934138498",
+  "aws_services": [
+    "RDS Aurora PostgreSQL",
+    "S3",
+    "KMS",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "Route53",
+    "CloudTrail",
+    "AWS Backup",
+    "Secrets Manager",
+    "Systems Manager Parameter Store",
+    "VPC",
+    "IAM"
+  ],
+  "region": "eu-west-2",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

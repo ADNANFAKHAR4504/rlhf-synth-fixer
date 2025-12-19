@@ -1,0 +1,30 @@
+{
+  "po_id": "101912458",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth-1",
+  "turn_type": "single",
+  "startedAt": "2025-11-14T00:55:00.402654Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "observability-&-monitoring"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "Lambda",
+    "SNS",
+    "IAM",
+    "EventBridge"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

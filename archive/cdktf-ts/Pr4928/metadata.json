@@ -1,0 +1,35 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "8805053057",
+  "team": "synth",
+  "startedAt": "2025-10-21T11:06:48+00:00",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 8.5,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "CloudTrail",
+    "SNS",
+    "Backup",
+    "SecretsManager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,23 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr867",
+  "team": "synth",
+  "startedAt": "2025-08-15T12:05:53+05:30",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Access Control",
+    "Performance Optimization",
+    "Monitoring Setup"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

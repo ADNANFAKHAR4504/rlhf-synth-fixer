@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "scklr",
+  "team": "synth",
+  "startedAt": "2025-11-07T10:57:55+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "ECR",
+    "ELB",
+    "RDS",
+    "WAF",
+    "Secrets Manager",
+    "SSM",
+    "CloudWatch",
+    "IAM",
+    "Application Auto Scaling"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

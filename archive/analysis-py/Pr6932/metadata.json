@@ -1,0 +1,19 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "349036",
+  "team": "2",
+  "startedAt": "2025-11-20T04:57:08.928Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

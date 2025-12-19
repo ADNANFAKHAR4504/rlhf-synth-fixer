@@ -1,0 +1,39 @@
+{
+  "po_id": "4101712413",
+  "team": "synth",
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "multi-turn",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "Infrastructure task for CDK",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "startedAt": "2025-10-14T14:59:07.393066+00:00",
+  "training_quality": 8.5,
+  "training_quality_justification": "High-value training data (8.5/10). Demonstrates critical DR architecture gaps (missing Route53, Aurora Global DB, S3 CRR), excellent ECS health check failure pattern (deployment blocker), and incomplete feature implementation (SNS without alarms). Code quality is excellent where implemented (70% of requirements). The ECS health check mismatch provides exceptional training value for real-world deployment issues. Score reduced from 10 due to: -1 metadata language mismatch (CSV setup issue), -2 missing critical AWS services (Route53, CloudWatch Alarms), -0.5 wrong implementations (Aurora/S3 CRR). Strong learning opportunity for disaster recovery completeness and feature implementation patterns.",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS Aurora",
+    "ECS",
+    "ELB",
+    "CloudWatch",
+    "CloudTrail",
+    "KMS",
+    "Secrets Manager",
+    "SNS",
+    "AWS Backup",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,35 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-17T13:36:06+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "p01c8w",
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "SNS",
+    "SQS",
+    "CloudWatch",
+    "KMS",
+    "SSM Parameter Store",
+    "EventBridge",
+    "IAM",
+    "X-Ray"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

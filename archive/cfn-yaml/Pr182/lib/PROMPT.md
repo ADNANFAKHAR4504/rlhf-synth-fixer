@@ -30,4 +30,4 @@ Use parameterized values where applicable.
 
 Add descriptive comments to explain each major section.
 
-Output only the CloudFormation YAML template—no explanations.
+Output only the CloudFormation YAML templateno explanations.

@@ -1,0 +1,38 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "3fu9x2",
+  "team": "synth-2",
+  "startedAt": "2025-11-14T21:44:57+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Configure cluster autoscaler with priority-based node selection",
+    "Implement pod security standards with restricted baseline",
+    "Enable EKS control plane logging to CloudWatch for audit, authenticator, and API logs",
+    "Configure OIDC provider for IRSA (IAM Roles for Service Accounts)",
+    "EKS cluster must use Kubernetes version 1.28 or higher",
+    "Use Pulumi Go SDK v3.x with strongly typed resource definitions",
+    "Use managed node groups with custom launch templates",
+    "Node groups must use Bottlerocket AMI for enhanced security",
+    "Implement Calico network policies for inter-pod traffic control"
+  ],
+  "aws_services": [
+    "EKS",
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudWatch",
+    "Auto Scaling",
+    "Elastic Load Balancing"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "raghav-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

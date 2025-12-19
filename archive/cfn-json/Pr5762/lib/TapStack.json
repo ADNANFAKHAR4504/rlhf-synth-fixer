@@ -1,0 +1,1483 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CDR Migration System - Complete Data Pipeline",
+  "Parameters": {
+    "EnvironmentName": {
+      "Type": "String",
+      "Default": "production",
+      "Description": "Environment name for the deployment"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming and configuration (e.g., dev, staging, prod)"
+    },
+    "RedshiftMasterUsername": {
+      "Type": "String",
+      "Default": "admin",
+      "Description": "Master username for Redshift cluster"
+    },
+    "AuroraMasterUsername": {
+      "Type": "String",
+      "Default": "admin",
+      "Description": "Master username for Aurora cluster"
+    }
+  },
+  "Resources": {
+    "CDRKinesisStream": {
+      "Type": "AWS::Kinesis::Stream",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "cdr-ingestion-stream-${EnvironmentSuffix}"
+        },
+        "ShardCount": 30,
+        "RetentionPeriodHours": 24,
+        "StreamModeDetails": {
+          "StreamMode": "PROVISIONED"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
+    "CDRArchivalBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "cdr-archive-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToIA",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "StorageClass": "STANDARD_IA",
+                  "TransitionInDays": 30
+                },
+                {
+                  "StorageClass": "GLACIER",
+                  "TransitionInDays": 90
+                }
+              ]
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "CDRDynamoDBTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "cdr-realtime-lookup-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "cdr_id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "cdr_id",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
+    "RedshiftSubnetGroup": {
+      "Type": "AWS::Redshift::ClusterSubnetGroup",
+      "Properties": {
+        "Description": "Subnet group for Redshift cluster",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
+    "RedshiftCluster": {
+      "Type": "AWS::Redshift::Cluster",
+      "Properties": {
+        "ClusterIdentifier": {
+          "Fn::Sub": "${EnvironmentName}-cdr-redshift-${EnvironmentSuffix}"
+        },
+        "DBName": "cdrwarehouse",
+        "MasterUsername": {
+          "Ref": "RedshiftMasterUsername"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${RedshiftSecret}:SecretString:password}}"
+        },
+        "NodeType": "ra3.4xlarge",
+        "ClusterType": "multi-node",
+        "NumberOfNodes": 2,
+        "ClusterSubnetGroupName": {
+          "Ref": "RedshiftSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "RedshiftSecurityGroup"
+          }
+        ],
+        "PubliclyAccessible": false,
+        "Encrypted": true,
+        "AutomatedSnapshotRetentionPeriod": 7,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraDBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnet group for Aurora cluster",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraDBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "DatabaseName": "billing",
+        "MasterUsername": {
+          "Ref": "AuroraMasterUsername"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${AuroraPasswordSecret}:SecretString:password}}"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "AuroraDBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "AuroraSecurityGroup"
+          }
+        ],
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "StorageEncrypted": true,
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "general",
+          "slowquery"
+        ],
+        "ServerlessV2ScalingConfiguration": {
+          "MinCapacity": 0.5,
+          "MaxCapacity": 16
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraDBInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceClass": "db.serverless",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraDBCluster"
+        },
+        "Engine": "aurora-mysql",
+        "PubliclyAccessible": false
+      }
+    },
+    "AuroraDBInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceClass": "db.serverless",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraDBCluster"
+        },
+        "Engine": "aurora-mysql",
+        "PubliclyAccessible": false
+      }
+    },
+    "FirehoseDeliveryRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "firehose.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "FirehoseDeliveryPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "CDRArchivalBucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${CDRArchivalBucket.Arn}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "redshift:DescribeClusters",
+                    "redshift:DescribeClusterDbRevisions"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:cluster:${RedshiftCluster}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "redshift-data:ExecuteStatement",
+                    "redshift-data:DescribeStatement"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CDRFirehoseStream": {
+      "Type": "AWS::KinesisFirehose::DeliveryStream",
+      "Properties": {
+        "DeliveryStreamName": {
+          "Fn::Sub": "${EnvironmentName}-cdr-firehose-${EnvironmentSuffix}"
+        },
+        "DeliveryStreamType": "DirectPut",
+          "RedshiftDestinationConfiguration": {
+          "ClusterJDBCURL": {
+            "Fn::Sub": "jdbc:redshift://${RedshiftCluster.Endpoint.Address}:${RedshiftCluster.Endpoint.Port}/cdrwarehouse"
+          },
+          "Username": {
+            "Ref": "RedshiftMasterUsername"
+          },
+            "Password": {
+              "Fn::Sub": "{{resolve:secretsmanager:${RedshiftSecret}:SecretString:password}}"
+            },
+          "RoleARN": {
+            "Fn::GetAtt": [
+              "FirehoseDeliveryRole",
+              "Arn"
+            ]
+          },
+          "CopyCommand": {
+            "DataTableName": "cdr_records",
+            "DataTableColumns": "cdr_id,timestamp,duration,caller,callee,cost",
+            "CopyOptions": "FORMAT AS JSON 'auto' GZIP"
+          },
+          "S3Configuration": {
+            "BucketARN": {
+              "Fn::GetAtt": [
+                "CDRArchivalBucket",
+                "Arn"
+              ]
+            },
+            "Prefix": "firehose/",
+            "BufferingHints": {
+              "IntervalInSeconds": 120,
+              "SizeInMBs": 128
+            },
+            "CompressionFormat": "GZIP",
+            "RoleARN": {
+              "Fn::GetAtt": [
+                "FirehoseDeliveryRole",
+                "Arn"
+              ]
+            }
+          },
+          "ProcessingConfiguration": {
+            "Enabled": false
+          },
+          "S3BackupMode": "Enabled",
+          "S3BackupConfiguration": {
+            "BucketARN": {
+              "Fn::GetAtt": [
+                "CDRArchivalBucket",
+                "Arn"
+              ]
+            },
+            "Prefix": "backup/",
+            "BufferingHints": {
+              "IntervalInSeconds": 300,
+              "SizeInMBs": 5
+            },
+            "CompressionFormat": "GZIP",
+            "RoleARN": {
+              "Fn::GetAtt": [
+                "FirehoseDeliveryRole",
+                "Arn"
+              ]
+            }
+          },
+          "CloudWatchLoggingOptions": {
+            "Enabled": true,
+            "LogGroupName": "/aws/kinesisfirehose/cdr",
+            "LogStreamName": "RedshiftDelivery"
+          }
+        }
+      }
+    },
+    "TransformLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "TransformLambdaPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${CDRArchivalBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:BatchWriteItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "CDRDynamoDBTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "firehose:PutRecord",
+                    "firehose:PutRecordBatch"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "CDRFirehoseStream",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "TransformLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${EnvironmentName}-cdr-transform-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "TransformLambdaRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "import json\nimport base64\nimport boto3\nimport os\nfrom datetime import datetime\nimport uuid\n\ns3 = boto3.client('s3')\nfirehose = boto3.client('firehose')\ndynamodb = boto3.resource('dynamodb')\n\ndef lambda_handler(event, context):\n    table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n    bucket = os.environ['S3_BUCKET']\n    stream_name = os.environ['FIREHOSE_STREAM']\n    \n    for record in event['Records']:\n        # Decode Kinesis data\n        payload = base64.b64decode(record['kinesis']['data']).decode('utf-8')\n        cdr_data = json.loads(payload)\n        \n        # Transform and validate\n        transformed = {\n            'cdr_id': str(uuid.uuid4()),\n            'timestamp': int(datetime.utcnow().timestamp()),\n            'duration': cdr_data.get('duration', 0),\n            'caller': cdr_data.get('caller', ''),\n            'callee': cdr_data.get('callee', ''),\n            'cost': cdr_data.get('cost', 0.0)\n        }\n        \n        # Write to DynamoDB\n        table.put_item(Item=transformed)\n        \n        # Prepare S3 key with partitioning\n        now = datetime.utcnow()\n        s3_key = f\"cdr-data/{now.year}/{now.month:02d}/{now.day:02d}/{now.hour:02d}/{transformed['cdr_id']}.json\"\n        \n        # Write to S3\n        s3.put_object(\n            Bucket=bucket,\n            Key=s3_key,\n            Body=json.dumps(transformed),\n            ContentType='application/json'\n        )\n        \n        # Send to Firehose\n        firehose.put_record(\n            DeliveryStreamName=stream_name,\n            Record={'Data': json.dumps(transformed) + '\\n'}\n        )\n    \n    return {'statusCode': 200}"
+        },
+        "Environment": {
+          "Variables": {
+            "S3_BUCKET": {
+              "Ref": "CDRArchivalBucket"
+            },
+            "DYNAMODB_TABLE": {
+              "Ref": "CDRDynamoDBTable"
+            },
+            "FIREHOSE_STREAM": {
+              "Ref": "CDRFirehoseStream"
+            }
+          }
+        },
+        "Timeout": 5,
+        "MemorySize": 1024,
+        "ReservedConcurrentExecutions": 100
+      }
+    },
+    "KinesisEventSourceMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "CDRKinesisStream",
+            "Arn"
+          ]
+        },
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "TransformLambdaFunction",
+            "Arn"
+          ]
+        },
+        "StartingPosition": "TRIM_HORIZON",
+        "BatchSize": 100,
+        "MaximumBatchingWindowInSeconds": 1,
+        "ParallelizationFactor": 10
+      }
+    },
+    "GlueCrawlerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "glue.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "GlueCrawlerS3Access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "CDRArchivalBucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${CDRArchivalBucket.Arn}/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "GlueDatabase": {
+      "Type": "AWS::Glue::Database",
+      "Properties": {
+        "CatalogId": {
+          "Ref": "AWS::AccountId"
+        },
+        "DatabaseInput": {
+          "Name": {
+            "Fn::Sub": "cdr_database-${EnvironmentSuffix}"
+          },
+          "Description": "CDR Data Catalog Database"
+        }
+      }
+    },
+    "CDRGlueCrawler": {
+      "Type": "AWS::Glue::Crawler",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "cdr-crawler-${EnvironmentSuffix}"
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "GlueCrawlerRole",
+            "Arn"
+          ]
+        },
+        "DatabaseName": {
+          "Ref": "GlueDatabase"
+        },
+        "Targets": {
+          "S3Targets": [
+            {
+              "Path": {
+                "Fn::Sub": "s3://${CDRArchivalBucket}/cdr-data/"
+              }
+            }
+          ]
+        },
+        "SchemaChangePolicy": {
+          "UpdateBehavior": "LOG",
+          "DeleteBehavior": "LOG"
+        },
+        "RecrawlPolicy": {
+          "RecrawlBehavior": "CRAWL_EVERYTHING"
+        }
+      }
+    },
+    "CrawlerTriggerLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "CrawlerTriggerPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "glue:StartCrawler",
+                    "glue:GetCrawler"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:crawler/${CDRGlueCrawler}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CrawlerTriggerLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "crawler-trigger-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "CrawlerTriggerLambdaRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "import boto3\nimport os\n\nglue = boto3.client('glue')\n\ndef lambda_handler(event, context):\n    crawler_name = os.environ['CRAWLER_NAME']\n    \n    try:\n        response = glue.start_crawler(Name=crawler_name)\n        return {\n            'statusCode': 200,\n            'body': f'Crawler {crawler_name} started successfully'\n        }\n    except glue.exceptions.CrawlerRunningException:\n        return {\n            'statusCode': 200,\n            'body': f'Crawler {crawler_name} is already running'\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'body': str(e)\n        }"
+        },
+        "Environment": {
+          "Variables": {
+            "CRAWLER_NAME": {
+              "Ref": "CDRGlueCrawler"
+            }
+          }
+        },
+        "Timeout": 30,
+        "MemorySize": 256
+      }
+    },
+    "CrawlerTriggerSchedule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentName}-crawler-schedule"
+        },
+        "Description": "Trigger Glue Crawler every 5 minutes",
+        "ScheduleExpression": "rate(5 minutes)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "CrawlerTriggerLambda",
+                "Arn"
+              ]
+            },
+            "Id": "CrawlerTriggerLambdaTarget"
+          }
+        ]
+      }
+    },
+    "CrawlerTriggerLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "CrawlerTriggerLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "CrawlerTriggerSchedule",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "AthenaWorkGroup": {
+      "Type": "AWS::Athena::WorkGroup",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "cdr-validation-${EnvironmentSuffix}"
+        },
+        "Description": "WorkGroup for CDR data validation queries",
+        "WorkGroupConfiguration": {
+          "ResultConfiguration": {
+            "OutputLocation": {
+              "Fn::Sub": "s3://${CDRArchivalBucket}/athena-results/"
+            },
+            "EncryptionConfiguration": {
+              "EncryptionOption": "SSE_S3"
+            }
+          },
+          "EnforceWorkGroupConfiguration": true,
+          "PublishCloudWatchMetricsEnabled": true,
+          "BytesScannedCutoffPerQuery": 1099511627776,
+          "RequesterPaysEnabled": false
+        }
+      }
+    },
+    "ValidationLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ValidationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "athena:StartQueryExecution",
+                    "athena:GetQueryExecution",
+                    "athena:GetQueryResults"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:athena:${AWS::Region}:${AWS::AccountId}:workgroup/${AthenaWorkGroup}"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "glue:GetDatabase",
+                    "glue:GetTable",
+                    "glue:GetPartitions"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/${GlueDatabase}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/${GlueDatabase}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket",
+                    "s3:PutObject",
+                    "s3:GetBucketLocation"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "CDRArchivalBucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${CDRArchivalBucket.Arn}/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ValidationLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "data-validation-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "ValidationLambdaRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "import boto3\nimport os\nimport time\n\nathena = boto3.client('athena')\n\ndef lambda_handler(event, context):\n    database = os.environ['DATABASE_NAME']\n    workgroup = os.environ['WORKGROUP_NAME']\n    output_location = os.environ['OUTPUT_LOCATION']\n    \n    # Validation query to check data accuracy\n    query = f'''\n        SELECT \n            COUNT(*) as total_records,\n            COUNT(DISTINCT cdr_id) as unique_records,\n            SUM(CASE WHEN cdr_id IS NOT NULL \n                AND timestamp IS NOT NULL \n                AND caller IS NOT NULL \n                AND callee IS NOT NULL \n                THEN 1 ELSE 0 END) as valid_records\n        FROM {database}.cdr_data\n        WHERE year = YEAR(CURRENT_DATE)\n        AND month = MONTH(CURRENT_DATE)\n        AND day = DAY(CURRENT_DATE)\n    '''\n    \n    response = athena.start_query_execution(\n        QueryString=query,\n        QueryExecutionContext={'Database': database},\n        WorkGroup=workgroup\n    )\n    \n    query_id = response['QueryExecutionId']\n    \n    # Wait for query completion\n    while True:\n        status = athena.get_query_execution(QueryExecutionId=query_id)\n        state = status['QueryExecution']['Status']['State']\n        \n        if state in ['SUCCEEDED', 'FAILED', 'CANCELLED']:\n            break\n        time.sleep(2)\n    \n    if state == 'SUCCEEDED':\n        results = athena.get_query_results(QueryExecutionId=query_id)\n        # Process results and check for 99.9% accuracy\n        return {'statusCode': 200, 'queryId': query_id}\n    else:\n        return {'statusCode': 500, 'error': 'Query failed'}"
+        },
+        "Environment": {
+          "Variables": {
+            "DATABASE_NAME": {
+              "Ref": "GlueDatabase"
+            },
+            "WORKGROUP_NAME": {
+              "Ref": "AthenaWorkGroup"
+            },
+            "OUTPUT_LOCATION": {
+              "Fn::Sub": "s3://${CDRArchivalBucket}/athena-results/"
+            }
+          }
+        },
+        "Timeout": 300,
+        "MemorySize": 512
+      }
+    },
+    "ValidationEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentName}-validation-schedule"
+        },
+        "Description": "Trigger data validation every hour",
+        "ScheduleExpression": "rate(1 hour)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "ValidationLambda",
+                "Arn"
+              ]
+            },
+            "Id": "ValidationLambdaTarget"
+          }
+        ]
+      }
+    },
+    "ValidationLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ValidationLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "ValidationEventRule",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "BillingStepFunctionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "states.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "BillingStepFunctionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "BillingProcessorLambda",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogDelivery",
+                    "logs:GetLogDelivery",
+                    "logs:UpdateLogDelivery",
+                    "logs:DeleteLogDelivery",
+                    "logs:ListLogDeliveries",
+                    "logs:PutResourcePolicy",
+                    "logs:DescribeResourcePolicies",
+                    "logs:DescribeLogGroups"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "BillingProcessorLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "BillingProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "redshift-data:ExecuteStatement",
+                    "redshift-data:DescribeStatement",
+                    "redshift-data:GetStatementResult",
+                    "redshift-data:ListStatements"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "redshift:DescribeClusters",
+                    "redshift:GetClusterCredentials"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:redshift:${AWS::Region}:${AWS::AccountId}:cluster:${RedshiftCluster}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "rds-data:ExecuteStatement",
+                    "rds-data:BatchExecuteStatement",
+                    "rds-data:BeginTransaction",
+                    "rds-data:CommitTransaction",
+                    "rds-data:RollbackTransaction"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "BillingProcessorLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${EnvironmentName}-billing-processor"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "BillingProcessorLambdaRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "import boto3\nimport json\nimport os\n\nredshift_data = boto3.client('redshift-data')\nrds_data = boto3.client('rds-data')\n\ndef lambda_handler(event, context):\n    cluster_id = os.environ['REDSHIFT_CLUSTER']\n    database = os.environ['REDSHIFT_DATABASE']\n    user = os.environ['REDSHIFT_USER']\n    aurora_cluster = os.environ['AURORA_CLUSTER']\n    aurora_database = os.environ['AURORA_DATABASE']\n    \n    # Extract batch parameters from event\n    offset = event.get('offset', 0)\n    limit = event.get('limit', 100000)\n    \n    # Query Redshift for CDR billing data\n    query = f'''\n        SELECT cdr_id, caller, callee, duration, cost, \n               DATE_TRUNC('month', timestamp) as billing_month\n        FROM cdr_records\n        WHERE timestamp >= DATE_TRUNC('month', CURRENT_DATE)\n        ORDER BY cdr_id\n        LIMIT {limit} OFFSET {offset}\n    '''\n    \n    response = redshift_data.execute_statement(\n        ClusterIdentifier=cluster_id,\n        Database=database,\n        DbUser=user,\n        Sql=query\n    )\n    \n    statement_id = response['Id']\n    \n    # Wait for query completion\n    while True:\n        status = redshift_data.describe_statement(Id=statement_id)\n        if status['Status'] in ['FINISHED', 'FAILED', 'ABORTED']:\n            break\n    \n    if status['Status'] == 'FINISHED':\n        # Get results\n        result = redshift_data.get_statement_result(Id=statement_id)\n        \n        # Process and insert into Aurora\n        for record in result['Records']:\n            billing_record = {\n                'cdr_id': record[0]['stringValue'],\n                'caller': record[1]['stringValue'],\n                'callee': record[2]['stringValue'],\n                'duration': record[3]['longValue'],\n                'cost': record[4]['doubleValue'],\n                'billing_month': record[5]['stringValue']\n            }\n            \n            # Insert into Aurora\n            sql = '''\n                INSERT INTO billing_records (cdr_id, caller, callee, duration, cost, billing_month)\n                VALUES (:cdr_id, :caller, :callee, :duration, :cost, :billing_month)\n                ON DUPLICATE KEY UPDATE cost = :cost\n            '''\n            \n            rds_data.execute_statement(\n                resourceArn=aurora_cluster,\n                secretArn=os.environ['AURORA_SECRET'],\n                database=aurora_database,\n                sql=sql,\n                parameters=[\n                    {'name': 'cdr_id', 'value': {'stringValue': billing_record['cdr_id']}},\n                    {'name': 'caller', 'value': {'stringValue': billing_record['caller']}},\n                    {'name': 'callee', 'value': {'stringValue': billing_record['callee']}},\n                    {'name': 'duration', 'value': {'longValue': billing_record['duration']}},\n                    {'name': 'cost', 'value': {'doubleValue': billing_record['cost']}},\n                    {'name': 'billing_month', 'value': {'stringValue': billing_record['billing_month']}}\n                ]\n            )\n        \n        return {\n            'statusCode': 200,\n            'processedRecords': len(result['Records']),\n            'hasMore': len(result['Records']) == limit\n        }\n    else:\n        return {'statusCode': 500, 'error': 'Query failed'}"
+        },
+        "Environment": {
+          "Variables": {
+            "REDSHIFT_CLUSTER": {
+              "Ref": "RedshiftCluster"
+            },
+            "REDSHIFT_DATABASE": "cdrwarehouse",
+            "REDSHIFT_USER": {
+              "Ref": "RedshiftMasterUsername"
+            },
+            "AURORA_CLUSTER": {
+              "Fn::GetAtt": [
+                "AuroraDBCluster",
+                "DBClusterArn"
+              ]
+            },
+            "AURORA_DATABASE": "billing",
+            "AURORA_SECRET": {
+              "Ref": "AuroraSecretArn"
+            }
+          }
+        },
+        "Timeout": 900,
+        "MemorySize": 3008,
+        "ReservedConcurrentExecutions": 50,
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            }
+          ]
+        }
+      }
+    },
+    "BillingStateMachine": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": {
+          "Fn::Sub": "billing-workflow-${EnvironmentSuffix}"
+        },
+        "StateMachineType": "EXPRESS",
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "BillingStepFunctionRole",
+            "Arn"
+          ]
+        },
+        "LoggingConfiguration": {
+          "Level": "ALL",
+          "IncludeExecutionData": true,
+          "Destinations": [
+            {
+              "CloudWatchLogsLogGroup": {
+                "LogGroupArn": {
+                  "Fn::GetAtt": [
+                    "BillingStateMachineLogGroup",
+                    "Arn"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "DefinitionString": {
+          "Fn::Sub": "{\n  \"Comment\": \"Billing workflow for processing CDR records\",\n  \"StartAt\": \"ProcessBillingBatch\",\n  \"States\": {\n    \"ProcessBillingBatch\": {\n      \"Type\": \"Map\",\n      \"ItemsPath\": \"$.batches\",\n      \"MaxConcurrency\": 20,\n      \"Parameters\": {\n        \"offset.$\": \"$$.Map.Item.Value.offset\",\n        \"limit.$\": \"$$.Map.Item.Value.limit\"\n      },\n      \"Iterator\": {\n        \"StartAt\": \"InvokeBillingLambda\",\n        \"States\": {\n          \"InvokeBillingLambda\": {\n            \"Type\": \"Task\",\n            \"Resource\": \"arn:aws:states:::lambda:invoke\",\n            \"Parameters\": {\n              \"FunctionName\": \"${BillingProcessorLambda.Arn}\",\n              \"Payload.$\": \"$\"\n            },\n            \"ResultPath\": \"$.result\",\n            \"End\": true\n          }\n        }\n      },\n      \"ResultPath\": \"$.mapResults\",\n      \"Next\": \"CheckCompletion\"\n    },\n    \"CheckCompletion\": {\n      \"Type\": \"Pass\",\n      \"Result\": \"Billing processing complete\",\n      \"End\": true\n    }\n  }\n}"
+        }
+      }
+    },
+    "BillingStateMachineLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/vendedlogs/states/billing-workflow-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "BillingScheduleRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "billing-schedule-${EnvironmentSuffix}"
+        },
+        "Description": "Trigger billing workflow daily",
+        "ScheduleExpression": "cron(0 2 * * ? *)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "BillingStateMachine"
+            },
+            "Id": "BillingStateMachineTarget",
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "BillingScheduleRole",
+                "Arn"
+              ]
+            },
+            "Input": "{\n  \"batches\": [\n    {\"offset\": 0, \"limit\": 1000000},\n    {\"offset\": 1000000, \"limit\": 1000000},\n    {\"offset\": 2000000, \"limit\": 1000000},\n    {\"offset\": 3000000, \"limit\": 1000000},\n    {\"offset\": 4000000, \"limit\": 1000000},\n    {\"offset\": 5000000, \"limit\": 1000000},\n    {\"offset\": 6000000, \"limit\": 1000000},\n    {\"offset\": 7000000, \"limit\": 1000000},\n    {\"offset\": 8000000, \"limit\": 1000000},\n    {\"offset\": 9000000, \"limit\": 1000000},\n    {\"offset\": 10000000, \"limit\": 1000000},\n    {\"offset\": 11000000, \"limit\": 1000000},\n    {\"offset\": 12000000, \"limit\": 1000000},\n    {\"offset\": 13000000, \"limit\": 1000000},\n    {\"offset\": 14000000, \"limit\": 1000000},\n    {\"offset\": 15000000, \"limit\": 1000000},\n    {\"offset\": 16000000, \"limit\": 1000000},\n    {\"offset\": 17000000, \"limit\": 1000000},\n    {\"offset\": 18000000, \"limit\": 1000000},\n    {\"offset\": 19000000, \"limit\": 1000000},\n    {\"offset\": 20000000, \"limit\": 1000000},\n    {\"offset\": 21000000, \"limit\": 1000000},\n    {\"offset\": 22000000, \"limit\": 1000000},\n    {\"offset\": 23000000, \"limit\": 1000000},\n    {\"offset\": 24000000, \"limit\": 1000000},\n    {\"offset\": 25000000, \"limit\": 1000000},\n    {\"offset\": 26000000, \"limit\": 1000000},\n    {\"offset\": 27000000, \"limit\": 1000000},\n    {\"offset\": 28000000, \"limit\": 1000000},\n    {\"offset\": 29000000, \"limit\": 1000000},\n    {\"offset\": 30000000, \"limit\": 1000000},\n    {\"offset\": 31000000, \"limit\": 1000000},\n    {\"offset\": 32000000, \"limit\": 1000000},\n    {\"offset\": 33000000, \"limit\": 1000000},\n    {\"offset\": 34000000, \"limit\": 1000000},\n    {\"offset\": 35000000, \"limit\": 1000000},\n    {\"offset\": 36000000, \"limit\": 1000000},\n    {\"offset\": 37000000, \"limit\": 1000000},\n    {\"offset\": 38000000, \"limit\": 1000000},\n    {\"offset\": 39000000, \"limit\": 1000000},\n    {\"offset\": 40000000, \"limit\": 1000000},\n    {\"offset\": 41000000, \"limit\": 1000000},\n    {\"offset\": 42000000, \"limit\": 1000000},\n    {\"offset\": 43000000, \"limit\": 1000000},\n    {\"offset\": 44000000, \"limit\": 1000000},\n    {\"offset\": 45000000, \"limit\": 1000000},\n    {\"offset\": 46000000, \"limit\": 1000000},\n    {\"offset\": 47000000, \"limit\": 1000000},\n    {\"offset\": 48000000, \"limit\": 1000000},\n    {\"offset\": 49000000, \"limit\": 1000000},\n    {\"offset\": 50000000, \"limit\": 1000000},\n    {\"offset\": 51000000, \"limit\": 1000000},\n    {\"offset\": 52000000, \"limit\": 1000000},\n    {\"offset\": 53000000, \"limit\": 1000000},\n    {\"offset\": 54000000, \"limit\": 1000000},\n    {\"offset\": 55000000, \"limit\": 1000000},\n    {\"offset\": 56000000, \"limit\": 1000000},\n    {\"offset\": 57000000, \"limit\": 1000000},\n    {\"offset\": 58000000, \"limit\": 1000000},\n    {\"offset\": 59000000, \"limit\": 1000000},\n    {\"offset\": 60000000, \"limit\": 1000000},\n    {\"offset\": 61000000, \"limit\": 1000000},\n    {\"offset\": 62000000, \"limit\": 1000000},\n    {\"offset\": 63000000, \"limit\": 1000000},\n    {\"offset\": 64000000, \"limit\": 1000000},\n    {\"offset\": 65000000, \"limit\": 1000000},\n    {\"offset\": 66000000, \"limit\": 1000000},\n    {\"offset\": 67000000, \"limit\": 1000000}\n  ]\n}"
+            }
+        ]
+      }
+    },
+    "BillingScheduleRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "StartStateMachinePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "states:StartExecution"
+                  ],
+                  "Resource": {
+                    "Ref": "BillingStateMachine"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AuroraSecretArn": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-aurora-credentials"
+        },
+        "Description": "Aurora database credentials",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 24,
+          "ExcludeCharacters": "@/\\\\"
+        }
+      }
+    },
+    "RedshiftSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-redshift-credentials"
+        },
+        "Description": "Redshift credentials",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 30,
+          "ExcludeCharacters": "@/\\\\"
+        }
+      }
+    },
+    "AuroraPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-aurora-password"
+        },
+        "Description": "Aurora master user password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 24,
+          "ExcludeCharacters": "@/\\\\"
+        }
+      }
+    },
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-VPC"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-Private-Subnet-1"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-Private-Subnet-2"
+            }
+          }
+        ]
+      }
+    },
+    "RedshiftSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Redshift cluster",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5439,
+            "ToPort": 5439,
+            "SourceSecurityGroupId": {
+              "Ref": "LambdaSecurityGroup"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "Redshift-SG-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Aurora cluster",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "LambdaSecurityGroup"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-Aurora-SG"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Lambda functions",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-Lambda-SG"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "KinesisStreamARN": {
+      "Description": "ARN of the Kinesis Data Stream",
+      "Value": {
+        "Fn::GetAtt": [
+          "CDRKinesisStream",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KinesisStreamARN"
+        }
+      }
+    },
+    "S3BucketName": {
+      "Description": "Name of the S3 archive bucket",
+      "Value": {
+        "Ref": "CDRArchivalBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3BucketName"
+        }
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "CDRDynamoDBTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DynamoDBTableName"
+        }
+      }
+    },
+    "RedshiftClusterId": {
+      "Description": "Redshift cluster identifier",
+      "Value": {
+        "Ref": "RedshiftCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RedshiftClusterId"
+        }
+      }
+    },
+    "AuroraClusterId": {
+      "Description": "Aurora cluster identifier",
+      "Value": {
+        "Ref": "AuroraDBCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuroraClusterId"
+        }
+      }
+    },
+    "StepFunctionStateMachineARN": {
+      "Description": "ARN of the billing Step Functions state machine",
+      "Value": {
+        "Ref": "BillingStateMachine"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StepFunctionARN"
+        }
+      }
+    }
+  }
+}

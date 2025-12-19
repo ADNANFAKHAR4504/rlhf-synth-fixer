@@ -1,0 +1,33 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-17T04:40:44+05:30",
+  "subtask": "Application Deployment",
+  "background": "EduTech Brasil, a growing educational technology provider, needs to deploy their custom LMS platform to support 10,000 concurrent students. The system requires session management and caching to handle high traffic loads during peak exam periods.",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "po_id": "4383134141",
+  "aws_services": [
+    "Amazon ECS (Fargate)",
+    "Amazon ElastiCache (Redis)",
+    "Amazon EFS",
+    "AWS KMS",
+    "Amazon VPC",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "AWS Secrets Manager"
+  ],
+  "region": "sa-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

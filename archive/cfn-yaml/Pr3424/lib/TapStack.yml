@@ -1,0 +1,886 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Payment Workflow Orchestration System using Step Functions"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: "dev"
+    AllowedValues:
+      - dev
+      - test
+      - prod
+    Description: Environment name for resource naming
+
+  AlertEmail:
+    Type: String
+    Default: "test@example.com"
+    Description: Email address for workflow failure alerts
+    AllowedPattern: '[^@]+@[^@]+\.[^@]+'
+
+  EnvironmentSuffix:
+    Type: String
+    Default: "dev"
+    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - Environment
+          - EnvironmentSuffix
+          - AlertEmail
+
+Resources:
+  # DynamoDB Table for Payment Transactions
+  DynamoDBTablePaymentTransactions:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${Environment}-payment-transactions-${EnvironmentSuffix}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: paymentId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: paymentId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: TimestampIndex
+          KeySchema:
+            - AttributeName: timestamp
+              KeyType: HASH
+            - AttributeName: paymentId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  # SNS Topic for Alerts
+  SNSTopicPaymentWorkflowAlerts:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${Environment}-payment-workflow-alerts-${EnvironmentSuffix}"
+      DisplayName: Payment Workflow Alerts
+      KmsMasterKeyId: alias/aws/sns
+      Subscription:
+        - Endpoint: !Ref AlertEmail
+          Protocol: email
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  # IAM Role for Step Functions
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Environment}-payment-workflow-sfn-role-${EnvironmentSuffix}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+      Policies:
+        - PolicyName: StepFunctionsExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ValidatePaymentLambda.Arn
+                  - !GetAtt ProcessPaymentLambda.Arn
+                  - !GetAtt StoreTransactionLambda.Arn
+                  - !GetAtt NotifyCustomerLambda.Arn
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref SNSTopicPaymentWorkflowAlerts
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  # IAM Role for Lambda Functions
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Environment}-payment-lambda-role-${EnvironmentSuffix}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LambdaExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt DynamoDBTablePaymentTransactions.Arn
+                  - !Sub "${DynamoDBTablePaymentTransactions.Arn}/index/*"
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref SNSTopicPaymentWorkflowAlerts
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda Function - Validate Payment
+  ValidatePaymentLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-validate-payment-${EnvironmentSuffix}"
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DynamoDBTablePaymentTransactions
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import re
+          from decimal import Decimal
+
+          def handler(event, context):
+              """
+              Validates payment input data.
+              Expected input: {
+                  "paymentId": "string",
+                  "customerId": "string", 
+                  "amount": number,
+                  "currency": "string",
+                  "customerEmail": "string"
+              }
+              """
+              try:
+                  # Extract payment data
+                  payment_id = event.get('paymentId')
+                  customer_id = event.get('customerId')
+                  amount = event.get('amount')
+                  currency = event.get('currency')
+                  email = event.get('customerEmail')
+                  
+                  # Validation rules
+                  errors = []
+                  
+                  if not payment_id or not isinstance(payment_id, str):
+                      errors.append('Invalid paymentId')
+                  
+                  if not customer_id or not isinstance(customer_id, str):
+                      errors.append('Invalid customerId')
+                  
+                  if not amount or amount <= 0:
+                      errors.append('Amount must be greater than 0')
+                  
+                  if currency not in ['USD', 'EUR', 'GBP']:
+                      errors.append('Currency must be USD, EUR, or GBP')
+                  
+                  if not email or not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+                      errors.append('Invalid email format')
+                  
+                  if errors:
+                      return {
+                          'statusCode': 400,
+                          'isValid': False,
+                          'errors': errors,
+                          'paymentId': payment_id
+                      }
+                  
+                  # Return validated data
+                  return {
+                      'statusCode': 200,
+                      'isValid': True,
+                      'paymentId': payment_id,
+                      'customerId': customer_id,
+                      'amount': float(amount),
+                      'currency': currency,
+                      'customerEmail': email
+                  }
+                  
+              except Exception as e:
+                  print(f"Validation error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'isValid': False,
+                      'error': str(e),
+                      'paymentId': event.get('paymentId')
+                  }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda Function - Process Payment
+  ProcessPaymentLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-process-payment-${EnvironmentSuffix}"
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      ReservedConcurrentExecutions: 100
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import time
+          import random
+          from datetime import datetime
+
+          def handler(event, context):
+              """
+              Processes payment via external payment gateway.
+              Simulates API call with success/failure scenarios.
+              """
+              try:
+                  payment_id = event['paymentId']
+                  amount = event['amount']
+                  currency = event['currency']
+                  
+                  # Simulate API processing time
+                  time.sleep(random.uniform(0.5, 2))
+                  
+                  # Simulate success rate (90% success for demo)
+                  if random.random() > 0.9:
+                      # Simulate transient failure
+                      if random.random() > 0.5:
+                          raise Exception("Payment gateway timeout")
+                      else:
+                          return {
+                              'statusCode': 402,
+                              'success': False,
+                              'paymentId': payment_id,
+                              'error': 'Insufficient funds',
+                              'transactionId': None
+                          }
+                  
+                  # Successful payment
+                  transaction_id = f"TXN-{payment_id}-{int(time.time())}"
+                  
+                  return {
+                      'statusCode': 200,
+                      'success': True,
+                      'paymentId': payment_id,
+                      'transactionId': transaction_id,
+                      'processedAt': datetime.utcnow().isoformat(),
+                      'amount': amount,
+                      'currency': currency
+                  }
+                  
+              except Exception as e:
+                  print(f"Payment processing error: {str(e)}")
+                  # Return retriable error
+                  raise Exception(f"Payment processing failed: {str(e)}")
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda Function - Store Transaction
+  StoreTransactionLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-store-transaction-${EnvironmentSuffix}"
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DynamoDBTablePaymentTransactions
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          from datetime import datetime
+          from decimal import Decimal
+
+          dynamodb = boto3.resource('dynamodb')
+
+          def handler(event, context):
+              """
+              Stores transaction result in DynamoDB.
+              """
+              try:
+                  table_name = os.environ['TABLE_NAME']
+                  table = dynamodb.Table(table_name)
+                  
+                  # Prepare item for DynamoDB
+                  item = {
+                      'paymentId': event['paymentId'],
+                      'customerId': event.get('customerId'),
+                      'amount': Decimal(str(event.get('amount', 0))),
+                      'currency': event.get('currency'),
+                      'customerEmail': event.get('customerEmail'),
+                      'transactionId': event.get('transactionId'),
+                      'status': 'SUCCESS' if event.get('success') else 'FAILED',
+                      'timestamp': datetime.utcnow().isoformat(),
+                      'processedAt': event.get('processedAt'),
+                      'errorReason': event.get('error'),
+                      'retries': event.get('retries', 0)
+                  }
+                  
+                  # Remove None values
+                  item = {k: v for k, v in item.items() if v is not None}
+                  
+                  # Store in DynamoDB with conditional write for idempotency
+                  response = table.put_item(
+                      Item=item,
+                      ConditionExpression='attribute_not_exists(paymentId) OR #status = :pending',
+                      ExpressionAttributeNames={'#status': 'status'},
+                      ExpressionAttributeValues={':pending': 'PENDING'}
+                  )
+                  
+                  return {
+                      'statusCode': 200,
+                      'stored': True,
+                      'paymentId': event['paymentId'],
+                      'status': item['status']
+                  }
+                  
+              except Exception as e:
+                  print(f"Storage error: {str(e)}")
+                  # For conditional check failures, return success (idempotent)
+                  if 'ConditionalCheckFailedException' in str(e):
+                      return {
+                          'statusCode': 200,
+                          'stored': True,
+                          'paymentId': event['paymentId'],
+                          'note': 'Already stored'
+                      }
+                  raise
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda Function - Notify Customer
+  NotifyCustomerLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-notify-customer-${EnvironmentSuffix}"
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref SNSTopicPaymentWorkflowAlerts
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+
+          sns = boto3.client('sns')
+
+          def handler(event, context):
+              """
+              Sends notification about payment status.
+              In production, this would send emails/SMS to customers.
+              """
+              try:
+                  payment_id = event['paymentId']
+                  customer_email = event.get('customerEmail')
+                  status = event.get('status', 'UNKNOWN')
+                  transaction_id = event.get('transactionId')
+                  
+                  # Prepare notification message
+                  if status == 'SUCCESS':
+                      subject = f"Payment Successful - {payment_id}"
+                      message = f"""
+                      Dear Customer,
+                      
+                      Your payment has been successfully processed.
+                      
+                      Payment ID: {payment_id}
+                      Transaction ID: {transaction_id}
+                      Amount: {event.get('amount')} {event.get('currency')}
+                      
+                      Thank you for your business!
+                      """
+                  else:
+                      subject = f"Payment Failed - {payment_id}"
+                      message = f"""
+                      Dear Customer,
+                      
+                      Unfortunately, your payment could not be processed.
+                      
+                      Payment ID: {payment_id}
+                      Error: {event.get('errorReason', 'Unknown error')}
+                      
+                      Please contact support if you need assistance.
+                      """
+                  
+                  # For demo, log the notification
+                  print(f"Notification - Subject: {subject}, To: {customer_email}")
+                  
+                  # In production, send actual email/SMS here
+                  # For now, just log success
+                  
+                  return {
+                      'statusCode': 200,
+                      'notified': True,
+                      'paymentId': payment_id,
+                      'customerEmail': customer_email,
+                      'notificationType': 'email'
+                  }
+                  
+              except Exception as e:
+                  print(f"Notification error: {str(e)}")
+                  # Non-critical failure, don't retry
+                  return {
+                      'statusCode': 200,
+                      'notified': False,
+                      'paymentId': event.get('paymentId'),
+                      'error': str(e)
+                  }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  # Step Functions State Machine
+  PaymentWorkflowStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub "${Environment}-payment-workflow-${EnvironmentSuffix}"
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+      StateMachineType: STANDARD
+      LoggingConfiguration:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt StepFunctionsLogGroup.Arn
+      Definition:
+        Comment: Payment processing workflow with retry logic
+        StartAt: ValidatePayment
+        States:
+          ValidatePayment:
+            Type: Task
+            Resource: !GetAtt ValidatePaymentLambda.Arn
+            ResultPath: $.validation
+            Next: CheckValidation
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                IntervalSeconds: 2
+                MaxAttempts: 3
+                BackoffRate: 2
+            Catch:
+              - ErrorEquals:
+                  - States.ALL
+                ResultPath: $.error
+                Next: ValidationFailed
+
+          CheckValidation:
+            Type: Choice
+            Choices:
+              - Variable: $.validation.isValid
+                BooleanEquals: true
+                Next: ProcessPayment
+            Default: ValidationFailed
+
+          ValidationFailed:
+            Type: Task
+            Resource: !GetAtt StoreTransactionLambda.Arn
+            Parameters:
+              paymentId.$: $.paymentId
+              status: VALIDATION_FAILED
+              errorReason.$: $.validation.errors
+              success: false
+            ResultPath: $.storeResult
+            Next: NotifyValidationFailure
+
+          ProcessPayment:
+            Type: Task
+            Resource: !GetAtt ProcessPaymentLambda.Arn
+            Parameters:
+              paymentId.$: $.validation.paymentId
+              customerId.$: $.validation.customerId
+              amount.$: $.validation.amount
+              currency.$: $.validation.currency
+              customerEmail.$: $.validation.customerEmail
+            ResultPath: $.payment
+            Next: CheckPaymentResult
+            Retry:
+              - ErrorEquals:
+                  - States.ALL
+                IntervalSeconds: 5
+                MaxAttempts: 3
+                BackoffRate: 2
+            Catch:
+              - ErrorEquals:
+                  - States.ALL
+                ResultPath: $.error
+                Next: PaymentFailed
+
+          CheckPaymentResult:
+            Type: Choice
+            Choices:
+              - Variable: $.payment.success
+                BooleanEquals: true
+                Next: StoreSuccessTransaction
+            Default: PaymentFailed
+
+          StoreSuccessTransaction:
+            Type: Task
+            Resource: !GetAtt StoreTransactionLambda.Arn
+            Parameters:
+              paymentId.$: $.payment.paymentId
+              customerId.$: $.validation.customerId
+              amount.$: $.payment.amount
+              currency.$: $.payment.currency
+              customerEmail.$: $.validation.customerEmail
+              transactionId.$: $.payment.transactionId
+              status: SUCCESS
+              processedAt.$: $.payment.processedAt
+              success: true
+            ResultPath: $.storeResult
+            Next: NotifySuccess
+
+          PaymentFailed:
+            Type: Task
+            Resource: !GetAtt StoreTransactionLambda.Arn
+            Parameters:
+              paymentId.$: $.validation.paymentId
+              customerId.$: $.validation.customerId
+              amount.$: $.validation.amount
+              currency.$: $.validation.currency
+              customerEmail.$: $.validation.customerEmail
+              status: FAILED
+              errorReason.$: $.payment.error
+              success: false
+            ResultPath: $.storeResult
+            Next: NotifyAndAlert
+
+          NotifySuccess:
+            Type: Task
+            Resource: !GetAtt NotifyCustomerLambda.Arn
+            Parameters:
+              paymentId.$: $.payment.paymentId
+              customerEmail.$: $.validation.customerEmail
+              status: SUCCESS
+              transactionId.$: $.payment.transactionId
+              amount.$: $.payment.amount
+              currency.$: $.payment.currency
+            End: true
+
+          NotifyValidationFailure:
+            Type: Task
+            Resource: !GetAtt NotifyCustomerLambda.Arn
+            Parameters:
+              paymentId.$: $.paymentId
+              customerEmail.$: $.customerEmail
+              status: VALIDATION_FAILED
+              errorReason.$: $.validation.errors
+            End: true
+
+          NotifyAndAlert:
+            Type: Parallel
+            End: true
+            Branches:
+              - StartAt: NotifyCustomer
+                States:
+                  NotifyCustomer:
+                    Type: Task
+                    Resource: !GetAtt NotifyCustomerLambda.Arn
+                    Parameters:
+                      paymentId.$: $.validation.paymentId
+                      customerEmail.$: $.validation.customerEmail
+                      status: FAILED
+                      errorReason.$: $.payment.error
+                    End: true
+              - StartAt: SendAlert
+                States:
+                  SendAlert:
+                    Type: Task
+                    Resource: arn:aws:states:::sns:publish
+                    Parameters:
+                      TopicArn: !Ref SNSTopicPaymentWorkflowAlerts
+                      Message:
+                        Input.$: $
+                      Subject: Payment Workflow Failed
+                    End: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  # CloudWatch Log Group for Step Functions
+  StepFunctionsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/stepfunctions/${Environment}-payment-workflow-${EnvironmentSuffix}"
+      RetentionInDays: 7
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  # CloudWatch Dashboard
+  PaymentWorkflowDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${Environment}-payment-workflow-dashboard-${EnvironmentSuffix}"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/States", "ExecutionsStarted", {"stat": "Sum"}],
+                  [".", "ExecutionsSucceeded", {"stat": "Sum"}],
+                  [".", "ExecutionsFailed", {"stat": "Sum"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Workflow Executions",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum"}],
+                  [".", "Errors", {"stat": "Sum"}],
+                  [".", "Duration", {"stat": "Average"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Metrics",
+                "period": 300
+              }
+            }
+          ]
+        }
+
+  # CloudWatch Alarms
+  WorkflowFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-payment-workflow-failures-${EnvironmentSuffix}"
+      AlarmDescription: Alert when payment workflows fail
+      MetricName: ExecutionsFailed
+      Namespace: AWS/States
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref SNSTopicPaymentWorkflowAlerts
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  HighExecutionTimeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-payment-workflow-high-execution-time-${EnvironmentSuffix}"
+      AlarmDescription: Alert when workflow execution time is high
+      MetricName: ExecutionTime
+      Namespace: AWS/States
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 60000
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref SNSTopicPaymentWorkflowAlerts
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: iac-rlhf-amazon
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+Outputs:
+  StateMachineArn:
+    Description: ARN of the Payment Workflow State Machine
+    Value: !Ref PaymentWorkflowStateMachine
+    Export:
+      Name: !Sub "${AWS::StackName}-StateMachineArn"
+
+  DynamoDBTableName:
+    Description: Name of the Payment Transactions DynamoDB table
+    Value: !Ref DynamoDBTablePaymentTransactions
+    Export:
+      Name: !Sub "${AWS::StackName}-DynamoDBTableName"
+
+  SNSTopicArn:
+    Description: ARN of the SNS topic for alerts
+    Value: !Ref SNSTopicPaymentWorkflowAlerts
+    Export:
+      Name: !Sub "${AWS::StackName}-SNSTopicArn"
+
+  DashboardURL:
+    Description: URL to CloudWatch Dashboard
+    Value: !Sub "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${Environment}-payment-workflow-dashboard-${EnvironmentSuffix}"
+
+  # Legacy outputs for backward compatibility
+  TurnAroundPromptTableName:
+    Description: "Name of the DynamoDB table (legacy)"
+    Value: !Ref DynamoDBTablePaymentTransactions
+    Export:
+      Name: !Sub "${AWS::StackName}-TurnAroundPromptTableName"
+
+  TurnAroundPromptTableArn:
+    Description: "ARN of the DynamoDB table (legacy)"
+    Value: !GetAtt DynamoDBTablePaymentTransactions.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TurnAroundPromptTableArn"
+
+  StackName:
+    Description: "Name of this CloudFormation stack"
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub "${AWS::StackName}-StackName"
+
+  EnvironmentSuffix:
+    Description: "Environment suffix used for this deployment"
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
+
+  # Lambda Function Outputs
+  ValidatePaymentLambdaName:
+    Description: "Name of the Validate Payment Lambda function"
+    Value: !Ref ValidatePaymentLambda
+    Export:
+      Name: !Sub "${AWS::StackName}-ValidatePaymentLambdaName"
+
+  ValidatePaymentLambdaArn:
+    Description: "ARN of the Validate Payment Lambda function"
+    Value: !GetAtt ValidatePaymentLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ValidatePaymentLambdaArn"
+
+  ProcessPaymentLambdaName:
+    Description: "Name of the Process Payment Lambda function"
+    Value: !Ref ProcessPaymentLambda
+    Export:
+      Name: !Sub "${AWS::StackName}-ProcessPaymentLambdaName"
+
+  ProcessPaymentLambdaArn:
+    Description: "ARN of the Process Payment Lambda function"
+    Value: !GetAtt ProcessPaymentLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ProcessPaymentLambdaArn"
+
+  StoreTransactionLambdaName:
+    Description: "Name of the Store Transaction Lambda function"
+    Value: !Ref StoreTransactionLambda
+    Export:
+      Name: !Sub "${AWS::StackName}-StoreTransactionLambdaName"
+
+  StoreTransactionLambdaArn:
+    Description: "ARN of the Store Transaction Lambda function"
+    Value: !GetAtt StoreTransactionLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-StoreTransactionLambdaArn"
+
+  NotifyCustomerLambdaName:
+    Description: "Name of the Notify Customer Lambda function"
+    Value: !Ref NotifyCustomerLambda
+    Export:
+      Name: !Sub "${AWS::StackName}-NotifyCustomerLambdaName"
+
+  NotifyCustomerLambdaArn:
+    Description: "ARN of the Notify Customer Lambda function"
+    Value: !GetAtt NotifyCustomerLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-NotifyCustomerLambdaArn"

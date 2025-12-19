@@ -1,0 +1,43 @@
+{
+  "task_id": "101912682",
+  "platform": "cfn",
+  "language": "json",
+  "difficulty": "expert",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912682",
+  "team": "synth",
+  "subtask": "Blue-Green Deployment Infrastructure",
+  "subject_labels": [
+    "Migration",
+    "PCI DSS Compliance",
+    "Zero Downtime",
+    "Blue-Green Deployment"
+  ],
+  "startedAt": "2025-11-26T07:49:37+00:00",
+  "aws_services": [
+    "CloudFormation",
+    "Aurora MySQL",
+    "AWS DMS",
+    "ECS Fargate",
+    "Application Load Balancer",
+    "Route 53",
+    "CloudWatch",
+    "Lambda",
+    "AWS Backup",
+    "Systems Manager Parameter Store",
+    "AWS KMS",
+    "AWS Secrets Manager",
+    "VPC",
+    "NAT Gateway"
+  ],
+  "region": "us-east-1",
+  "training_quality": 4,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

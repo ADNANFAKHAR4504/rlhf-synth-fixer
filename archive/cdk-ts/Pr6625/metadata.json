@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth-2",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T21:45:30-05:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "m2c0m5",
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "SQS",
+    "SNS",
+    "EventBridge",
+    "CloudWatch",
+    "Step Functions",
+    "Kinesis",
+    "CodeDeploy",
+    "WAF",
+    "KMS",
+    "S3",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

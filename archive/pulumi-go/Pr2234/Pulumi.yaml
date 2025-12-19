@@ -1,0 +1,4 @@
+name: TapStack
+runtime: go
+description: Multi-region AWS infrastructure with CloudFront, ALB, EC2, RDS, and DynamoDB Global Tables
+main: ./lib

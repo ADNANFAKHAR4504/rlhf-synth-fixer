@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000221",
+  "team": "3",
+  "startedAt": "2025-10-31T07:08:27.965Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "KMS",
+    "S3",
+    "Lambda",
+    "IAM",
+    "CloudWatch",
+    "EventBridge",
+    "SNS",
+    "CloudTrail"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

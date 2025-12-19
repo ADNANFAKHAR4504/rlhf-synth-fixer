@@ -1,0 +1,109 @@
+---
+# CI/CD Pipeline Configuration
+# This file defines the CI/CD pipeline stages and configuration
+# for the Node.js application
+
+version: 1.0
+
+pipeline:
+  name: nodejs-cicd-pipeline
+  description: >-
+    Automated CI/CD pipeline for Node.js application with
+    S3 source, CodeBuild, and S3 deployment
+
+stages:
+  - name: Source
+    type: source
+    provider: S3
+    configuration:
+      bucket_key: source-artifacts
+      poll_for_changes: true
+      trigger_on_upload: true
+      description: >-
+        Source stage pulls artifacts from S3 bucket
+        with versioning enabled
+
+  - name: Build
+    type: build
+    provider: CodeBuild
+    configuration:
+      project: nodejs-build
+      compute_type: BUILD_GENERAL1_SMALL
+      image: aws/codebuild/standard:5.0
+      environment_variables:
+        - name: NODE_ENV
+          value: production
+          type: PLAINTEXT
+        - name: BUILD_NUMBER
+          value: ${CODEBUILD_BUILD_NUMBER}
+          type: PLAINTEXT
+      logs:
+        cloudwatch:
+          enabled: true
+          retention_days: 7
+          group_name: /aws/codebuild/nodejs-build
+      description: >-
+        Build stage compiles and tests Node.js application
+
+  - name: Deploy
+    type: deploy
+    provider: S3
+    configuration:
+      extract: false
+      description: >-
+        Deploy stage uploads build artifacts
+        to deployment S3 bucket
+
+artifacts:
+  type: S3
+  encryption: aws:kms
+  encryption_algorithm: AES256
+  versioning: true
+  lifecycle:
+    expiration_days: 30
+    description: >-
+      Automatically delete artifacts older than 30 days
+
+notifications:
+  type: CloudWatch Events
+  events:
+    - build_failed
+  targets:
+    - cloudwatch_logs
+  description: >-
+    Send notifications to CloudWatch Events for failed builds
+
+iam:
+  least_privilege: true
+  no_wildcard_permissions: true
+  roles:
+    - name: codebuild-role
+      service: codebuild.amazonaws.com
+      permissions:
+        - logs:CreateLogGroup
+        - logs:CreateLogStream
+        - logs:PutLogEvents
+        - s3:GetObject
+        - s3:GetObjectVersion
+        - s3:PutObject
+        - s3:ListBucket
+    - name: codepipeline-role
+      service: codepipeline.amazonaws.com
+      permissions:
+        - s3:GetObject
+        - s3:GetObjectVersion
+        - s3:PutObject
+        - s3:ListBucket
+        - codebuild:BatchGetBuilds
+        - codebuild:StartBuild
+
+security:
+  encryption_at_rest: true
+  encryption_in_transit: true
+  kms_managed_keys: false
+  aws_managed_keys: true
+  encryption_algorithm: AES256
+
+tags:
+  Environment: production
+  ManagedBy: pulumi

@@ -1,0 +1,31 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-04T19:44:44+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "o19mi",
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "Secrets Manager",
+    "Lambda",
+    "EventBridge",
+    "IAM",
+    "CloudWatch",
+    "EC2"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

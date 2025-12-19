@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "h9i5b4e1",
+  "team": "synth",
+  "startedAt": "2025-12-01T13:01:25.883860Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ElastiCache",
+    "EFS",
+    "API Gateway",
+    "Secrets Manager",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

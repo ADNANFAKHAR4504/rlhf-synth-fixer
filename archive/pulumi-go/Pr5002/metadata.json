@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-22T07:03:08",
+  "po_id": "6570799653",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "ElastiCache Redis",
+    "RDS Aurora",
+    "Secrets Manager",
+    "KMS",
+    "VPC",
+    "EC2",
+    "CloudWatch"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

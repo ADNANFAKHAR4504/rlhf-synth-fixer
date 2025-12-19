@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-12T18:48:33+00:00",
+  "subtask": "Infrastructure as Code",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "iac-program-optimization-&-fixes"
+  ],
+  "po_id": "101912430",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "RDS",
+    "IAM",
+    "Secrets Manager",
+    "S3",
+    "DynamoDB",
+    "KMS"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

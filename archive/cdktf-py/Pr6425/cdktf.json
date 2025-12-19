@@ -1,0 +1,13 @@
+{
+  "language": "python",
+  "app": "python tap.py",
+  "projectId": "payment-migration",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}

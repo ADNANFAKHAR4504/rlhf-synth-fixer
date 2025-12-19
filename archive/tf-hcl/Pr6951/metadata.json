@@ -1,0 +1,46 @@
+{
+  "task_id": "101912518",
+  "po_id": "101912518",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-20T10:33:17.489766",
+  "aws_services": [
+    "s3",
+    "dynamodb",
+    "lambda",
+    "iam",
+    "cloudwatch",
+    "step-functions",
+    "eventbridge",
+    "backup"
+  ],
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "migration",
+    "s3",
+    "dynamodb",
+    "lambda",
+    "cross-region-replication",
+    "zero-downtime",
+    "data-synchronization"
+  ],
+  "constraints": [
+    "All S3 buckets must use SSE-S3 encryption with bucket keys enabled",
+    "DynamoDB global tables must maintain eventual consistency with <1 second replication lag",
+    "Lambda functions must use ARM-based Graviton2 processors for cost optimization",
+    "Terraform state must be stored in S3 with DynamoDB state locking enabled",
+    "Resource names must follow pattern: {environment}-{region}-{service}-{purpose}",
+    "Migration must support rollback by switching traffic without data loss"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

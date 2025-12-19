@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350139",
+  "team": "4",
+  "startedAt": "2025-11-12T10:16:26.047Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "S3",
+    "RDS",
+    "ALB",
+    "KMS",
+    "CloudTrail",
+    "Config",
+    "GuardDuty",
+    "WAF",
+    "Auto Scaling",
+    "SNS",
+    "CloudWatch",
+    "Secrets Manager",
+    "EC2",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "background": "Enterprise-grade AWS infrastructure automation using Terraform with comprehensive security, compliance, and monitoring requirements. Implements secure web application environment with encryption, multi-AZ deployment, automated scaling, and complete audit logging.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

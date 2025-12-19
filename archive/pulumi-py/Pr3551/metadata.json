@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "55253849",
+  "team": "1",
+  "startedAt": "2025-10-04T18:47:13.818Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "SNS",
+    "SQS",
+    "SES",
+    "Pinpoint",
+    "EventBridge",
+    "CloudWatch",
+    "IAM",
+    "SSM Parameter Store"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "This data provides high-quality training value (8/10) for the following reasons:\n\n1. **Architectural Pattern Learning (HIGH VALUE)**: The MODEL_RESPONSE provided a functionally correct but architecturally suboptimal flat structure, while the IDEAL_RESPONSE demonstrates production-grade ComponentResource pattern. This teaches the model about Pulumi best practices for component-based infrastructure.\n\n2. **Security Best Practices (HIGH VALUE)**: The corrections include proper S3 bucket security configuration using dedicated resources (BucketServerSideEncryptionConfiguration, BucketVersioning, BucketPublicAccessBlock) with parent-child relationships, demonstrating AWS security patterns.\n\n3. **Operational Infrastructure (HIGH VALUE)**: The addition of SSM Parameter Store integration is a critical production pattern for configuration management, cross-stack references, and operational excellence that was completely missing from the MODEL_RESPONSE.\n\n4. **Complex Multi-Service Integration**: The solution demonstrates proper integration of 12+ AWS services (API Gateway, Lambda, DynamoDB, S3, SNS, SQS, SES, Pinpoint, EventBridge, CloudWatch, IAM, SSM) with least-privilege IAM policies, dead letter queues, and comprehensive monitoring.\n\n5. **Resource Dependency Management**: Shows proper use of Pulumi Output types, parent-child resource hierarchies, and dependency tracking across complex service interactions.\n\n**Why not 9-10?**: The task is relatively standard (loyalty system CRUD) without exotic AWS services or cutting-edge architectural patterns. The improvements are best-practice corrections rather than novel solutions to unique problems.\n\n**Training Impact**: This data will substantially improve the model's ability to generate production-grade Pulumi infrastructure following AWS and Pulumi best practices for component architecture, security configuration, and operational tooling.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "emmanuel-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912478",
+  "team": "synth",
+  "startedAt": "2025-11-13T08:03:55+00:00",
+  "subtask": "Infrastructure as Code",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "web-application-deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "ELB",
+    "IAM",
+    "CloudWatch"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

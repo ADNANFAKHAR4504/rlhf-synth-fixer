@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-18T13:05:57+00:00",
+  "po_id": "101912451",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "multi-region-disaster-recovery"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ELB",
+    "Auto Scaling",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

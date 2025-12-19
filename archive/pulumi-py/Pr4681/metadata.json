@@ -1,0 +1,26 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000245",
+  "team": "synth",
+  "startedAt": "2025-10-17T06:16:28.058Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "Cloudwatch"
+  ],
+  "training_quality": "9",
+  "background": "AWS IAC Optimization - Pulumi Python",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "emmanuel-turing",
+  "dockerS3Location": ""
+}

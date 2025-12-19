@@ -1,0 +1,15 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291535",
+  "team": "1",
+  "startedAt": "2025-08-28T14:07:30.093Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "akshat-jain355",
+  "dockerS3Location": ""
+}

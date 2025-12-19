@@ -1,0 +1,38 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101911135",
+  "team": "synth",
+  "startedAt": "2025-12-02T14:39:05+00:00",
+  "subtask": "Zero-Trust Network Access Infrastructure",
+  "subject_labels": [
+    "Zero-Trust Network Access",
+    "VPC Infrastructure",
+    "Serverless Architecture",
+    "Security and Compliance"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "IAM",
+    "KMS",
+    "CloudWatch Logs",
+    "AWS Config",
+    "VPC Endpoints",
+    "Network ACLs"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

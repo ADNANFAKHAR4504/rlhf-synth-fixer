@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "8725611688",
+  "team": "synth",
+  "startedAt": "2025-10-27T21:42:20+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "ElastiCache",
+    "RDS",
+    "Secrets Manager",
+    "KMS",
+    "VPC",
+    "EC2",
+    "EIP",
+    "NAT Gateway"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

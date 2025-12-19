@@ -1,0 +1,7 @@
+ignore_templates:
+  - lib/parameters-dev.json
+  - lib/parameters-staging.json
+  - lib/parameters-prod.json
+  - parameters-dev.json
+  - parameters-staging.json
+  - parameters-prod.json

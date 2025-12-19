@@ -1,0 +1,26 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "author": "mayanksethi-turing",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-25T21:29:19+0000",
+  "po_id": "t7f5i9j6",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

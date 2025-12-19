@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912535",
+  "team": "synth",
+  "startedAt": "2025-11-20T11:37:04+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "networking",
+    "vpc",
+    "security",
+    "compliance"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

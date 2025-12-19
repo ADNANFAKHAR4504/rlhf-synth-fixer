@@ -1,0 +1,15 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291883",
+  "team": "1",
+  "startedAt": "2025-08-25T10:08:24.444Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
+}

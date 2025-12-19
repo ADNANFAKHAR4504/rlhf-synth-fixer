@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-14T20:27:01+05:30",
+  "subtask": "Application Deployment",
+  "background": "HealthTech Solutions is launching a new SaaS platform that handles sensitive patient data. They need a HIPAA-compliant infrastructure that ensures data encryption at rest and in transit, automated credential management, and comprehensive audit logging. The solution must be deployed in the EU region to maintain GDPR compliance.",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "4262252434",
+  "aws_services": [
+    "KMS",
+    "VPC",
+    "EC2",
+    "RDS",
+    "SecretsManager",
+    "Lambda",
+    "IAM",
+    "EFS",
+    "CloudWatch Logs"
+  ],
+  "region": "eu-central-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

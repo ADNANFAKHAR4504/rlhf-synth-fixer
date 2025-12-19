@@ -1,0 +1,802 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack.yml — Robust networking infrastructure in us-west-2. Includes VPC, subnets, IGW, NAT Gateway, EC2 Auto Scaling (LaunchTemplate with SSM AMI), IAM roles, CloudWatch alarms, and a secure S3 bucket.\n",
+    "Parameters": {
+        "EnvironmentName": {
+            "Type": "String",
+            "Default": "tapstack"
+        },
+        "VpcCIDR": {
+            "Type": "String",
+            "Default": "10.0.0.0/16"
+        },
+        "PublicSubnet1CIDR": {
+            "Type": "String",
+            "Default": "10.0.1.0/24"
+        },
+        "PublicSubnet2CIDR": {
+            "Type": "String",
+            "Default": "10.0.2.0/24"
+        },
+        "PrivateSubnet1CIDR": {
+            "Type": "String",
+            "Default": "10.0.3.0/24"
+        },
+        "PrivateSubnet2CIDR": {
+            "Type": "String",
+            "Default": "10.0.4.0/24"
+        },
+        "InstanceType": {
+            "Type": "String",
+            "Default": "t2.micro"
+        },
+        "AllowedSSHRange": {
+            "Type": "String",
+            "Default": "203.0.113.0/24"
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCIDR"
+                },
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-vpc"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-igw"
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet1CIDR"
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-public-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet2CIDR"
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-public-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet1CIDR"
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-private-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet2CIDR"
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-private-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-public-rt"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "VPCGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-private-rt"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "NatEIP": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NatGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-natgw"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway"
+                }
+            }
+        },
+        "InstanceSG": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enable SSH from trusted IPs",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "AllowedSSHRange"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-instance-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "EC2S3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${AppDataBucket}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "AppDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${EnvironmentName}-app-bucket-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-app-bucket"
+                        }
+                    }
+                ]
+            }
+        },
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${EnvironmentName}-launch-template"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Ref": "LatestAmiId"
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "InstanceSG"
+                        }
+                    ]
+                }
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "MinSize": 1,
+                "MaxSize": 4,
+                "DesiredCapacity": 2,
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-asg-instance"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "CPUAlarmHigh": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "Scale out if CPU > 70% for 2 periods of 1 minute",
+                "Namespace": "AWS/EC2",
+                "MetricName": "CPUUtilization",
+                "Statistic": "Average",
+                "Period": 60,
+                "EvaluationPeriods": 2,
+                "Threshold": 70,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleOutPolicy"
+                    }
+                ]
+            }
+        },
+        "CPUAlarmLow": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "Scale in if CPU < 20% for 2 periods of 1 minute",
+                "Namespace": "AWS/EC2",
+                "MetricName": "CPUUtilization",
+                "Statistic": "Average",
+                "Period": 60,
+                "EvaluationPeriods": 2,
+                "Threshold": 20,
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleInPolicy"
+                    }
+                ]
+            }
+        },
+        "ScaleOutPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "AdjustmentType": "ChangeInCapacity",
+                "ScalingAdjustment": 1,
+                "Cooldown": 300
+            }
+        },
+        "ScaleInPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "AdjustmentType": "ChangeInCapacity",
+                "ScalingAdjustment": -1,
+                "Cooldown": 300
+            }
+        }
+    },
+    "Outputs": {
+        "VpcId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VpcId"
+                }
+            }
+        },
+        "VpcCidr": {
+            "Description": "CIDR block of the VPC",
+            "Value": {
+                "Ref": "VpcCIDR"
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicSubnet2"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet2"
+                }
+            }
+        },
+        "PublicSubnets": {
+            "Description": "All public subnet IDs",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PublicSubnet1"
+                        },
+                        {
+                            "Ref": "PublicSubnet2"
+                        }
+                    ]
+                ]
+            }
+        },
+        "PrivateSubnets": {
+            "Description": "All private subnet IDs",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ]
+                ]
+            }
+        },
+        "PublicSubnet1CIDR": {
+            "Description": "Public Subnet 1 CIDR",
+            "Value": {
+                "Ref": "PublicSubnet1CIDR"
+            }
+        },
+        "PublicSubnet2CIDR": {
+            "Description": "Public Subnet 2 CIDR",
+            "Value": {
+                "Ref": "PublicSubnet2CIDR"
+            }
+        },
+        "PrivateSubnet1CIDR": {
+            "Description": "Private Subnet 1 CIDR",
+            "Value": {
+                "Ref": "PrivateSubnet1CIDR"
+            }
+        },
+        "PrivateSubnet2CIDR": {
+            "Description": "Private Subnet 2 CIDR",
+            "Value": {
+                "Ref": "PrivateSubnet2CIDR"
+            }
+        },
+        "PublicRouteTableId": {
+            "Description": "Public Route Table ID",
+            "Value": {
+                "Ref": "PublicRouteTable"
+            }
+        },
+        "PrivateRouteTableId": {
+            "Description": "Private Route Table ID",
+            "Value": {
+                "Ref": "PrivateRouteTable"
+            }
+        },
+        "InternetGatewayId": {
+            "Description": "Internet Gateway ID",
+            "Value": {
+                "Ref": "InternetGateway"
+            }
+        },
+        "NatGatewayId": {
+            "Description": "NAT Gateway ID",
+            "Value": {
+                "Ref": "NatGateway"
+            }
+        },
+        "NatEIPId": {
+            "Description": "Elastic IP ID for NAT Gateway",
+            "Value": {
+                "Ref": "NatEIP"
+            }
+        },
+        "NatEIPAllocationId": {
+            "Description": "Elastic IP Allocation ID for NAT",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NatEIP",
+                    "AllocationId"
+                ]
+            }
+        },
+        "InstanceSecurityGroupId": {
+            "Description": "Security Group for EC2 instances",
+            "Value": {
+                "Ref": "InstanceSG"
+            }
+        },
+        "EC2RoleName": {
+            "Description": "IAM Role for EC2",
+            "Value": {
+                "Ref": "EC2Role"
+            }
+        },
+        "EC2RoleArn": {
+            "Description": "IAM Role ARN for EC2",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2Role",
+                    "Arn"
+                ]
+            }
+        },
+        "InstanceProfileName": {
+            "Description": "Instance Profile name",
+            "Value": {
+                "Ref": "InstanceProfile"
+            }
+        },
+        "InstanceProfileArn": {
+            "Description": "Instance Profile ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "InstanceProfile",
+                    "Arn"
+                ]
+            }
+        },
+        "BucketName": {
+            "Description": "Name of the managed S3 bucket",
+            "Value": {
+                "Ref": "AppDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-AppDataBucketName"
+                }
+            }
+        },
+        "BucketArn": {
+            "Description": "ARN of the managed S3 bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppDataBucket",
+                    "Arn"
+                ]
+            }
+        },
+        "LaunchTemplateId": {
+            "Description": "Launch Template ID",
+            "Value": {
+                "Ref": "LaunchTemplate"
+            }
+        },
+        "LaunchTemplateLatestVersion": {
+            "Description": "Launch Template Latest Version",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LaunchTemplate",
+                    "LatestVersionNumber"
+                ]
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "Auto Scaling Group Name",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ASG"
+                }
+            }
+        },
+        "ScaleOutPolicyArn": {
+            "Description": "ARN of the Scale Out Policy",
+            "Value": {
+                "Ref": "ScaleOutPolicy"
+            }
+        },
+        "ScaleInPolicyArn": {
+            "Description": "ARN of the Scale In Policy",
+            "Value": {
+                "Ref": "ScaleInPolicy"
+            }
+        },
+        "CPUAlarmHighArn": {
+            "Description": "ARN of the high CPU alarm",
+            "Value": {
+                "Ref": "CPUAlarmHigh"
+            }
+        },
+        "CPUAlarmLowArn": {
+            "Description": "ARN of the low CPU alarm",
+            "Value": {
+                "Ref": "CPUAlarmLow"
+            }
+        }
+    }
+}

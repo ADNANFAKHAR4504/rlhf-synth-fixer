@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350039",
+  "team": "2",
+  "startedAt": "2025-10-01T16:53:51.449Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "aws_services": [
+    "S3",
+    "VPC",
+    "EC2",
+    "Security Groups",
+    "RDS",
+    "CloudTrail",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "KMS",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "caiof-turing",
+  "dockerS3Location": ""
+}

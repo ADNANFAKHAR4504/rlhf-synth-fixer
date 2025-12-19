@@ -1,0 +1,4 @@
+encryptionsalt: v1:WJd6c/HwADA=:v1:f5+3YRtkbcQKq4AN:2IQ+SpsNhSe/ZrHXZ7e7c+fr9/s/6A==
+config:
+  transaction-processing:environmentSuffix: synthv42e7j
+  aws:region: eu-south-2

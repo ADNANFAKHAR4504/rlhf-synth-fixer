@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "4126",
+  "team": "5",
+  "startedAt": "2025-10-12T14:14:34.200Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "Building production-ready static website hosting infrastructure on AWS S3 for media assets to serve content for an upcoming product launch, with security, versioning, and cost optimization features",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "S3 Bucket",
+    "S3 Bucket Versioning",
+    "S3 Server-side Encryption",
+    "S3 Static Website Hosting",
+    "S3 CORS Configuration",
+    "S3 Lifecycle Management",
+    "S3 Public Access Block",
+    "S3 Bucket Policy"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

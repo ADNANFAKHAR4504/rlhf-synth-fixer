@@ -1,0 +1,1 @@
+Can you include the missing resources, like the rest of s3 and the output, and make sure you continue from the previous conversation

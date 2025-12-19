@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "a2p9c4",
+  "team": "synth",
+  "startedAt": "2025-11-20T00:38:33+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "Organizations",
+    "IAM",
+    "KMS",
+    "S3",
+    "CloudWatch Logs",
+    "AWS Config",
+    "DynamoDB"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

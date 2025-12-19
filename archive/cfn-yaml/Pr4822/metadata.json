@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349999",
+  "team": "2",
+  "startedAt": "2025-10-17T13:59:28.458Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "Internet Gateway",
+    "NAT Gateway",
+    "CloudWatch",
+    "S3",
+    "IAM"
+  ],
+  "training_quality": "9",
+  "background": "Secure multi-tier web infrastructure with VPC, ALB, Auto Scaling, and CloudWatch",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

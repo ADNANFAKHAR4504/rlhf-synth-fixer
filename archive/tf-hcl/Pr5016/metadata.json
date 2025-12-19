@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350116",
+  "team": "4",
+  "startedAt": "2025-10-21T03:24:37.333Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "S3 Bucket, VPC, IAM, IGW, EC2, NAT Gateway, Security Groups, VPC Endpoints",
+  "training_quality": 9,
+  "background": "This task implements a production-ready AWS VPC infrastructure in us-west-2 with high availability across 3 Availability Zones. The solution includes 3 public and 3 private subnets, NAT Gateways for private subnet internet access, an S3 bucket with encryption and versioning, IAM roles for EC2 instances, and comprehensive security configurations. The infrastructure is fully tested with 89 unit tests and 39 integration tests, follows AWS Well-Architected Framework principles, and implements security best practices including IMDSv2, encrypted EBS volumes, and VPC endpoints for optimized S3 access.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

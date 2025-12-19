@@ -1,0 +1,4 @@
+name: TapStack
+runtime: python
+description: Multi-environment infrastructure deployment with Pulumi
+main: tap.py

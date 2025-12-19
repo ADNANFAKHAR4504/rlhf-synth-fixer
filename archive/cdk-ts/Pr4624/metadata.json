@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "410126",
+  "team": "4",
+  "startedAt": "2025-10-16T15:40:54.107Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "SNS",
+    "DynamoDB",
+    "Lambda",
+    "EventBridge",
+    "IAM"
+  ],
+  "background": "Build a centralized CloudWatch monitoring system to manage 10,000+ daily API and database interactions. The solution includes a unified dashboard visualizing metrics from API Gateway, Lambda, and RDS; 8 comprehensive CloudWatch alarms for latency, errors, and performance thresholds; SNS topics for alert and report notifications; a DynamoDB audit table with TTL and GSIs for persistent alarm logging; Lambda functions for automated reporting and health checks; EventBridge rules for scheduled daily reports and hourly health checks; and IAM policies implementing least-privilege access for all components.",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}

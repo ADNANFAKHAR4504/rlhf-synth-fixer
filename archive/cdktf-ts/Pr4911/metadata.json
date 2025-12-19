@@ -1,0 +1,35 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "7492345100",
+  "team": "synth",
+  "startedAt": "2025-10-21T08:11:50Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "RouteTable",
+    "SecurityGroup",
+    "KMS",
+    "RDS",
+    "ECS",
+    "IAM",
+    "SecretsManager",
+    "APIGateway",
+    "Lambda",
+    "CloudWatchLogs"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

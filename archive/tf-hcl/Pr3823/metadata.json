@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349002",
+  "team": "4",
+  "startedAt": "2025-10-08T08:06:49.355Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "S3",
+    "RDS",
+    "Security Groups",
+    "IAM",
+    "CloudTrail",
+    "Secrets Manager",
+    "EC2",
+    "VPC Peering",
+    "AWS Config"
+  ],
+  "training_quality": 3,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

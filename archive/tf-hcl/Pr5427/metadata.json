@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348982",
+  "team": "5",
+  "startedAt": "2025-10-30T09:32:11.533Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "ECS",
+    "ECR",
+    "Fargate",
+    "Application Load Balancer (ALB)",
+    "CloudWatch",
+    "IAM",
+    "VPC",
+    "SSM Parameter Store",
+    "Security Groups"
+  ],
+  "training_quality": 0.95,
+  "background": "A fintech company's ECS-based microservices platform experiencing deployment failures and resource inefficiencies. The existing Terraform configuration has grown organically over 18 months, resulting in hardcoded values, resource conflicts, and suboptimal task definitions causing frequent out-of-memory errors. Infrastructure includes 3 microservices (web, api, worker) running on ECS Fargate in eu-central-1 (Frankfurt) across 3 AZs with existing ALB, ECR repositories, and CloudWatch log groups.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

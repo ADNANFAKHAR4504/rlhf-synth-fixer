@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292065",
+  "team": "1",
+  "startedAt": "2025-08-19T20:37:23.212Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "Monitoring Setup",
+    "Performance Optimization",
+    "IaC Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "KMS",
+    "IAM",
+    "Route53",
+    "WAF",
+    "CloudTrail",
+    "CloudWatch",
+    "Config",
+    "GuardDuty",
+    "SNS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "alexstan89",
+  "dockerS3Location": ""
+}

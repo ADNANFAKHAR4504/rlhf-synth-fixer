@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "CLO_YML_MED_SNS_LAMBDA_8a9b1c_2x3y4z5aMN",
+  "team": "5",
+  "startedAt": "2025-10-09T05:27:54.463Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "SNS",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "SES",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

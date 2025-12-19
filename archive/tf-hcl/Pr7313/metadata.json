@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth-2",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-01-26T00:00:00-08:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "z4a8u2v3",
+  "aws_services": [
+    "Application Load Balancer",
+    "Aurora",
+    "CloudFront",
+    "CloudWatch",
+    "EC2",
+    "EC2 Auto Scaling",
+    "EventBridge",
+    "IAM",
+    "KMS",
+    "RDS",
+    "S3",
+    "VPC",
+    "WAF",
+    "ACM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

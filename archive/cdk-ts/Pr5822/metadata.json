@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000297",
+  "team": "1",
+  "startedAt": "2025-11-04T06:23:53.641Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "SQS",
+    "S3",
+    "SNS",
+    "VPC",
+    "VPC Peering",
+    "API Gateway",
+    "CloudWatch",
+    "Route 53",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
+}

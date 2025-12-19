@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "typescript",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000343",
+  "team": "1",
+  "startedAt": "2025-11-01T17:37:46.023Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "SQS",
+    "SNS",
+    "API Gateway",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Dashboards",
+    "IAM",
+    "VPC",
+    "VPC Endpoints",
+    "EC2",
+    "Budgets",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

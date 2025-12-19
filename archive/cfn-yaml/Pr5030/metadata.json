@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349121",
+  "team": "3",
+  "startedAt": "2025-10-22T11:06:02.979Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "kms, iam, lambda, cloudwatch alarm, nacl, apigateway, s3, waf",
+  "training_quality": 3,
+  "aws_services_implemented": [
+    "kms",
+    "iam",
+    "lambda",
+    "cloudwatch-alarm",
+    "nacl",
+    "apigateway",
+    "s3",
+    "waf"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "misra-s-turing",
+  "dockerS3Location": ""
+}

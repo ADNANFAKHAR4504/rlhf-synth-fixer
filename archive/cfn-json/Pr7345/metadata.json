@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912669",
+  "team": "synth",
+  "startedAt": "2025-11-26T06:35:00.000Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "ECS",
+    "Fargate",
+    "ALB",
+    "Auto Scaling",
+    "CloudWatch",
+    "IAM"
+  ],
+  "aws_services": [
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "Target Groups",
+    "Auto Scaling",
+    "CloudWatch Logs",
+    "KMS",
+    "IAM",
+    "Security Groups",
+    "ALB Listener"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

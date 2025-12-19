@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "CLO_YML_MED_LAMBDA_EVENTBRIDGE_9t1u2v_3q4r5s6tYZ",
+  "team": "5",
+  "startedAt": "2025-10-02T04:34:59.908Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "EventBridge",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

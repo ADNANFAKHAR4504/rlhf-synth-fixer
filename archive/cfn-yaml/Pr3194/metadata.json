@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "IAC-CLO_YML_MED_S3_DYNAMO_3w4x5y_6t7u8v9wEF",
+  "team": "5",
+  "startedAt": "2025-10-01T07:37:16.142Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "IAM",
+    "EventBridge",
+    "CloudWatch"
+  ],
+  "training_quality": 0,
+  "training_quality_note": "UNABLE TO ASSESS: MODEL_RESPONSE.md contains only placeholder text. Actual model response required for training quality assessment.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

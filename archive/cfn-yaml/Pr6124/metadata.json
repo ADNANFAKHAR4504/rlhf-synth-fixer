@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349055",
+  "team": "3",
+  "startedAt": "2025-11-07T05:18:03.348Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "ApiGateway",
+    "AutoScaling",
+    "CloudTrail",
+    "CloudWatch",
+    "Config",
+    "EC2",
+    "IAM",
+    "KMS",
+    "Logs",
+    "RDS",
+    "S3",
+    "SSM",
+    "SecretsManager",
+    "WAFv2"
+  ],
+  "training_quality": 10,
+  "background": "Deploy a secure, production-grade baseline in us-east-1 using a single TapStack.yml. The stack provisions networking (VPC with public/private subnets, Internet/NAT gateways, routes, and security groups), identity (IAM roles/policies/users and account password policy), and encryption (KMS key). It creates versioned, KMS-encrypted S3 buckets with restrictive bucket policies, enables AWS Config (recorder and delivery channel), and delivers CloudTrail logs to S3. Data services include an RDS instance with a DB subnet group. An API layer is provided via API Gateway (REST API, deployment, and stage) protected by a WAF WebACL and association. Compute is automated via an EC2 Launch Template and Auto Scaling Group, with operational visibility through CloudWatch alarms and notifications via SNS topics/subscriptions. The goal is a self-contained, repeatable environment aligned to production hardening and consistent tagging/naming conventions.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,1473 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure and Compliant AWS Infrastructure with Production Security Standards'
+
+Parameters:
+  EnvironmentName:
+    Description: Environment name prefix for resources (lowercase only)
+    Type: String
+    Default: secureprod
+    AllowedPattern: ^[a-z][a-z0-9-]*$
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+
+  KeyPairName:
+    Description: (Optional) EC2 Key Pair for SSH access - leave empty to disable SSH
+    Type: String
+    Default: ''
+
+  DBUsername:
+    Description: Database master username
+    Type: String
+    Default: dbadmin
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+  CertificateArn:
+    Description: ARN of the SSL certificate for ALB (from ACM)
+    Type: String
+    Default: ''
+
+  CreateNATGateways:
+    Description: Create NAT Gateways for private subnet internet access (requires 2 EIPs)
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  CreateAWSConfig:
+    Description: Create AWS Config resources (only 1 recorder/channel allowed per region)
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  CreateCloudTrail:
+    Description: Create CloudTrail resources (AWS limit is 5 trails per region)
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  LatestAmiId:
+    Description: Latest Amazon Linux 2 AMI ID from SSM Parameter Store
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+Conditions:
+  HasSSLCertificate: !Not [!Equals [!Ref CertificateArn, '']]
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  ShouldCreateNATGateways: !Equals [!Ref CreateNATGateways, 'true']
+  ShouldCreateAWSConfig: !Equals [!Ref CreateAWSConfig, 'true']
+  ShouldCreateCloudTrail: !Equals [!Ref CreateCloudTrail, 'true']
+
+Mappings:
+  SubnetConfig:
+    VPC:
+      CIDR: '10.0.0.0/16'
+    PublicSubnet1:
+      CIDR: '10.0.0.0/24'
+    PublicSubnet2:
+      CIDR: '10.0.1.0/24'
+    PrivateSubnet1:
+      CIDR: '10.0.10.0/24'
+    PrivateSubnet2:
+      CIDR: '10.0.11.0/24'
+    DatabaseSubnet1:
+      CIDR: '10.0.20.0/24'
+    DatabaseSubnet2:
+      CIDR: '10.0.21.0/24'
+
+Resources:
+  # ==========================================
+  # VPC and Networking Resources
+  # ==========================================
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [SubnetConfig, VPC, CIDR]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-VPC'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-IGW'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet1, CIDR]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Public-Subnet-AZ1'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet2, CIDR]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Public-Subnet-AZ2'
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet1, CIDR]
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Private-Subnet-AZ1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet2, CIDR]
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Private-Subnet-AZ2'
+
+  # Database Subnets
+  DatabaseSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet1, CIDR]
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Database-Subnet-AZ1'
+
+  DatabaseSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet2, CIDR]
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Database-Subnet-AZ2'
+
+  # NAT Gateways (Optional - requires 2 EIPs)
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    Condition: ShouldCreateNATGateways
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-NAT-EIP-AZ1'
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    Condition: ShouldCreateNATGateways
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-NAT-EIP-AZ2'
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Condition: ShouldCreateNATGateways
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-NAT-Gateway-AZ1'
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Condition: ShouldCreateNATGateways
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-NAT-Gateway-AZ2'
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Public-Routes'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Private-Routes-AZ1'
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Condition: ShouldCreateNATGateways
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Private-Routes-AZ2'
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Condition: ShouldCreateNATGateways
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  # ==========================================
+  # Security Groups
+  # ==========================================
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS from Internet
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP from Internet (redirect to HTTPS)
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ALB-SG'
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EC2 instances
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref BastionSecurityGroup
+          Description: SSH from Bastion
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS to Internet for updates
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-WebServer-SG'
+
+  ALBToWebServerIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref WebServerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Description: HTTP from ALB
+
+  ALBToWebServerEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref ALBSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      DestinationSecurityGroupId: !Ref WebServerSecurityGroup
+      Description: HTTP to Web Servers
+
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Bastion Host
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0  # In production, restrict to specific IPs
+          Description: SSH from specific IPs
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Bastion-SG'
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS PostgreSQL
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Database-SG'
+
+  WebServerToDatabaseEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref WebServerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
+      Description: PostgreSQL to RDS
+
+  DatabaseFromWebServerIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Description: PostgreSQL from Web Servers
+
+  # ==========================================
+  # IAM Roles and Policies
+  # ==========================================
+
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: ParameterStoreAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ssm:GetParameter'
+                  - 'ssm:GetParameters'
+                  - 'ssm:GetParameterHistory'
+                  - 'ssm:GetParametersByPath'
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${EnvironmentName}/*'
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                Resource: !GetAtt ParameterStoreKMSKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-EC2-Role'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+
+  CloudTrailRole:
+    Type: AWS::IAM::Role
+    Condition: ShouldCreateCloudTrail
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CloudTrailLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketAcl'
+                Resource: !GetAtt CloudTrailBucket.Arn
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                Resource: !Sub '${CloudTrailBucket.Arn}/*'
+                Condition:
+                  StringEquals:
+                    's3:x-amz-acl': bucket-owner-full-control
+
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Policies:
+        - PolicyName: ConfigBucketPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketAcl'
+                  - 's3:ListBucket'
+                Resource: !GetAtt ConfigBucket.Arn
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                Resource: !Sub '${ConfigBucket.Arn}/*'
+                Condition:
+                  StringEquals:
+                    's3:x-amz-acl': bucket-owner-full-control
+
+  # ==========================================
+  # KMS Keys for Encryption
+  # ==========================================
+
+  EBSKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for EBS volume encryption
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow use of the key for EBS
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+
+  EBSKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${EnvironmentName}-ebs-key'
+      TargetKeyId: !Ref EBSKMSKey
+
+  ParameterStoreKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for Parameter Store encryption
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+
+  ParameterStoreKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${EnvironmentName}-parameter-store-key'
+      TargetKeyId: !Ref ParameterStoreKMSKey
+
+  # ==========================================
+  # S3 Buckets
+  # ==========================================
+
+  # Lambda function to empty S3 buckets before deletion
+  EmptyS3BucketLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3BucketEmptyPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Resource: '*'
+
+  EmptyS3BucketLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt EmptyS3BucketLambdaRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Delete':
+                      bucket_name = event['ResourceProperties']['BucketName']
+                      s3 = boto3.resource('s3')
+                      bucket = s3.Bucket(bucket_name)
+                      bucket.object_versions.all().delete()
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f'Error: {str(e)}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub '${EnvironmentName}-logging-bucket-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Logging-Bucket'
+
+  EmptyLoggingBucket:
+    Type: Custom::EmptyS3Bucket
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref LoggingBucket
+
+  ApplicationBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub '${EnvironmentName}-application-bucket-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: application-bucket-logs/
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Application-Bucket'
+
+  EmptyApplicationBucket:
+    Type: Custom::EmptyS3Bucket
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref ApplicationBucket
+
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Condition: ShouldCreateCloudTrail
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub '${EnvironmentName}-cloudtrail-bucket-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: RetainTrailLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-CloudTrail-Bucket'
+
+  EmptyCloudTrailBucket:
+    Type: Custom::EmptyS3Bucket
+    Condition: ShouldCreateCloudTrail
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref CloudTrailBucket
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateCloudTrail
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Condition: ShouldCreateAWSConfig
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub '${EnvironmentName}-config-bucket-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Config-Bucket'
+
+  EmptyConfigBucket:
+    Type: Custom::EmptyS3Bucket
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref ConfigBucket
+
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt ConfigBucket.Arn
+          - Sid: AWSConfigBucketExistenceCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:ListBucket'
+            Resource: !GetAtt ConfigBucket.Arn
+          - Sid: AWSConfigBucketWrite
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${ConfigBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
+  # ==========================================
+  # CloudTrail (Optional - limit 5 per region)
+  # ==========================================
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Condition: ShouldCreateCloudTrail
+    DependsOn:
+      - CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub '${EnvironmentName}-CloudTrail'
+      S3BucketName: !Ref CloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - !Sub '${ApplicationBucket.Arn}/'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-CloudTrail'
+
+  # ==========================================
+  # AWS Config (Optional - limit 1 per region)
+  # ==========================================
+
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Condition: ShouldCreateAWSConfig
+    DependsOn:
+      - ConfigBucketPolicy
+    Properties:
+      Name: !Sub '${EnvironmentName}-ConfigRecorder'
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+        ResourceTypes:
+          - AWS::EC2::Instance
+          - AWS::EC2::SecurityGroup
+          - AWS::EC2::VPC
+          - AWS::S3::Bucket
+          - AWS::RDS::DBInstance
+
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      Name: !Sub '${EnvironmentName}-ConfigDeliveryChannel'
+      S3BucketName: !Ref ConfigBucket
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
+  # Config Rules for Compliance
+  RequiredTagsRule:
+    Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateAWSConfig
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: required-tags
+      Description: Checks whether resources contain all required tags
+      Source:
+        Owner: AWS
+        SourceIdentifier: REQUIRED_TAGS
+      InputParameters:
+        tag1Key: Name
+        tag2Key: Environment
+
+  EncryptedVolumesRule:
+    Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateAWSConfig
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: encrypted-volumes
+      Description: Checks whether EBS volumes are encrypted
+      Source:
+        Owner: AWS
+        SourceIdentifier: ENCRYPTED_VOLUMES
+
+  # ==========================================
+  # Systems Manager Parameters
+  # ==========================================
+
+  DBPasswordParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${EnvironmentName}/database/password'
+      Type: String
+      Value: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+      Description: Database password stored securely
+      Tags:
+        Environment: !Ref EnvironmentName
+
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentName}-db-password'
+      Description: RDS PostgreSQL Database Password
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
+  ApplicationConfigParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${EnvironmentName}/app/config'
+      Type: String
+      Value: !Sub |
+        {
+          "database_endpoint": "${PostgreSQLDatabase.Endpoint.Address}",
+          "s3_bucket": "${ApplicationBucket}",
+          "region": "${AWS::Region}"
+        }
+      Description: Application configuration
+      Tags:
+        Environment: !Ref EnvironmentName
+
+  # ==========================================
+  # Launch Template for EC2 Instances
+  # ==========================================
+
+  EC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${EnvironmentName}-LaunchTemplate'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: t3.medium
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 30
+              VolumeType: gp3
+              DeleteOnTermination: true
+        Monitoring:
+          Enabled: true
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y amazon-ssm-agent
+            yum install -y amazon-cloudwatch-agent
+            systemctl enable amazon-ssm-agent
+            systemctl start amazon-ssm-agent
+
+            # Install necessary software
+            yum install -y httpd
+            systemctl enable httpd
+            systemctl start httpd
+
+            # Configure CloudWatch Agent
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json <<EOF
+            {
+              "metrics": {
+                "namespace": "${EnvironmentName}",
+                "metrics_collected": {
+                  "mem": {
+                    "measurement": [
+                      {"name": "mem_used_percent", "rename": "MemoryUtilization"}
+                    ]
+                  },
+                  "disk": {
+                    "measurement": [
+                      {"name": "used_percent", "rename": "DiskUtilization"}
+                    ],
+                    "resources": ["/"]
+                  }
+                }
+              }
+            }
+            EOF
+
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+              -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json \
+              -s
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${EnvironmentName}-WebServer'
+              - Key: Environment
+                Value: !Ref EnvironmentName
+
+  # ==========================================
+  # Auto Scaling Group
+  # ==========================================
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${EnvironmentName}-ASG'
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref EC2LaunchTemplate
+        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 6
+      DesiredCapacity: 2
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ASG-Instance'
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentName
+          PropagateAtLaunch: true
+
+  # ==========================================
+  # Application Load Balancer
+  # ==========================================
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${EnvironmentName}-ALB'
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ALB'
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${EnvironmentName}-TG'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetType: instance
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-TargetGroup'
+
+  ALBListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: 443
+            StatusCode: HTTP_301
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  ALBListenerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasSSLCertificate
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
+
+  # ==========================================
+  # Bastion Host
+  # ==========================================
+
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Condition: HasKeyPair
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t3.micro
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 10
+            VolumeType: gp3
+            Encrypted: true
+            KmsKeyId: !Ref EBSKMSKey
+            DeleteOnTermination: true
+      Monitoring: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Bastion'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ==========================================
+  # RDS PostgreSQL Database
+  # ==========================================
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${EnvironmentName}-db-subnet-group'
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref DatabaseSubnet1
+        - !Ref DatabaseSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-DBSubnetGroup'
+
+  DBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: PostgreSQL parameter group with security settings
+      Family: postgres16
+      Parameters:
+        log_statement: all
+        log_connections: 1
+        log_disconnections: 1
+        shared_preload_libraries: pg_stat_statements
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-DBParameterGroup'
+
+  PostgreSQLDatabase:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-postgres-db'
+      DBName: applicationdb
+      AllocatedStorage: 100
+      DBInstanceClass: db.t3.medium
+      Engine: postgres
+      EngineVersion: '16'
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBParameterGroupName: !Ref DBParameterGroup
+      BackupRetentionPeriod: 30
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      MultiAZ: true
+      StorageEncrypted: true
+      KmsKeyId: !Ref EBSKMSKey
+      StorageType: gp3
+      EnableCloudwatchLogsExports:
+        - postgresql
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-PostgreSQL'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ==========================================
+  # Systems Manager Maintenance Window
+  # ==========================================
+
+  MaintenanceWindow:
+    Type: AWS::SSM::MaintenanceWindow
+    Properties:
+      Name: !Sub '${EnvironmentName}-PatchWindow'
+      Description: Maintenance window for patching EC2 instances
+      Duration: 2
+      Cutoff: 0
+      Schedule: cron(0 2 ? * SUN *)
+      AllowUnassociatedTargets: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-MaintenanceWindow'
+
+  MaintenanceWindowTarget:
+    Type: AWS::SSM::MaintenanceWindowTarget
+    Properties:
+      Name: !Sub '${EnvironmentName}-PatchTargets'
+      Description: EC2 instances to patch
+      WindowId: !Ref MaintenanceWindow
+      ResourceType: INSTANCE
+      Targets:
+        - Key: tag:Environment
+          Values:
+            - !Ref EnvironmentName
+
+  MaintenanceWindowTask:
+    Type: AWS::SSM::MaintenanceWindowTask
+    Properties:
+      Name: !Sub '${EnvironmentName}-PatchTask'
+      Description: Apply OS patches
+      WindowId: !Ref MaintenanceWindow
+      TaskType: RUN_COMMAND
+      TaskArn: AWS-RunPatchBaseline
+      Priority: 1
+      ServiceRoleArn: !GetAtt MaintenanceWindowRole.Arn
+      Targets:
+        - Key: WindowTargetIds
+          Values:
+            - !Ref MaintenanceWindowTarget
+      MaxConcurrency: '50%'
+      MaxErrors: '0'
+
+  MaintenanceWindowRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ssm.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonSSMMaintenanceWindowRole
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-MaintenanceWindowRole'
+
+  # ==========================================
+  # CloudWatch Alarms
+  # ==========================================
+
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-HighCPU'
+      AlarmDescription: Alarm when CPU exceeds 80%
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+
+  DatabaseStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-LowDatabaseStorage'
+      AlarmDescription: Alarm when database storage is low
+      MetricName: FreeStorageSpace
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10737418240  # 10 GB in bytes
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref PostgreSQLDatabase
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${EnvironmentName}-VPC-ID'
+
+  LoadBalancerDNS:
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${EnvironmentName}-ALB-DNS'
+
+  DatabaseEndpoint:
+    Description: RDS PostgreSQL Endpoint
+    Value: !GetAtt PostgreSQLDatabase.Endpoint.Address
+    Export:
+      Name: !Sub '${EnvironmentName}-DB-Endpoint'
+
+  ApplicationBucketName:
+    Description: Application S3 Bucket Name
+    Value: !Ref ApplicationBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-App-Bucket'
+
+  BastionPublicIP:
+    Condition: HasKeyPair
+    Description: Bastion Host Public IP
+    Value: !GetAtt BastionHost.PublicIp
+    Export:
+      Name: !Sub '${EnvironmentName}-Bastion-IP'
+
+  CloudTrailName:
+    Condition: ShouldCreateCloudTrail
+    Description: CloudTrail Name
+    Value: !Ref CloudTrail
+    Export:
+      Name: !Sub '${EnvironmentName}-CloudTrail'
+
+  ConfigRecorderName:
+    Condition: ShouldCreateAWSConfig
+    Description: AWS Config Recorder Name
+    Value: !Ref ConfigRecorder
+    Export:
+      Name: !Sub '${EnvironmentName}-ConfigRecorder'
+
+  LoggingBucketName:
+    Description: Logging S3 Bucket Name
+    Value: !Ref LoggingBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-Logging-Bucket'
+
+  CloudTrailBucketName:
+    Condition: ShouldCreateCloudTrail
+    Description: CloudTrail S3 Bucket Name
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-CloudTrail-Bucket'
+
+  ConfigBucketName:
+    Condition: ShouldCreateAWSConfig
+    Description: Config S3 Bucket Name
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-Config-Bucket'
+
+  DBPasswordSecretArn:
+    Description: ARN of Database Password Secret
+    Value: !Ref DBPasswordSecret
+    Export:
+      Name: !Sub '${EnvironmentName}-DB-Secret-ARN'
+
+  AutoScalingGroupName:
+    Description: Auto Scaling Group Name
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-ASG-Name'
+
+  ALBTargetGroupArn:
+    Description: ALB Target Group ARN
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-TG-ARN'
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${EnvironmentName}-Public-Subnet-1'
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${EnvironmentName}-Public-Subnet-2'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${EnvironmentName}-Private-Subnet-1'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${EnvironmentName}-Private-Subnet-2'
+
+  DatabaseSubnet1Id:
+    Description: Database Subnet 1 ID
+    Value: !Ref DatabaseSubnet1
+    Export:
+      Name: !Sub '${EnvironmentName}-Database-Subnet-1'
+
+  DatabaseSubnet2Id:
+    Description: Database Subnet 2 ID
+    Value: !Ref DatabaseSubnet2
+    Export:
+      Name: !Sub '${EnvironmentName}-Database-Subnet-2'
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${EnvironmentName}-IGW-ID'
+
+  NATGateway1Id:
+    Condition: ShouldCreateNATGateways
+    Description: NAT Gateway 1 ID
+    Value: !Ref NatGateway1
+    Export:
+      Name: !Sub '${EnvironmentName}-NAT-Gateway-1'
+
+  NATGateway2Id:
+    Condition: ShouldCreateNATGateways
+    Description: NAT Gateway 2 ID
+    Value: !Ref NatGateway2
+    Export:
+      Name: !Sub '${EnvironmentName}-NAT-Gateway-2'
+
+  ALBSecurityGroupId:
+    Description: ALB Security Group ID
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-ALB-SG-ID'
+
+  WebServerSecurityGroupId:
+    Description: Web Server Security Group ID
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-WebServer-SG-ID'
+
+  DatabaseSecurityGroupId:
+    Description: Database Security Group ID
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-Database-SG-ID'
+
+  BastionSecurityGroupId:
+    Description: Bastion Security Group ID
+    Value: !Ref BastionSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-Bastion-SG-ID'
+
+  EBSKMSKeyId:
+    Description: EBS KMS Key ID
+    Value: !Ref EBSKMSKey
+    Export:
+      Name: !Sub '${EnvironmentName}-EBS-KMS-Key-ID'
+
+  ParameterStoreKMSKeyId:
+    Description: Parameter Store KMS Key ID
+    Value: !Ref ParameterStoreKMSKey
+    Export:
+      Name: !Sub '${EnvironmentName}-ParameterStore-KMS-Key-ID'
+
+  EC2InstanceRoleArn:
+    Description: EC2 Instance Role ARN
+    Value: !GetAtt EC2InstanceRole.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-EC2-Role-ARN'
+
+  MaintenanceWindowId:
+    Description: Maintenance Window ID
+    Value: !Ref MaintenanceWindow
+    Export:
+      Name: !Sub '${EnvironmentName}-Maintenance-Window-ID'
+
+  HighCPUAlarmName:
+    Description: High CPU Alarm Name
+    Value: !Ref HighCPUAlarm
+    Export:
+      Name: !Sub '${EnvironmentName}-HighCPU-Alarm'
+
+  DatabaseStorageAlarmName:
+    Description: Database Storage Alarm Name
+    Value: !Ref DatabaseStorageAlarm
+    Export:
+      Name: !Sub '${EnvironmentName}-DatabaseStorage-Alarm'
+
+  DBPasswordParameterName:
+    Description: Database Password Parameter Name
+    Value: !Ref DBPasswordParameter
+    Export:
+      Name: !Sub '${EnvironmentName}-DB-Password-Parameter'
+
+  ApplicationConfigParameterName:
+    Description: Application Config Parameter Name
+    Value: !Ref ApplicationConfigParameter
+    Export:
+      Name: !Sub '${EnvironmentName}-App-Config-Parameter'
+```

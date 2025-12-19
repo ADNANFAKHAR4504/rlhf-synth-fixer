@@ -1,0 +1,22 @@
+{
+  "task_id": "s2z5s1w6",
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "turn_type": "single",
+  "po_id": "s2z5s1w6",
+  "startedAt": "2025-12-04T00:00:00.000Z",
+  "aws_services": [],
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349199",
+  "team": "6",
+  "startedAt": "2025-10-29T11:07:54.643Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "AWS IAC that ensures automated, consistent deployment of resources across multiple accounts and regions. It simplifies the management of AWS resources in environments that require redundancy and high availability",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Systems Manager"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

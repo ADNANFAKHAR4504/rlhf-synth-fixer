@@ -1,0 +1,2 @@
+#!/bin/bash
+zip -r turing-iac-review-app/turing-iac-tasks-processor-dockerfile-0-4-0.zip . -x ".git/*" -x ".claude/*" -x ".github/*" -x ".vscode/*" -x "cli/*" -x "node_modules/*" -x "templates/*" -x "turing-iac-review-app/*"

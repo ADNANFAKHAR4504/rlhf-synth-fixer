@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Automated Infrastructure Compliance Monitoring System
+main: bin/tap.ts

@@ -1,0 +1,46 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291596",
+  "team": "2",
+  "startedAt": "2025-08-22T16:46:53.835Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "Network Configuration",
+    "Data Encryption",
+    "Audit Logging",
+    "Infrastructure as Code",
+    "Multi-Factor Authentication",
+    "CloudFormation Deployment",
+    "Resource Provisioning",
+    "Compliance Framework"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS CloudFormation",
+    "AWS KMS",
+    "AWS VPC",
+    "AWS EC2",
+    "AWS Lambda",
+    "AWS S3",
+    "AWS IAM",
+    "AWS CloudTrail",
+    "AWS CloudWatch",
+    "AWS Secrets Manager",
+    "AWS EIP",
+    "AWS NAT Gateway",
+    "AWS Internet Gateway",
+    "AWS Security Groups",
+    "AWS CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

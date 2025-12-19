@@ -1,0 +1,44 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "5011",
+  "team": "stf",
+  "startedAt": "2025-10-30T12:55:52.892Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "DynamoDB",
+    "Lambda",
+    "Kinesis Data Streams",
+    "ElastiCache Redis",
+    "Aurora PostgreSQL Serverless v2",
+    "Neptune",
+    "SNS",
+    "SQS",
+    "Step Functions",
+    "EventBridge",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "Secrets Manager",
+    "Security Groups",
+    "VPC Endpoints",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 10,
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}

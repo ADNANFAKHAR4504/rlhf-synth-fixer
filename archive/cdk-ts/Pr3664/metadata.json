@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349411",
+  "team": "3",
+  "startedAt": "2025-10-03T17:58:16.315Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "CodeBuild",
+    "CodePipeline",
+    "S3",
+    "IAM",
+    "SNS",
+    "SecretsManager",
+    "ECR",
+    "ECS",
+    "VPC",
+    "EC2",
+    "CloudWatch",
+    "EventBridge",
+    "KMS"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

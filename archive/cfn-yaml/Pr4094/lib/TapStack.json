@@ -1,0 +1,813 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "IoT Analytics and Dashboard System for Smart City Traffic Monitoring",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "EnvironmentName": {
+            "Type": "String",
+            "Default": "production",
+            "AllowedValues": [
+                "development",
+                "staging",
+                "production"
+            ],
+            "Description": "Environment name for resource naming"
+        },
+        "KinesisShardCount": {
+            "Type": "Number",
+            "Default": 10,
+            "MinValue": 1,
+            "MaxValue": 100,
+            "Description": "Number of shards for Kinesis Data Stream"
+        },
+        "DynamoDBReadCapacity": {
+            "Type": "Number",
+            "Default": 100,
+            "MinValue": 5,
+            "Description": "Read capacity units for DynamoDB table"
+        },
+        "DynamoDBWriteCapacity": {
+            "Type": "Number",
+            "Default": 1000,
+            "MinValue": 5,
+            "Description": "Write capacity units for DynamoDB table"
+        },
+        "AlertThresholdCongestionIndex": {
+            "Type": "Number",
+            "Default": 80,
+            "MinValue": 0,
+            "MaxValue": 100,
+            "Description": "Congestion index threshold for triggering alerts (0-100)"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Default": "traffic-alerts@smartcity.com",
+            "Description": "Email address for congestion alerts"
+        }
+    },
+    "Resources": {
+        "IoTPolicy": {
+            "Type": "AWS::IoT::Policy",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-TrafficSensorPolicy"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "iot:Connect",
+                                "iot:Publish"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/${!iot:Certificate.Subject.CommonName}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/traffic/sensors/*"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "IoTTopicRule": {
+            "Type": "AWS::IoT::TopicRule",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RuleName": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}TrafficDataRule"
+                },
+                "TopicRulePayload": {
+                    "RuleDisabled": false,
+                    "Sql": "SELECT * FROM 'traffic/sensors/+'",
+                    "Actions": [
+                        {
+                            "Kinesis": {
+                                "StreamName": {
+                                    "Ref": "KinesisDataStream"
+                                },
+                                "PartitionKey": "${topic(3)}",
+                                "RoleArn": {
+                                    "Fn::GetAtt": [
+                                        "IoTRuleRole",
+                                        "Arn"
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    "ErrorAction": {
+                        "CloudwatchLogs": {
+                            "LogGroupName": {
+                                "Ref": "IoTErrorLogGroup"
+                            },
+                            "RoleArn": {
+                                "Fn::GetAtt": [
+                                    "IoTRuleRole",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "IoTRuleRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-IoTRuleRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "iot.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "KinesisWritePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kinesis:PutRecord",
+                                        "kinesis:PutRecords"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "KinesisDataStream",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "IoTErrorLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "KinesisDataStream": {
+            "Type": "AWS::Kinesis::Stream",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-TrafficDataStream"
+                },
+                "ShardCount": {
+                    "Ref": "KinesisShardCount"
+                },
+                "RetentionPeriodHours": 24,
+                "StreamEncryption": {
+                    "EncryptionType": "KMS",
+                    "KeyId": "alias/aws/kinesis"
+                },
+                "StreamModeDetails": {
+                    "StreamMode": "PROVISIONED"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-LambdaExecutionRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:BatchWriteItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TrafficAnalyticsTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${TrafficAnalyticsTable.Arn}/index/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "EventBridgePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "events:PutEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "CongestionEventBus",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CloudWatchLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ProcessingLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-TrafficDataProcessor"
+                },
+                "Runtime": "python3.9",
+                "Handler": "lambda_handler.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "MemorySize": 512,
+                "ReservedConcurrentExecutions": 100,
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE_NAME": {
+                            "Ref": "TrafficAnalyticsTable"
+                        },
+                        "ALERT_THRESHOLD": {
+                            "Ref": "AlertThresholdCongestionIndex"
+                        },
+                        "EVENT_BUS_NAME": {
+                            "Ref": "CongestionEventBus"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport base64\nimport boto3\nimport os\nfrom datetime import datetime\nfrom decimal import Decimal\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndynamodb = boto3.resource('dynamodb')\nevents = boto3.client('events')\n\ntable_name = os.environ['DYNAMODB_TABLE_NAME']\nalert_threshold = int(os.environ['ALERT_THRESHOLD'])\nevent_bus_name = os.environ['EVENT_BUS_NAME']\n\ndef lambda_handler(event, context):\n    table = dynamodb.Table(table_name)\n    batch_items = []\n    alerts = []\n    \n    for record in event['Records']:\n        try:\n            # Decode Kinesis data\n            payload = base64.b64decode(record['kinesis']['data']).decode('utf-8')\n            data = json.loads(payload)\n            \n            # Extract sensor data\n            sensor_id = data.get('sensor_id')\n            zone_id = data.get('zone_id')\n            timestamp = data.get('timestamp', datetime.utcnow().isoformat())\n            vehicle_count = int(data.get('vehicle_count', 0))\n            avg_speed = float(data.get('avg_speed', 0))\n            congestion_index = float(data.get('congestion_index', 0))\n            \n            # Process and enrich data\n            processed_item = {\n                'sensor_id': sensor_id,\n                'zone_id': zone_id,\n                'timestamp': timestamp,\n                'vehicle_count': vehicle_count,\n                'avg_speed': Decimal(str(avg_speed)),\n                'congestion_index': Decimal(str(congestion_index)),\n                'processed_at': datetime.utcnow().isoformat(),\n                'ttl': int((datetime.utcnow().timestamp())) + 86400 * 7  # 7 days TTL\n            }\n            \n            batch_items.append({\n                'PutRequest': {\n                    'Item': processed_item\n                }\n            })\n            \n            # Check for congestion alerts\n            if congestion_index > alert_threshold:\n                alerts.append({\n                    'Source': 'traffic.analytics',\n                    'DetailType': 'CongestionAlert',\n                    'Detail': json.dumps({\n                        'sensor_id': sensor_id,\n                        'zone_id': zone_id,\n                        'congestion_index': float(congestion_index),\n                        'vehicle_count': vehicle_count,\n                        'avg_speed': avg_speed,\n                        'timestamp': timestamp\n                    }),\n                    'EventBusName': event_bus_name\n                })\n            \n        except Exception as e:\n            logger.error(f\"Error processing record: {e}\")\n            continue\n    \n    # Batch write to DynamoDB\n    if batch_items:\n        try:\n            response = dynamodb.batch_write_item(\n                RequestItems={\n                    table_name: batch_items[:25]  # DynamoDB batch limit\n                }\n            )\n            logger.info(f\"Wrote {len(batch_items)} items to DynamoDB\")\n        except Exception as e:\n            logger.error(f\"Error writing to DynamoDB: {e}\")\n    \n    # Send alerts to EventBridge\n    if alerts:\n        try:\n            response = events.put_events(Entries=alerts[:10])  # EventBridge batch limit\n            logger.info(f\"Sent {len(alerts)} congestion alerts\")\n        except Exception as e:\n            logger.error(f\"Error sending alerts: {e}\")\n    \n    return {\n        'statusCode': 200,\n        'batchItemsProcessed': len(batch_items),\n        'alertsSent': len(alerts)\n    }\n"
+                }
+            }
+        },
+        "KinesisEventSourceMapping": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "EventSourceArn": {
+                    "Fn::GetAtt": [
+                        "KinesisDataStream",
+                        "Arn"
+                    ]
+                },
+                "FunctionName": {
+                    "Ref": "ProcessingLambdaFunction"
+                },
+                "StartingPosition": "LATEST",
+                "BatchSize": 100,
+                "MaximumBatchingWindowInSeconds": 5,
+                "ParallelizationFactor": 10,
+                "MaximumRecordAgeInSeconds": 3600
+            }
+        },
+        "TrafficAnalyticsTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-TrafficAnalytics"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "sensor_id",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "zone_id",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "sensor_id",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "BillingMode": "PROVISIONED",
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": {
+                        "Ref": "DynamoDBReadCapacity"
+                    },
+                    "WriteCapacityUnits": {
+                        "Ref": "DynamoDBWriteCapacity"
+                    }
+                },
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "zone-timestamp-index",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "zone_id",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "timestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": {
+                                "Ref": "DynamoDBReadCapacity"
+                            },
+                            "WriteCapacityUnits": {
+                                "Ref": "DynamoDBWriteCapacity"
+                            }
+                        }
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "TimeToLiveSpecification": {
+                    "AttributeName": "ttl",
+                    "Enabled": true
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                }
+            }
+        },
+        "CongestionEventBus": {
+            "Type": "AWS::Events::EventBus",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-CongestionAlerts"
+                }
+            }
+        },
+        "CongestionAlertRule": {
+            "Type": "AWS::Events::Rule",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-CongestionAlertRule"
+                },
+                "EventBusName": {
+                    "Ref": "CongestionEventBus"
+                },
+                "EventPattern": {
+                    "source": [
+                        "traffic.analytics"
+                    ],
+                    "detail-type": [
+                        "CongestionAlert"
+                    ]
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Ref": "AlertTopic"
+                        },
+                        "Id": "1"
+                    }
+                ]
+            }
+        },
+        "AlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-CongestionAlerts"
+                },
+                "DisplayName": "Traffic Congestion Alerts",
+                "KmsMasterKeyId": "alias/aws/sns"
+            }
+        },
+        "AlertEmailSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Protocol": "email",
+                "TopicArn": {
+                    "Ref": "AlertTopic"
+                },
+                "Endpoint": {
+                    "Ref": "NotificationEmail"
+                }
+            }
+        },
+        "IoTErrorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/iot/TapStack${EnvironmentSuffix}/errors"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "LambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/TapStack${EnvironmentSuffix}-TrafficDataProcessor"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "ProcessingErrorsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-ProcessingErrors"
+                },
+                "AlarmDescription": "Alert when Lambda processing errors exceed threshold",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "ProcessingLambdaFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        },
+        "KinesisIncomingRecordsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-NoIncomingData"
+                },
+                "AlarmDescription": "Alert when no data is received for 5 minutes",
+                "MetricName": "IncomingRecords",
+                "Namespace": "AWS/Kinesis",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "StreamName",
+                        "Value": {
+                            "Ref": "KinesisDataStream"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        },
+        "QuickSightDataSourceRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-QuickSightDataSourceRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "quicksight.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBReadPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:DescribeTable",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan",
+                                        "dynamodb:GetItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TrafficAnalyticsTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${TrafficAnalyticsTable.Arn}/index/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "DashboardMetricsFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-DashboardMetrics"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "TrafficAnalyticsTable"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime, timedelta\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ncloudwatch = boto3.client('cloudwatch')\n\ndef decimal_default(obj):\n    if isinstance(obj, Decimal):\n        return float(obj)\n    raise TypeError\n\ndef lambda_handler(event, context):\n    table_name = os.environ['TABLE_NAME']\n    table = dynamodb.Table(table_name)\n    \n    # Calculate metrics for the last hour\n    end_time = datetime.utcnow()\n    start_time = end_time - timedelta(hours=1)\n    \n    # Query data by zone\n    zones = ['zone-1', 'zone-2', 'zone-3', 'zone-4', 'zone-5']\n    metrics = []\n    \n    for zone in zones:\n        try:\n            response = table.query(\n                IndexName='zone-timestamp-index',\n                KeyConditionExpression='zone_id = :zone AND #ts BETWEEN :start AND :end',\n                ExpressionAttributeNames={'#ts': 'timestamp'},\n                ExpressionAttributeValues={\n                    ':zone': zone,\n                    ':start': start_time.isoformat(),\n                    ':end': end_time.isoformat()\n                }\n            )\n            \n            items = response.get('Items', [])\n            if items:\n                avg_congestion = sum(float(item['congestion_index']) for item in items) / len(items)\n                total_vehicles = sum(int(item['vehicle_count']) for item in items)\n                \n                # Send custom metrics to CloudWatch\n                cloudwatch.put_metric_data(\n                    Namespace='TrafficAnalytics',\n                    MetricData=[\n                        {\n                            'MetricName': 'AverageCongestionIndex',\n                            'Value': avg_congestion,\n                            'Unit': 'None',\n                            'Dimensions': [{'Name': 'Zone', 'Value': zone}]\n                        },\n                        {\n                            'MetricName': 'TotalVehicleCount',\n                            'Value': total_vehicles,\n                            'Unit': 'Count',\n                            'Dimensions': [{'Name': 'Zone', 'Value': zone}]\n                        }\n                    ]\n                )\n        except Exception as e:\n            print(f\"Error processing zone {zone}: {e}\")\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps({'message': 'Metrics published successfully'})\n    }\n"
+                }
+            }
+        },
+        "MetricsScheduleRule": {
+            "Type": "AWS::Events::Rule",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-MetricsSchedule"
+                },
+                "ScheduleExpression": "rate(5 minutes)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "DashboardMetricsFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "1"
+                    }
+                ]
+            }
+        },
+        "MetricsSchedulePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "DashboardMetricsFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "MetricsScheduleRule",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "IoTEndpoint": {
+            "Description": "AWS IoT Core endpoint for device connections",
+            "Value": {
+                "Fn::Sub": "https://${AWS::AccountId}.iot.${AWS::Region}.amazonaws.com"
+            }
+        },
+        "KinesisStreamArn": {
+            "Description": "ARN of the Kinesis Data Stream",
+            "Value": {
+                "Fn::GetAtt": [
+                    "KinesisDataStream",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KinesisStreamArn"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "Name of the DynamoDB table storing analytics data",
+            "Value": {
+                "Ref": "TrafficAnalyticsTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBTableName"
+                }
+            }
+        },
+        "QuickSightDataSourceRoleArn": {
+            "Description": "IAM role ARN for QuickSight data source",
+            "Value": {
+                "Fn::GetAtt": [
+                    "QuickSightDataSourceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-QuickSightDataSourceRoleArn"
+                }
+            }
+        },
+        "AlertTopicArn": {
+            "Description": "SNS topic ARN for congestion alerts",
+            "Value": {
+                "Ref": "AlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AlertTopicArn"
+                }
+            }
+        },
+        "DashboardMetricsNamespace": {
+            "Description": "CloudWatch namespace for custom traffic metrics",
+            "Value": "TrafficAnalytics",
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DashboardMetricsNamespace"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Name of the Lambda function processing traffic data",
+            "Value": {
+                "Ref": "ProcessingLambdaFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionName"
+                }
+            }
+        },
+        "EventBusName": {
+            "Description": "Name of the EventBridge custom event bus",
+            "Value": {
+                "Ref": "CongestionEventBus"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EventBusName"
+                }
+            }
+        }
+    }
+}

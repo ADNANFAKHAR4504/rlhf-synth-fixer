@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "31748052",
+  "team": "synth",
+  "startedAt": "2025-10-03T19:00:00-00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure"
+  ],
+  "training_quality": 8.5,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "EventBridge",
+    "SNS",
+    "SQS",
+    "SecretsManager",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM",
+    "SES"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

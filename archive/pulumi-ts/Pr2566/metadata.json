@@ -1,0 +1,44 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348854",
+  "team": "2",
+  "startedAt": "2025-09-02T03:33:10.055Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Performance Optimization",
+    "IaC Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "ALB",
+    "Auto Scaling",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "CloudFront",
+    "WAF",
+    "NAT Gateway",
+    "Internet Gateway",
+    "VPC Flow Logs",
+    "Secrets Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ashish-a-turing",
+  "dockerS3Location": ""
+}

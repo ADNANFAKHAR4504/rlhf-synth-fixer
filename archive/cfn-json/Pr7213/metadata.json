@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "s8x0i8n9",
+  "team": "synth",
+  "startedAt": "2025-11-25T00:27:00-05:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "EKS",
+    "EC2",
+    "VPC",
+    "Auto Scaling",
+    "IAM",
+    "KMS",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

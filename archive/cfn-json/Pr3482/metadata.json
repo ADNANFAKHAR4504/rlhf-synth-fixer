@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "72380619",
+  "team": "synth",
+  "startedAt": "2025-10-03T18:50:06+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure"
+  ],
+  "training_quality": 9,
+  "training_quality_justification": "High training value (9/10): The dataset demonstrates critical production fixes for CloudFormation/Lambda deployment issues. Key learnings include: (1) Lambda handler configuration for inline code (index.handler vs module-based), (2) EventBridge schedule expression formats (cron vs at), (3) AWS account concurrency limits, (4) API Gateway CloudWatch integration, and (5) timezone handling in Python datetime. These are common real-world deployment blockers that would significantly improve model performance on serverless IaC tasks. The progression from broken to working infrastructure with detailed error messages provides excellent training signal for debugging and fixing common AWS deployment issues.",
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "SNS",
+    "EventBridge",
+    "CloudWatch",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

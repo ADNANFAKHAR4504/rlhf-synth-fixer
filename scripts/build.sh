@@ -10,11 +10,46 @@ if [ -f "metadata.json" ]; then
   echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 fi
 
-# Build the project only if language is not Python
-if [ "$LANGUAGE" != "py" ]; then
-  echo "Building project..."
-  npm run build
-  echo "✅ Build completed successfully"
-else
-  echo "⏭️ Skipping build for Python project (language=$LANGUAGE)"
+# CDKTF Go preparation happens once during build to warm caches and generate .gen
+if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "go" ]; then
+  echo "🔧 Preparing CDKTF Go (one-time in build)..."
+  bash ./scripts/cdktf-go-prepare.sh
 fi
+
+# Build the project based on language
+case "$LANGUAGE" in
+  java)
+    echo "⚡ Building Java project with Gradle..."
+    chmod +x ./gradlew
+    ./gradlew assemble \
+      --build-cache \
+      --parallel \
+      --max-workers=$(nproc) \
+      --no-daemon
+    echo "✅ Java build completed successfully"
+    ;;
+
+  py)
+    echo "⏭️ Skipping build for Python project (language=$LANGUAGE)"
+    ;;
+
+  go)
+    echo "⚡ Building Go project..."
+    go mod tidy
+    echo "✅ Go build completed successfully"
+    ;;
+
+  yaml|json)
+    echo "⏭️ Skipping build for CloudFormation $LANGUAGE project (no TypeScript compilation needed)"
+    ;;
+
+  hcl)
+    echo "⏭️ Skipping build for Terraform HCL project (language=$LANGUAGE, no TypeScript compilation needed)"
+    ;;
+
+  *)
+    echo "📦 Running generic build (npm)..."
+    npm run build
+    echo "✅ Build completed successfully"
+    ;;
+esac

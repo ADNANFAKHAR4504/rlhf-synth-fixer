@@ -1,0 +1,42 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350163",
+  "team": "4",
+  "startedAt": "2025-10-06T06:56:19.223Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Multi-AZ Infrastructure",
+    "ECS Fargate Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "IAM",
+    "S3",
+    "DynamoDB",
+    "CloudWatch",
+    "ELB"
+  ],
+  "training_quality": 8,
+  "testDependencies": {
+    "@aws-sdk/client-ec2": "^3.883.0",
+    "@aws-sdk/client-ecs": "^3.856.0",
+    "@aws-sdk/client-s3": "^3.856.0",
+    "@aws-sdk/client-dynamodb": "^3.883.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.856.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "ts-jest": "^29.0.0"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

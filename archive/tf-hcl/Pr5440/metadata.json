@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "5414",
+  "team": "5",
+  "startedAt": "2025-10-30T09:55:49.037Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "multi-environment S3 and DynamoDB infrastructure for financial services",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "s3",
+    "dynamodb",
+    "kms",
+    "iam",
+    "cloudwatch",
+    "sns"
+  ],
+  "training_quality": 9.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,26 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912260",
+  "team": "2",
+  "startedAt": "2025-11-23T13:39:58.241Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "EKS",
+    "VPC",
+    "EC2",
+    "IAM",
+    "KMS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
+}

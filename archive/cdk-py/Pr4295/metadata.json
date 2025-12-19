@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "multi",
+  "po_id": "1184609787",
+  "team": "synth",
+  "startedAt": "2025-10-13T17:24:27.950318Z",
+  "subtask": "Application Deployment",
+  "background": "Deploy a multi-tier e-commerce application infrastructure on AWS using CDK Python. The infrastructure includes VPC networking, ECS containers for application hosting, RDS Aurora for database, ElastiCache for caching, EFS for shared storage, Kinesis for event streaming, API Gateway and Lambda for serverless APIs, with CloudWatch monitoring and SNS notifications.",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "training_quality": 6,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ElastiCache",
+    "EFS",
+    "API Gateway",
+    "Lambda",
+    "Secrets Manager",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "Step Functions"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

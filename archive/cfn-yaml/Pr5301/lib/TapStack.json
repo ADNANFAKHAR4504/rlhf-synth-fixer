@@ -1,0 +1,1044 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "NovaFintech Digital Banking Platform - Production Infrastructure Stack",
+    "Parameters": {
+        "DomainName": {
+            "Type": "String",
+            "Description": "The domain name for the NovaFintech application (e.g., bankingapp.novafintech.com)",
+            "Default": "bankingapp.novafintech.com",
+            "AllowedPattern": "^[a-z0-9][a-z0-9\\-\\.]*[a-z0-9]$",
+            "ConstraintDescription": "Must be a valid domain name"
+        },
+        "HostedZoneId": {
+            "Type": "String",
+            "Description": "The Route 53 Hosted Zone ID where the domain will be created",
+            "Default": ""
+        },
+        "KeyPairName": {
+            "Type": "String",
+            "Description": "EC2 Key Pair for SSH access to instances",
+            "Default": ""
+        },
+        "Environment": {
+            "Type": "String",
+            "Description": "Environment name for tagging and identification",
+            "Default": "Production",
+            "AllowedValues": [
+                "Production",
+                "Staging",
+                "Development"
+            ]
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Description": "Latest Amazon Linux 2 AMI ID",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+        }
+    },
+    "Conditions": {
+        "HasHostedZoneId": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "HostedZoneId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "NovaVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-VPC"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "NovaFintech-Banking"
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-IGW"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "NovaInternetGateway"
+                }
+            }
+        },
+        "NovaPublicSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-PublicSubnet-1"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaPublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-PublicSubnet-2"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaPublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-PublicRT"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "NovaPublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "NovaInternetGateway"
+                }
+            }
+        },
+        "SubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "NovaPublicSubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "NovaPublicRouteTable"
+                }
+            }
+        },
+        "SubnetRouteTableAssociation2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "NovaPublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "NovaPublicRouteTable"
+                }
+            }
+        },
+        "NovaWebSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "NovaFintech-${Environment}-WebSG"
+                },
+                "GroupDescription": "Security group for NovaFintech web application servers",
+                "VpcId": {
+                    "Ref": "NovaVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTP traffic from anywhere"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow SSH access for operations team"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-WebSG"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaEC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "NovaFintech-${Environment}-EC2Role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "NovaS3AccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${NovaLogsBucket.Arn}"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:PutObjectAcl"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${NovaLogsBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-EC2Role"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaEC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "NovaFintech-${Environment}-EC2Profile"
+                },
+                "Roles": [
+                    {
+                        "Ref": "NovaEC2Role"
+                    }
+                ]
+            }
+        },
+        "NovaLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "novafintech-bankingapp-logs-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "TransitionOldLogs",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                },
+                                {
+                                    "TransitionInDays": 90,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ],
+                            "NoncurrentVersionTransitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-LogsBucket"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Application logs and transaction records"
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "NovaFintech-${Environment}-LaunchTemplate"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Ref": "LatestAmiId"
+                    },
+                    "InstanceType": "t2.micro",
+                    "KeyName": {
+                        "Fn::If": [
+                            "HasKeyPair",
+                            {
+                                "Ref": "KeyPairName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "NovaEC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "NovaWebSecurityGroup"
+                        }
+                    ],
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "NovaFintech-${Environment}-WebServer"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "Environment"
+                                    }
+                                },
+                                {
+                                    "Key": "Application",
+                                    "Value": "NovaFintech-Banking"
+                                },
+                                {
+                                    "Key": "ManagedBy",
+                                    "Value": "AutoScaling"
+                                },
+                                {
+                                    "Key": "team",
+                                    "Value": "2"
+                                },
+                                {
+                                    "Key": "iac-rlhf-amazon",
+                                    "Value": "true"
+                                }
+                            ]
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": "#!/bin/bash\nset -e  # Exit on error\n\n# Update system\nyum update -y\n\n# Install necessary packages\nyum install -y httpd aws-cli amazon-cloudwatch-agent\n\n# Ensure Apache log directory exists\nmkdir -p /var/log/httpd\nchown root:root /var/log/httpd\n\n# Configure Apache\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create a simple landing page\ncat > /var/www/html/index.html <<EOF\n<!DOCTYPE html>\n<html>\n<head>\n    <title>NovaFintech Digital Banking Platform</title>\n    <style>\n        body {\n            font-family: Arial, sans-serif;\n            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n            color: white;\n            display: flex;\n            justify-content: center;\n            align-items: center;\n            height: 100vh;\n            margin: 0;\n        }\n        .container {\n            text-align: center;\n            padding: 2em;\n            background: rgba(255,255,255,0.1);\n            border-radius: 10px;\n        }\n        h1 { font-size: 3em; margin-bottom: 0.5em; }\n        p { font-size: 1.2em; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>NovaFintech</h1>\n        <p>Revolutionary Digital Banking Platform</p>\n        <p>Environment: ${Environment}</p>\n        <p>Instance ID: $(ec2-metadata --instance-id | cut -d \" \" -f 2)</p>\n    </div>\n</body>\n</html>\nEOF\n\n# Configure CloudWatch agent\nmkdir -p /opt/aws/amazon-cloudwatch-agent/etc\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"/aws/ec2/novafintech/${Environment}/apache/access\",\n            \"log_stream_name\": \"{instance_id}\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"/aws/ec2/novafintech/${Environment}/apache/error\",\n            \"log_stream_name\": \"{instance_id}\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent with local config file\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a append-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n\n# Ensure agent is running and enabled\nsystemctl enable amazon-cloudwatch-agent\nsystemctl start amazon-cloudwatch-agent\n\n# Log successful startup and upload to S3 (non-blocking)\necho \"NovaFintech application server started at $(date)\" >> /var/log/nova-startup.log\nset +e  # Temporarily disable exit on error for S3 upload\naws s3 cp /var/log/nova-startup.log s3://${NovaLogsBucket}/startup-logs/$(date +%Y%m%d)/$(ec2-metadata --instance-id | cut -d \" \" -f 2).log 2>&1 || echo \"S3 upload failed, but continuing...\"\nset -e  # Re-enable exit on error\n"
+                        }
+                    }
+                }
+            }
+        },
+        "NovaAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "DependsOn": [
+                "AttachGateway"
+            ],
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "NovaFintech-${Environment}-ASG"
+                },
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "NovaPublicSubnet"
+                    },
+                    {
+                        "Ref": "NovaPublicSubnet2"
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "NovaLaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "NovaLaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": 1,
+                "MaxSize": 1,
+                "DesiredCapacity": 1,
+                "HealthCheckType": "EC2",
+                "HealthCheckGracePeriod": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-ASG-Instance"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2",
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true",
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "NovaElasticIP": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-EIP"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EIPAssociationLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "NovaFintech-${Environment}-EIPLambdaRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "EIPAssociationPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:AssociateAddress",
+                                        "ec2:DisassociateAddress",
+                                        "ec2:DescribeInstances",
+                                        "ec2:DescribeAddresses",
+                                        "autoscaling:CompleteLifecycleAction"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-EIPLambdaRole"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EIPAssociationLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "NovaFintech-${Environment}-EIPAssociation"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "EIPAssociationLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "ELASTIC_IP_ALLOCATION_ID": {
+                            "Fn::GetAtt": [
+                                "NovaElasticIP",
+                                "AllocationId"
+                            ]
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import boto3\nimport os\nimport json\n\ndef handler(event, context):\n    ec2 = boto3.client('ec2')\n    autoscaling = boto3.client('autoscaling')\n    \n    # Get the EIP allocation ID from environment variable\n    allocation_id = os.environ['ELASTIC_IP_ALLOCATION_ID']\n    \n    # Parse the event\n    message = json.loads(event['Records'][0]['Sns']['Message'])\n    \n    if message['Event'] == 'autoscaling:EC2_INSTANCE_LAUNCHING':\n        instance_id = message['EC2InstanceId']\n        \n        try:\n            # Check if EIP is already associated to another instance\n            addresses = ec2.describe_addresses(AllocationIds=[allocation_id])\n            if addresses['Addresses'] and addresses['Addresses'][0].get('InstanceId'):\n                existing_instance = addresses['Addresses'][0]['InstanceId']\n                if existing_instance != instance_id:\n                    # Disassociate from old instance\n                    print(f\"Disassociating EIP from existing instance {existing_instance}\")\n                    ec2.disassociate_address(AssociationId=addresses['Addresses'][0]['AssociationId'])\n            \n            # Wait for instance to be running\n            waiter = ec2.get_waiter('instance_running')\n            waiter.wait(InstanceIds=[instance_id], WaiterConfig={'Delay': 5, 'MaxAttempts': 60})\n            \n            # Associate the Elastic IP with the new instance\n            response = ec2.associate_address(\n                AllocationId=allocation_id,\n                InstanceId=instance_id\n            )\n            \n            print(f\"Successfully associated EIP with instance {instance_id}\")\n            \n            # Complete the lifecycle action\n            autoscaling.complete_lifecycle_action(\n                LifecycleHookName=message['LifecycleHookName'],\n                AutoScalingGroupName=message['AutoScalingGroupName'],\n                LifecycleActionResult='CONTINUE',\n                InstanceId=instance_id\n            )\n        except Exception as e:\n            print(f\"Error associating EIP: {str(e)}\")\n            import traceback\n            print(traceback.format_exc())\n            # Still continue with the lifecycle action\n            autoscaling.complete_lifecycle_action(\n                LifecycleHookName=message['LifecycleHookName'],\n                AutoScalingGroupName=message['AutoScalingGroupName'],\n                LifecycleActionResult='CONTINUE',\n                InstanceId=instance_id\n            )\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps('EIP association completed')\n    }\n"
+                },
+                "Timeout": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-EIPAssociation"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaASGNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "NovaFintech-${Environment}-ASG-Notifications"
+                },
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Fn::GetAtt": [
+                                "EIPAssociationLambda",
+                                "Arn"
+                            ]
+                        },
+                        "Protocol": "lambda"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-ASG-Notifications"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LambdaInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "EIPAssociationLambda"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "sns.amazonaws.com",
+                "SourceArn": {
+                    "Ref": "NovaASGNotificationTopic"
+                }
+            }
+        },
+        "NovaASGLifecycleHook": {
+            "Type": "AWS::AutoScaling::LifecycleHook",
+            "Properties": {
+                "LifecycleHookName": {
+                    "Fn::Sub": "NovaFintech-${Environment}-EIPHook"
+                },
+                "AutoScalingGroupName": {
+                    "Ref": "NovaAutoScalingGroup"
+                },
+                "LifecycleTransition": "autoscaling:EC2_INSTANCE_LAUNCHING",
+                "NotificationTargetARN": {
+                    "Ref": "NovaASGNotificationTopic"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "AutoScalingNotificationRole",
+                        "Arn"
+                    ]
+                },
+                "HeartbeatTimeout": 300,
+                "DefaultResult": "CONTINUE"
+            }
+        },
+        "AutoScalingNotificationRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "autoscaling.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "PublishToSNS",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "NovaASGNotificationTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-ASG-NotificationRole"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NovaDNSRecord": {
+            "Type": "AWS::Route53::RecordSet",
+            "Condition": "HasHostedZoneId",
+            "Properties": {
+                "HostedZoneId": {
+                    "Ref": "HostedZoneId"
+                },
+                "Name": {
+                    "Ref": "DomainName"
+                },
+                "Type": "A",
+                "TTL": 300,
+                "ResourceRecords": [
+                    {
+                        "Ref": "NovaElasticIP"
+                    }
+                ]
+            }
+        },
+        "HighCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "NovaFintech-${Environment}-HighCPU"
+                },
+                "AlarmDescription": "Alert when CPU exceeds 80%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "NovaAutoScalingGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "NovaFintech-${Environment}-HighCPU"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "WebsiteURL": {
+            "Description": "URL of the NovaFintech application",
+            "Value": {
+                "Fn::Sub": "http://${DomainName}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebsiteURL"
+                }
+            }
+        },
+        "InstancePublicIP": {
+            "Description": "Elastic IP address of the application",
+            "Value": {
+                "Ref": "NovaElasticIP"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-InstancePublicIP"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "Name of the S3 bucket for logs and transaction records",
+            "Value": {
+                "Ref": "NovaLogsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogsBucket"
+                }
+            }
+        },
+        "SecurityGroupId": {
+            "Description": "Security Group ID for web servers",
+            "Value": {
+                "Ref": "NovaWebSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecurityGroup"
+                }
+            }
+        },
+        "IAMRoleARN": {
+            "Description": "ARN of IAM role for EC2 instance",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NovaEC2Role",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-IAMRoleARN"
+                }
+            }
+        },
+        "VPCId": {
+            "Description": "VPC ID for the NovaFintech infrastructure",
+            "Value": {
+                "Ref": "NovaVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC"
+                }
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "Auto Scaling Group name for future scaling",
+            "Value": {
+                "Ref": "NovaAutoScalingGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ASG"
+                }
+            }
+        },
+        "LaunchTemplateId": {
+            "Description": "Launch Template ID for instance configuration",
+            "Value": {
+                "Ref": "NovaLaunchTemplate"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LaunchTemplate"
+                }
+            }
+        }
+    }
+}

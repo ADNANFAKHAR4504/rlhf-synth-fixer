@@ -1,0 +1,28 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "JQJZOP000",
+  "team": "1",
+  "startedAt": "2025-10-12T07:55:05.935Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon EC2",
+    "AWS Auto Scaling",
+    "Amazon S3",
+    "Amazon CloudWatch",
+    "AWS IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

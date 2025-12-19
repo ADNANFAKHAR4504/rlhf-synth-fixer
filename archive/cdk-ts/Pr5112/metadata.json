@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "356258",
+  "team": "stf",
+  "startedAt": "2025-10-26T14:18:04.787Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "Kinesis",
+    "Lambda",
+    "ElastiCache Redis",
+    "DynamoDB",
+    "S3",
+    "Step Functions",
+    "Athena",
+    "Neptune",
+    "Aurora RDS",
+    "API Gateway",
+    "OpenSearch Serverless",
+    "VPC",
+    "CloudWatch Logs",
+    "Security Hub",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

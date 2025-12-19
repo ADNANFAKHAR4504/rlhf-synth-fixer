@@ -1,0 +1,676 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Manufacturing IoT Data Processing Pipeline with Real-Time Analytics",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        }
+    },
+    "Resources": {
+        "RawDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "iot-raw-data-${EnvironmentSuffix}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "TransitionToIA",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                },
+                                {
+                                    "TransitionInDays": 90,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "IoT-Raw-Data-Archive"
+                    }
+                ]
+            }
+        },
+        "SensorDataTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "SensorData-${EnvironmentSuffix}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "deviceId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "deviceId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "TimeToLiveSpecification": {
+                    "AttributeName": "ttl",
+                    "Enabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "IoT-Processed-Data"
+                    }
+                ]
+            }
+        },
+        "SensorDataStream": {
+            "Type": "AWS::Kinesis::Stream",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "sensor-data-stream-${EnvironmentSuffix}"
+                },
+                "ShardCount": 1,
+                "RetentionPeriodHours": 24,
+                "StreamModeDetails": {
+                    "StreamMode": "PROVISIONED"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "IoT-Data-Ingestion"
+                    }
+                ]
+            }
+        },
+        "DataProcessorRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "IoTDataProcessorRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "KinesisReadPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kinesis:GetRecords",
+                                        "kinesis:GetShardIterator",
+                                        "kinesis:DescribeStream",
+                                        "kinesis:ListShards",
+                                        "kinesis:ListStreams"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "SensorDataStream",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "DynamoDBWritePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:BatchWriteItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "SensorDataTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "S3WritePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:PutObjectAcl"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${RawDataBucket.Arn}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CloudWatchMetricsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "DataProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "iot-data-processor-${EnvironmentSuffix}"
+                },
+                "Runtime": "nodejs20.x",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "DataProcessorRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE": {
+                            "Ref": "SensorDataTable"
+                        },
+                        "S3_BUCKET": {
+                            "Ref": "RawDataBucket"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        },
+                        "TEMP_THRESHOLD_HIGH": "80",
+                        "TEMP_THRESHOLD_LOW": "10",
+                        "PRESSURE_THRESHOLD_HIGH": "150",
+                        "PRESSURE_THRESHOLD_LOW": "30",
+                        "VIBRATION_THRESHOLD": "5.0"
+                    }
+                },
+                "Code": {
+                    "ZipFile": "const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');\nconst { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');\n\nconst dynamoClient = new DynamoDBClient({});\nconst s3Client = new S3Client({});\nconst cloudwatchClient = new CloudWatchClient({});\n\nexports.handler = async (event) => {\n  console.log('Processing Kinesis records:', JSON.stringify(event, null, 2));\n\n  const processedCount = { value: 0 };\n  const anomalyCount = { value: 0 };\n  const errors = [];\n\n  try {\n    for (const record of event.Records) {\n      try {\n        const payload = JSON.parse(Buffer.from(record.kinesis.data, 'base64').toString('utf-8'));\n        console.log('Processing payload:', payload);\n\n        await archiveRawData(payload);\n        const anomalyDetected = await processAndStore(payload);\n\n        processedCount.value++;\n        if (anomalyDetected) {\n          anomalyCount.value++;\n        }\n      } catch (err) {\n        console.error('Error processing record:', err);\n        errors.push({ record: record.kinesis.sequenceNumber, error: err.message });\n      }\n    }\n\n    await publishMetrics(processedCount.value, anomalyCount.value);\n\n    console.log(`Processed ${processedCount.value} records, detected ${anomalyCount.value} anomalies`);\n\n    return {\n      statusCode: 200,\n      body: JSON.stringify({\n        processed: processedCount.value,\n        anomalies: anomalyCount.value,\n        errors: errors.length\n      })\n    };\n  } catch (err) {\n    console.error('Fatal error:', err);\n    throw err;\n  }\n};\n\nasync function archiveRawData(data) {\n  const timestamp = Date.now();\n  const key = `raw/${data.deviceId || 'unknown'}/${timestamp}.json`;\n\n  const command = new PutObjectCommand({\n    Bucket: process.env.S3_BUCKET,\n    Key: key,\n    Body: JSON.stringify(data),\n    ContentType: 'application/json'\n  });\n\n  await s3Client.send(command);\n  console.log(`Archived raw data to S3: ${key}`);\n}\n\nasync function processAndStore(data) {\n  const timestamp = data.timestamp || Date.now();\n  const deviceId = data.deviceId || 'unknown';\n  const sensorType = data.sensorType || 'unknown';\n  const value = parseFloat(data.value || 0);\n\n  const anomalyDetected = detectAnomaly(sensorType, value);\n  const status = anomalyDetected ? 'ANOMALY' : 'NORMAL';\n\n  const ttl = Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60);\n\n  const command = new PutItemCommand({\n    TableName: process.env.DYNAMODB_TABLE,\n    Item: {\n      deviceId: { S: deviceId },\n      timestamp: { N: timestamp.toString() },\n      sensorType: { S: sensorType },\n      value: { N: value.toString() },\n      status: { S: status },\n      anomalyDetected: { BOOL: anomalyDetected },\n      ttl: { N: ttl.toString() }\n    }\n  });\n\n  await dynamoClient.send(command);\n  console.log(`Stored processed data for device ${deviceId}: ${status}`);\n\n  return anomalyDetected;\n}\n\nfunction detectAnomaly(sensorType, value) {\n  switch (sensorType.toLowerCase()) {\n    case 'temperature':\n      return value > parseFloat(process.env.TEMP_THRESHOLD_HIGH) ||\n             value < parseFloat(process.env.TEMP_THRESHOLD_LOW);\n    case 'pressure':\n      return value > parseFloat(process.env.PRESSURE_THRESHOLD_HIGH) ||\n             value < parseFloat(process.env.PRESSURE_THRESHOLD_LOW);\n    case 'vibration':\n      return value > parseFloat(process.env.VIBRATION_THRESHOLD);\n    default:\n      return false;\n  }\n}\n\nasync function publishMetrics(processedCount, anomalyCount) {\n  const command = new PutMetricDataCommand({\n    Namespace: 'IoT/Manufacturing',\n    MetricData: [\n      {\n        MetricName: 'SensorReadingsProcessed',\n        Value: processedCount,\n        Unit: 'Count',\n        Timestamp: new Date(),\n        Dimensions: [\n          {\n            Name: 'Environment',\n            Value: process.env.ENVIRONMENT\n          }\n        ]\n      },\n      {\n        MetricName: 'AnomaliesDetected',\n        Value: anomalyCount,\n        Unit: 'Count',\n        Timestamp: new Date(),\n        Dimensions: [\n          {\n            Name: 'Environment',\n            Value: process.env.ENVIRONMENT\n          }\n        ]\n      }\n    ]\n  });\n\n  await cloudwatchClient.send(command);\n  console.log('Published CloudWatch metrics');\n}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "IoT-Data-Processing"
+                    }
+                ]
+            }
+        },
+        "DataProcessorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/iot-data-processor-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "KinesisEventSourceMapping": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "Properties": {
+                "EventSourceArn": {
+                    "Fn::GetAtt": [
+                        "SensorDataStream",
+                        "Arn"
+                    ]
+                },
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "DataProcessorFunction",
+                        "Arn"
+                    ]
+                },
+                "StartingPosition": "LATEST",
+                "BatchSize": 100,
+                "MaximumBatchingWindowInSeconds": 5,
+                "MaximumRetryAttempts": 3,
+                "ParallelizationFactor": 1,
+                "Enabled": true
+            }
+        },
+        "IoTRuleRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "IoTRuleRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "iot.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "KinesisWritePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kinesis:PutRecord",
+                                        "kinesis:PutRecords"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "SensorDataStream",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "SensorDataRule": {
+            "Type": "AWS::IoT::TopicRule",
+            "Properties": {
+                "RuleName": {
+                    "Fn::Sub": "SensorDataRule_${EnvironmentSuffix}"
+                },
+                "TopicRulePayload": {
+                    "Description": "Route sensor data from IoT devices to Kinesis stream",
+                    "Sql": "SELECT *, timestamp() as timestamp FROM 'sensor/+/data'",
+                    "RuleDisabled": false,
+                    "Actions": [
+                        {
+                            "Kinesis": {
+                                "StreamName": {
+                                    "Ref": "SensorDataStream"
+                                },
+                                "PartitionKey": "${deviceId}",
+                                "RoleArn": {
+                                    "Fn::GetAtt": [
+                                        "IoTRuleRole",
+                                        "Arn"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "SensorDevicePolicy": {
+            "Type": "AWS::IoT::Policy",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "SensorDevicePolicy-${EnvironmentSuffix}"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "iot:Connect"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/${!iot:Connection.Thing.ThingName}"
+                                }
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "iot:Publish"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/sensor/*/data"
+                                }
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "iot:Subscribe"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/sensor/*/commands"
+                                }
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "iot:Receive"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/sensor/*/commands"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "ManufacturingDevice": {
+            "Type": "AWS::IoT::Thing",
+            "Properties": {
+                "ThingName": {
+                    "Fn::Sub": "manufacturing-device-${EnvironmentSuffix}"
+                },
+                "AttributePayload": {
+                    "Attributes": {
+                        "deviceType": "sensor",
+                        "location": "manufacturing-floor",
+                        "environment": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                }
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "IoT-Lambda-Errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Lambda function has high error rate",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "DataProcessorFunction"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "AnomalyAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "IoT-High-Anomalies-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when anomaly detection rate is high",
+                "MetricName": "AnomaliesDetected",
+                "Namespace": "IoT/Manufacturing",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "KinesisIteratorAgeAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "IoT-Kinesis-Iterator-Age-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Kinesis iterator age is high indicating processing lag",
+                "MetricName": "IteratorAge",
+                "Namespace": "AWS/Kinesis",
+                "Statistic": "Maximum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 60000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "StreamName",
+                        "Value": {
+                            "Ref": "SensorDataStream"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        }
+    },
+    "Outputs": {
+        "SensorDataTableName": {
+            "Description": "DynamoDB table name for sensor data",
+            "Value": {
+                "Ref": "SensorDataTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SensorDataTable"
+                }
+            }
+        },
+        "RawDataBucketName": {
+            "Description": "S3 bucket name for raw sensor data",
+            "Value": {
+                "Ref": "RawDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RawDataBucket"
+                }
+            }
+        },
+        "KinesisStreamName": {
+            "Description": "Kinesis stream name for sensor data",
+            "Value": {
+                "Ref": "SensorDataStream"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KinesisStream"
+                }
+            }
+        },
+        "DataProcessorFunctionName": {
+            "Description": "Lambda function name for data processing",
+            "Value": {
+                "Ref": "DataProcessorFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DataProcessorFunction"
+                }
+            }
+        },
+        "DataProcessorFunctionArn": {
+            "Description": "Lambda function ARN for data processing",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataProcessorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DataProcessorFunctionArn"
+                }
+            }
+        },
+        "IoTEndpoint": {
+            "Description": "IoT endpoint for device connections",
+            "Value": {
+                "Fn::Sub": "${AWS::AccountId}.iot.${AWS::Region}.amazonaws.com"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-IoTEndpoint"
+                }
+            }
+        },
+        "IoTThingName": {
+            "Description": "IoT Thing name for manufacturing device",
+            "Value": {
+                "Ref": "ManufacturingDevice"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-IoTThingName"
+                }
+            }
+        },
+        "IoTTopicPattern": {
+            "Description": "MQTT topic pattern for publishing sensor data",
+            "Value": "sensor/{deviceId}/data",
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-IoTTopicPattern"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        }
+    }
+}

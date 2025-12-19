@@ -1,0 +1,477 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Static Website Infrastructure with S3, CloudFront, Route53, CloudWatch, WAF, and Lambda@Edge",
+  "Parameters": {
+    "DomainName": {
+      "Type": "String",
+      "Description": "Domain name for the website (e.g., example.com)",
+      "Default": "example.com"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming"
+    },
+    "WebACLArn": {
+      "Type": "String",
+      "Description": "ARN of the WAF WebACL from us-east-1 stack",
+      "Default": ""
+    },
+    "SecurityHeadersFunctionArn": {
+      "Type": "String",
+      "Description": "ARN of Lambda@Edge Security Headers function from us-east-1 stack",
+      "Default": ""
+    },
+    "CustomHeadersFunctionArn": {
+      "Type": "String",
+      "Description": "ARN of Lambda@Edge Custom Headers function from us-east-1 stack",
+      "Default": ""
+    }
+  },
+  "Conditions": {
+    "HasWebACL": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "WebACLArn"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "HasLambdaFunctions": {
+      "Fn::And": [
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Ref": "SecurityHeadersFunctionArn"
+                },
+                ""
+              ]
+            }
+          ]
+        },
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Ref": "CustomHeadersFunctionArn"
+                },
+                ""
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "WebsiteBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${DomainName}-website-${EnvironmentSuffix}"
+        },
+        "WebsiteConfiguration": {
+          "IndexDocument": "index.html",
+          "ErrorDocument": "error.html"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": false,
+          "BlockPublicPolicy": false,
+          "IgnorePublicAcls": false,
+          "RestrictPublicBuckets": false
+        },
+        "MetricsConfigurations": [
+          {
+            "Id": "EntireBucket",
+            "Prefix": ""
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LogsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${DomainName}-logs-${EnvironmentSuffix}"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldLogs",
+              "Status": "Enabled",
+              "ExpirationInDays": 30
+            }
+          ]
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerPreferred"
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": false,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": false,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LogsBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "LogsBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSLogDeliveryWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "logging.s3.amazonaws.com"
+              },
+              "Action": [
+                "s3:PutObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "${LogsBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            },
+            {
+              "Sid": "AWSLogDeliveryAclCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "logging.s3.amazonaws.com"
+              },
+              "Action": [
+                "s3:GetBucketAcl"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "LogsBucket",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "OriginAccessIdentity": {
+      "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+      "Properties": {
+        "CloudFrontOriginAccessIdentityConfig": {
+          "Comment": {
+            "Fn::Sub": "OAI for ${DomainName}"
+          }
+        }
+      }
+    },
+    "WebsiteBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "WebsiteBucket"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Sid": "AllowCloudFrontOAIRead",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${OriginAccessIdentity}"
+                }
+              },
+              "Action": "s3:GetObject",
+              "Resource": {
+                "Fn::Sub": "${WebsiteBucket.Arn}/*"
+              }
+            },
+            {
+              "Sid": "AllowPublicRead",
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "s3:GetObject",
+              "Resource": {
+                "Fn::Sub": "${WebsiteBucket.Arn}/*"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "CloudFrontDistribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ],
+        "DistributionConfig": {
+          "Origins": [
+            {
+              "Id": "S3Origin",
+              "DomainName": {
+                "Fn::GetAtt": [
+                  "WebsiteBucket",
+                  "RegionalDomainName"
+                ]
+              },
+              "S3OriginConfig": {
+                "OriginAccessIdentity": {
+                  "Fn::Sub": "origin-access-identity/cloudfront/${OriginAccessIdentity}"
+                }
+              }
+            }
+          ],
+          "Enabled": true,
+          "DefaultRootObject": "index.html",
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "S3Origin",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "AllowedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "CachedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "Compress": true,
+            "ForwardedValues": {
+              "QueryString": false,
+              "Cookies": {
+                "Forward": "none"
+              }
+            },
+            "MinTTL": 0,
+            "DefaultTTL": 86400,
+            "MaxTTL": 31536000,
+            "LambdaFunctionAssociations": {
+              "Fn::If": [
+                "HasLambdaFunctions",
+                [
+                  {
+                    "EventType": "viewer-request",
+                    "LambdaFunctionARN": {
+                      "Ref": "SecurityHeadersFunctionArn"
+                    }
+                  },
+                  {
+                    "EventType": "origin-response",
+                    "LambdaFunctionARN": {
+                      "Ref": "CustomHeadersFunctionArn"
+                    }
+                  }
+                ],
+                {
+                  "Ref": "AWS::NoValue"
+                }
+              ]
+            }
+          },
+          "PriceClass": "PriceClass_100",
+          "ViewerCertificate": {
+            "CloudFrontDefaultCertificate": true,
+            "MinimumProtocolVersion": "TLSv1.2_2021"
+          },
+          "Logging": {
+            "Bucket": {
+              "Fn::GetAtt": [
+                "LogsBucket",
+                "DomainName"
+              ]
+            },
+            "Prefix": "cloudfront-logs/",
+            "IncludeCookies": false
+          },
+          "CustomErrorResponses": [
+            {
+              "ErrorCode": 404,
+              "ResponseCode": 404,
+              "ResponsePagePath": "/error.html"
+            }
+          ],
+          "Comment": {
+            "Fn::Sub": "CloudFront distribution for ${DomainName}"
+          },
+          "WebACLId": {
+            "Fn::If": [
+              "HasWebACL",
+              {
+                "Ref": "WebACLArn"
+              },
+              {
+                "Ref": "AWS::NoValue"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "CloudWatchDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "website-metrics-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/CloudFront\", \"CacheHitRate\"],\n          [\".\", \"BytesDownloaded\"],\n          [\".\", \"BytesUploaded\"],\n          [\".\", \"Requests\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"us-east-1\",\n        \"title\": \"CloudFront Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/S3\", \"NumberOfObjects\", \"BucketName\", \"${WebsiteBucket}\", \"StorageType\", \"AllStorageTypes\"],\n          [\".\", \"BucketSizeBytes\", \"BucketName\", \"${WebsiteBucket}\", \"StorageType\", \"StandardStorage\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"S3 Storage Metrics\",\n        \"period\": 86400\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/S3\", \"AllRequests\", \"BucketName\", \"${WebsiteBucket}\", \"FilterId\", \"EntireBucket\"],\n          [\".\", \"GetRequests\", \"BucketName\", \"${WebsiteBucket}\", \"FilterId\", \"EntireBucket\"],\n          [\".\", \"4xxErrors\", \"BucketName\", \"${WebsiteBucket}\", \"FilterId\", \"EntireBucket\"],\n          [\".\", \"5xxErrors\", \"BucketName\", \"${WebsiteBucket}\", \"FilterId\", \"EntireBucket\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"S3 Request Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/WAFV2\", \"BlockedRequests\", \"WebACL\", \"${DomainName}-waf-${EnvironmentSuffix}\", \"Region\", \"GLOBAL\", \"Rule\", \"RateLimitRule\"],\n          [\".\", \"AllowedRequests\", \".\", \".\", \".\", \".\", \".\", \".\"],\n          [\".\", \"CountedRequests\", \".\", \".\", \".\", \".\", \".\", \".\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"us-east-1\",\n        \"title\": \"WAF Metrics\",\n        \"period\": 300\n      }\n    }\n  ]\n}\n"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "WebsiteBucketName": {
+      "Description": "Name of the S3 bucket hosting the website",
+      "Value": {
+        "Ref": "WebsiteBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-WebsiteBucket"
+        }
+      }
+    },
+    "CloudFrontDistributionId": {
+      "Description": "CloudFront Distribution ID",
+      "Value": {
+        "Ref": "CloudFrontDistribution"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DistributionId"
+        }
+      }
+    },
+    "CloudFrontDomainName": {
+      "Description": "CloudFront Distribution Domain Name",
+      "Value": {
+        "Fn::GetAtt": [
+          "CloudFrontDistribution",
+          "DomainName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DistributionDomain"
+        }
+      }
+    },
+    "WebsiteURL": {
+      "Description": "Website URL (via CloudFront)",
+      "Value": {
+        "Fn::Sub": "https://${CloudFrontDistribution.DomainName}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-WebsiteURL"
+        }
+      }
+    },
+    "LogsBucketName": {
+      "Description": "Name of the S3 bucket for logs",
+      "Value": {
+        "Ref": "LogsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LogsBucket"
+        }
+      }
+    },
+    "DashboardURL": {
+      "Description": "CloudWatch Dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=website-metrics-${EnvironmentSuffix}"
+      }
+    },
+    "WebACLArn": {
+      "Description": "AWS WAF WebACL ARN",
+      "Value": {
+        "Fn::If": [
+          "HasWebACL",
+          {
+            "Ref": "WebACLArn"
+          },
+          "N/A"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-WebACLArn"
+        }
+      }
+    },
+    "SecurityHeadersFunctionArn": {
+      "Description": "Lambda@Edge Security Headers Function ARN",
+      "Value": {
+        "Fn::If": [
+          "HasLambdaFunctions",
+          {
+            "Ref": "SecurityHeadersFunctionArn"
+          },
+          "N/A"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecurityHeadersFunction"
+        }
+      }
+    },
+    "CustomHeadersFunctionArn": {
+      "Description": "Lambda@Edge Custom Headers Function ARN",
+      "Value": {
+        "Fn::If": [
+          "HasLambdaFunctions",
+          {
+            "Ref": "CustomHeadersFunctionArn"
+          },
+          "N/A"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CustomHeadersFunction"
+        }
+      }
+    }
+  }
+}

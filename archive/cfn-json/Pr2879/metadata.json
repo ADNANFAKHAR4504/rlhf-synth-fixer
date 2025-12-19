@@ -1,0 +1,15 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348960",
+  "team": "4",
+  "startedAt": "2025-09-08T13:40:34.432Z",
+  "author": "manoj-tur",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

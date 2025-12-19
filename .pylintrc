@@ -1,5 +1,8 @@
+[MAIN]
+# Configuration for pylint
+
 [MESSAGES CONTROL]
-# Disable specific messages
+# Disable specific warning messages
 disable=
     C0111, # missing-docstring
     C0103, # invalid-name
@@ -9,21 +12,33 @@ disable=
     R0913, # too-many-arguments
     R0914, # too-many-locals
     R0915, # too-many-statements
+    R0917, # too-many-positional-arguments
+    W0613, # unused-argument
+    W0612, # unused-variable
+    W0611, # unused-import
+    C0415, # import-outside-toplevel
+    C0411, # wrong-import-order
+    E0611, # no-name-in-module (for moto mock imports)
+    E0401, # import-error (for Lambda function imports)
+    R0902, # too-many-instance-attributes
+    R0917, # too-many-positional-arguments
+    W0621, # redefined-outer-name (for pytest fixtures)
+    W0718, # broad-exception-caught
 
 [FORMAT]
 # Maximum number of characters on a single line
-max-line-length=100
+max-line-length=120
 
-# Expected format of line ending, e.g. empty (any line ending), LF or CRLF
+# Expected format of line ending, e.g. empty (any line ending), LF or CRLF.
 expected-line-ending-format=LF
 
 # Indentation preference
-indent-string='  '  # 2 spaces
-indent-after-paren=2  # 2 spaces
+indent-string='    '  # 4 spaces
+indent-after-paren=4  # 4 spaces
 
 [BASIC]
 # Good variable names which should always be accepted
-good-names=i,j,k,ex,Run,_,id
+good-names=i,j,k,ex,Run,_,id,ec2,s3,rds,iam,kms
 
 [DESIGN]
 # Maximum number of arguments for function / method

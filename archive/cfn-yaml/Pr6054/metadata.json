@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000281",
+  "team": "2",
+  "startedAt": "2025-11-06T05:50:35.596Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "Route53",
+    "VPC",
+    "EC2",
+    "KMS",
+    "S3",
+    "RDS",
+    "DynamoDB",
+    "ElasticLoadBalancingV2",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "EventBridge",
+    "IAM",
+    "Systems Manager Parameter Store",
+    "SecretsManager",
+    "Logs"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

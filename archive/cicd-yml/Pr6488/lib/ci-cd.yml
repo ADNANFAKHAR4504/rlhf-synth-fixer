@@ -1,0 +1,929 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target action (deploy-production or rollback)'
+        required: false
+        default: 'deploy-production'
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+  ORDER_SERVICE_REPO: order-service
+  PAYMENT_SERVICE_REPO: payment-service
+  INVENTORY_SERVICE_REPO: inventory-service
+  NOTIFICATION_SERVICE_REPO: notification-service
+  IMAGE_TAG: ${{ github.sha }}
+
+permissions:
+  id-token: write
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  validation:
+    name: Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.8.5'
+
+      - name: Install validation tools
+        run: |
+          pip install tflint==0.50.0 tfsec==1.28.1 checkov==3.1.0 yamllint==1.33.0
+
+      - name: Terraform fmt
+        run: |
+          terraform fmt -check -recursive
+
+      - name: Terraform init (validation)
+        run: |
+          terraform init -backend=false -input=false
+
+      - name: Terraform validate
+        run: |
+          terraform validate
+
+      - name: Verify Terraform backend locking
+        run: |
+          if ! grep -R "dynamodb_table" -n .; then echo "Missing DynamoDB state lock config"; exit 1; fi
+
+      - name: Run tflint
+        run: |
+          tflint
+
+      - name: Run tfsec
+        run: |
+          tfsec .
+
+      - name: Run Checkov
+        run: |
+          checkov -d .
+
+      - name: Shellcheck scripts
+        run: |
+          shellcheck lib/scripts/*.sh
+
+      - name: Install markdownlint
+        run: |
+          npm install -g markdownlint-cli@0.39.0
+
+      - name: Markdown lint
+        run: |
+          markdownlint "**/*.md"
+
+      - name: YAML validation
+        run: |
+          yamllint .
+
+  build:
+    name: Build & Plan
+    runs-on: ubuntu-latest
+    needs: validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-${{ runner.os }}-
+
+      - name: Cache Terraform
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.terraform.d/plugin-cache
+            .terraform
+          key: tf-${{ runner.os }}-${{ hashFiles('**/*.tf') }}
+          restore-keys: |
+            tf-${{ runner.os }}-
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+          ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
+        run: |
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+      - name: Build & push order-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/order-service
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ORDER_SERVICE_REPO }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push payment-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/payment-service
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.PAYMENT_SERVICE_REPO }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push inventory-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/inventory-service
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.INVENTORY_SERVICE_REPO }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push notification-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/notification-service
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.NOTIFICATION_SERVICE_REPO }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install frontend deps
+        working-directory: ./frontend
+        run: |
+          npm ci
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: |
+          npm run build
+
+      - name: Terraform init
+        env:
+          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+        run: |
+          terraform init -input=false
+
+      - name: Terraform plan
+        run: |
+          terraform plan -input=false -out=tfplan
+
+      - name: Upload terraform plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-build
+          path: tfplan
+          retention-days: 30
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install Vegeta
+        run: |
+          sudo apt-get update && sudo apt-get install -y vegeta
+
+      - name: Install test tools
+        run: |
+          npm install
+
+      - name: Install frontend test deps
+        working-directory: ./frontend
+        run: |
+          npm ci
+
+      - name: Run Jest tests
+        working-directory: ./frontend
+        env:
+          JEST_JUNIT_OUTPUT_DIR: ./reports
+          JEST_JUNIT_OUTPUT_NAME: junit-frontend.xml
+        run: |
+          npm test -- --ci --reporters=default --reporters=jest-junit
+
+      - name: Go unit tests
+        working-directory: ./services
+        env:
+          GO_TEST_REPORT: ./reports/go-tests.out
+        run: |
+          go test ./... -v -coverprofile=coverage.out | tee "$GO_TEST_REPORT"
+
+      - name: Integration tests (testcontainers)
+        working-directory: ./tests
+        run: |
+          go test ./integration -v -count=1
+
+      - name: Contract tests (Pact)
+        working-directory: ./tests
+        run: |
+          npm run pact:test
+
+      - name: Vegeta performance test
+        working-directory: ./perf
+        run: |
+          vegeta attack -duration=60s -rate=10000 -targets=targets.txt > vegeta.bin
+          vegeta report -type=json vegeta.bin > vegeta.json
+          node -e "const d=require('./vegeta.json');if(d.latencies.p95>500000000||d.errors>0.001){process.exit(1);}"
+
+      - name: Collect reports
+        run: |
+          mkdir -p artifacts
+          cp -r frontend/reports artifacts/frontend || true
+          cp -r services/reports artifacts/services || true
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-and-coverage
+          path: artifacts
+          retention-days: 30
+
+  security:
+    name: Security Scans
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install security tools
+        run: |
+          pip install snyk==1.1215.0 trivy==0.51.0 grype==0.81.0 semgrep==1.95.0 trufflehog==2.2.0 prowler==4.5.0 aws-parliament==1.5.0
+
+      - name: Snyk container scan
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        run: |
+          snyk container test "$ECR_REGISTRY/${{ env.ORDER_SERVICE_REPO }}:$IMAGE_TAG" --severity-threshold=high
+
+      - name: Trivy filesystem scan
+        run: |
+          trivy fs . --exit-code 1 --severity HIGH,CRITICAL --format sarif --output trivy-fs.sarif
+
+      - name: Trivy image scan
+        env:
+          ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        run: |
+          trivy image "$ECR_REGISTRY/${{ env.ORDER_SERVICE_REPO }}:$IMAGE_TAG" --severity HIGH,CRITICAL --format sarif --output trivy-image.sarif
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image.sarif
+
+      - name: Generate SBOM with Grype
+        env:
+          ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        run: |
+          grype "$ECR_REGISTRY/${{ env.ORDER_SERVICE_REPO }}:$IMAGE_TAG" -o json > grype-sbom.json
+
+      - name: Semgrep SAST
+        run: |
+          semgrep ci --json > semgrep.json
+
+      - name: TruffleHog secret scan
+        run: |
+          trufflehog filesystem . --fail
+
+      - name: Prowler PCI-DSS checks
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          prowler -r "$AWS_REGION" -M json > prowler.json
+
+      - name: Parliament IAM validation
+        run: |
+          parliament --format json iam-policies/ > parliament.json
+
+      - name: Upload security artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-artifacts
+          path: |
+            trivy-fs.sarif
+            trivy-image.sarif
+            grype-sbom.json
+            semgrep.json
+            prowler.json
+            parliament.json
+          retention-days: 30
+
+  infrastructure-preview:
+    name: Infrastructure Preview
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: security
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.8.5'
+
+      - name: Install infra preview tools
+        run: |
+          pip install infracost==0.10.39 driftctl==1.10.0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init (PR)
+        env:
+          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+        run: |
+          terraform init -input=false
+
+      - name: Terraform plan (PR)
+        run: |
+          terraform plan -input=false -out=tfplan-pr
+
+      - name: Upload PR plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-pr
+          path: tfplan-pr
+          retention-days: 30
+
+      - name: Infracost breakdown
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+        run: |
+          infracost breakdown --path . --format json --out-file infracost.json
+
+      - name: Driftctl scan
+        run: |
+          driftctl scan --to tfstate://terraform.tfstate --output json://driftctl.json
+
+      - name: Upload preview artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-preview
+          path: |
+            infracost.json
+            driftctl.json
+          retention-days: 30
+
+      - name: PR comment with preview
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = 'Terraform plan, Infracost, and driftctl results are available as artifacts.';
+            github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body});
+
+  deploy-dev:
+    name: Deploy Dev
+    runs-on: ubuntu-latest
+    needs:
+      - validation
+      - build
+      - test
+      - security
+    if: github.ref == 'refs/heads/main'
+    concurrency:
+      group: deploy-dev
+      cancel-in-progress: false
+    environment:
+      name: development
+      url: https://dev.shop.example.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (dev)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.8.5'
+
+      - name: Terraform init (dev)
+        env:
+          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+        run: |
+          terraform init -input=false
+
+      - name: Terraform apply (dev)
+        run: |
+          terraform workspace select dev || terraform workspace new dev
+          terraform apply -input=false -auto-approve
+
+      - name: Deploy ECS services (dev)
+        env:
+          ENVIRONMENT: dev
+          ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          SECURITY_GROUPS: ${{ vars.DEV_ECS_SECURITY_GROUPS }}
+          SUBNET_IDS: ${{ vars.DEV_ECS_SUBNET_IDS }}
+        run: |
+          bash lib/scripts/deploy-ecs.sh "$ENVIRONMENT" "$ECR_REGISTRY" "$IMAGE_TAG"
+
+      - name: Run DB migrations (dev)
+        env:
+          ENVIRONMENT: dev
+        run: |
+          bash lib/scripts/run-migrations.sh "$ENVIRONMENT"
+
+      - name: Check Redis health (dev)
+        run: |
+          aws elasticache describe-cache-clusters --show-cache-node-info
+
+      - name: Check ALB target health (dev)
+        env:
+          DEV_TARGET_GROUP_ARN: ${{ vars.DEV_TARGET_GROUP_ARN }}
+        run: |
+          aws elbv2 describe-target-health --target-group-arn "$DEV_TARGET_GROUP_ARN"
+
+  integration-test:
+    name: Integration Tests (Dev)
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install newman
+        run: |
+          npm install -g newman@6.0.0
+
+      - name: Newman API tests (dev)
+        run: |
+          newman run postman/dev-collection.json --env-var baseUrl=https://dev.shop.example.com
+
+      - name: DB transaction tests
+        run: |
+          npm run test:db:dev
+
+      - name: Cache invalidation tests
+        run: |
+          npm run test:cache:dev
+
+      - name: SQS processing tests
+        run: |
+          npm run test:sqs:dev
+
+      - name: Upload integration logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-dev
+          path: logs/integration
+          retention-days: 30
+
+  deploy-staging:
+    name: Deploy Staging
+    runs-on: ubuntu-latest
+    needs: integration-test
+    if: github.ref == 'refs/heads/main'
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    environment:
+      name: staging
+      url: https://staging.shop.example.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (staging)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.8.5'
+
+      - name: Terraform init (staging)
+        env:
+          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+        run: |
+          terraform init -input=false
+
+      - name: Terraform apply (staging)
+        run: |
+          terraform workspace select staging || terraform workspace new staging
+          terraform apply -input=false -auto-approve
+
+      - name: ECS blue-green deploy (staging)
+        env:
+          ENVIRONMENT: staging
+          ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          BLUE_TG_ARN: ${{ vars.STAGE_BLUE_TG_ARN }}
+          GREEN_TG_ARN: ${{ vars.STAGE_GREEN_TG_ARN }}
+          LISTENER_ARN: ${{ vars.STAGE_LISTENER_ARN }}
+        run: |
+          bash lib/scripts/deploy-blue-green.sh "$ENVIRONMENT" "$ECR_REGISTRY" "$IMAGE_TAG"
+
+      - name: DB migrations (staging)
+        env:
+          ENVIRONMENT: staging
+        run: |
+          bash lib/scripts/run-migrations.sh "$ENVIRONMENT"
+
+  e2e-test:
+    name: E2E Tests (Staging)
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install E2E tools
+        run: |
+          npm install
+
+      - name: Playwright E2E
+        run: |
+          npm run test:e2e -- --base-url=https://staging.shop.example.com
+
+      - name: Payment gateway tests
+        run: |
+          npm run test:payments:staging
+
+      - name: Order fulfillment tests
+        run: |
+          npm run test:orders:staging
+
+      - name: Notification delivery tests
+        run: |
+          npm run test:notifications:staging
+
+      - name: Accessibility tests
+        run: |
+          npm run test:a11y:staging
+
+      - name: Upload E2E artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-staging
+          path: artifacts/e2e
+          retention-days: 30
+
+  security-scan-live:
+    name: Live Security Scan (Staging)
+    runs-on: ubuntu-latest
+    needs: e2e-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install DAST tools
+        run: |
+          pip install zap-cli==0.15.0 sqlmap==1.8.0 nuclei==3.3.7
+
+      - name: OWASP ZAP DAST
+        run: |
+          zap-cli quick-scan --self-contained https://staging.shop.example.com
+
+      - name: SQLMap tests
+        run: |
+          sqlmap -u https://staging.shop.example.com/api/orders --batch --level=1 --risk=1 --technique=B --no-cast --flush-session
+
+      - name: Nuclei scan
+        run: |
+          nuclei -u https://staging.shop.example.com -json -o nuclei.json
+
+      - name: Upload DAST artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-security-staging
+          path: |
+            nuclei.json
+          retention-days: 30
+
+  performance-test:
+    name: Performance Tests (Staging)
+    runs-on: ubuntu-latest
+    needs: security-scan-live
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install performance tools
+        run: |
+          npm install -g k6@0.51.0 jmeter@5.6.3
+
+      - name: K6 load test
+        run: |
+          k6 run perf/k6-staging.js
+
+      - name: JMeter sustained load
+        run: |
+          jmeter -n -t perf/jmeter-staging.jmx -l perf/jmeter-results.jtl
+
+      - name: X-Ray trace analysis
+        run: |
+          aws xray get-service-graph --start-time "$(date -d '-15 minutes' +%s)" --end-time "$(date +%s)" > xray.json
+
+      - name: Upload performance artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-staging
+          path: perf
+          retention-days: 30
+
+  compliance-validation:
+    name: Compliance Validation
+    runs-on: ubuntu-latest
+    needs: performance-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (multi-env)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: PCI-DSS validation
+        run: |
+          bash lib/scripts/validate-pci.sh
+
+      - name: Generate compliance report
+        run: |
+          bash lib/scripts/generate-compliance-report.sh
+
+      - name: Upload compliance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-report
+          path: compliance
+          retention-days: 30
+
+  deploy-prod-approval:
+    name: Deploy Prod Approval
+    runs-on: ubuntu-latest
+    needs: compliance-validation
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: https://shop.example.com
+    steps:
+      - name: Await production approval
+        run: |
+          echo "Deployment awaiting environment approval."
+
+  deploy-production:
+    name: Deploy Production
+    runs-on: ubuntu-latest
+    needs:
+      - compliance-validation
+      - deploy-prod-approval
+    if: >
+      (github.ref == 'refs/heads/main' &&
+       needs.deploy-prod-approval.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.event.inputs.target == 'deploy-production')
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: https://shop.example.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (prod)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.8.5'
+
+      - name: Terraform init (prod)
+        env:
+          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+        run: |
+          terraform init -input=false
+
+      - name: Terraform apply (prod)
+        run: |
+          terraform workspace select prod || terraform workspace new prod
+          terraform apply -input=false -auto-approve
+
+      - name: Rolling ECS deploy (prod)
+        env:
+          ENVIRONMENT: prod
+          ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          SECURITY_GROUPS: ${{ vars.PROD_ECS_SECURITY_GROUPS }}
+          SUBNET_IDS: ${{ vars.PROD_ECS_SUBNET_IDS }}
+        run: |
+          bash lib/scripts/deploy-ecs.sh "$ENVIRONMENT" "$ECR_REGISTRY" "$IMAGE_TAG"
+
+      - name: Run DB migrations (prod)
+        env:
+          ENVIRONMENT: prod
+        run: |
+          bash lib/scripts/run-migrations.sh "$ENVIRONMENT"
+
+      - name: Configure CloudWatch alarms
+        run: |
+          aws cloudwatch put-metric-alarm --cli-input-json file://alarms/prod-alarms.json
+
+  smoke-test:
+    name: Smoke Tests (Prod)
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install newman
+        run: |
+          npm install -g newman@6.0.0
+
+      - name: Postman smoke tests (prod)
+        run: |
+          newman run postman/prod-smoke.json --env-var baseUrl=https://shop.example.com
+
+      - name: Synthetic transactions
+        run: |
+          npm run test:synthetic:prod
+
+      - name: Microservice health
+        run: |
+          npm run test:health:prod
+
+      - name: CDN and DB checks
+        run: |
+          npm run test:cdn-db:prod
+
+      - name: Upload smoke logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-prod
+          path: logs/smoke
+          retention-days: 30
+
+  monitoring:
+    name: Monitoring & Observability
+    runs-on: ubuntu-latest
+    needs: smoke-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install sentry-cli
+        run: |
+          curl -sL https://sentry.io/get-cli/ | bash
+
+      - name: Update monitoring systems
+        run: |
+          bash lib/scripts/update-monitoring.sh
+
+      - name: Upload monitoring artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring
+          path: monitoring
+          retention-days: 30
+
+  rollback:
+    name: Rollback
+    runs-on: ubuntu-latest
+    needs: []
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'rollback'
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: https://shop.example.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (rollback)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Rollback ECS services
+        env:
+          ENVIRONMENT: prod
+        run: |
+          bash lib/scripts/rollback-ecs.sh "$ENVIRONMENT"
+
+      - name: Rollback DB migrations
+        env:
+          ENVIRONMENT: prod
+        run: |
+          bash lib/scripts/rollback-migrations.sh "$ENVIRONMENT"
+
+      - name: Clear caches
+        run: |
+          npm run cache:clear:prod
+
+      - name: Verify health after rollback
+        run: |
+          npm run test:health:prod
+
+      - name: Upload rollback logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollback
+          path: logs/rollback
+          retention-days: 30
+
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    if: failure()
+    needs:
+      - validation
+      - build
+      - test
+      - security
+      - deploy-dev
+      - deploy-staging
+      - deploy-production
+    steps:
+      - name: Notify Slack
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}

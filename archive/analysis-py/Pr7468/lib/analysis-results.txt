@@ -1,0 +1,15 @@
+2025-11-28 07:53:30,785 - INFO - Found credentials in environment variables.
+2025-11-28 07:53:30,840 - INFO - Starting Redshift cluster analysis...
+2025-11-28 07:53:30,848 - INFO - Found 0 clusters in us-east-1
+2025-11-28 07:53:30,848 - INFO - Analyzing 0 clusters after exclusions
+2025-11-28 07:53:30,849 - INFO - Generated: redshift_analysis.json
+2025-11-28 07:53:30,849 - INFO - No rightsizing recommendations generated
+2025-11-28 07:53:30,849 - INFO - Generated optimization SQL script with 0 table recommendations
+2025-11-28 07:53:30,849 - WARNING - Plotly not available, skipping HTML dashboard generation
+2025-11-28 07:53:30,849 - INFO - HTML dashboard generated: cluster_utilization_trends.html
+
+================================================================================
+REDSHIFT ANALYSIS SUMMARY
+================================================================================
+
+No clusters analyzed.

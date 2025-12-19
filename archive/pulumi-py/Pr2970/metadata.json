@@ -1,0 +1,41 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349318",
+  "team": "3",
+  "startedAt": "2025-09-09T13:45:07.348Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "S3",
+    "ALB",
+    "Auto Scaling",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch",
+    "SNS",
+    "Lambda",
+    "EventBridge"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "shreyaspturing",
+  "dockerS3Location": ""
+}

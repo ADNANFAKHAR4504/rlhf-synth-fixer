@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "y9a2t2",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-11-24T19:21:30+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "Lambda",
+    "DynamoDB",
+    "CodeDeploy",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

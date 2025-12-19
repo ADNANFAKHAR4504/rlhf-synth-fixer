@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-26T00:00:00+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "e9p5a7f3",
+  "aws_services": [
+    "EKS",
+    "VPC",
+    "EC2",
+    "IAM",
+    "ALB",
+    "ECR",
+    "Secrets Manager",
+    "CloudWatch"
+  ],
+  "region": "eu-central-1",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

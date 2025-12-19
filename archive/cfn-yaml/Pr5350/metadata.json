@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000232",
+  "team": "2",
+  "startedAt": "2025-10-29T12:38:00.463Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "S3",
+    "Config",
+    "IAM",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "DynamoDB",
+    "Systems Manager",
+    "KMS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

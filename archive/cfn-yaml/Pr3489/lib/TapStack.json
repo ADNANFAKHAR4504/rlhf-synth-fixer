@@ -1,0 +1,1062 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Email Notification System with SNS, SES, Lambda, DynamoDB, and CloudWatch",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix",
+            "VerifiedDomain",
+            "SesFromAddress",
+            "EnableProductionSES",
+            "TestEmailAddress",
+            "AlarmEmail"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "VerifiedDomain": {
+      "Type": "String",
+      "Description": "Verified SES domain (e.g., example.com)",
+      "Default": "example.com"
+    },
+    "SesFromAddress": {
+      "Type": "String",
+      "Description": "From email address for sending emails",
+      "Default": "no-reply@example.com"
+    },
+    "EnableProductionSES": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Enable production SES sending (false routes to test address)"
+    },
+    "TestEmailAddress": {
+      "Type": "String",
+      "Default": "test@example.com",
+      "Description": "Test email address for sandbox mode"
+    },
+    "AlarmEmail": {
+      "Type": "String",
+      "Description": "Email address for CloudWatch alarm notifications",
+      "Default": "ops@example.com"
+    }
+  },
+  "Resources": {
+    "SNSTopicOrderConfirmations": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${EnvironmentSuffix}-order-confirmations"
+        },
+        "DisplayName": "Order Confirmation Events",
+        "KmsMasterKeyId": "alias/aws/sns",
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Service",
+            "Value": "email-notifications"
+          }
+        ]
+      }
+    },
+    "SNSTopicSesDelivery": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${EnvironmentSuffix}-ses-delivery-notifications"
+        },
+        "DisplayName": "SES Delivery Notifications",
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "SNSTopicSesBounce": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${EnvironmentSuffix}-ses-bounce-notifications"
+        },
+        "DisplayName": "SES Bounce Notifications",
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "SNSTopicSesComplaint": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${EnvironmentSuffix}-ses-complaint-notifications"
+        },
+        "DisplayName": "SES Complaint Notifications",
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "EmailDeliveriesTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${EnvironmentSuffix}-email-deliveries"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS",
+          "KMSMasterKeyId": "alias/aws/dynamodb"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "orderId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "messageId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "to",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "status",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "orderId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "messageId",
+            "KeyType": "RANGE"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "EmailIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "to",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "timestamp",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          },
+          {
+            "IndexName": "StatusIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "status",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "timestamp",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "TimeToLiveSpecification": {
+          "AttributeName": "ttl",
+          "Enabled": true
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Service",
+            "Value": "email-notifications"
+          }
+        ]
+      }
+    },
+    "TurnAroundPromptTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false,
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaSendOrderEmailRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${EnvironmentSuffix}-lambda-send-order-email-role"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SendOrderEmailPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ses:SendEmail",
+                    "ses:SendRawEmail"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${VerifiedDomain}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/${EnvironmentSuffix}-ses-config-set"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "EmailDeliveriesTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${EmailDeliveriesTable.Arn}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "cloudwatch:namespace": {
+                        "Fn::Sub": "${EnvironmentSuffix}/EmailNotifications"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "LambdaSesFeedbackProcessorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${EnvironmentSuffix}-lambda-ses-feedback-role"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SesFeedbackProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "EmailDeliveriesTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${EmailDeliveriesTable.Arn}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "cloudwatch:namespace": {
+                        "Fn::Sub": "${EnvironmentSuffix}/EmailNotifications"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "LambdaCostMonitoringRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${EnvironmentSuffix}-lambda-cost-monitoring-role"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "CostMonitoringPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:GetMetricStatistics",
+                    "cloudwatch:PutMetricData",
+                    "logs:DescribeLogGroups",
+                    "logs:DescribeLogStreams",
+                    "logs:GetLogEvents"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "SNSTopicOrderConfirmations"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "EmailDeliveriesTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${EmailDeliveriesTable.Arn}/index/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "LambdaSendOrderEmail": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${EnvironmentSuffix}-send-order-email"
+        },
+        "Runtime": "python3.12",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaSendOrderEmailRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "VERIFIED_DOMAIN": {
+              "Ref": "VerifiedDomain"
+            },
+            "SES_FROM_ADDRESS": {
+              "Ref": "SesFromAddress"
+            },
+            "ENABLE_PRODUCTION_SES": {
+              "Ref": "EnableProductionSES"
+            },
+            "TEST_EMAIL_ADDRESS": {
+              "Ref": "TestEmailAddress"
+            },
+            "EMAIL_DELIVERIES_TABLE": {
+              "Ref": "EmailDeliveriesTable"
+            },
+            "SES_CONFIG_SET": {
+              "Fn::Sub": "${EnvironmentSuffix}-ses-config-set"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport uuid\nfrom datetime import datetime, timedelta\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\nses = boto3.client('ses')\ndynamodb = boto3.resource('dynamodb')\ncloudwatch = boto3.client('cloudwatch')\n\ndef lambda_handler(event, context):\n    \"\"\"Process SNS order confirmation events and send emails via SES\"\"\"\n    try:\n        # Parse SNS message\n        for record in event.get('Records', []):\n            if record.get('EventSource') == 'aws:sns':\n                message = json.loads(record['Sns']['Message'])\n                process_order_confirmation(message)\n        \n        return {'statusCode': 200, 'body': json.dumps('Success')}\n    \n    except Exception as e:\n        logger.error(f\"Error processing order confirmation: {str(e)}\")\n        raise\n\ndef process_order_confirmation(order_data):\n    \"\"\"Process individual order confirmation\"\"\"\n    # Extract order information\n    order_id = order_data.get('orderId')\n    customer_email = order_data.get('customerEmail') \n    customer_name = order_data.get('customerName')\n    \n    # Validate required fields\n    if not all([order_id, customer_email, customer_name]):\n        raise ValueError(\"Missing required fields in order data\")\n    \n    # Check for duplicate processing\n    table = dynamodb.Table(os.environ['EMAIL_DELIVERIES_TABLE'])\n    message_id = str(uuid.uuid4())\n    \n    # Send email via SES\n    ses_message_id = send_order_confirmation_email(order_data, message_id)\n    \n    # Record in DynamoDB\n    record_email_delivery(table, order_id, message_id, customer_email, order_data, ses_message_id)\n\ndef send_order_confirmation_email(order_data, message_id):\n    \"\"\"Send email via SES\"\"\"\n    order_id = order_data.get('orderId')\n    customer_email = order_data.get('customerEmail')\n    customer_name = order_data.get('customerName', 'Customer')\n    items = order_data.get('items', [])\n    total = order_data.get('total', '0.00')\n    \n    # Determine target email based on production flag\n    to_address = customer_email if os.environ.get('ENABLE_PRODUCTION_SES', 'false').lower() == 'true' else os.environ.get('TEST_EMAIL_ADDRESS', 'test@example.com')\n    \n    # Generate email content\n    subject = f\"Order Confirmation #{order_id}\"\n    html_body = generate_order_confirmation_html(order_id, customer_name, items, total)\n    \n    # Send email via SES\n    try:\n        response = ses.send_email(\n            Source=os.environ['SES_FROM_ADDRESS'],\n            Destination={'ToAddresses': [to_address]},\n            Message={\n                'Subject': {'Data': subject},\n                'Body': {'Html': {'Data': html_body}}\n            },\n            ConfigurationSetName=os.environ.get('SES_CONFIG_SET')\n        )\n        logger.info(f\"Email sent successfully. SES MessageId: {response['MessageId']}\")\n        return response['MessageId']\n    except Exception as e:\n        logger.error(f\"Failed to send email: {str(e)}\")\n        raise\n\ndef record_email_delivery(table, order_id, message_id, email, order_data, ses_message_id=None):\n    \"\"\"Record email delivery in DynamoDB\"\"\"\n    try:\n        table.put_item(\n            Item={\n                'orderId': order_id,\n                'messageId': message_id,\n                'to': email,\n                'status': 'SENT',\n                'sesMessageId': ses_message_id,\n                'timestamp': int(datetime.now().timestamp()),\n                'lastUpdated': datetime.now().isoformat(),\n                'customerName': order_data.get('customerName'),\n                'total': order_data.get('total'),\n                'items': order_data.get('items', []),\n                'attempts': 1\n            },\n            ConditionExpression='attribute_not_exists(orderId) AND attribute_not_exists(messageId)'\n        )\n        logger.info(f\"Email delivery recorded for order {order_id}\")\n    except Exception as e:\n        if 'ConditionalCheckFailedException' in str(e):\n            logger.warning(f\"Email already recorded for order {order_id}\")\n        else:\n            logger.error(f\"Failed to record email delivery: {str(e)}\")\n            raise\n\ndef generate_order_confirmation_html(order_id, customer_name, items, total):\n    \"\"\"Generate HTML email content\"\"\"\n    items_html = \"\"\n    if items:\n        items_html = \"<ul>\"\n        for item in items:\n            items_html += f\"<li>{item.get('name', 'Item')} - Quantity: {item.get('quantity', 1)} - ${item.get('price', '0.00')}</li>\"\n        items_html += \"</ul>\"\n    \n    return f\"\"\"\n    <html>\n        <body style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;\">\n            <h2 style=\"color: #333;\">Order Confirmation</h2>\n            <p>Dear {customer_name},</p>\n            <p>Thank you for your order #{order_id}!</p>\n            <h3>Order Details:</h3>\n            {items_html}\n            <p><strong>Total: ${total}</strong></p>\n            <p>We'll send you a shipping confirmation once your order is on its way.</p>\n            <p>Best regards,<br>Your E-commerce Team</p>\n        </body>\n    </html>\n    \"\"\"\n"
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaSesFeedbackProcessor": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${EnvironmentSuffix}-ses-feedback-processor"
+        },
+        "Runtime": "python3.12",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaSesFeedbackProcessorRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "EMAIL_DELIVERIES_TABLE": {
+              "Ref": "EmailDeliveriesTable"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport logging\nfrom datetime import datetime\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndynamodb = boto3.resource('dynamodb')\ncloudwatch = boto3.client('cloudwatch')\n\ndef lambda_handler(event, context):\n    \"\"\"Process SES feedback events (delivery, bounce, complaint)\"\"\"\n    try:\n        for record in event.get('Records', []):\n            if record.get('EventSource') == 'aws:sns':\n                process_ses_feedback(json.loads(record['Sns']['Message']))\n        \n        return {'statusCode': 200, 'body': json.dumps('Success')}\n    \n    except Exception as e:\n        logger.error(f\"Error processing SES feedback: {str(e)}\")\n        raise\n\ndef process_ses_feedback(feedback_data):\n    \"\"\"Process SES feedback and update DynamoDB\"\"\"\n    notification_type = feedback_data.get('notificationType')\n    ses_message_id = feedback_data.get('mail', {}).get('messageId')\n    \n    if not ses_message_id:\n        logger.warning(\"No SES message ID found in feedback data\")\n        return\n    \n    table = dynamodb.Table(os.environ['EMAIL_DELIVERIES_TABLE'])\n    \n    if notification_type == 'Bounce':\n        handle_bounce_notification(feedback_data, ses_message_id, table)\n    elif notification_type == 'Complaint':\n        handle_complaint_notification(feedback_data, ses_message_id, table)\n    elif notification_type == 'Delivery':\n        handle_delivery_notification(feedback_data, ses_message_id, table)\n    else:\n        logger.warning(f\"Unknown notification type: {notification_type}\")\n\ndef handle_bounce_notification(feedback_data, ses_message_id, table):\n    \"\"\"Handle bounce notifications\"\"\"\n    bounce_data = feedback_data.get('bounce', {})\n    bounced_recipients = bounce_data.get('bouncedRecipients', [])\n    \n    for recipient in bounced_recipients:\n        email = recipient.get('emailAddress')\n        bounce_type = bounce_data.get('bounceType', 'Unknown')\n        bounce_subtype = bounce_data.get('bounceSubType', 'Unknown')\n        reason = f\"{bounce_type}: {bounce_subtype}\"\n        \n        update_email_status(table, ses_message_id, email, 'BOUNCE', reason)\n        publish_metric('Bounces', 1)\n    \n    logger.info(f\"Processed bounce notification for {len(bounced_recipients)} recipients\")\n\ndef handle_complaint_notification(feedback_data, ses_message_id, table):\n    \"\"\"Handle complaint notifications\"\"\"\n    complaint_data = feedback_data.get('complaint', {})\n    complained_recipients = complaint_data.get('complainedRecipients', [])\n    \n    for recipient in complained_recipients:\n        email = recipient.get('emailAddress')\n        complaint_type = complaint_data.get('complaintFeedbackType', 'Unknown')\n        \n        update_email_status(table, ses_message_id, email, 'COMPLAINT', complaint_type)\n        publish_metric('Complaints', 1)\n    \n    logger.info(f\"Processed complaint notification for {len(complained_recipients)} recipients\")\n\ndef handle_delivery_notification(feedback_data, ses_message_id, table):\n    \"\"\"Handle delivery notifications\"\"\"\n    delivery_data = feedback_data.get('delivery', {})\n    recipients = delivery_data.get('recipients', [])\n    \n    for email in recipients:\n        update_email_status(table, ses_message_id, email, 'DELIVERED', 'Successfully delivered')\n        publish_metric('Deliveries', 1)\n    \n    logger.info(f\"Processed delivery notification for {len(recipients)} recipients\")\n\ndef update_email_status(table, ses_message_id, email, status, reason):\n    \"\"\"Update email status in DynamoDB\"\"\"\n    try:\n        # Find the record by sesMessageId using GSI\n        response = table.query(\n            IndexName='EmailIndex',\n            KeyConditionExpression='#to = :email',\n            FilterExpression='sesMessageId = :msg_id',\n            ExpressionAttributeNames={'#to': 'to'},\n            ExpressionAttributeValues={\n                ':email': email,\n                ':msg_id': ses_message_id\n            }\n        )\n        \n        if response['Items']:\n            item = response['Items'][0]\n            \n            # Update the status\n            table.update_item(\n                Key={\n                    'orderId': item['orderId'],\n                    'messageId': item['messageId']\n                },\n                UpdateExpression='SET #status = :status, lastUpdated = :updated, reason = :reason',\n                ExpressionAttributeNames={'#status': 'status'},\n                ExpressionAttributeValues={\n                    ':status': status,\n                    ':updated': datetime.now().isoformat(),\n                    ':reason': reason\n                }\n            )\n            logger.info(f\"Updated status to {status} for {email}\")\n        else:\n            logger.warning(f\"No record found for sesMessageId: {ses_message_id}, email: {email}\")\n            \n    except Exception as e:\n        logger.error(f\"Error updating email status: {str(e)}\")\n        raise\n\ndef publish_metric(metric_name, value):\n    \"\"\"Publish custom metric to CloudWatch\"\"\"\n    try:\n        cloudwatch.put_metric_data(\n            Namespace=f\"{os.environ['ENVIRONMENT']}/EmailNotifications\",\n            MetricData=[{\n                'MetricName': metric_name,\n                'Value': value,\n                'Unit': 'Count',\n                'Timestamp': datetime.now()\n            }]\n        )\n    except Exception as e:\n        logger.error(f\"Error publishing metric {metric_name}: {str(e)}\")\n"
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "LambdaCostMonitoring": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${EnvironmentSuffix}-cost-monitoring"
+        },
+        "Runtime": "python3.12",
+        "Handler": "cost-monitoring.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaCostMonitoringRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 300,
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "EMAIL_DELIVERIES_TABLE": {
+              "Ref": "EmailDeliveriesTable"
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "SNSTopicOrderConfirmations"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "# Cost monitoring Lambda code will be deployed separately\ndef lambda_handler(event, context):\n    return {'statusCode': 200, 'body': 'Cost monitoring placeholder'}\n"
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "LambdaPermissionOrderConfirmations": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "LambdaSendOrderEmail"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "sns.amazonaws.com",
+        "SourceArn": {
+          "Ref": "SNSTopicOrderConfirmations"
+        }
+      }
+    },
+    "LambdaPermissionSesDelivery": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "LambdaSesFeedbackProcessor"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "sns.amazonaws.com",
+        "SourceArn": {
+          "Ref": "SNSTopicSesDelivery"
+        }
+      }
+    },
+    "LambdaPermissionSesBounce": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "LambdaSesFeedbackProcessor"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "sns.amazonaws.com",
+        "SourceArn": {
+          "Ref": "SNSTopicSesBounce"
+        }
+      }
+    },
+    "LambdaPermissionSesComplaint": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "LambdaSesFeedbackProcessor"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "sns.amazonaws.com",
+        "SourceArn": {
+          "Ref": "SNSTopicSesComplaint"
+        }
+      }
+    },
+    "SNSSubscriptionOrderConfirmations": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Protocol": "lambda",
+        "TopicArn": {
+          "Ref": "SNSTopicOrderConfirmations"
+        },
+        "Endpoint": {
+          "Fn::GetAtt": [
+            "LambdaSendOrderEmail",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "SNSSubscriptionSesDelivery": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Protocol": "lambda",
+        "TopicArn": {
+          "Ref": "SNSTopicSesDelivery"
+        },
+        "Endpoint": {
+          "Fn::GetAtt": [
+            "LambdaSesFeedbackProcessor",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "SNSSubscriptionSesBounce": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Protocol": "lambda",
+        "TopicArn": {
+          "Ref": "SNSTopicSesBounce"
+        },
+        "Endpoint": {
+          "Fn::GetAtt": [
+            "LambdaSesFeedbackProcessor",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "SNSSubscriptionSesComplaint": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Protocol": "lambda",
+        "TopicArn": {
+          "Ref": "SNSTopicSesComplaint"
+        },
+        "Endpoint": {
+          "Fn::GetAtt": [
+            "LambdaSesFeedbackProcessor",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "SESConfigurationSet": {
+      "Type": "AWS::SES::ConfigurationSet",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-ses-config-set"
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "SESEventDestinationDelivery": {
+      "Type": "AWS::SES::ConfigurationSetEventDestination",
+      "Properties": {
+        "ConfigurationSetName": {
+          "Ref": "SESConfigurationSet"
+        },
+        "EventDestination": {
+          "Name": "delivery-destination",
+          "Enabled": true,
+          "MatchingEventTypes": [
+            "delivery"
+          ],
+          "SnsDestination": {
+            "TopicARN": {
+              "Ref": "SNSTopicSesDelivery"
+            }
+          }
+        }
+      }
+    },
+    "SESEventDestinationBounce": {
+      "Type": "AWS::SES::ConfigurationSetEventDestination",
+      "Properties": {
+        "ConfigurationSetName": {
+          "Ref": "SESConfigurationSet"
+        },
+        "EventDestination": {
+          "Name": "bounce-destination",
+          "Enabled": true,
+          "MatchingEventTypes": [
+            "bounce"
+          ],
+          "SnsDestination": {
+            "TopicARN": {
+              "Ref": "SNSTopicSesBounce"
+            }
+          }
+        }
+      }
+    },
+    "SESEventDestinationComplaint": {
+      "Type": "AWS::SES::ConfigurationSetEventDestination",
+      "Properties": {
+        "ConfigurationSetName": {
+          "Ref": "SESConfigurationSet"
+        },
+        "EventDestination": {
+          "Name": "complaint-destination",
+          "Enabled": true,
+          "MatchingEventTypes": [
+            "complaint"
+          ],
+          "SnsDestination": {
+            "TopicARN": {
+              "Ref": "SNSTopicSesComplaint"
+            }
+          }
+        }
+      }
+    },
+    "SNSTopicAlarms": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${EnvironmentSuffix}-email-system-alarms"
+        },
+        "DisplayName": "Email System Alarms",
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "SNSSubscriptionAlarms": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Protocol": "email",
+        "TopicArn": {
+          "Ref": "SNSTopicAlarms"
+        },
+        "Endpoint": {
+          "Ref": "AlarmEmail"
+        }
+      }
+    },
+    "AlarmHighBounceRate": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${EnvironmentSuffix}-high-bounce-rate"
+        },
+        "AlarmDescription": "High email bounce rate detected",
+        "MetricName": "BounceRate",
+        "Namespace": {
+          "Fn::Sub": "${EnvironmentSuffix}/EmailNotifications"
+        },
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopicAlarms"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "AlarmEmailSendFailures": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${EnvironmentSuffix}-email-send-failures"
+        },
+        "AlarmDescription": "High rate of email send failures",
+        "MetricName": "SendFailures",
+        "Namespace": {
+          "Fn::Sub": "${EnvironmentSuffix}/EmailNotifications"
+        },
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopicAlarms"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "OrderConfirmationsTopicArn": {
+      "Description": "ARN of the order confirmations SNS topic",
+      "Value": {
+        "Ref": "SNSTopicOrderConfirmations"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OrderConfirmationsTopicArn"
+        }
+      }
+    },
+    "EmailDeliveriesTableName": {
+      "Description": "Name of the email deliveries DynamoDB table",
+      "Value": {
+        "Ref": "EmailDeliveriesTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EmailDeliveriesTableName"
+        }
+      }
+    },
+    "EmailDeliveriesTableArn": {
+      "Description": "ARN of the email deliveries DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "EmailDeliveriesTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EmailDeliveriesTableArn"
+        }
+      }
+    },
+    "TurnAroundPromptTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "TurnAroundPromptTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+        }
+      }
+    },
+    "TurnAroundPromptTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TurnAroundPromptTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+        }
+      }
+    },
+    "SendOrderEmailFunctionArn": {
+      "Description": "ARN of the send order email Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "LambdaSendOrderEmail",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SendOrderEmailFunctionArn"
+        }
+      }
+    },
+    "SesFeedbackProcessorFunctionArn": {
+      "Description": "ARN of the SES feedback processor Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "LambdaSesFeedbackProcessor",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SesFeedbackProcessorFunctionArn"
+        }
+      }
+    },
+    "CostMonitoringFunctionArn": {
+      "Description": "ARN of the cost monitoring Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "LambdaCostMonitoring",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CostMonitoringFunctionArn"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}

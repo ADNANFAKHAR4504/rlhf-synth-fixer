@@ -1,0 +1,49 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291519",
+  "team": "6",
+  "startedAt": "2025-08-25T07:36:06.662Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Network Configuration",
+    "Database Management",
+    "Security Configuration",
+    "Resource Scaling",
+    "IaC Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::SecretsManager::Secret",
+    "AWS::EC2::KeyPair",
+    "AWS::EC2::VPC",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::EIP",
+    "AWS::EC2::NatGateway",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::SubnetRouteTableAssociation",
+    "AWS::IAM::Role",
+    "AWS::IAM::InstanceProfile",
+    "AWS::EC2::SecurityGroup",
+    "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    "AWS::ElasticLoadBalancingV2::TargetGroup",
+    "AWS::ElasticLoadBalancingV2::Listener",
+    "AWS::EC2::LaunchTemplate",
+    "AWS::AutoScaling::AutoScalingGroup",
+    "AWS::AutoScaling::ScalingPolicy",
+    "AWS::CloudWatch::Alarm",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::RDS::DBInstance"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "356257",
+  "team": "stf",
+  "startedAt": "2025-10-26T12:12:04.068Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudTrail",
+    "DynamoDB",
+    "OpenSearch",
+    "Lambda",
+    "Kinesis Firehose",
+    "SNS",
+    "Step Functions",
+    "Athena",
+    "Glue",
+    "IAM",
+    "CloudWatch Logs",
+    "Macie"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

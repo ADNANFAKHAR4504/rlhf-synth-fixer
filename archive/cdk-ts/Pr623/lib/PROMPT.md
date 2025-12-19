@@ -12,7 +12,7 @@ Carefully review the provided task to understand each security control and infra
 ### 2. Write the Architecture in CDK Format
 Propose a robust AWS infrastructure that fulfills all stated requirements, adhering to best practices for:
 - Security
-- High availability  
+- High availability 
 - Operational excellence
 
 ### 3. Specify AWS Services
@@ -84,13 +84,13 @@ You are tasked with designing an **IaC solution** for provisioning a secure and 
 
 The delivered solution must demonstrate:
 
-1. ✅ **Security Excellence**: Implementation of defense-in-depth security controls
-2. ✅ **High Availability**: Multi-AZ deployment for fault tolerance  
-3. ✅ **Compliance**: Adherence to security and compliance best practices
-4. ✅ **Operational Excellence**: Comprehensive monitoring and logging
-5. ✅ **Cost Optimization**: Effective tagging and resource management
-6. ✅ **Reliability**: Robust infrastructure design patterns
-7. ✅ **Performance**: Optimized resource configuration
+1. **Security Excellence**: Implementation of defense-in-depth security controls
+2. **High Availability**: Multi-AZ deployment for fault tolerance 
+3. **Compliance**: Adherence to security and compliance best practices
+4. **Operational Excellence**: Comprehensive monitoring and logging
+5. **Cost Optimization**: Effective tagging and resource management
+6. **Reliability**: Robust infrastructure design patterns
+7. **Performance**: Optimized resource configuration
 
 ## Expected Deliverables
 

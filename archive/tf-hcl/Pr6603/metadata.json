@@ -1,0 +1,30 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6601",
+  "team": "5",
+  "startedAt": "2025-11-16T13:36:59.329Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "asynchronous payment processing system for fintech startup with ordered transaction validation",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "SQS",
+    "Lambda",
+    "EventBridge",
+    "DynamoDB",
+    "SNS",
+    "IAM",
+    "CloudWatch",
+    "SSM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,15 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291605",
+  "team": "6",
+  "startedAt": "2025-08-27T08:59:30.376Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350085",
+  "team": "3",
+  "startedAt": "2025-10-14T18:34:19.924Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AWS Config",
+    "IAM",
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "Route Table",
+    "Security Group",
+    "EC2",
+    "Application Load Balancer",
+    "Target Group",
+    "Listener",
+    "S3",
+    "CloudWatch Logs",
+    "CloudWatch",
+    "Elastic Network Interface",
+    "Auto Scaling (optional if scaling EC2)",
+    "CloudFormation"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Devesh-turing-99",
+  "dockerS3Location": ""
+}

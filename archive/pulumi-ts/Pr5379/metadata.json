@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-30T10:19:57+05:30",
+  "subtask": "Environment Migration",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "migration",
+    "multi-environment",
+    "pulumi"
+  ],
+  "po_id": "mm8fq",
+  "aws_services": [
+    "KMS",
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "IAM",
+    "WAF",
+    "AWS Backup",
+    "X-Ray"
+  ],
+  "region": "eu-west-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

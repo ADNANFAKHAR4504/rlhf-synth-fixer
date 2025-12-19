@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349842",
+  "team": "3",
+  "startedAt": "2025-10-14T10:42:25.888Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 6,
+  "training_quality_justification": "Score: 6/10 (BELOW MINIMUM THRESHOLD - BLOCKS PR). Positive: Complex serverless architecture, good security practices, monitoring, proper CDK patterns. Critical Issues: (1) Missing required sample data population feature explicitly requested in PROMPT, (2) MODEL_FAILURES.md claims this was fixed but implementation is absent, (3) Inconsistency between documented fixes and actual code reduces training value. Needs improvement to meet minimum quality threshold of 8/10.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}

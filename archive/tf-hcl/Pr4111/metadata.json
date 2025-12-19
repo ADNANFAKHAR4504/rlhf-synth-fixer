@@ -1,0 +1,39 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350150",
+  "team": "4",
+  "startedAt": "2025-10-10T15:16:31.390Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ALB",
+    "S3",
+    "SSM Parameter Store",
+    "Internet Gateway",
+    "Security Groups",
+    "Route Tables",
+    "Subnets"
+  ],
+  "training_quality": 8,
+  "testDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^22.10.2",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.2"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

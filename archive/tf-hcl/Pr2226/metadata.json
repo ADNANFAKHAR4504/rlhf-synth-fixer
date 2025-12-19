@@ -1,0 +1,45 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291754",
+  "team": "5",
+  "startedAt": "2025-08-25T15:04:26.826Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Database Management",
+    "Performance Optimization",
+    "Access Control",
+    "Monitoring Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ECS",
+    "S3",
+    "KMS",
+    "IAM",
+    "ALB",
+    "WAF",
+    "CloudTrail",
+    "Config",
+    "Secrets Manager",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "Network ACLs",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

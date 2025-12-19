@@ -15,9 +15,9 @@ Environment=Prod
 Owner=Akshat Jain
 
 For the code structure, keep separate constructs in the same stack file:
-IamConstruct – roles/policies  
-StorageConstruct – sensitive S3 buckets  
-BackendConstruct – backend setup (S3+DynamoDB)
+IamConstruct - roles/policies  
+StorageConstruct - sensitive S3 buckets  
+BackendConstruct - backend setup (S3+DynamoDB)
 
 Root stack just sets AWS provider and pulls it together. Each construct should be reusable and take config options (interfaces are fine). No hardcoded creds, assume AWS CLI/env vars.
 

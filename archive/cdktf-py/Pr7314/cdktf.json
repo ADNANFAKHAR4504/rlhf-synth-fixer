@@ -1,0 +1,14 @@
+{
+  "language": "python",
+  "app": "pipenv run python tap.py",
+  "projectId": "18754d04-9786-40f1-92a2-6ec8b0ebc00a",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "hashicorp/aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349979",
+  "team": "3",
+  "startedAt": "2025-08-29T13:43:13.174Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "DynamoDB",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "Systems Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}

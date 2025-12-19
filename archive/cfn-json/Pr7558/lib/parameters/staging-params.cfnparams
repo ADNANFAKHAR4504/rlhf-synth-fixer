@@ -1,0 +1,26 @@
+[
+  {
+    "ParameterKey": "EnvironmentName",
+    "ParameterValue": "staging"
+  },
+  {
+    "ParameterKey": "SnsEmail",
+    "ParameterValue": "staging-team@example.com"
+  },
+  {
+    "ParameterKey": "VpcCidr",
+    "ParameterValue": "10.1.0.0/16"
+  },
+  {
+    "ParameterKey": "AvailabilityZone1",
+    "ParameterValue": "us-east-1a"
+  },
+  {
+    "ParameterKey": "AvailabilityZone2",
+    "ParameterValue": "us-east-1b"
+  },
+  {
+    "ParameterKey": "AvailabilityZone3",
+    "ParameterValue": "us-east-1c"
+  }
+]

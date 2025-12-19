@@ -1,0 +1,45 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291572",
+  "team": "4",
+  "startedAt": "2025-08-22T08:07:48.235Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Access Control",
+    "Performance Optimization",
+    "Monitoring Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "Lambda",
+    "CloudTrail",
+    "EventBridge",
+    "SNS",
+    "CloudWatch Logs",
+    "KMS",
+    "IAM",
+    "Secrets Manager",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups",
+    "EIP"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
+}

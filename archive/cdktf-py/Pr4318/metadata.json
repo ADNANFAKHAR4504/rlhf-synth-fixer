@@ -1,0 +1,36 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-14T04:36:34+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "2700326098",
+  "aws_services": [
+    "Kinesis Data Streams",
+    "Kinesis Data Firehose",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "Secrets Manager",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "region": "eu-central-1",
+  "background": "A large manufacturing company operates multiple production lines with IoT sensors generating 10,000 events per second. They need a scalable infrastructure to ingest, process, and analyze this data in real-time while maintaining data integrity and compliance with industrial regulations.",
+  "training_quality": 9,
+  "completedAt": "2025-10-14T03:49:00+05:30",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

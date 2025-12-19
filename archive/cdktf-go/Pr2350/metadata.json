@@ -1,0 +1,39 @@
+{
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291610-GO",
+  "team": "3",
+  "startedAt": "2025-08-27T09:57:29.267Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Network Configuration",
+    "Database Management",
+    "Access Control",
+    "IaC Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudTrail",
+    "CloudWatch",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "Secrets Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tushar-turing8",
+  "dockerS3Location": ""
+}

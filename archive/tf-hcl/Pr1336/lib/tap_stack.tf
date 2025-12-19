@@ -15,27 +15,27 @@ variable "aws_region" {
 variable "environments" {
   description = "Environment configurations"
   type = map(object({
-    vpc_cidr      = string
-    instance_type = string
-    public_subnet_cidrs = list(string)
+    vpc_cidr             = string
+    instance_type        = string
+    public_subnet_cidrs  = list(string)
     private_subnet_cidrs = list(string)
   }))
   default = {
     dev = {
-      vpc_cidr      = "10.0.0.0/16"
-      instance_type = "t2.micro"
+      vpc_cidr             = "10.0.0.0/16"
+      instance_type        = "t2.micro"
       public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
       private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
     }
     staging = {
-      vpc_cidr      = "10.1.0.0/16"
-      instance_type = "t3.medium"
+      vpc_cidr             = "10.1.0.0/16"
+      instance_type        = "t3.medium"
       public_subnet_cidrs  = ["10.1.1.0/24", "10.1.2.0/24"]
       private_subnet_cidrs = ["10.1.10.0/24", "10.1.20.0/24"]
     }
     production = {
-      vpc_cidr      = "10.2.0.0/16"
-      instance_type = "m5.large"
+      vpc_cidr             = "10.2.0.0/16"
+      instance_type        = "m5.large"
       public_subnet_cidrs  = ["10.2.1.0/24", "10.2.2.0/24"]
       private_subnet_cidrs = ["10.2.10.0/24", "10.2.20.0/24"]
     }
@@ -46,10 +46,10 @@ variable "common_tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)
   default = {
-    Owner       = "DevOps-Team"
-    Purpose     = "Multi-Environment-Infrastructure"
-    ManagedBy   = "Terraform"
-    Project     = "TAP-Stack"
+    Owner     = "DevOps-Team"
+    Purpose   = "Multi-Environment-Infrastructure"
+    ManagedBy = "Terraform"
+    Project   = "TAP-Stack"
   }
 }
 
@@ -267,7 +267,7 @@ resource "aws_route_table_association" "public_rta" {
     for combo in flatten([
       for env_name, env_config in var.environments : [
         for idx, cidr in env_config.public_subnet_cidrs : {
-          key = "${env_name}-public-${idx}"
+          key      = "${env_name}-public-${idx}"
           env_name = env_name
         }
       ]
@@ -284,7 +284,7 @@ resource "aws_route_table_association" "private_rta" {
     for combo in flatten([
       for env_name, env_config in var.environments : [
         for idx, cidr in env_config.private_subnet_cidrs : {
-          key = "${env_name}-private-${idx}"
+          key      = "${env_name}-private-${idx}"
           env_name = env_name
         }
       ]
@@ -539,9 +539,9 @@ resource "aws_instance" "web_servers" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = each.value.instance_type
   vpc_security_group_ids = [aws_security_group.web_sg[each.key].id]
-  subnet_id             = aws_subnet.public_subnets["${each.key}-public-0"].id
-  iam_instance_profile  = aws_iam_instance_profile.ec2_profile[each.key].name
-  user_data = replace(var.user_data_template, "__ENVIRONMENT__", each.key)
+  subnet_id              = aws_subnet.public_subnets["${each.key}-public-0"].id
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile[each.key].name
+  user_data              = replace(var.user_data_template, "__ENVIRONMENT__", each.key)
   root_block_device {
     volume_type = "gp3"
     volume_size = each.key == "production" ? 20 : 10

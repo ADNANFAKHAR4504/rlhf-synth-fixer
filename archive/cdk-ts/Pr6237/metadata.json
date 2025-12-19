@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-10T16:58:15.156468Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "q4r92",
+  "aws_services": [
+    "IAM",
+    "S3",
+    "DynamoDB",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "Config"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

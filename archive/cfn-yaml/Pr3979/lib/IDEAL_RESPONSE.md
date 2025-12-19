@@ -1,0 +1,969 @@
+```yml
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SecureEnv - Foundational secure AWS environment for sensitive workloads'
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: EC2 instance type
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    Description: RDS instance class
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+
+  CertificateARN:
+    Type: String
+    Default: ''
+    Description: ARN of the SSL certificate for the ALB listener (leave empty for HTTP only)
+
+  AllowedCIDR:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR block allowed to access the web layer
+
+  AMIID:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: AMI ID for the EC2 instance
+
+Conditions:
+  HasCertificate: !Not [!Equals [!Ref CertificateARN, '']]
+
+Resources:
+  # Secrets Manager for RDS Password
+  SecureEnvDBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub
+        - 'SecureEnvDBMasterPassword-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
+      Description: Master password for RDS database
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
+  # VPC and Networking 
+  SecureEnvVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvVPC'
+
+  SecureEnvInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvInternetGateway'
+
+  SecureEnvAttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      InternetGatewayId: !Ref SecureEnvInternetGateway
+
+  SecureEnvPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvPublicSubnet1'
+
+  SecureEnvPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvPublicSubnet2'
+
+  SecureEnvPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvPrivateSubnet1'
+
+  SecureEnvPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvPrivateSubnet2'
+
+  SecureEnvNATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt SecureEnvEIPForNAT.AllocationId
+      SubnetId: !Ref SecureEnvPublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvNATGateway'
+
+  SecureEnvEIPForNAT:
+    Type: AWS::EC2::EIP
+    DependsOn: SecureEnvAttachGateway
+    Properties:
+      Domain: vpc
+
+  SecureEnvPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvPublicRouteTable'
+
+  SecureEnvPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureEnvVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvPrivateRouteTable'
+
+  SecureEnvPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: SecureEnvAttachGateway
+    Properties:
+      RouteTableId: !Ref SecureEnvPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref SecureEnvInternetGateway
+
+  SecureEnvPrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref SecureEnvPrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref SecureEnvNATGateway
+
+  SecureEnvPublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SecureEnvPublicSubnet1
+      RouteTableId: !Ref SecureEnvPublicRouteTable
+
+  SecureEnvPublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SecureEnvPublicSubnet2
+      RouteTableId: !Ref SecureEnvPublicRouteTable
+
+  SecureEnvPrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SecureEnvPrivateSubnet1
+      RouteTableId: !Ref SecureEnvPrivateRouteTable
+
+  SecureEnvPrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SecureEnvPrivateSubnet2
+      RouteTableId: !Ref SecureEnvPrivateRouteTable
+
+  # Security Groups
+  SecureEnvWebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for web servers
+      VpcId: !Ref SecureEnvVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref AllowedCIDR
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowedCIDR
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvWebSecurityGroup'
+
+  SecureEnvDatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for database servers
+      VpcId: !Ref SecureEnvVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref SecureEnvWebSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvDatabaseSecurityGroup'
+
+  SecureEnvLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref SecureEnvVPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvLambdaSecurityGroup'
+
+  # IAM Roles
+  SecureEnvEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-SecureEnvEC2Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: SecureEnvS3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${SecureEnvDataBucket}/*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvEC2Role'
+
+  SecureEnvEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${AWS::StackName}-SecureEnvEC2InstanceProfile'
+      Roles:
+        - !Ref SecureEnvEC2Role
+
+  SecureEnvLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-SecureEnvLambdaRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: SecureEnvLambdaS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${SecureEnvDataBucket}/*'
+        - PolicyName: SecureEnvLambdaEC2Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                  - ec2:AttachNetworkInterface
+                  - ec2:DetachNetworkInterface
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvLambdaRole'
+
+  SecureEnvAPIGatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-SecureEnvAPIGatewayRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvAPIGatewayRole'
+
+  # S3 Buckets
+  SecureEnvDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub
+        - 'secureenv-${AWS::AccountId}-${AWS::Region}-data-bucket-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvDataBucket'
+
+  SecureEnvLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub
+        - 'secureenv-${AWS::AccountId}-${AWS::Region}-logs-bucket-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvLogsBucket'
+
+  SecureEnvLogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SecureEnvLogsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::652711504416:root
+            Action:
+              - s3:PutObject
+            Resource: !Sub '${SecureEnvLogsBucket.Arn}/alb-logs/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+              - s3:ListBucket
+            Resource:
+              - !GetAtt SecureEnvLogsBucket.Arn
+
+  # EC2 Instance
+  SecureEnvWebServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AMIID
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref SecureEnvPrivateSubnet1
+      SecurityGroupIds:
+        - !Ref SecureEnvWebSecurityGroup
+      IamInstanceProfile: !Ref SecureEnvEC2InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            set -euxo pipefail
+            yum update -y
+            amazon-linux-extras enable nginx1 || true
+            yum install -y nginx amazon-cloudwatch-agent
+            systemctl enable nginx
+            echo "<html><body><h1>Hello from SecureEnv web server</h1></body></html>" > /usr/share/nginx/html/index.html
+            # RDS connectivity status page
+            DB_ENDPOINT="${SecureEnvDatabase.Endpoint.Address}"
+            DB_PORT=3306
+            if timeout 3 bash -c "</dev/tcp/$DB_ENDPOINT/$DB_PORT"; then
+              echo "<html><body><h2>DB Connectivity: OK</h2><p>$DB_ENDPOINT:$DB_PORT reachable</p></body></html>" > /usr/share/nginx/html/db-status.html
+            else
+              echo "<html><body><h2>DB Connectivity: FAIL</h2><p>$DB_ENDPOINT:$DB_PORT unreachable</p></body></html>" > /usr/share/nginx/html/db-status.html
+            fi
+            systemctl start nginx
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvWebServer'
+
+  # RDS Subnet Group
+  SecureEnvDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${AWS::StackName}-secureenv-db-subnet-group'
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref SecureEnvPrivateSubnet1
+        - !Ref SecureEnvPrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvDBSubnetGroup'
+
+  # RDS Instance
+  SecureEnvDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-secureenv-database'
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: mysql
+      EngineVersion: '8.0.43'
+      AllocatedStorage: 20
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: admin
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${SecureEnvDBSecret}:SecretString:password}}'
+      VPCSecurityGroups:
+        - !Ref SecureEnvDatabaseSecurityGroup
+      DBSubnetGroupName: !Ref SecureEnvDBSubnetGroup
+      MultiAZ: true
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvDatabase'
+
+  # Application Load Balancer
+  SecureEnvALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: SecureEnvLogBucketPolicy
+    Properties:
+      Name: !Sub '${AWS::StackName}-SecureEnvALB'
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      Subnets:
+        - !Ref SecureEnvPublicSubnet1
+        - !Ref SecureEnvPublicSubnet2
+      SecurityGroups:
+        - !Ref SecureEnvWebSecurityGroup
+      LoadBalancerAttributes:
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref SecureEnvLogsBucket
+        - Key: access_logs.s3.prefix
+          Value: 'alb-logs'
+        - Key: routing.http2.enabled
+          Value: 'true'
+        - Key: routing.http.drop_invalid_header_fields.enabled
+          Value: 'true'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvALB'
+
+  SecureEnvTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-TG'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref SecureEnvVPC
+      TargetType: instance
+      Targets:
+        - Id: !Ref SecureEnvWebServer
+          Port: 80
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvTargetGroup'
+
+  SecureEnvALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref SecureEnvTargetGroup
+      LoadBalancerArn: !Ref SecureEnvALB
+      Port: !If [HasCertificate, 443, 80]
+      Protocol: !If [HasCertificate, HTTPS, HTTP]
+      SslPolicy: !If [HasCertificate, ELBSecurityPolicy-TLS-1-2-2017-01, !Ref AWS::NoValue]
+      Certificates: !If 
+        - HasCertificate
+        - - CertificateArn: !Ref CertificateARN
+        - !Ref AWS::NoValue
+
+  # Lambda Function
+  SecureEnvLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-SecureEnvLambdaFunction'
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt SecureEnvLambdaRole.Arn
+      Environment:
+        Variables:
+          DATA_BUCKET: !Ref SecureEnvDataBucket
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+
+          s3 = boto3.client('s3')
+          DATA_BUCKET = os.environ.get('DATA_BUCKET')
+
+          def lambda_handler(event, context):
+              params = (event or {}).get('queryStringParameters') or {}
+              op = (params.get('op') or '').lower()
+              key = params.get('key') or 'test-object'
+              value = params.get('value') or 'ok'
+
+              if op == 'put' and DATA_BUCKET:
+                  s3.put_object(Bucket=DATA_BUCKET, Key=key, Body=value.encode('utf-8'))
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({'ok': True, 'action': 'put', 'key': key})
+                  }
+
+              if op == 'get' and DATA_BUCKET:
+                  try:
+                      obj = s3.get_object(Bucket=DATA_BUCKET, Key=key)
+                      body = obj['Body'].read().decode('utf-8')
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps({'ok': True, 'action': 'get', 'key': key, 'value': body})
+                      }
+                  except Exception as e:
+                      return {'statusCode': 404, 'body': json.dumps({'ok': False, 'error': str(e)})}
+
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({'ok': True, 'message': 'Hello from Lambda!'})
+              }
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SecureEnvLambdaSecurityGroup
+        SubnetIds:
+          - !Ref SecureEnvPrivateSubnet1
+          - !Ref SecureEnvPrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvLambdaFunction'
+
+  SecureEnvLambdaRoleEc2Policy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-LambdaEc2Policy'
+      Roles:
+        - !Ref SecureEnvLambdaRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ec2:CreateNetworkInterface
+              - ec2:DescribeNetworkInterfaces
+              - ec2:DeleteNetworkInterface
+              - ec2:AttachNetworkInterface
+              - ec2:DetachNetworkInterface
+            Resource: '*'
+
+  # API Gateway
+  SecureEnvAPIGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${AWS::StackName}-SecureEnvAPIGateway'
+      Description: Secure API Gateway for the environment
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Policy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: execute-api:Invoke
+            Resource: '*'
+            Condition:
+              IpAddress:
+                aws:SourceIp: !Ref AllowedCIDR
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvAPIGateway'
+
+  SecureEnvAPIGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref SecureEnvAPIGateway
+      ParentId: !GetAtt SecureEnvAPIGateway.RootResourceId
+      PathPart: 'secure'
+
+  SecureEnvAPIGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SecureEnvAPIGateway
+      ResourceId: !Ref SecureEnvAPIGatewayResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SecureEnvLambdaFunction.Arn}/invocations'
+
+  SecureEnvAPIGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - SecureEnvAPIGatewayMethod
+      - SecureEnvAPIGatewayAccount
+    Properties:
+      RestApiId: !Ref SecureEnvAPIGateway
+      StageName: prod
+      StageDescription:
+        LoggingLevel: INFO
+        DataTraceEnabled: true
+        MetricsEnabled: true
+        AccessLogSetting:
+          DestinationArn: !GetAtt SecureEnvAPIGatewayLogGroup.Arn
+          Format: '$context.requestId $requestTime $httpMethod $resourcePath $status $responseLength'
+
+  SecureEnvAPIGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${SecureEnvAPIGateway}'
+      RetentionInDays: 14
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvAPIGatewayLogGroup'
+
+  # Configure API Gateway account-level CloudWatch Logs role
+  SecureEnvAPIGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt SecureEnvAPIGatewayRole.Arn
+
+  SecureEnvLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SecureEnvLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SecureEnvAPIGateway}/*/*'
+
+
+  # CloudWatch Alarms
+  SecureEnvEC2CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-SecureEnvEC2HighCPU'
+      AlarmDescription: Alarm when EC2 CPU exceeds 80%
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref SecureEnvWebServer
+      AlarmActions:
+        - !Ref SecureEnvAlarmTopic
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvEC2CPUAlarm'
+
+  SecureEnvRDSConnectionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-SecureEnvRDSHighConnections'
+      AlarmDescription: Alarm when RDS connections exceed 80% of max
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref SecureEnvDatabase
+      AlarmActions:
+        - !Ref SecureEnvAlarmTopic
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvRDSConnectionsAlarm'
+
+  # Notifications
+  SecureEnvAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-SecureEnvAlarmTopic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvAlarmTopic'
+
+  SecureEnvALBTargetResponseTimeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-SecureEnvALBHighResponseTime'
+      AlarmDescription: Alarm when ALB target response time exceeds 1 second
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt SecureEnvALB.LoadBalancerFullName
+      AlarmActions:
+        - !Ref SecureEnvAlarmTopic
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvALBTargetResponseTimeAlarm'
+  SecureEnvALBUnhealthyHostsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-SecureEnvALBUnhealthyHosts'
+      AlarmDescription: Alarm when ALB has unhealthy hosts
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt SecureEnvALB.LoadBalancerFullName
+        - Name: TargetGroup
+          Value: !GetAtt SecureEnvTargetGroup.TargetGroupFullName
+      AlarmActions:
+        - !Ref SecureEnvAlarmTopic
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvALBUnhealthyHostsAlarm'
+
+  SecureEnvALBUnhealthyTargetsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-SecureEnvALBUnhealthyTargets'
+      AlarmDescription: Alarm when ALB has unhealthy targets
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt SecureEnvALB.LoadBalancerFullName
+      AlarmActions:
+        - !Ref SecureEnvAlarmTopic
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvALBUnhealthyTargetsAlarm'
+  SecureEnvALBResponseTimeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-SecureEnvALBResponseTime'
+      AlarmDescription: Alarm when ALB response time exceeds 1 second
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt SecureEnvALB.LoadBalancerFullName
+      AlarmActions:
+        - !Ref SecureEnvAlarmTopic
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvALBResponseTimeAlarm'
+
+  
+  # GuardDuty Detector
+  SecureEnvGuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: FIFTEEN_MINUTES
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvGuardDutyDetector'
+
+  # VPC Flow Logs
+  SecureEnvVPCFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+  SecureEnvVPCFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId: !Ref SecureEnvVPC
+      TrafficType: ALL
+      LogGroupName: !Ref SecureEnvVPCFlowLogsGroup
+      DeliverLogsPermissionArn: !GetAtt SecureEnvVPCFlowLogsRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvVPCFlowLogs'
+  SecureEnvVPCFlowLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${AWS::StackName}'
+      RetentionInDays: 30
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref SecureEnvVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref SecureEnvPublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1-ID'
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref SecureEnvPublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref SecureEnvPrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref SecureEnvPrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+
+  LoadBalancerDNS:
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt SecureEnvALB.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-DNS'
+
+  APIGatewayURL:
+    Description: API Gateway URL
+    Value: !Sub 'https://${SecureEnvAPIGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: !Sub '${AWS::StackName}-API-URL'
+
+  S3BucketName:
+    Description: S3 Data Bucket Name
+    Value: !Ref SecureEnvDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3-Bucket'
+
+  DatabaseSecretArn:
+    Description: Secrets Manager ARN for RDS password
+    Value: !Ref SecureEnvDBSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-Database-Secret-ARN'
+
+
+```

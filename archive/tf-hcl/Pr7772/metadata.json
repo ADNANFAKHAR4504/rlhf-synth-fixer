@@ -1,0 +1,45 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912180",
+  "team": "4",
+  "startedAt": "2025-12-02T23:36:53.577Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Route Tables",
+    "VPC Peering",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Security Groups",
+    "ECS Fargate",
+    "Application Load Balancer",
+    "Target Groups",
+    "RDS PostgreSQL",
+    "Secrets Manager",
+    "KMS",
+    "S3 Bucket",
+    "S3 Replication",
+    "IAM Roles",
+    "CloudWatch Dashboards",
+    "CloudWatch Log Groups",
+    "SNS Topics",
+    "CloudWatch Alarms"
+  ],
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,35 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291768",
+  "team": "1",
+  "startedAt": "2025-08-20T12:11:57.698Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Database Management",
+    "Network Configuration",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "KMS",
+    "S3",
+    "CloudTrail",
+    "IAM",
+    "VPC",
+    "EC2",
+    "RDS",
+    "SecurityGroup",
+    "SecretsManager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

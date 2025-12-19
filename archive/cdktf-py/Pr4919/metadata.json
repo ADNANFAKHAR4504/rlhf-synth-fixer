@@ -1,0 +1,22 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "8008335318",
+  "team": "synth",
+  "startedAt": "2025-10-21T15:02:09.353717",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

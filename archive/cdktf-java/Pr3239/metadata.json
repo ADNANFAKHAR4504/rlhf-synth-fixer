@@ -1,0 +1,32 @@
+{
+  "platform": "cdktf",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349019",
+  "team": "6",
+  "startedAt": "2025-10-01T15:39:24.449Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Log Metric Filters",
+    "SNS",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "This dataset provides high-quality training value (8/10) for several reasons: (1) It demonstrates comprehensive CDKTF Java implementation with proper construct patterns and modular architecture. (2) The MODEL_FAILURES.md document identifies 7 critical fixes including API Gateway CloudWatch logging configuration, Lambda deployment package management with TerraformAsset, correct CloudWatch metric filter patterns, S3 resource API updates, proper dependency management, and IAM policy construction - all valuable learning examples. (3) The solution implements production-grade serverless architecture with proper security (least privilege IAM), monitoring (CloudWatch + SNS), and best practices (versioning, tagging, resource naming). (4) The Lambda function includes advanced patterns like request tracing, health checks, pagination, batch operations, and comprehensive error handling. (5) However, the MODEL_RESPONSE had a critical runtime mismatch (nodejs14.x vs nodejs20.x required) which reduces the score slightly. The fixes demonstrate important infrastructure patterns that would significantly improve model knowledge in CDKTF Java, AWS serverless architecture, and production-ready IaC practices.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "antny-turing",
+  "dockerS3Location": ""
+}

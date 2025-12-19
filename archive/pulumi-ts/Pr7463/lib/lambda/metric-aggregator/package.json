@@ -1,0 +1,9 @@
+{
+  "name": "metric-aggregator",
+  "version": "1.0.0",
+  "description": "Lambda function for aggregating metrics from microservices",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.500.0"
+  }
+}

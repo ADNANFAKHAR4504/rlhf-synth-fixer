@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-21T12:53:50.309908+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "ECS",
+    "RDS Aurora",
+    "ALB",
+    "VPC",
+    "IAM",
+    "Secrets Manager"
+  ],
+  "aws_services": [
+    "EC2",
+    "ECS",
+    "ELB",
+    "IAM",
+    "Logs",
+    "RDS",
+    "Secrets Manager"
+  ],
+  "po_id": "101912552",
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

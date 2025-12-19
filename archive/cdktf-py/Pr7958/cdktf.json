@@ -1,0 +1,12 @@
+{
+  "language": "python",
+  "app": "python3 bin/main.py",
+  "projectId": "trading-platform-failover",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true"
+  }
+}

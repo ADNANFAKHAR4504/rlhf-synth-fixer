@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "69142738",
+  "team": "1",
+  "startedAt": "2025-10-03T08:20:23.988Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "ElastiCache",
+    "OpenSearch",
+    "Cognito",
+    "Step Functions",
+    "EventBridge",
+    "SNS",
+    "CloudWatch",
+    "VPC"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "This dataset provides substantial training value (8/10) for several reasons: (1) Complex multi-service architecture demonstrating real-world serverless patterns with WebSocket APIs, document collaboration, and conflict resolution; (2) The model failure teaches critical lessons about requirement adherence - the model ignored explicit Gradle requirement and provided Maven, highlighting the importance of following user constraints; (3) Comprehensive AWS service integration showing proper use of DynamoDB Streams, ElastiCache, OpenSearch, Step Functions, EventBridge in a cohesive system; (4) The correction from multi-stack to single-stack approach demonstrates pragmatic infrastructure design decisions; (5) The shift from complex Java Lambda handlers to inline Python code shows deployment optimization strategies. The extensive MODEL_FAILURES.md document (949 lines) provides detailed analysis of what went wrong and why, making this an excellent learning example. However, it's not a perfect 10 because: (a) the original model response was fundamentally flawed requiring complete rebuild, and (b) some architectural decisions in the correction (like removing AppSync) were simplifications rather than improvements.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
+}

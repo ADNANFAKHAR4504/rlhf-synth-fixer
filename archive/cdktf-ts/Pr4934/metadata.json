@@ -1,0 +1,32 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "9586377746",
+  "team": "synth",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "startedAt": "2025-10-21T11:23:06.776222Z",
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "RDS",
+    "Secrets Manager",
+    "Application Load Balancer",
+    "NAT Gateway",
+    "Internet Gateway",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
