@@ -1,4 +1,4 @@
-#!/bin/bash
+w#!/bin/bash
 
 # LocalStack Start Script
 # Starts LocalStack with Pro license support
