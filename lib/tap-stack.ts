@@ -289,7 +289,7 @@ exports.handler = async (event) => {
       });
 
       new ec2.CfnEIPAssociation(this, 'EIPAssociation', {
-        eip: elasticIp.ref,
+        allocationId: elasticIp.attrAllocationId,
         instanceId: ec2Instance1.instanceId,
       });
 
