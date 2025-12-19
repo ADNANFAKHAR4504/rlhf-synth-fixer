@@ -33,8 +33,26 @@ import * as path from 'path';
 // Load stack outputs from deployment
 const loadStackOutputs = () => {
   try {
-    // Follow the exact pattern from archive/pulumi-ts examples
-    const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
+    // Check multiple possible output locations (in order of priority)
+    const possiblePaths = [
+      path.join(__dirname, '../cfn-outputs/flat-outputs.json'),
+      path.join(__dirname, '../cdk-outputs/flat-outputs.json'),
+      path.join(__dirname, '../cfn-outputs/all-outputs.json'),
+    ];
+    
+    let outputsPath: string | undefined;
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        outputsPath = p;
+        break;
+      }
+    }
+    
+    if (!outputsPath) {
+      throw new Error(`No outputs file found. Checked: ${possiblePaths.join(', ')}`);
+    }
+    
+    console.log(`Loading outputs from: ${outputsPath}`);
     const outputsContent = fs.readFileSync(outputsPath, 'utf8');
     return JSON.parse(outputsContent);
   } catch (error) {
@@ -56,13 +74,26 @@ const initializeClients = (region?: string) => {
 
 // Extract resource IDs from outputs
 const extractResourceIds = (stackOutputs: any) => {
-  // Get the first stack (assuming single stack deployment)
-  const stackName = Object.keys(stackOutputs)[0];
-  if (!stackName) {
+  // Check if it's a flat format (keys are resource IDs directly)
+  // Flat format: { vpcId: "...", bucketName: "..." }
+  // Nested format: { "TapStack": { vpcId: "...", bucketName: "..." } }
+  
+  const keys = Object.keys(stackOutputs);
+  if (!keys.length) {
     throw new Error('No stack outputs found');
   }
   
-  // Return the outputs for the first stack
+  // Check if first key looks like a resource output (contains common output names)
+  const commonOutputKeys = ['vpcId', 'publicSubnetIds', 'privateSubnetIds', 'region', 'applicationDataBucketName', 'backupBucketName'];
+  const isFlat = commonOutputKeys.some(key => keys.includes(key));
+  
+  if (isFlat) {
+    // Flat format - return outputs directly with a default stack name
+    return { ...stackOutputs, stackName: 'TapStack' };
+  }
+  
+  // Nested format - get the first stack
+  const stackName = keys[0];
   const outputs = stackOutputs[stackName];
   return { ...outputs, stackName };
 };
