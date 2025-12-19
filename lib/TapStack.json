@@ -1469,10 +1469,7 @@
                         "Ref": "LaunchTemplate"
                     },
                     "Version": {
-                        "Fn::GetAtt": [
-                            "LaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
+                        "Fn::Sub": "${LaunchTemplate.LatestVersionNumber}"
                     }
                 },
                 "ImageId": {
