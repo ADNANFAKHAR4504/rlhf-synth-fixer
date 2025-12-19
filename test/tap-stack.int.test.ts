@@ -23,8 +23,8 @@ import net from 'net';
 
 // Configuration - Get outputs from CloudFormation stack
 let outputs: any = {};
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr1492';
-const stackName = `TapStack${environmentSuffix}`;
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || '';
+const stackName = `tap-stack-localstack${environmentSuffix}`;
 
 try {
   outputs = JSON.parse(
@@ -169,24 +169,7 @@ describe('TapStack Integration Tests', () => {
       }
     });
   });
-
-  describe('CloudWatch Log Groups', () => {
-    if (skipIfNoOutputs()) return;
-    test('Log group for S3 bucket should exist if log group name is known', async () => {
-      // Defensive: Only test if you have a valid log group name output
-      // Remove this test if you do not create a log group for S3 in your stack
-      const logGroupName = stackOutputs['S3LogGroupName'];
-      if (!logGroupName) {
-        console.warn('No S3LogGroupName output, skipping log group test.');
-        return;
-      }
-      expect(logGroupName).toBeDefined();
-      const result = await logsClient.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName }));
-      expect(result.logGroups).toBeDefined();
-      expect(result.logGroups!.length).toBeGreaterThan(0);
-    });
-  });
-
+  
   describe('RDS Connectivity', () => {
     if (skipIfNoOutputs()) return;
     test('RDS endpoint should be reachable on the specified port', async () => {

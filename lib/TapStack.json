@@ -4,9 +4,9 @@
     "Parameters": {
         "Environment": {
             "Type": "String",
-            "Default": "development",
+            "Default": "dev",
             "AllowedValues": [
-                "development",
+                "dev",
                 "testing",
                 "production"
             ],
@@ -26,13 +26,13 @@
                 "AvailabilityZone2": "us-west-2b"
             },
             "us-east-1": {
-                "AMI": "ami-0c2b8ca1dad447f8a",
+                "AMI": "ami-0e56c64a3a4acc345",
                 "AvailabilityZone1": "us-east-1a",
                 "AvailabilityZone2": "us-east-1b"
             }
         },
         "EnvironmentMap": {
-            "development": {
+            "dev": {
                 "InstanceType": "t3.micro",
                 "MinSize": 1,
                 "MaxSize": 2,
@@ -769,20 +769,6 @@
         },
         "DatabaseInstance": {
             "Type": "AWS::RDS::DBInstance",
-            "DeletionPolicy": {
-                "Fn::If": [
-                    "IsProduction",
-                    "Snapshot",
-                    "Delete"
-                ]
-            },
-            "UpdateReplacePolicy": {
-                "Fn::If": [
-                    "IsProduction",
-                    "Snapshot",
-                    "Delete"
-                ]
-            },
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "database-${Environment}-${AWS::Region}"

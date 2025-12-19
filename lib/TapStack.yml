@@ -7,9 +7,9 @@ Description: 'IaC - AWS Nova Model Breaking - Multi-Region, Multi-Environment In
 Parameters:
   Environment:
     Type: String
-    Default: development
+    Default: dev
     AllowedValues:
-      - development
+      - dev
       - testing
       - production
     Description: 'Target environment for deployment'
@@ -30,13 +30,13 @@ Mappings:
       AvailabilityZone1: us-west-2a
       AvailabilityZone2: us-west-2b
     us-east-1:
-      AMI: ami-0c2b8ca1dad447f8a  # Amazon Linux 2 AMI (updated, valid)
+      AMI: ami-0e56c64a3a4acc345  # Amazon Linux 2 AMI (updated, valid)
       AvailabilityZone1: us-east-1a
       AvailabilityZone2: us-east-1b
   
   # Environment-specific instance configurations
   EnvironmentMap:
-    development:
+    dev:
       InstanceType: t3.micro
       MinSize: 1
       MaxSize: 2
@@ -451,8 +451,8 @@ Resources:
   # RDS Database Instance
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: !If [IsProduction, Snapshot, Delete]
-    UpdateReplacePolicy: !If [IsProduction, Snapshot, Delete]
+    # DeletionPolicy: !If [IsProduction, Snapshot, Delete]
+    # UpdateReplacePolicy: !If [IsProduction, Snapshot, Delete]
     Properties:
       DBInstanceIdentifier: !Sub 'database-${Environment}-${AWS::Region}'
       DBInstanceClass: !FindInMap [EnvironmentMap, !Ref Environment, DBInstanceClass]

@@ -51,7 +51,16 @@
   - Model: Output section is functionally similar but may have minor formatting differences (e.g., spacing, comments).
 - **Impact:** Minor, but may affect readability or output key consistency.
 
----
+### 9. LocalStack Deployment Config
+- **Model Miss:**
+  - Model: This does not work properly in LocalStack.
+    Conditional DeletionPolicy and UpdateReplacePolicy (!If) are not reliably supported
+    and can cause CloudFormation stack failures.
+    Works correctly on AWS but is unstable in LocalStack.
+
+    DeletionPolicy: !If [IsProduction, Snapshot, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Snapshot, Delete]
+
 
 **Summary:**
 - The model response is close but misses several best practices and compliance requirements found in the ideal response, especially around AMI IDs, S3 policy ARNs, secret management, and template cleanliness.

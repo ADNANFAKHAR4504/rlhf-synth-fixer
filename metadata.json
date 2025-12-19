@@ -7,7 +7,7 @@
   "team": "2",
   "startedAt": "2025-08-17T17:54:55.529Z",
   "subtask": "Provisioning of Infrastructure Environments",
-  "provider": "aws",
+  "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup"
   ],
