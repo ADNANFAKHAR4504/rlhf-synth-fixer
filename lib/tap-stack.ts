@@ -131,23 +131,18 @@ export class TapStack extends cdk.Stack {
       'systemctl restart httpd'
     );
 
-    // Launch Template for Auto Scaling Group
-    const launchTemplate = new ec2.LaunchTemplate(this, 'TapLaunchTemplate', {
-      launchTemplateName: `TapLaunchTemplate-${environmentSuffix}`,
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T2,
-        ec2.InstanceSize.MICRO
-      ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      securityGroup: instanceSecurityGroup,
-      userData,
-    });
-
     // Auto Scaling Group
     // LocalStack: Use PUBLIC subnets since PRIVATE_WITH_EGRESS requires NAT Gateway
     // LocalStack: Use instance-based approach instead of launch template to avoid LatestVersionNumber issues
-    const autoScalingGroup = isLocalStack
-      ? new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
+    // LocalStack: Do NOT create LaunchTemplate as it causes LatestVersionNumber property access issues
+    let autoScalingGroup: autoscaling.AutoScalingGroup;
+
+    if (isLocalStack) {
+      // LocalStack: Instance-based ASG (no launch template)
+      autoScalingGroup = new autoscaling.AutoScalingGroup(
+        this,
+        'TapAutoScalingGroup',
+        {
           autoScalingGroupName: `TapAutoScalingGroup-${environmentSuffix}`,
           vpc,
           instanceType: ec2.InstanceType.of(
@@ -166,8 +161,29 @@ export class TapStack extends cdk.Stack {
           healthCheck: autoscaling.HealthCheck.elb({
             grace: cdk.Duration.seconds(300),
           }),
-        })
-      : new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
+        }
+      );
+    } else {
+      // Production AWS: Launch template-based ASG
+      const launchTemplate = new ec2.LaunchTemplate(
+        this,
+        'TapLaunchTemplate',
+        {
+          launchTemplateName: `TapLaunchTemplate-${environmentSuffix}`,
+          instanceType: ec2.InstanceType.of(
+            ec2.InstanceClass.T2,
+            ec2.InstanceSize.MICRO
+          ),
+          machineImage: ec2.MachineImage.latestAmazonLinux2(),
+          securityGroup: instanceSecurityGroup,
+          userData,
+        }
+      );
+
+      autoScalingGroup = new autoscaling.AutoScalingGroup(
+        this,
+        'TapAutoScalingGroup',
+        {
           autoScalingGroupName: `TapAutoScalingGroup-${environmentSuffix}`,
           vpc,
           launchTemplate,
@@ -180,7 +196,9 @@ export class TapStack extends cdk.Stack {
           healthCheck: autoscaling.HealthCheck.elb({
             grace: cdk.Duration.seconds(300),
           }),
-        });
+        }
+      );
+    }
 
     // CPU-based scaling policy
     autoScalingGroup.scaleOnCpuUtilization('CpuScaling', {
