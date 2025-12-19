@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure S3 bucket and IAM role for FinApp with encryption, access controls, and least-privilege permissions'
 
@@ -124,3 +125,4 @@ Outputs:
     Value: !GetAtt FinAppS3AccessInstanceProfile.Arn
     Export:
       Name: !Sub '${AWS::StackName}-InstanceProfileArn'
+```
