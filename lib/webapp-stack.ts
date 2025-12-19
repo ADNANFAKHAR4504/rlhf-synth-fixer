@@ -147,8 +147,8 @@ export class WebAppStack extends cdk.Stack {
     // Auto Scaling Group using LaunchConfiguration for LocalStack compatibility
     // LocalStack doesn't support LaunchTemplate's LatestVersionNumber attribute
     // Using the older LaunchConfiguration approach which is supported by LocalStack
-    const imageId = ec2.MachineImage.latestAmazonLinux2023().getImage(this)
-      .imageId;
+    const imageId =
+      ec2.MachineImage.latestAmazonLinux2023().getImage(this).imageId;
 
     const launchConfig = new autoscaling.CfnLaunchConfiguration(
       this,
@@ -223,11 +223,12 @@ export class WebAppStack extends cdk.Stack {
     cfnAsg.targetGroupArns = [targetGroup.targetGroupArn];
 
     // Create a wrapper for compatibility with the rest of the code
-    this.autoScalingGroup = autoscaling.AutoScalingGroup.fromAutoScalingGroupName(
-      this,
-      'WebServerASG',
-      cfnAsg.ref
-    ) as autoscaling.AutoScalingGroup;
+    this.autoScalingGroup =
+      autoscaling.AutoScalingGroup.fromAutoScalingGroupName(
+        this,
+        'WebServerASG',
+        cfnAsg.ref
+      ) as autoscaling.AutoScalingGroup;
 
     // ALB Listener
     this.loadBalancer.addListener('WebAppListener', {
