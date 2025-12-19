@@ -260,58 +260,87 @@ export class ElasticBeanstalkStack extends cdk.Stack {
       defaultTargetGroups: [targetGroup],
     });
 
-    // Auto Scaling Group with LaunchConfiguration (LocalStack compatible)
-    // Using the simpler instanceType/machineImage approach which creates LaunchConfiguration
-    this.autoScalingGroup = new autoscaling.AutoScalingGroup(
-      this,
-      'AutoScalingGroup',
-      {
-        vpc: this.vpc,
-        autoScalingGroupName: `web-app-asg-${environmentSuffix}`,
-        instanceType: new ec2.InstanceType(instanceType),
-        machineImage: ec2.MachineImage.latestAmazonLinux2023({
+    // Create LaunchTemplate with explicit version for LocalStack compatibility
+    // LocalStack requires explicit version management
+    const launchTemplate = new ec2.CfnLaunchTemplate(this, 'LaunchTemplate', {
+      launchTemplateName: `web-app-lt-${environmentSuffix}`,
+      launchTemplateData: {
+        imageId: ec2.MachineImage.latestAmazonLinux2023({
           cpuType: ec2.AmazonLinuxCpuType.X86_64,
-        }),
-        userData: userData,
-        role: instanceRole,
-        securityGroup: instanceSecurityGroup,
-        minCapacity: 2,
-        maxCapacity: 10,
-        desiredCapacity: 2,
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PUBLIC,
+        }).getImage(this).imageId,
+        instanceType: instanceType,
+        iamInstanceProfile: {
+          arn: instanceRole.roleArn,
         },
-        healthCheck: autoscaling.HealthCheck.elb({
-          grace: cdk.Duration.seconds(300),
-        }),
-        updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
-          maxBatchSize: 1,
-          minInstancesInService: 1,
-          pauseTime: cdk.Duration.seconds(300),
-        }),
+        securityGroupIds: [instanceSecurityGroup.securityGroupId],
+        userData: cdk.Fn.base64(userData.render()),
+      },
+    });
+
+    // Auto Scaling Group using L1 CfnAutoScalingGroup with explicit version
+    // This approach avoids CDK's automatic LaunchTemplate versioning which LocalStack doesn't support
+    const cfnAsg = new autoscaling.CfnAutoScalingGroup(
+      this,
+      'ASG',
+      {
+        autoScalingGroupName: `web-app-asg-${environmentSuffix}`,
+        minSize: '2',
+        maxSize: '10',
+        desiredCapacity: '2',
+        vpcZoneIdentifier: this.vpc.selectSubnets({
+          subnetType: ec2.SubnetType.PUBLIC,
+        }).subnetIds,
+        healthCheckType: 'ELB',
+        healthCheckGracePeriod: 300,
+        launchTemplate: {
+          launchTemplateId: launchTemplate.ref,
+          version: '$Latest', // Use $Latest instead of $Default for LocalStack
+        },
+        targetGroupArns: [targetGroup.targetGroupArn],
       }
     );
 
-    // Attach Auto Scaling Group to target group
-    this.autoScalingGroup.attachToApplicationTargetGroup(targetGroup);
+    // Wrap CfnAutoScalingGroup in L2 construct for easier manipulation
+    this.autoScalingGroup = autoscaling.AutoScalingGroup.fromAutoScalingGroupName(
+      this,
+      'AutoScalingGroup',
+      `web-app-asg-${environmentSuffix}`
+    ) as autoscaling.AutoScalingGroup;
 
-    // Scaling policies based on CPU utilization
-    this.autoScalingGroup.scaleOnCpuUtilization('CpuScaling', {
-      targetUtilizationPercent: 50,
-      cooldown: cdk.Duration.seconds(300),
-    });
+    // Note: Target group already attached via targetGroupArns in CfnAutoScalingGroup
 
-    // Add custom scaling policy for ALB request count
+    // Scaling policies using CFN resources for LocalStack compatibility
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const requestCountScaling = new autoscaling.TargetTrackingScalingPolicy(
+    const cpuScalingPolicy = new autoscaling.CfnScalingPolicy(
+      this,
+      'CpuScaling',
+      {
+        autoScalingGroupName: `web-app-asg-${environmentSuffix}`,
+        policyType: 'TargetTrackingScaling',
+        targetTrackingConfiguration: {
+          predefinedMetricSpecification: {
+            predefinedMetricType: 'ASGAverageCPUUtilization',
+          },
+          targetValue: 50,
+        },
+      }
+    );
+
+    // Request count scaling policy
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const requestCountScaling = new autoscaling.CfnScalingPolicy(
       this,
       'RequestCountScaling',
       {
-        autoScalingGroup: this.autoScalingGroup,
-        targetValue: 1000,
-        predefinedMetric:
-          autoscaling.PredefinedMetric.ALB_REQUEST_COUNT_PER_TARGET,
-        resourceLabel: `${this.loadBalancer.loadBalancerFullName}/${targetGroup.targetGroupFullName}`,
+        autoScalingGroupName: `web-app-asg-${environmentSuffix}`,
+        policyType: 'TargetTrackingScaling',
+        targetTrackingConfiguration: {
+          predefinedMetricSpecification: {
+            predefinedMetricType: 'ALBRequestCountPerTarget',
+            resourceLabel: `${this.loadBalancer.loadBalancerFullName}/${targetGroup.targetGroupFullName}`,
+          },
+          targetValue: 1000,
+        },
       }
     );
 
