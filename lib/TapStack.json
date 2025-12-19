@@ -192,6 +192,7 @@
         },
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
+            "Condition": "IsNotLocalStack",
             "Properties": {
                 "DBSubnetGroupDescription": "Subnet group for secure RDS instance",
                 "SubnetIds": [
@@ -721,6 +722,7 @@
         },
         "RDSSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
+            "Condition": "IsNotLocalStack",
             "Properties": {
                 "GroupDescription": "Security group for secure RDS instance",
                 "VpcId": {
@@ -748,6 +750,7 @@
         },
         "SecureRDSInstance": {
             "Type": "AWS::RDS::DBInstance",
+            "Condition": "IsNotLocalStack",
             "DeletionPolicy": "Snapshot",
             "UpdateReplacePolicy": "Snapshot",
             "Properties": {
@@ -856,6 +859,7 @@
             }
         },
         "RDSEndpoint": {
+            "Condition": "IsNotLocalStack",
             "Description": "RDS instance endpoint address",
             "Value": {
                 "Fn::GetAtt": [

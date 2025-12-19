@@ -138,6 +138,7 @@ Resources:
   # DB Subnet Group for RDS
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    Condition: IsNotLocalStack
     Properties:
       DBSubnetGroupDescription: 'Subnet group for secure RDS instance'
       SubnetIds:
@@ -502,6 +503,7 @@ Resources:
   # Security Group for RDS
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: IsNotLocalStack
     Properties:
       GroupDescription: 'Security group for secure RDS instance'
       VpcId: !Ref SecureVPC
@@ -518,6 +520,7 @@ Resources:
   # RDS Instance with encryption and logging
   SecureRDSInstance:
     Type: AWS::RDS::DBInstance
+    Condition: IsNotLocalStack
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
@@ -588,6 +591,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-Secure-Data-Bucket'
 
   RDSEndpoint:
+    Condition: IsNotLocalStack
     Description: 'RDS instance endpoint address'
     Value: !GetAtt SecureRDSInstance.Endpoint.Address
     Export:

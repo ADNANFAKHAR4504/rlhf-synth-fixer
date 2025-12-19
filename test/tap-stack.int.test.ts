@@ -170,6 +170,8 @@ describe('TapStack CloudFormation Template', () => {
       test('should have RDS instance with correct security configuration', () => {
         const rds = template.Resources.SecureRDSInstance;
         expect(rds.Type).toBe('AWS::RDS::DBInstance');
+        // RDS has condition for LocalStack, so it's conditionally deployed
+        expect(rds.Condition).toBe('IsNotLocalStack');
         
         const props = rds.Properties;
         expect(props.StorageEncrypted).toBe(true);
@@ -190,6 +192,8 @@ describe('TapStack CloudFormation Template', () => {
       test('should have RDS security group', () => {
         const sg = template.Resources.RDSSecurityGroup;
         expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
+        // RDS SG has condition for LocalStack
+        expect(sg.Condition).toBe('IsNotLocalStack');
         expect(sg.Properties.VpcId.Ref).toBe('SecureVPC');
         expect(sg.Properties.GroupDescription).toBe('Security group for secure RDS instance');
       });
