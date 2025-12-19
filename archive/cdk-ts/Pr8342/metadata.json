@@ -12,9 +12,16 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "s3",
-    "ec2",
-    "iam",
-    "vpc"
-  ]
+    "S3",
+    "EC2",
+    "IAM",
+    "VPC"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
