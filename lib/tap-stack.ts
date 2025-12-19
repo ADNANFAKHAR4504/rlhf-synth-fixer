@@ -165,20 +165,16 @@ export class TapStack extends cdk.Stack {
       );
     } else {
       // Production AWS: Launch template-based ASG
-      const launchTemplate = new ec2.LaunchTemplate(
-        this,
-        'TapLaunchTemplate',
-        {
-          launchTemplateName: `TapLaunchTemplate-${environmentSuffix}`,
-          instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.T2,
-            ec2.InstanceSize.MICRO
-          ),
-          machineImage: ec2.MachineImage.latestAmazonLinux2(),
-          securityGroup: instanceSecurityGroup,
-          userData,
-        }
-      );
+      const launchTemplate = new ec2.LaunchTemplate(this, 'TapLaunchTemplate', {
+        launchTemplateName: `TapLaunchTemplate-${environmentSuffix}`,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T2,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        securityGroup: instanceSecurityGroup,
+        userData,
+      });
 
       autoScalingGroup = new autoscaling.AutoScalingGroup(
         this,
