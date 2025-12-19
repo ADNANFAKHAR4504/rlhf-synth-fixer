@@ -350,9 +350,10 @@ deploy_cdk() {
     local env_suffix="${ENVIRONMENT_SUFFIX:-dev}"
     print_status $BLUE "📌 Environment suffix: $env_suffix"
 
-    # Bootstrap CDK for LocalStack
-    print_status $YELLOW "🔧 Bootstrapping CDK..."
-    cdklocal bootstrap -c environmentSuffix="$env_suffix" || true
+    # Skip Bootstrap for LocalStack - ECR not available in Community edition
+    # Using --method=direct deployment which doesn't require bootstrap
+    print_status $YELLOW "🔧 Skipping CDK bootstrap (not needed for LocalStack Community)"
+    print_status $BLUE "   Using direct deployment method without ECR dependencies"
 
     # Deploy based on language
     print_status $YELLOW "🚀 Deploying stacks..."
@@ -360,6 +361,7 @@ deploy_cdk() {
     case "$language" in
         "ts"|"js")
             cdklocal deploy --all --require-approval never \
+                --method=direct \
                 -c environmentSuffix="$env_suffix" \
                 --no-rollback \
                 --verbose 2>&1
@@ -367,6 +369,7 @@ deploy_cdk() {
             ;;
         "py"|"python")
             cdklocal deploy --all --require-approval never \
+                --method=direct \
                 -c environmentSuffix="$env_suffix" \
                 --no-rollback \
                 --verbose 2>&1
@@ -374,6 +377,7 @@ deploy_cdk() {
             ;;
         "go")
             cdklocal deploy --all --require-approval never \
+                --method=direct \
                 -c environmentSuffix="$env_suffix" \
                 --no-rollback \
                 --verbose 2>&1
@@ -381,6 +385,7 @@ deploy_cdk() {
             ;;
         "java")
             cdklocal deploy --all --require-approval never \
+                --method=direct \
                 -c environmentSuffix="$env_suffix" \
                 --no-rollback \
                 --verbose 2>&1
@@ -395,6 +400,7 @@ deploy_cdk() {
     if [ $exit_code -ne 0 ]; then
         print_status $YELLOW "⚠️  Initial deployment failed, retrying..."
         cdklocal deploy --all --require-approval never \
+            --method=direct \
             -c environmentSuffix="$env_suffix" \
             --force \
             --no-rollback \
