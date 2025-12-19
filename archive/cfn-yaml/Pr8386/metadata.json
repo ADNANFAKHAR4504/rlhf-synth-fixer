@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "292083_ls",
+  "team": "2",
+  "startedAt": "2025-08-21T02:36:21.600Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AWS::IAM::Role",
+    "AWS::KMS::Key",
+    "AWS::DynamoDB::Table",
+    "AWS::IAM::Policy",
+    "AWS::KMS::Alias",
+    "AWS::S3::Bucket",
+    "AWS::Logs::LogGroup",
+    "AWS::S3::BucketPolicy"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
+}
