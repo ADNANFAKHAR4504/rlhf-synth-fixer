@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "provider": "localstack",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291541",
+  "team": "5",
+  "startedAt": "2025-08-21T06:51:07.108Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Subnets",
+    "Elastic IP"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

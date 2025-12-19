@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "19283746",
+  "team": "synth",
+  "startedAt": "2025-10-03T16:43:18+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "S3",
+    "ApplicationAutoScaling",
+    "Timestream",
+    "EventBridge Scheduler"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "adnan-turing",
+  "dockerS3Location": ""
+}
