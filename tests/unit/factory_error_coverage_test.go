@@ -652,5 +652,3 @@ func TestFactoryInjectedErrors_CoverErrBranches(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
-
-

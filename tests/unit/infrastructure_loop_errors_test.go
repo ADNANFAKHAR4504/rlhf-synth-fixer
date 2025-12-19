@@ -124,5 +124,3 @@ func TestCreateSubnets_RouteTableAssociation2ErrorPath(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "mocked failure")
 }
-
-

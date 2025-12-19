@@ -454,9 +454,9 @@ func (m *MultiRegionInfrastructure) DeployRegionalResources(region string, roles
 
 	// Return regional resources for export
 	resources := map[string]pulumi.Output{
-		"vpcId":             vpc.ID().ToStringOutput(),
-		"kmsKeyId":          regionalKmsKey.ID().ToStringOutput(),
-		"kmsKeyArn":         regionalKmsKey.Arn,
+		"vpcId":     vpc.ID().ToStringOutput(),
+		"kmsKeyId":  regionalKmsKey.ID().ToStringOutput(),
+		"kmsKeyArn": regionalKmsKey.Arn,
 		// COMMENTED OUT: RDS instance references removed since RDS creation is commented out for LocalStack
 		// "rdsInstanceId":     rdsInstance.ID().ToStringOutput(),
 		// "rdsEndpoint":       rdsInstance.Endpoint,

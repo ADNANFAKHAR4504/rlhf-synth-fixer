@@ -22,5 +22,3 @@ func TestMainIsCallableWithoutRunningPulumi(t *testing.T) {
 		t.Fatalf("expected main() to call pulumiRun")
 	}
 }
-
-
