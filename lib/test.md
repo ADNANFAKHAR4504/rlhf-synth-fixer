@@ -1,23 +1,23 @@
-🧪 Running Integration Tests against LocalStack CDK Deployment...
-✅ LocalStack is running
-✅ Infrastructure outputs found
-✅ Infrastructure outputs validated
-📁 Working directory: /Users/barunmishra/Desktop/projects/personal/turing/iac-test-automations
-📦 Installing dependencies...
-✅ Node.js dependencies installed
+ Running Integration Tests against LocalStack CDK Deployment...
+ LocalStack is running
+ Infrastructure outputs found
+ Infrastructure outputs validated
+ Working directory: /Users/barunmishra/Desktop/projects/personal/turing/iac-test-automations
+ Installing dependencies...
+ Node.js dependencies installed
 
 > tap@0.1.0 build
 > tsc --skipLibCheck
 
-🔧 Setting up LocalStack environment...
-🌐 Environment configured for LocalStack:
+ Setting up LocalStack environment...
+ Environment configured for LocalStack:
 • AWS_ENDPOINT_URL: http://localhost:4566
 • AWS_REGION: us-east-1
 • CDK_DEFAULT_ACCOUNT: 000000000000
 • SSL Verification: Disabled
-🔍 Verifying CDK stack deployment...
-✅ CDK Stack is deployed: TapStackdev (Status: CREATE_COMPLETE)
-📊 Deployed Resources:
+ Verifying CDK stack deployment...
+ CDK Stack is deployed: TapStackdev (Status: CREATE_COMPLETE)
+ Deployed Resources:
 
 ---
 
@@ -36,9 +36,9 @@
 | SecureCorpAdminRoledevDefaultPolicyC6D5F303 | AWS::IAM::Policy | CREATE_COMPLETE |
 | SecureCorpAuditorRoledevF9DFD87E | AWS::IAM::Role | CREATE_COMPLETE |
 :
-⚠️ Could not list resources
-🚀 Starting integration tests...
-📋 Running test:integration script...
+ Could not list resources
+ Starting integration tests...
+ Running test:integration script...
 
 > tap@0.1.0 test:integration
 > jest --testPathPattern=\.int\.test\.ts$ --testTimeout=30000
@@ -132,49 +132,49 @@ Secrets Manager test skipped (LocalStack ARN format limitation)
 PASS test/tap-stack.int.test.ts
 SecureCorp Infrastructure Integration Tests
 KMS Encryption
-✓ KMS key exists and has rotation enabled (55 ms)
-✓ KMS key alias exists (5 ms)
+ KMS key exists and has rotation enabled (55 ms)
+ KMS key alias exists (5 ms)
 VPC and Networking
-✓ VPC exists with correct configuration (20 ms)
-✓ VPC has correct subnet configuration (19 ms)
-✓ VPC Flow Logs are enabled (38 ms)
+ VPC exists with correct configuration (20 ms)
+ VPC has correct subnet configuration (19 ms)
+ VPC Flow Logs are enabled (38 ms)
 VPC Endpoints
-✓ S3 VPC endpoint exists (7 ms)
-✓ Secrets Manager VPC endpoint exists (10 ms)
+ S3 VPC endpoint exists (7 ms)
+ Secrets Manager VPC endpoint exists (10 ms)
 S3 Buckets
-✓ CloudTrail bucket exists with encryption (9 ms)
-✓ CloudTrail bucket has versioning enabled (5 ms)
-✓ Data bucket exists with encryption (4 ms)
-✓ Buckets have public access blocked (6 ms)
+ CloudTrail bucket exists with encryption (9 ms)
+ CloudTrail bucket has versioning enabled (5 ms)
+ Data bucket exists with encryption (4 ms)
+ Buckets have public access blocked (6 ms)
 CloudTrail
-✓ CloudTrail is enabled and logging (33 ms)
-✓ CloudTrail has multi-region and global service events enabled (5 ms)
-✓ CloudTrail logs to CloudWatch (7 ms)
+ CloudTrail is enabled and logging (33 ms)
+ CloudTrail has multi-region and global service events enabled (5 ms)
+ CloudTrail logs to CloudWatch (7 ms)
 IAM Roles
-✓ Developer role exists with correct configuration (8 ms)
-✓ Admin role exists with PowerUserAccess (6 ms)
-✓ Auditor role exists with ReadOnlyAccess (3 ms)
+ Developer role exists with correct configuration (8 ms)
+ Admin role exists with PowerUserAccess (6 ms)
+ Auditor role exists with ReadOnlyAccess (3 ms)
 RDS Database
-✓ RDS instance exists with encryption (11 ms)
-✓ RDS instance has performance insights enabled (6 ms)
-✓ Database credentials are stored in Secrets Manager (11 ms)
+ RDS instance exists with encryption (11 ms)
+ RDS instance has performance insights enabled (6 ms)
+ Database credentials are stored in Secrets Manager (11 ms)
 CloudWatch Logs
-✓ VPC Flow Logs log group exists (4 ms)
-✓ CloudTrail log group exists (3 ms)
+ VPC Flow Logs log group exists (4 ms)
+ CloudTrail log group exists (3 ms)
 Security Groups
-✓ Database security group has restrictive rules (14 ms)
+ Database security group has restrictive rules (14 ms)
 End-to-End Security Validation
-✓ All encryption keys are managed by KMS (8 ms)
-✓ All resources are properly tagged (5 ms)
-✓ Network isolation is properly configured (12 ms)
+ All encryption keys are managed by KMS (8 ms)
+ All resources are properly tagged (5 ms)
+ Network isolation is properly configured (12 ms)
 
 Test Suites: 1 passed, 1 total
 Tests: 26 passed, 26 total
 Snapshots: 0 total
 Time: 1.224 s
 Ran all test suites matching /.int.test.ts$/i.
-🎉 Integration tests completed successfully!
-📊 Test Summary:
+ Integration tests completed successfully!
+ Test Summary:
 • All infrastructure components validated
 • LocalStack environment verified
 • CDK resources properly configured
