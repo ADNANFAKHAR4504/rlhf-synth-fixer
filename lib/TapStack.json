@@ -1265,10 +1265,10 @@
                     "Ref": "KMSKey"
                 },
                 "MasterUsername": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${EnvironmentName}-database-credentials:SecretString:username}}"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${EnvironmentName}-database-credentials:SecretString:password}}"
                 },
                 "VPCSecurityGroups": [
                     {

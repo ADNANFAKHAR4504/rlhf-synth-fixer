@@ -862,8 +862,8 @@ Resources:
       StorageType: gp3
       StorageEncrypted: true
       KmsKeyId: !Ref KMSKey
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      MasterUsername: !Sub '{{resolve:secretsmanager:${EnvironmentName}-database-credentials:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${EnvironmentName}-database-credentials:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
