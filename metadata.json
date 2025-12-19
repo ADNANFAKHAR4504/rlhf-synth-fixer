@@ -4,7 +4,7 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "291902",
-  "team": "synth",
+  "team": "synth-2",
   "startedAt": "2025-08-13T08:26:26.526Z",
   "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
