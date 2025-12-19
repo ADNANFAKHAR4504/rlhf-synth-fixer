@@ -1,0 +1,27 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "w3p6r9g9",
+  "team": "synth",
+  "startedAt": "2025-12-05T18:33:18+05:30",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "ec2",
+    "vpc",
+    "rds",
+    "iam",
+    "s3"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
