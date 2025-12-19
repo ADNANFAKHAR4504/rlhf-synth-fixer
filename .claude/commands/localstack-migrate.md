@@ -29,15 +29,15 @@ See `.claude/config/localstack.yaml` for full configuration options.
 
 This command uses modular shell scripts in `.claude/scripts/` for better maintainability:
 
-| Script                            | Description                                      |
-| --------------------------------- | ------------------------------------------------ |
-| `localstack-common.sh`            | Common functions, config loading, error handling |
-| `localstack-init.sh`              | Environment validation and initialization        |
-| `localstack-select-task.sh`       | Task selection logic                             |
-| `localstack-fetch-github.sh`      | Fetch tasks from GitHub PRs                      |
-| `localstack-sanitize-metadata.sh` | Sanitize metadata.json for schema compliance     |
-| `localstack-create-pr.sh`         | Create GitHub PR with migrated code              |
-| `localstack-update-log.sh`        | Update migration log with file locking           |
+| Script                            | Description                                                           |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `localstack-common.sh`            | Common functions, config loading, error handling                      |
+| `localstack-init.sh`              | Environment validation and initialization                             |
+| `localstack-select-task.sh`       | Task selection logic                                                  |
+| `localstack-fetch-github.sh`      | Fetch tasks from GitHub PRs                                           |
+| `localstack-sanitize-metadata.sh` | Sanitize metadata.json for schema compliance (sets team to `synth-2`) |
+| `localstack-create-pr.sh`         | Create GitHub PR with migrated code                                   |
+| `localstack-update-log.sh`        | Update migration log with file locking                                |
 
 All scripts use `set -euo pipefail` for strict error handling and trap handlers for cleanup.
 
@@ -601,6 +601,13 @@ Exit code 0 if fixed, 1 if unable to fix, 2 if unsupported services.
 > - `localstack-sanitize-metadata.sh` - Sanitizes metadata.json for schema compliance
 > - `localstack-create-pr.sh` - Creates PR with git worktrees for parallel safety
 > - `localstack-update-log.sh` - Updates migration log with file locking
+
+> **🏷️ Required Labels**: All PRs created by localstack-migrate automatically include:
+>
+> - `synth-2` - Identifies PRs created by the synth-2 team/process
+> - `localstack` - Identifies PRs for LocalStack-compatible tasks
+> - `<platform>` - Platform type from metadata.json (e.g., `cdk`, `cfn`, `tf`, `pulumi`)
+> - `<language>` - Language from metadata.json (e.g., `ts`, `py`, `go`, `java`)
 
 ```bash
 log_header "📦 CREATING PULL REQUEST (Parallel-Safe)"
