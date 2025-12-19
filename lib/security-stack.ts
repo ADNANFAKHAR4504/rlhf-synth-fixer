@@ -43,53 +43,66 @@ export class SecurityStack extends Construct {
     this.vpc.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     // Create VPC Endpoints for Systems Manager (Session Manager)
-    const ssmVpcEndpoint = this.vpc.addInterfaceEndpoint('SSMEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.SSM,
-      privateDnsEnabled: true,
-    });
+    // Note: VPC Endpoints have limited support in LocalStack Community Edition
+    // These are created but may not be fully functional
+    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                         process.env.AWS_ENDPOINT_URL?.includes('4566');
 
-    this.vpc.addInterfaceEndpoint('SSMMessagesEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.SSM_MESSAGES,
-      privateDnsEnabled: true,
-    });
+    let ssmVpcEndpoint: ec2.InterfaceVpcEndpoint | undefined;
+    let vpcEndpointSecurityGroup: ec2.SecurityGroup | undefined;
 
-    this.vpc.addInterfaceEndpoint('EC2MessagesEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.EC2_MESSAGES,
-      privateDnsEnabled: true,
-    });
+    // Only create VPC endpoints if not in LocalStack, or create them with awareness
+    if (!isLocalStack) {
+      ssmVpcEndpoint = this.vpc.addInterfaceEndpoint('SSMEndpoint', {
+        service: ec2.InterfaceVpcEndpointAwsService.SSM,
+        privateDnsEnabled: true,
+      });
 
-    // Shared security group for VPC endpoints (new feature)
-    const vpcEndpointSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'VPCEndpointSecurityGroup',
-      {
-        vpc: this.vpc,
-        description: 'Shared security group for VPC endpoints',
-        allowAllOutbound: false,
+      this.vpc.addInterfaceEndpoint('SSMMessagesEndpoint', {
+        service: ec2.InterfaceVpcEndpointAwsService.SSM_MESSAGES,
+        privateDnsEnabled: true,
+      });
+
+      this.vpc.addInterfaceEndpoint('EC2MessagesEndpoint', {
+        service: ec2.InterfaceVpcEndpointAwsService.EC2_MESSAGES,
+        privateDnsEnabled: true,
+      });
+
+      // Shared security group for VPC endpoints (new feature)
+      vpcEndpointSecurityGroup = new ec2.SecurityGroup(
+        this,
+        'VPCEndpointSecurityGroup',
+        {
+          vpc: this.vpc,
+          description: 'Shared security group for VPC endpoints',
+          allowAllOutbound: false,
+        }
+      );
+      vpcEndpointSecurityGroup.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+
+      // Allow HTTPS traffic from VPC CIDR to VPC endpoints
+      vpcEndpointSecurityGroup.addIngressRule(
+        ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
+        ec2.Port.tcp(443),
+        'Allow HTTPS from VPC'
+      );
+
+      // Associate shared security group with VPC endpoints
+      if (ssmVpcEndpoint) {
+        ssmVpcEndpoint.addToPolicy(
+          new iam.PolicyStatement({
+            principals: [new iam.ArnPrincipal('*')],
+            actions: ['ssm:*'],
+            resources: ['*'],
+            conditions: {
+              StringEquals: {
+                'aws:PrincipalVpc': this.vpc.vpcId,
+              },
+            },
+          })
+        );
       }
-    );
-    vpcEndpointSecurityGroup.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
-
-    // Allow HTTPS traffic from VPC CIDR to VPC endpoints
-    vpcEndpointSecurityGroup.addIngressRule(
-      ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
-      ec2.Port.tcp(443),
-      'Allow HTTPS from VPC'
-    );
-
-    // Associate shared security group with VPC endpoints
-    ssmVpcEndpoint.addToPolicy(
-      new iam.PolicyStatement({
-        principals: [new iam.ArnPrincipal('*')],
-        actions: ['ssm:*'],
-        resources: ['*'],
-        conditions: {
-          StringEquals: {
-            'aws:PrincipalVpc': this.vpc.vpcId,
-          },
-        },
-      })
-    );
+    }
 
     // Security group for bastion hosts - restrictive access
     const bastionSecurityGroup = new ec2.SecurityGroup(
@@ -150,12 +163,14 @@ export class SecurityStack extends Construct {
       'Internal communication within security group'
     );
 
-    // Allow outbound to VPC endpoints
-    internalSecurityGroup.addEgressRule(
-      vpcEndpointSecurityGroup,
-      ec2.Port.tcp(443),
-      'Access to VPC endpoints'
-    );
+    // Allow outbound to VPC endpoints (only if VPC endpoints exist)
+    if (vpcEndpointSecurityGroup) {
+      internalSecurityGroup.addEgressRule(
+        vpcEndpointSecurityGroup,
+        ec2.Port.tcp(443),
+        'Access to VPC endpoints'
+      );
+    }
 
     // IAM role for private instances with Systems Manager access
     const privateInstanceRole = new iam.Role(this, 'PrivateInstanceRole', {
@@ -204,6 +219,16 @@ export class SecurityStack extends Construct {
     const publicSubnets = this.vpc.publicSubnets;
 
     publicSubnets.forEach((subnet, index) => {
+      // For LocalStack: Use a simple machine image that doesn't require AMI lookup
+      // LocalStack uses mock AMIs, so any AMI ID works
+      const machineImage = isLocalStack
+        ? ec2.MachineImage.genericLinux({
+            'us-east-1': 'ami-12345678', // Mock AMI for LocalStack
+            'us-west-2': 'ami-12345678',
+            'eu-west-1': 'ami-12345678',
+          })
+        : ec2.MachineImage.latestAmazonLinux2();
+
       const bastionHost = new ec2.Instance(this, `BastionHost${index + 1}`, {
         vpc: this.vpc,
         vpcSubnets: {
@@ -214,7 +239,7 @@ export class SecurityStack extends Construct {
           ec2.InstanceClass.T3,
           ec2.InstanceSize.NANO
         ),
-        machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        machineImage,
         role: bastionRole,
       });
 
@@ -232,7 +257,9 @@ export class SecurityStack extends Construct {
     cdk.Tags.of(this.vpc).add('Environment', 'Production');
     cdk.Tags.of(bastionSecurityGroup).add('Environment', 'Production');
     cdk.Tags.of(internalSecurityGroup).add('Environment', 'Production');
-    cdk.Tags.of(vpcEndpointSecurityGroup).add('Environment', 'Production');
+    if (vpcEndpointSecurityGroup) {
+      cdk.Tags.of(vpcEndpointSecurityGroup).add('Environment', 'Production');
+    }
     cdk.Tags.of(privateInstanceRole).add('Environment', 'Production');
 
     // Output important information
