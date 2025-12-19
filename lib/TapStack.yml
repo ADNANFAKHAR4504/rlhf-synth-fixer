@@ -26,6 +26,14 @@ Parameters:
     MaxLength: '16'
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
+  DBPassword:
+    Type: String
+    Default: 'TempPassword123!'
+    Description: 'Database administrator password (for LocalStack testing only)'
+    NoEcho: true
+    MinLength: '8'
+    MaxLength: '41'
+
 Resources:
   # VPC and Network Infrastructure
   VPC:
@@ -439,8 +447,8 @@ Resources:
       MultiAZ: false
       DBName: securewebapp
       MasterUsername: !Ref DBUsername
-      # LocalStack Community has limited Secrets Manager support - use simple password for testing
-      MasterUserPassword: 'TempPassword123!'
+      # LocalStack Community has limited Secrets Manager support - use parameter for testing
+      MasterUserPassword: !Ref DBPassword
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
