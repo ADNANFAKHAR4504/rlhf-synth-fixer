@@ -1,0 +1,1 @@
+# LocalStack fixes applied
