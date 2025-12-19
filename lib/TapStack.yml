@@ -665,98 +665,101 @@ Resources:
         - Key: team-number
           Value: 2
 
-  StaticAssetsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref StaticAssetsBucket
-      PolicyDocument:
-        Statement:
-          - Sid: AllowCloudFrontOAI
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}'
-            Action: s3:GetObject
-            Resource: !Sub '${StaticAssetsBucket.Arn}/*'
+  # NOTE: NOT supported by LocalStack (CloudFront/OAI integration is not emulated).
+  # This bucket policy exists specifically to allow CloudFront OAI access to the S3 origin.
+  # StaticAssetsBucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref StaticAssetsBucket
+  #     PolicyDocument:
+  #       Statement:
+  #         - Sid: AllowCloudFrontOAI
+  #           Effect: Allow
+  #           Principal:
+  #             AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}'
+  #           Action: s3:GetObject
+  #           Resource: !Sub '${StaticAssetsBucket.Arn}/*'
 
   # ==========================================
-  # CloudFront Distribution
+  # CloudFront Distribution (NOT supported by LocalStack)
   # ==========================================
-
-  CloudFrontOAI:
-    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
-    Properties:
-      CloudFrontOriginAccessIdentityConfig:
-        Comment: !Sub 'OAI for ${ProjectName}-${EnvironmentSuffix}'
-
-  CloudFrontDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Enabled: true
-        Comment: !Sub 'CloudFront distribution for ${ProjectName}-${EnvironmentSuffix}'
-        DefaultRootObject: index.html
-        HttpVersion: http2
-        PriceClass: PriceClass_100
-        Origins:
-          - Id: ALBOrigin
-            DomainName: !GetAtt ApplicationLoadBalancer.DNSName
-            CustomOriginConfig:
-              OriginProtocolPolicy: http-only
-              OriginSSLProtocols:
-                - TLSv1.2
-          - Id: S3Origin
-            DomainName: !GetAtt StaticAssetsBucket.RegionalDomainName
-            S3OriginConfig:
-              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
-        DefaultCacheBehavior:
-          TargetOriginId: ALBOrigin
-          ViewerProtocolPolicy: redirect-to-https
-          AllowedMethods:
-            - GET
-            - HEAD
-            - OPTIONS
-            - PUT
-            - POST
-            - PATCH
-            - DELETE
-          CachedMethods:
-            - GET
-            - HEAD
-            - OPTIONS
-          Compress: true
-          ForwardedValues:
-            QueryString: true
-            Headers:
-              - Host
-              - Origin
-            Cookies:
-              Forward: all
-        CacheBehaviors:
-          - PathPattern: /static/*
-            TargetOriginId: S3Origin
-            ViewerProtocolPolicy: redirect-to-https
-            AllowedMethods:
-              - GET
-              - HEAD
-            CachedMethods:
-              - GET
-              - HEAD
-            Compress: true
-            ForwardedValues:
-              QueryString: false
-              Cookies:
-                Forward: none
-        Logging:
-          Bucket: !GetAtt LoggingBucket.DomainName
-          Prefix: cloudfront/
-          IncludeCookies: false
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-cloudfront-${EnvironmentSuffix}'
-        - Key: project
-          Value: iac-rlhf-amazon
-        - Key: team-number
-          Value: 2
+  # LocalStack does not emulate CloudFront; these resources are commented out for local deployments.
+  #
+  # CloudFrontOAI:
+  #   Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+  #   Properties:
+  #     CloudFrontOriginAccessIdentityConfig:
+  #       Comment: !Sub 'OAI for ${ProjectName}-${EnvironmentSuffix}'
+  #
+  # CloudFrontDistribution:
+  #   Type: AWS::CloudFront::Distribution
+  #   Properties:
+  #     DistributionConfig:
+  #       Enabled: true
+  #       Comment: !Sub 'CloudFront distribution for ${ProjectName}-${EnvironmentSuffix}'
+  #       DefaultRootObject: index.html
+  #       HttpVersion: http2
+  #       PriceClass: PriceClass_100
+  #       Origins:
+  #         - Id: ALBOrigin
+  #           DomainName: !GetAtt ApplicationLoadBalancer.DNSName
+  #           CustomOriginConfig:
+  #             OriginProtocolPolicy: http-only
+  #             OriginSSLProtocols:
+  #               - TLSv1.2
+  #         - Id: S3Origin
+  #           DomainName: !GetAtt StaticAssetsBucket.RegionalDomainName
+  #           S3OriginConfig:
+  #             OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
+  #       DefaultCacheBehavior:
+  #         TargetOriginId: ALBOrigin
+  #         ViewerProtocolPolicy: redirect-to-https
+  #         AllowedMethods:
+  #           - GET
+  #           - HEAD
+  #           - OPTIONS
+  #           - PUT
+  #           - POST
+  #           - PATCH
+  #           - DELETE
+  #         CachedMethods:
+  #           - GET
+  #           - HEAD
+  #           - OPTIONS
+  #         Compress: true
+  #         ForwardedValues:
+  #           QueryString: true
+  #           Headers:
+  #             - Host
+  #             - Origin
+  #           Cookies:
+  #             Forward: all
+  #       CacheBehaviors:
+  #         - PathPattern: /static/*
+  #           TargetOriginId: S3Origin
+  #           ViewerProtocolPolicy: redirect-to-https
+  #           AllowedMethods:
+  #             - GET
+  #             - HEAD
+  #           CachedMethods:
+  #             - GET
+  #             - HEAD
+  #           Compress: true
+  #           ForwardedValues:
+  #             QueryString: false
+  #             Cookies:
+  #               Forward: none
+  #       Logging:
+  #         Bucket: !GetAtt LoggingBucket.DomainName
+  #         Prefix: cloudfront/
+  #         IncludeCookies: false
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub '${ProjectName}-cloudfront-${EnvironmentSuffix}'
+  #       - Key: project
+  #         Value: iac-rlhf-amazon
+  #       - Key: team-number
+  #         Value: 2
 
   # ==========================================
   # CloudWatch Alarms
@@ -965,17 +968,18 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-tg-arn-${EnvironmentSuffix}'
 
-  CloudFrontURL:
-    Description: CloudFront Distribution URL
-    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
-    Export:
-      Name: !Sub '${ProjectName}-cloudfront-url-${EnvironmentSuffix}'
-
-  CloudFrontDistributionId:
-    Description: CloudFront Distribution ID
-    Value: !Ref CloudFrontDistribution
-    Export:
-      Name: !Sub '${ProjectName}-cloudfront-id-${EnvironmentSuffix}'
+  # NOTE: NOT supported by LocalStack (CloudFront resources are commented out above).
+  # CloudFrontURL:
+  #   Description: CloudFront Distribution URL
+  #   Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+  #   Export:
+  #     Name: !Sub '${ProjectName}-cloudfront-url-${EnvironmentSuffix}'
+  #
+  # CloudFrontDistributionId:
+  #   Description: CloudFront Distribution ID
+  #   Value: !Ref CloudFrontDistribution
+  #   Export:
+  #     Name: !Sub '${ProjectName}-cloudfront-id-${EnvironmentSuffix}'
 
   StaticAssetsBucket:
     Description: S3 bucket for static assets
