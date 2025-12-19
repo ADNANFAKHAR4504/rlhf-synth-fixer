@@ -1,0 +1,22 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "4792",
+  "team": "synth-2",
+  "startedAt": "2025-12-15T09:53:58.568Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "lambda",
+    "api-gateway",
+    "dynamodb",
+    "cloudwatch"
+  ]
+}
