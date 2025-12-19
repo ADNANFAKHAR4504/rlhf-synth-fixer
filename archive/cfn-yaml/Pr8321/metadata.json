@@ -17,5 +17,12 @@
     "KMS",
     "S3",
     "IAM"
-  ]
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajc-turing",
+  "dockerS3Location": ""
 }
