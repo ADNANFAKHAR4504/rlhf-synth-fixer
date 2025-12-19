@@ -1,152 +1,106 @@
 #!/bin/bash
-
-# Exit on any error
 set -e
 
-echo "🔧 Setting up environment..."
+echo "🔧 Starting optimized environment setup..."
+export PIPENV_VENV_IN_PROJECT=1
 
-# Set default values if not provided via environment variables
 NODE_VERSION=${NODE_VERSION:-22.17.0}
 TERRAFORM_VERSION=${TERRAFORM_VERSION:-1.12.2}
 PULUMI_VERSION=${PULUMI_VERSION:-3.109.0}
-PYTHON_VERSION=${PYTHON_VERSION:-3.12.11}
-PIPENV_VERSION=${PIPENV_VERSION:-2025.0.4}
-DOWNLOAD_ARTIFACTS=${DOWNLOAD_ARTIFACTS:-false}
-UPLOAD_ARTIFACTS=${UPLOAD_ARTIFACTS:-false}
 PLATFORM=${PLATFORM:-""}
+LANGUAGE=${LANGUAGE:-""}
 
-echo "Environment setup configuration:"
-echo "  Node.js version: $NODE_VERSION"
-echo "  Terraform version: $TERRAFORM_VERSION"
-echo "  Pulumi version: $PULUMI_VERSION"
-echo "  Python version: $PYTHON_VERSION" 
-echo "  Pipenv version: $PIPENV_VERSION"
-echo "  Platform: $PLATFORM"
-echo "  Download artifacts: $DOWNLOAD_ARTIFACTS"
-echo "  Upload artifacts: $UPLOAD_ARTIFACTS"
+echo "Platform: $PLATFORM"
+echo "Language: $LANGUAGE"
+echo "Node: $NODE_VERSION | Terraform: $TERRAFORM_VERSION | Pulumi: $PULUMI_VERSION"
 
-# Setup Node.js
-echo "📦 Setting up Node.js $NODE_VERSION..."
-if command -v node >/dev/null 2>&1; then
-  CURRENT_NODE=$(node --version)
-  echo "Current Node.js version: $CURRENT_NODE"
-  if [ "$CURRENT_NODE" != "v$NODE_VERSION" ]; then
-    echo "⚠️ Node.js version mismatch. Expected: v$NODE_VERSION, Current: $CURRENT_NODE"
-    echo "Please ensure correct Node.js version is available in PATH"
-  fi
-else
-  echo "❌ Node.js not found in PATH"
-  exit 1
+# Ensure system utilities
+if ! command -v jq &>/dev/null; then
+  echo "📦 Installing jq..."
+  sudo apt-get update -y && sudo apt-get install -y jq
 fi
 
-# Setup Python
-echo "📦 Setting up Python $PYTHON_VERSION..."
-if command -v python >/dev/null 2>&1; then
-  CURRENT_PYTHON=$(python --version)
-  echo "Current Python version: $CURRENT_PYTHON"
-  if [ "$CURRENT_PYTHON" != "Python $PYTHON_VERSION" ]; then
-    echo "⚠️ Python version mismatch. Expected: Python $PYTHON_VERSION, Current: $CURRENT_PYTHON"
-    echo "Please ensure correct Python version is available in PATH"
-  fi
-else
-  echo "❌ Python not found in PATH"
-  exit 1
-fi
+# Configure npm global directory
+export NPM_CONFIG_PREFIX="$HOME/.npm-global"
+export PATH="$HOME/.npm-global/bin:$PATH"
 
-# Setup Terraform if needed
-if [ "$PLATFORM" = "cdktf" ] || [ "$PLATFORM" = "tf" ] || [ "$PLATFORM" = "" ]; then
-  echo "📦 Setting up Terraform $TERRAFORM_VERSION..."
-  if command -v terraform >/dev/null 2>&1; then
-    CURRENT_TERRAFORM=$(terraform version -json 2>/dev/null | jq -r '.terraform_version' || echo 'unknown')
-    echo "Current Terraform version: $CURRENT_TERRAFORM"
-    if [ "$CURRENT_TERRAFORM" != "$TERRAFORM_VERSION" ]; then
-      echo "⚠️ Terraform version mismatch. Expected: $TERRAFORM_VERSION, Current: $CURRENT_TERRAFORM"
-      echo "Please ensure correct Terraform version is available in PATH"
-    fi
-  else
-    echo "❌ Terraform not found in PATH"
-    if [ "$PLATFORM" = "tf" ] || [ "$PLATFORM" = "cdktf" ]; then
-      exit 1
-    fi
-  fi
-fi
+echo "🔹 Checking tools..."
+node --version || echo "⚠️ Node not found"
+python --version || echo "⚠️ Python not found"
 
-# Setup Pulumi if needed
-if [ "$PLATFORM" = "pulumi" ] || [ "$PLATFORM" = "" ]; then
-  echo "📦 Setting up Pulumi $PULUMI_VERSION..."
-  if command -v pulumi >/dev/null 2>&1; then
-    CURRENT_PULUMI=$(pulumi version 2>/dev/null || echo 'unknown')
-    echo "Current Pulumi version: $CURRENT_PULUMI"
-    # Note: Pulumi version output format is different, so we don't do strict comparison
-  else
-    echo "❌ Pulumi not found in PATH"
-    if [ "$PLATFORM" = "pulumi" ]; then
-      exit 1
-    fi
-  fi
-fi
-
-# Configure AWS if credentials are available
-if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-  echo "🔧 AWS credentials found, configuring AWS..."
-  ./scripts/configure-aws.sh
-else
-  echo "ℹ️ No AWS credentials found, skipping AWS configuration"
-fi
-
-# Install pipenv
-echo "📦 Installing pipenv $PIPENV_VERSION..."
-pip install --upgrade pip pipenv==$PIPENV_VERSION
-
-# Set pipenv environment variable
-export PIPENV_VENV_IN_PROJECT=1
-if [ -n "$GITHUB_ENV" ]; then
-  echo "PIPENV_VENV_IN_PROJECT=1" >> "$GITHUB_ENV"
-fi
-
-# Install Node.js dependencies
-echo "📦 Installing Node.js dependencies..."
+# 1) === Install Node.js dependencies IF package.json exists ===
 if [ -f "package.json" ]; then
-  npm ci
-else
-  echo "⚠️ No package.json found, skipping npm install"
+  echo "📦 Ensuring Node dependencies..."
+
+  if [ -d "node_modules" ]; then
+    echo "✅ node_modules exists — cache restored — skipping npm ci"
+  elif [ -f "package-lock.json" ]; then
+    echo "📦 Running npm ci (first install or cache miss)"
+    npm ci
+  else
+    echo "📦 Running npm install (no lockfile)"
+    npm install
+  fi
 fi
 
-# Install Python dependencies if Pipfile exists
-echo "📦 Installing Python dependencies..."
+# 2) === Install Python dependencies IF Pipfile exists ===
 if [ -f "Pipfile" ]; then
-  pipenv install --dev --ignore-pipfile
-else
-  echo "ℹ️ No Pipfile found, skipping Python dependencies installation"
+  echo "🐍 Ensuring pipenv environment..."
+
+  if ! command -v pipenv &>/dev/null; then
+    echo "📦 Installing pipenv..."
+    pip install pipenv
+  fi
+
+  # Rebuild venv if cache mismatched interpreter version
+  if [ -d ".venv" ] && [ ! -f ".venv/bin/python" ]; then
+    echo "⚠️ Cached venv invalid — removing and recreating..."
+    rm -rf .venv
+  fi
+
+  if [ -d ".venv" ]; then
+    echo "✅ .venv exists — using cached environment"
+    pipenv sync --dev
+  else
+    echo "📦 Creating new pipenv environment..."
+    pipenv install --dev
+  fi
+  if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "py" ]; then
+    echo "📦 Ensuring CDKTF Python libraries are available..."
+
+    # Check if cdktf is installed in the venv
+    if ! pipenv run python -c "import cdktf" 2>/dev/null; then
+      echo "📦 Installing CDKTF Python SDK into existing venv..."
+      pipenv install "cdktf~=0.21.0" "constructs>=10.0.0,<11.0.0"
+    else
+      echo "✅ CDKTF Python library already installed in venv"
+    fi
+  fi
+
+  echo "$(pwd)/.venv/bin" >> "$GITHUB_PATH"
 fi
 
-# Verify environment
-echo "=== Environment Verification ==="
-echo "Node.js: $(node --version 2>/dev/null || echo 'Not installed')"
-echo "Python: $(python --version 2>/dev/null || echo 'Not installed')"
-echo "Pipenv: $(pipenv --version 2>/dev/null || echo 'Not installed')"
-echo "Terraform: $(terraform version -json 2>/dev/null | jq -r '.terraform_version' || echo 'Not installed')"
-echo "Terraform location: $(which terraform 2>/dev/null || echo 'Not found in PATH')"
-echo "Pulumi: $(pulumi version 2>/dev/null || echo 'Not installed')"
-echo "Pulumi location: $(which pulumi 2>/dev/null || echo 'Not found in PATH')"
-echo "=============================="
+# 3) === CDKTF extra handling ===
+if [ "$PLATFORM" = "cdktf" ]; then
+  if ! command -v cdktf &>/dev/null; then
+    echo "📦 Installing CDKTF CLI..."
+    npm install -g cdktf-cli@latest >/dev/null 2>&1
+  else
+    echo "✅ CDKTF CLI already installed"
+  fi
 
-# Setup PATH
-echo "📦 Setting up PATH..."
-# Add node_modules/.bin to PATH if it exists
-if [ -d "node_modules/.bin" ]; then
-  export PATH="$(pwd)/node_modules/.bin:$PATH"
-  if [ -n "$GITHUB_PATH" ]; then
-    echo "$(pwd)/node_modules/.bin" >> "$GITHUB_PATH"
+  if [ ! -d ".gen/aws" ]; then
+    echo "📦 Generating provider bindings (.gen)..."
+    npx --yes cdktf get
+  else
+    echo "✅ .gen restored from cache — skipping cdktf get"
   fi
 fi
 
-# Add .venv/bin to PATH if it exists
-if [ -d ".venv/bin" ]; then
-  export PATH="$(pwd)/.venv/bin:$PATH"
-  if [ -n "$GITHUB_PATH" ]; then
-    echo "$(pwd)/.venv/bin" >> "$GITHUB_PATH"
-  fi
+# 4) Universal Jest fallback
+if ! command -v jest &>/dev/null; then
+  echo "📦 Installing Jest fallback..."
+  npm install -g jest@28.1.3 ts-node typescript @types/jest >/dev/null 2>&1 || true
 fi
 
 echo "✅ Environment setup completed successfully"

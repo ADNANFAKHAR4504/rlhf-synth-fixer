@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350230",
+  "team": "4",
+  "startedAt": "2025-10-15T15:47:50.375Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "S3 Bucket, CloudTrail, IAM, CloudWatch, KMS, VPC, MFA, AWS Config",
+  "training_quality": 9,
+  "background": "This prompt requires creating a comprehensive Terraform-based Infrastructure as Code solution for provisioning a secure AWS environment. The implementation must include enterprise-grade security controls: KMS encryption for all data at rest and in transit, IAM roles with least privilege access, CloudTrail for audit logging, AWS Config for compliance monitoring, restrictive network security (Security Groups and NACLs with no 0.0.0.0/0 inbound access), S3 buckets with versioning and encryption for secure logging, MFA enforcement for IAM users, VPC with proper network isolation, GuardDuty for threat detection, CloudWatch monitoring with budget alerts, and comprehensive resource tagging (CostCenter, Environment, ManagedBy). All configuration must be contained in a single Terraform file (tap_stack.tf) targeting the us-west-2 region, following Terraform best practices and AWS Well-Architected Framework principles. The solution includes 133 comprehensive tests (98 unit tests validating Terraform code structure and 35 integration tests verifying deployed AWS resources) with graceful degradation patterns for pre-deployment testing. This represents a production-ready, security-first infrastructure implementation with complete documentation covering ideal responses, actual implementation, and common failure scenarios.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,432 @@
+---
+# CI/CD Pipeline Configuration for Pulumi Infrastructure
+# Multi-stage deployment pipeline for Pulumi Python infrastructure
+
+name: Pulumi Infrastructure - Deployment Pipeline
+
+'on':
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-east-1
+  PYTHON_VERSION: '3.9'
+  NODE_VERSION: '18'
+  PULUMI_VERSION: 'latest'
+  DEV_ACCOUNT_ID: ${{ secrets.DEV_ACCOUNT_ID }}
+  STAGING_ACCOUNT_ID: ${{ secrets.STAGING_ACCOUNT_ID }}
+  PROD_ACCOUNT_ID: ${{ secrets.PROD_ACCOUNT_ID }}
+
+jobs:
+  source:
+    name: Source Stage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Source
+
+  build:
+    name: Build and Validate
+    runs-on: ubuntu-latest
+    needs: source
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Build
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v4
+        with:
+          pulumi-version: ${{ env.PULUMI_VERSION }}
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pipenv
+          pipenv install --dev
+
+      - name: Run Python linting
+        run: |
+          pipenv run pylint lib/*.py --disable=C,R,W
+
+      - name: Run Pulumi preview
+        run: |
+          export PULUMI_STACK="ci"
+          pipenv run pulumi stack select $PULUMI_STACK --create
+          pipenv run pulumi preview
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Run security checks
+        run: |
+          # Install checkov for IaC security scanning
+          pip install checkov
+          checkov -d . --framework terraform --quiet
+        continue-on-error: true
+
+      - name: Encrypt artifacts with KMS
+        run: ./scripts/encrypt-artifacts.sh
+        continue-on-error: true
+
+      - name: Upload encrypted artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: pulumi-outputs.tar.gz.encrypted
+          retention-days: 7
+        continue-on-error: true
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pipenv
+          pipenv install --dev
+
+      - name: Run unit tests
+        run: |
+          pipenv run pytest tests/ -v --cov=lib --cov-report=term-missing
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+        continue-on-error: true
+
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    environment: dev
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: artifacts/
+        continue-on-error: true
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v4
+        with:
+          pulumi-version: ${{ env.PULUMI_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pipenv
+          pipenv install
+
+      - name: Deploy to Dev
+        run: |
+          export PULUMI_STACK="dev"
+          pipenv run pulumi stack select $PULUMI_STACK --create
+          pipenv run pulumi up --yes
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Verify deployment
+        run: |
+          pipenv run pulumi stack output
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        continue-on-error: true
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          MSG="Dev deployment $STATUS for Pulumi infrastructure"
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"$MSG - ${{ github.ref }}\"}"
+        continue-on-error: true
+
+  manual-approval-staging:
+    name: Approve Staging Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: staging-approval
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to staging approved"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: manual-approval-staging
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: artifacts/
+        continue-on-error: true
+
+      - name: Assume cross-account role for Staging via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: >-
+            arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/
+            CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Staging
+          role-chaining: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v4
+        with:
+          pulumi-version: ${{ env.PULUMI_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pipenv
+          pipenv install
+
+      - name: Deploy to Staging
+        run: |
+          export PULUMI_STACK="staging"
+          pipenv run pulumi stack select $PULUMI_STACK --create
+          pipenv run pulumi up --yes
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Run smoke tests
+        run: |
+          pipenv run pytest tests/smoke/ -v
+        continue-on-error: true
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          MSG="Staging deployment $STATUS for Pulumi infrastructure"
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"$MSG - ${{ github.ref }}\"}"
+        continue-on-error: true
+
+  manual-approval-prod:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: prod-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to production approved"
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: manual-approval-prod
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: artifacts/
+        continue-on-error: true
+
+      - name: Assume cross-account role for Production via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: >-
+            arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Prod
+          role-chaining: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v4
+        with:
+          pulumi-version: ${{ env.PULUMI_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pipenv
+          pipenv install
+
+      - name: Create backup of existing infrastructure
+        run: |
+          BACKUP_FILE="prod-backup-$(date +%Y%m%d-%H%M%S).json"
+          pipenv run pulumi stack export > "$BACKUP_FILE"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        continue-on-error: true
+
+      - name: Deploy to Production
+        run: |
+          export PULUMI_STACK="prod"
+          pipenv run pulumi stack select $PULUMI_STACK --create
+          pipenv run pulumi up --yes
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Run production smoke tests
+        run: |
+          pipenv run pytest tests/smoke/ -v --environment=prod
+        continue-on-error: true
+
+      - name: Verify all services
+        run: |
+          pipenv run pulumi stack output
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        continue-on-error: true
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          MSG="🚀 Production deployment $STATUS for Pulumi infra"
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"$MSG - ${{ github.ref }}\"}"
+        continue-on-error: true
+
+  rollback:
+    name: Rollback (Manual Trigger)
+    runs-on: ubuntu-latest
+    if: failure() && github.event_name == 'workflow_dispatch'
+    needs: [deploy-dev, deploy-staging, deploy-prod]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v4
+        with:
+          pulumi-version: ${{ env.PULUMI_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pipenv
+          pipenv install
+
+      - name: Destroy failed deployment
+        run: |
+          export PULUMI_STACK="${{ github.event.inputs.environment }}"
+          pipenv run pulumi stack select $PULUMI_STACK
+          pipenv run pulumi destroy --yes
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Notify rollback
+        run: |
+          MSG="⚠️ Rollback initiated for Pulumi infrastructure"
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"$MSG\"}"
+        continue-on-error: true

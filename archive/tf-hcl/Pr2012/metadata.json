@@ -1,0 +1,28 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291738",
+  "team": "6",
+  "startedAt": "2025-08-21T07:43:13.444Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "IaC Optimization",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "IAM",
+    "S3",
+    "DynamoDB"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000341",
+  "team": "6",
+  "startedAt": "2025-11-04T15:01:39.801Z",
+  "subtask": "Application Deployment",
+  "background": "A fintech startup's transaction processing system built with Pulumi Python is experiencing performance bottlenecks and high operational costs. The existing infrastructure uses Lambda functions with DynamoDB but suffers from cold starts, inefficient table design, and excessive CloudWatch logging costs.",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "SQS",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "API Gateway",
+    "Application Auto Scaling"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

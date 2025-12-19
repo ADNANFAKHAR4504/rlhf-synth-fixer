@@ -1,0 +1,1275 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Multi-environment infrastructure with automated replication capabilities'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: "Environment type (dev, staging, or prod)"
+    Default: "prod"
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    
+  EnvironmentSuffix:
+    Type: String
+    Description: "Suffix for resource names to support multiple parallel deployments (e.g., PR number from CI/CD)"
+    Default: "pr4056"
+    AllowedPattern: "^[a-zA-Z0-9\\-]*$"
+    ConstraintDescription: "Must contain only alphanumeric characters and hyphens"
+    
+  ProjectName:
+    Type: String
+    Default: "MultiEnvProject"
+    Description: "Project or application name for tagging and naming"
+    
+  DBMasterUsername:
+    Type: String
+    Description: "Master username for RDS instance"
+    Default: "dbadmin"
+    NoEcho: false
+    
+  AlertEmail:
+    Type: String
+    Default: "alerts@mycompany.com"
+    Description: "Email address for CloudWatch alerts"
+    AllowedPattern: "^[\\x20-\\x45]?[\\w-\\+]+(\\.[\\w]+)*@[\\w-]+(\\.[\\w]+)*(\\.[a-z]{2,})$"
+    ConstraintDescription: "Must be a valid email address"
+
+Mappings:
+  EnvConfig:
+    dev:
+      VpcCidr: 10.0.0.0/16
+      DBInstanceClass: db.t3.micro
+      ASGMinSize: "1"
+      ASGMaxSize: "2"
+      ASGDesiredSize: "1"
+      ALBHealthInterval: "30"
+      S3LifecycleDays: "7"
+      BackupRetention: "1"
+      MultiAZ: "false"
+      DeletionProtection: "false"
+      CPUAlarmThreshold: "80"
+      MemoryAlarmThreshold: "80"
+    staging:
+      VpcCidr: 10.1.0.0/16
+      DBInstanceClass: db.t3.small
+      ASGMinSize: "2"
+      ASGMaxSize: "4"
+      ASGDesiredSize: "2"
+      ALBHealthInterval: "15"
+      S3LifecycleDays: "30"
+      BackupRetention: "7"
+      MultiAZ: "false"
+      DeletionProtection: "false"
+      CPUAlarmThreshold: "70"
+      MemoryAlarmThreshold: "70"
+    prod:
+      VpcCidr: 10.2.0.0/16
+      DBInstanceClass: db.m5.large
+      ASGMinSize: "4"
+      ASGMaxSize: "8"
+      ASGDesiredSize: "4"
+      ALBHealthInterval: "5"
+      S3LifecycleDays: "90"
+      BackupRetention: "30"
+      MultiAZ: "true"
+      DeletionProtection: "true"
+      CPUAlarmThreshold: "60"
+      MemoryAlarmThreshold: "60"
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+  EnableMultiAZ: !Equals [!FindInMap [EnvConfig, !Ref Environment, MultiAZ], "true"]
+  EnableDeletionProtection: !Equals [!FindInMap [EnvConfig, !Ref Environment, DeletionProtection], "true"]
+
+Resources:
+  # Secrets Manager Secret for RDS Password
+  DBMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-master-secret'
+      Description: 'RDS master password'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludePunctuation: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-secret"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # EC2 Key Pair
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-keypair"
+      KeyType: rsa
+      KeyFormat: pem
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-keypair"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # VPC Configuration
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [EnvConfig, !Ref Environment, VpcCidr]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-igw"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [0, !Cidr [!FindInMap [EnvConfig, !Ref Environment, VpcCidr], 6, 8]]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [1, !Cidr [!FindInMap [EnvConfig, !Ref Environment, VpcCidr], 6, 8]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-2"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [2, !Cidr [!FindInMap [EnvConfig, !Ref Environment, VpcCidr], 6, 8]]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-1"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [3, !Cidr [!FindInMap [EnvConfig, !Ref Environment, VpcCidr], 6, 8]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-2"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # NAT Gateways
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-natgw-eip-1"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  NATGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-natgw-eip-2"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-natgw-1"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-natgw-2"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-rt"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-rt-1"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-rt-2"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway2
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  # Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-sg"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for web servers
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-web-sg"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds-sg"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Lambda Execution Role for RDS Snapshot
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lambda-exec-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RDSSnapshotPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds:CreateDBSnapshot
+                  - rds:DescribeDBSnapshots
+                  - rds:DescribeDBInstances
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lambda-role"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Lambda Function for RDS Pre-Update Snapshot
+  RDSSnapshotLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds-snapshot"
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+          import datetime
+
+          def handler(event, context):
+              try:
+                  rds_client = boto3.client('rds')
+                  
+                  if event['RequestType'] == 'Delete':
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+                  
+                  if event['RequestType'] == 'Update':
+                      db_instance_id = event['ResourceProperties']['DBInstanceId']
+                      timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+                      snapshot_id = f"{db_instance_id}-pre-update-{timestamp}"
+                      
+                      response = rds_client.create_db_snapshot(
+                          DBSnapshotIdentifier=snapshot_id,
+                          DBInstanceIdentifier=db_instance_id
+                      )
+                      
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                          'SnapshotId': snapshot_id
+                      })
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lambda"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # RDS Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-subnet-group"
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-subnet-group"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # RDS Instance
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: !If [EnableDeletionProtection, Retain, Delete]
+    UpdateReplacePolicy: !If [EnableDeletionProtection, Retain, Delete]
+    Properties:
+      DBInstanceIdentifier: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db"
+      Engine: postgres
+      EngineVersion: '14'
+      DBInstanceClass: !FindInMap [EnvConfig, !Ref Environment, DBInstanceClass]
+      AllocatedStorage: '20'
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}'
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: !FindInMap [EnvConfig, !Ref Environment, BackupRetention]
+      PreferredBackupWindow: "03:00-04:00"
+      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
+      MultiAZ: !If [EnableMultiAZ, true, false]
+      DeletionProtection: !If [EnableDeletionProtection, true, false]
+      EnableCloudwatchLogsExports:
+        - postgresql
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Custom Resource for RDS Pre-Update Snapshot
+  RDSPreUpdateSnapshot:
+    Type: Custom::RDSSnapshot
+    Properties:
+      ServiceToken: !GetAtt RDSSnapshotLambda.Arn
+      DBInstanceId: !Ref RDSInstance
+
+  # S3 Bucket
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-bucket"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: !FindInMap [EnvConfig, !Ref Environment, S3LifecycleDays]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-s3"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # IAM Role for EC2 Instances
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt S3Bucket.Arn
+                  - !Sub "${S3Bucket.Arn}/*"
+              - !If
+                - IsProd
+                - Effect: Deny
+                  Action:
+                    - s3:DeleteBucket
+                    - s3:DeleteBucketPolicy
+                  Resource: !GetAtt S3Bucket.Arn
+                  Condition:
+                    BoolIfExists:
+                      aws:MultiFactorAuthPresent: false
+                - !Ref AWS::NoValue
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-role"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-profile"
+      Roles:
+        - !Ref EC2Role
+
+  # Launch Template
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lt"
+      LaunchTemplateData:
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        InstanceType: !If [IsProd, t3.medium, t3.micro]
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        KeyName: !Ref EC2KeyPair
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            echo "<h1>Hello from ${Environment} environment - ${AWS::Region}</h1>" > /var/www/html/index.html
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-instance"
+              - Key: Environment
+                Value: !Ref Environment
+              - Key: Project
+                Value: !Ref ProjectName
+
+  # Target Group
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-tg"
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: !FindInMap [EnvConfig, !Ref Environment, ALBHealthInterval]
+      HealthCheckTimeoutSeconds: 3
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-tg"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-alb"
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # Auto Scaling Group
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-asg"
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: !FindInMap [EnvConfig, !Ref Environment, ASGMinSize]
+      MaxSize: !FindInMap [EnvConfig, !Ref Environment, ASGMaxSize]
+      DesiredCapacity: !FindInMap [EnvConfig, !Ref Environment, ASGDesiredSize]
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-asg-instance"
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref Environment
+          PropagateAtLaunch: true
+        - Key: Project
+          Value: !Ref ProjectName
+          PropagateAtLaunch: true
+
+  # SNS Topic
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alerts"
+      DisplayName: !Sub "${ProjectName} ${Environment} Alerts"
+      Subscription:
+        - Endpoint: !Ref AlertEmail
+          Protocol: email
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-sns"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # CloudWatch Alarms
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-cpu-high"
+      AlarmDescription: "Alarm if CPU exceeds threshold"
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !FindInMap [EnvConfig, !Ref Environment, CPUAlarmThreshold]
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      AlarmActions:
+        - !Ref SNSTopic
+
+  RDSStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds-storage"
+      AlarmDescription: "Alarm if RDS free storage is low"
+      MetricName: FreeStorageSpace
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2147483648  # 2GB in bytes
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref RDSInstance
+      AlarmActions:
+        - !Ref SNSTopic
+
+  # CloudWatch Dashboard
+  Dashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-dashboard"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", "${AutoScalingGroup}"],
+                  ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${RDSInstance}"]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "CPU Utilization"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${ApplicationLoadBalancer.LoadBalancerFullName}"],
+                  ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", "${ApplicationLoadBalancer.LoadBalancerFullName}"]
+                ],
+                "period": 60,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "ALB Metrics"
+              }
+            }
+          ]
+        }
+
+  # Stack Policy (Applied via stack update after creation)
+  StackPolicyDocument:
+    Type: AWS::CloudFormation::CustomResource
+    Condition: IsProd
+    Properties:
+      ServiceToken: !GetAtt StackPolicyLambda.Arn
+      StackName: !Ref AWS::StackName
+      PolicyDocument:
+        Statement:
+          - Effect: Deny
+            Principal: "*"
+            Action: "Update:Delete"
+            Resource: "*"
+            Condition:
+              StringEquals:
+                ResourceType:
+                  - "AWS::RDS::DBInstance"
+                  - "AWS::S3::Bucket"
+
+  StackPolicyLambda:
+    Type: AWS::Lambda::Function
+    Condition: IsProd
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-stack-policy"
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt StackPolicyLambdaRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Delete':
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+                  
+                  # Note: Stack policies must be applied after stack creation
+                  # This is a placeholder to demonstrate the concept
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                      'Message': 'Stack policy would be applied post-creation'
+                  })
+                  
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  StackPolicyLambdaRole:
+    Type: AWS::IAM::Role
+    Condition: IsProd
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-stack-policy-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+Outputs:
+  # Secrets Manager Outputs
+  DBSecretArn:
+    Description: RDS Master Secret ARN
+    Value: !Ref DBMasterSecret
+    Export:
+      Name: !Sub "${AWS::StackName}-DB-Secret-ARN"
+
+  DBSecretName:
+    Description: RDS Master Secret Name
+    Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-master-secret'
+    Export:
+      Name: !Sub "${AWS::StackName}-DB-Secret-Name"
+
+  # Key Pair Outputs
+  EC2KeyPairId:
+    Description: EC2 Key Pair ID
+    Value: !Ref EC2KeyPair
+    Export:
+      Name: !Sub "${AWS::StackName}-KeyPair-ID"
+
+  EC2KeyPairName:
+    Description: EC2 Key Pair Name
+    Value: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-keypair"
+    Export:
+      Name: !Sub "${AWS::StackName}-KeyPair-Name"
+
+  # VPC Outputs
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VPC-ID"
+
+  VPCCidr:
+    Description: VPC CIDR Block
+    Value: !FindInMap [EnvConfig, !Ref Environment, VpcCidr]
+    Export:
+      Name: !Sub "${AWS::StackName}-VPC-CIDR"
+
+  # Internet Gateway Outputs
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-IGW-ID"
+
+  # Subnet Outputs
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-Public-Subnet-1-ID"
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-Public-Subnet-2-ID"
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-Private-Subnet-1-ID"
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-Private-Subnet-2-ID"
+
+  PublicSubnet1AZ:
+    Description: Public Subnet 1 Availability Zone
+    Value: !GetAtt PublicSubnet1.AvailabilityZone
+    Export:
+      Name: !Sub "${AWS::StackName}-Public-Subnet-1-AZ"
+
+  PublicSubnet2AZ:
+    Description: Public Subnet 2 Availability Zone
+    Value: !GetAtt PublicSubnet2.AvailabilityZone
+    Export:
+      Name: !Sub "${AWS::StackName}-Public-Subnet-2-AZ"
+
+  PrivateSubnet1AZ:
+    Description: Private Subnet 1 Availability Zone
+    Value: !GetAtt PrivateSubnet1.AvailabilityZone
+    Export:
+      Name: !Sub "${AWS::StackName}-Private-Subnet-1-AZ"
+
+  PrivateSubnet2AZ:
+    Description: Private Subnet 2 Availability Zone
+    Value: !GetAtt PrivateSubnet2.AvailabilityZone
+    Export:
+      Name: !Sub "${AWS::StackName}-Private-Subnet-2-AZ"
+
+  # NAT Gateway Outputs
+  NATGateway1Id:
+    Description: NAT Gateway 1 ID
+    Value: !Ref NATGateway1
+    Export:
+      Name: !Sub "${AWS::StackName}-NAT-Gateway-1-ID"
+
+  NATGateway2Id:
+    Description: NAT Gateway 2 ID
+    Value: !Ref NATGateway2
+    Export:
+      Name: !Sub "${AWS::StackName}-NAT-Gateway-2-ID"
+
+  NATGateway1EIP:
+    Description: NAT Gateway 1 Elastic IP
+    Value: !Ref NATGateway1EIP
+    Export:
+      Name: !Sub "${AWS::StackName}-NAT-Gateway-1-EIP"
+
+  NATGateway2EIP:
+    Description: NAT Gateway 2 Elastic IP
+    Value: !Ref NATGateway2EIP
+    Export:
+      Name: !Sub "${AWS::StackName}-NAT-Gateway-2-EIP"
+
+  # Route Table Outputs
+  PublicRouteTableId:
+    Description: Public Route Table ID
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub "${AWS::StackName}-Public-RT-ID"
+
+  PrivateRouteTable1Id:
+    Description: Private Route Table 1 ID
+    Value: !Ref PrivateRouteTable1
+    Export:
+      Name: !Sub "${AWS::StackName}-Private-RT-1-ID"
+
+  PrivateRouteTable2Id:
+    Description: Private Route Table 2 ID
+    Value: !Ref PrivateRouteTable2
+    Export:
+      Name: !Sub "${AWS::StackName}-Private-RT-2-ID"
+
+  # Security Group Outputs
+  ALBSecurityGroupId:
+    Description: ALB Security Group ID
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-ALB-SG-ID"
+
+  WebServerSecurityGroupId:
+    Description: Web Server Security Group ID
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-Web-SG-ID"
+
+  RDSSecurityGroupId:
+    Description: RDS Security Group ID
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-RDS-SG-ID"
+
+  # Lambda Outputs
+  RDSSnapshotLambdaArn:
+    Description: RDS Snapshot Lambda Function ARN
+    Value: !GetAtt RDSSnapshotLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RDS-Snapshot-Lambda-ARN"
+
+  LambdaExecutionRoleArn:
+    Description: Lambda Execution Role ARN
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-Lambda-Execution-Role-ARN"
+
+  # RDS Outputs
+  RDSInstanceId:
+    Description: RDS Instance ID
+    Value: !Ref RDSInstance
+    Export:
+      Name: !Sub "${AWS::StackName}-RDS-Instance-ID"
+
+  RDSEndpoint:
+    Description: RDS endpoint
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-RDS-Endpoint"
+
+  RDSPort:
+    Description: RDS Port
+    Value: !GetAtt RDSInstance.Endpoint.Port
+    Export:
+      Name: !Sub "${AWS::StackName}-RDS-Port"
+
+  RDSEngineVersion:
+    Description: RDS Engine Version
+    Value: '14'
+    Export:
+      Name: !Sub "${AWS::StackName}-RDS-Engine-Version"
+
+  DBSubnetGroupName:
+    Description: DB Subnet Group Name
+    Value: !Ref DBSubnetGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-DB-Subnet-Group-Name"
+
+  # S3 Outputs
+  S3BucketName:
+    Description: S3 bucket name
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub "${AWS::StackName}-S3-Bucket"
+
+  S3BucketArn:
+    Description: S3 bucket ARN
+    Value: !GetAtt S3Bucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-S3-Bucket-ARN"
+
+  S3BucketDomainName:
+    Description: S3 bucket domain name
+    Value: !GetAtt S3Bucket.DomainName
+    Export:
+      Name: !Sub "${AWS::StackName}-S3-Domain-Name"
+
+  S3BucketRegionalDomainName:
+    Description: S3 bucket regional domain name
+    Value: !GetAtt S3Bucket.RegionalDomainName
+    Export:
+      Name: !Sub "${AWS::StackName}-S3-Regional-Domain-Name"
+
+  # IAM Outputs
+  EC2RoleArn:
+    Description: EC2 IAM Role ARN
+    Value: !GetAtt EC2Role.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EC2-Role-ARN"
+
+  EC2InstanceProfileArn:
+    Description: EC2 Instance Profile ARN
+    Value: !GetAtt EC2InstanceProfile.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EC2-Instance-Profile-ARN"
+
+  # Launch Template Outputs
+  LaunchTemplateId:
+    Description: Launch Template ID
+    Value: !Ref LaunchTemplate
+    Export:
+      Name: !Sub "${AWS::StackName}-Launch-Template-ID"
+
+  LaunchTemplateVersion:
+    Description: Launch Template Latest Version
+    Value: !GetAtt LaunchTemplate.LatestVersionNumber
+    Export:
+      Name: !Sub "${AWS::StackName}-Launch-Template-Version"
+
+  # Load Balancer Outputs
+  ALBArn:
+    Description: ALB ARN
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub "${AWS::StackName}-ALB-ARN"
+
+  ALBDNSName:
+    Description: ALB DNS name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub "${AWS::StackName}-ALB-DNS"
+
+  ALBHostedZoneId:
+    Description: ALB Hosted Zone ID
+    Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+    Export:
+      Name: !Sub "${AWS::StackName}-ALB-Hosted-Zone-ID"
+
+  ALBFullName:
+    Description: ALB Full Name
+    Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
+    Export:
+      Name: !Sub "${AWS::StackName}-ALB-Full-Name"
+
+  # Target Group Outputs
+  TargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-Target-Group-ARN"
+
+  TargetGroupFullName:
+    Description: Target Group Full Name
+    Value: !GetAtt TargetGroup.TargetGroupFullName
+    Export:
+      Name: !Sub "${AWS::StackName}-Target-Group-Full-Name"
+
+  # Auto Scaling Group Outputs
+  AutoScalingGroupName:
+    Description: Auto Scaling Group Name
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-ASG-Name"
+
+  # SNS Outputs
+  SNSTopicArn:
+    Description: SNS Topic ARN for alerts
+    Value: !Ref SNSTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-SNS-Topic"
+
+  SNSTopicName:
+    Description: SNS Topic Name
+    Value: !GetAtt SNSTopic.TopicName
+    Export:
+      Name: !Sub "${AWS::StackName}-SNS-Topic-Name"
+
+  # CloudWatch Outputs
+  CPUAlarmName:
+    Description: CPU High Alarm Name
+    Value: !Ref CPUAlarmHigh
+    Export:
+      Name: !Sub "${AWS::StackName}-CPU-Alarm-Name"
+
+  RDSStorageAlarmName:
+    Description: RDS Storage Alarm Name
+    Value: !Ref RDSStorageAlarm
+    Export:
+      Name: !Sub "${AWS::StackName}-RDS-Storage-Alarm-Name"
+
+  DashboardName:
+    Description: CloudWatch Dashboard Name
+    Value: !Ref Dashboard
+    Export:
+      Name: !Sub "${AWS::StackName}-Dashboard-Name"
+
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${Dashboard}"
+
+  # Environment Configuration Outputs
+  Environment:
+    Description: Environment type
+    Value: !Ref Environment
+    Export:
+      Name: !Sub "${AWS::StackName}-Environment"
+
+  EnvironmentSuffix:
+    Description: Environment suffix
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub "${AWS::StackName}-Environment-Suffix"
+
+  ProjectName:
+    Description: Project name
+    Value: !Ref ProjectName
+    Export:
+      Name: !Sub "${AWS::StackName}-Project-Name"
+
+  # Stack Information
+  StackName:
+    Description: CloudFormation Stack Name
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub "${AWS::StackName}-Stack-Name"
+
+  Region:
+    Description: AWS Region
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub "${AWS::StackName}-Region"

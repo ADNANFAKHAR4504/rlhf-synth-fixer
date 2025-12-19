@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350118",
+  "team": "4",
+  "startedAt": "2025-10-14T09:11:44.767Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code",
+    "AWS Well-Architected Framework",
+    "Infrastructure Security Implementation"
+  ],
+  "aws_services": "S3 Bucket, VPC, IAM, ALB, RDS, Lambda, CloudTrail, CloudWatch, KMS, SNS, EC2, NAT Gateway",
+  "training_quality": 9,
+  "background": "Design and implement a comprehensive AWS production infrastructure using Terraform that adheres to security best practices and compliance requirements. The infrastructure must include multi-tier architecture with public and private subnets, IAM roles with least privilege, encrypted data storage, multi-AZ redundancy, centralized logging and monitoring, and automated security alerting. This task requires integrating 12 AWS services with proper security configurations including KMS encryption, CloudTrail auditing, VPC isolation, and security group restrictions.",
+  "testDependencies": {
+    "@aws-sdk/client-ec2": "^3.883.0",
+    "@aws-sdk/client-s3": "^3.901.0",
+    "@aws-sdk/client-iam": "^3.901.0",
+    "@aws-sdk/client-rds": "^3.883.0",
+    "@aws-sdk/client-lambda": "^3.901.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.883.0",
+    "@aws-sdk/client-cloudtrail": "^3.901.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.901.0",
+    "@aws-sdk/client-cloudwatch": "^3.883.0",
+    "@aws-sdk/client-sns": "^3.855.0",
+    "@aws-sdk/client-kms": "^3.901.0",
+    "@aws-sdk/client-acm": "^3.883.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,1 @@
+"""Lambda functions for inventory processing system."""

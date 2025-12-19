@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348839",
+  "team": "4",
+  "startedAt": "2025-08-29T11:24:54.612Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "API Authentication",
+    "Infrastructure QA",
+    "WAF Protection",
+    "CORS Configuration",
+    "Access Control",
+    "Monitoring Setup",
+    "IaC Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "S3",
+    "SQS",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "WAF",
+    "X-Ray"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}

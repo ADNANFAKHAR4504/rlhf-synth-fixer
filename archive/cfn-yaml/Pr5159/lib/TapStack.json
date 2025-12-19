@@ -1,0 +1,1173 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Student Records Management System - Highly Available Database Infrastructure with FERPA Compliance",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Database Configuration"
+          },
+          "Parameters": [
+            "DBInstanceClass",
+            "DBAllocatedStorage",
+            "DBName",
+            "DBMasterUsername"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Cache Configuration"
+          },
+          "Parameters": [
+            "CacheNodeType"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Network Configuration"
+          },
+          "Parameters": [
+            "VpcId",
+            "PrivateSubnetIds"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9-]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
+    },
+    "DBInstanceClass": {
+      "Type": "String",
+      "Default": "db.t3.medium",
+      "Description": "RDS PostgreSQL instance class",
+      "AllowedValues": [
+        "db.t3.medium",
+        "db.t3.large",
+        "db.r5.large",
+        "db.r5.xlarge"
+      ]
+    },
+    "DBAllocatedStorage": {
+      "Type": "Number",
+      "Default": 100,
+      "MinValue": 20,
+      "MaxValue": 1000,
+      "Description": "Allocated storage in GB for RDS instance"
+    },
+    "DBName": {
+      "Type": "String",
+      "Default": "studentrecords",
+      "Description": "Database name for student records",
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+    },
+    "DBMasterUsername": {
+      "Type": "String",
+      "Default": "dbadmin",
+      "Description": "Master username for RDS instance",
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+    },
+    "CacheNodeType": {
+      "Type": "String",
+      "Default": "cache.t3.medium",
+      "Description": "ElastiCache Redis node type",
+      "AllowedValues": [
+        "cache.t3.small",
+        "cache.t3.medium",
+        "cache.r5.large"
+      ]
+    },
+    "VpcId": {
+      "Type": "String",
+      "Description": "VPC ID for resource deployment (leave empty to use default VPC)",
+      "Default": ""
+    },
+    "PrivateSubnetIds": {
+      "Type": "CommaDelimitedList",
+      "Description": "Comma-delimited list of private subnet IDs for RDS and ElastiCache (leave empty for default VPC subnets)",
+      "Default": ""
+    }
+  },
+  "Conditions": {
+    "UseDefaultVpc": {
+      "Fn::Equals": [
+        {
+          "Ref": "VpcId"
+        },
+        ""
+      ]
+    },
+    "UseProvidedSubnets": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Fn::Join": [
+                "",
+                {
+                  "Ref": "PrivateSubnetIds"
+                }
+              ]
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "studentrecords-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "studentrecords-igw-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "studentrecords-private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "studentrecords-private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "RDSKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for RDS encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow RDS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "rds.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      }
+    },
+    "RDSKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/rds-studentrecords-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "RDSKMSKey"
+        }
+      }
+    },
+    "ElastiCacheKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for ElastiCache encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow ElastiCache to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "elasticache.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      }
+    },
+    "ElastiCacheKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/elasticache-studentrecords-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "ElastiCacheKMSKey"
+        }
+      }
+    },
+    "DBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "rds-studentrecords-credentials-${EnvironmentSuffix}"
+        },
+        "Description": {
+          "Fn::Sub": "Database credentials for student records system - ${EnvironmentSuffix}"
+        },
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\",
+          "RequireEachIncludedType": true
+        }
+      }
+    },
+    "RDSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "rds-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": {
+          "Fn::Sub": "Security group for RDS PostgreSQL instance - ${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Fn::If": [
+            "UseDefaultVpc",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "VpcId"
+            }
+          ]
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "SourceSecurityGroupId": {
+              "Ref": "AppSecurityGroup"
+            },
+            "Description": "Allow PostgreSQL traffic from application security group"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "student-records"
+          }
+        ]
+      }
+    },
+    "ElastiCacheSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "elasticache-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": {
+          "Fn::Sub": "Security group for ElastiCache Redis cluster - ${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Fn::If": [
+            "UseDefaultVpc",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "VpcId"
+            }
+          ]
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 6379,
+            "ToPort": 6379,
+            "SourceSecurityGroupId": {
+              "Ref": "AppSecurityGroup"
+            },
+            "Description": "Allow Redis traffic from application security group"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "elasticache-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "student-records"
+          }
+        ]
+      }
+    },
+    "AppSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "app-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": {
+          "Fn::Sub": "Security group for application instances - ${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Fn::If": [
+            "UseDefaultVpc",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "VpcId"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "app-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "student-records"
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "rds-subnet-group-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": {
+          "Fn::Sub": "Subnet group for RDS PostgreSQL - ${EnvironmentSuffix}"
+        },
+        "SubnetIds": {
+          "Fn::If": [
+            "UseProvidedSubnets",
+            {
+              "Ref": "PrivateSubnetIds"
+            },
+            [
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              }
+            ]
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-subnet-group-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "RDSInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "studentrecords-db-${EnvironmentSuffix}"
+        },
+        "Engine": "postgres",
+        "EngineVersion": "15.10",
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
+        "AllocatedStorage": {
+          "Ref": "DBAllocatedStorage"
+        },
+        "StorageType": "gp3",
+        "StorageEncrypted": true,
+        "KmsKeyId": {
+          "Ref": "RDSKMSKey"
+        },
+        "MultiAZ": true,
+        "DBName": {
+          "Ref": "DBName"
+        },
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "RDSSecurityGroup"
+          }
+        ],
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "PubliclyAccessible": false,
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "EnableCloudwatchLogsExports": [
+          "postgresql",
+          "upgrade"
+        ],
+        "DeletionProtection": false,
+        "CopyTagsToSnapshot": true,
+        "EnableIAMDatabaseAuthentication": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "studentrecords-db-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "student-records"
+          },
+          {
+            "Key": "Compliance",
+            "Value": "FERPA"
+          }
+        ]
+      }
+    },
+    "SecretRotationSchedule": {
+      "Type": "AWS::SecretsManager::RotationSchedule",
+      "DependsOn": "RDSInstance",
+      "Properties": {
+        "SecretId": {
+          "Ref": "DBSecret"
+        },
+        "RotationRules": {
+          "AutomaticallyAfterDays": 30
+        },
+        "RotationLambdaARN": {
+          "Fn::GetAtt": [
+            "SecretRotationLambda",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "SecretRotationLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "secret-rotation-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Sub": "secret-rotation-policy-${EnvironmentSuffix}"
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:DescribeSecret",
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:PutSecretValue",
+                    "secretsmanager:UpdateSecretVersionStage"
+                  ],
+                  "Resource": {
+                    "Ref": "DBSecret"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetRandomPassword"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "rds:DescribeDBInstances",
+                    "rds:ModifyDBInstance"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${RDSInstance}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "SecretRotationLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "secret-rotation-lambda-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "SecretRotationLambdaRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 300,
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "AppSecurityGroup"
+            }
+          ],
+          "SubnetIds": {
+            "Fn::If": [
+              "UseProvidedSubnets",
+              {
+                "Ref": "PrivateSubnetIds"
+              },
+              [
+                {
+                  "Ref": "PrivateSubnet1"
+                },
+                {
+                  "Ref": "PrivateSubnet2"
+                }
+              ]
+            ]
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "SECRETS_MANAGER_ENDPOINT": {
+              "Fn::Sub": "https://secretsmanager.${AWS::Region}.amazonaws.com"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import boto3\nimport json\nimport os\n\ndef lambda_handler(event, context):\n    \"\"\"Handles the secret rotation for RDS PostgreSQL\"\"\"\n    service_client = boto3.client('secretsmanager', endpoint_url=os.environ['SECRETS_MANAGER_ENDPOINT'])\n    arn = event['SecretId']\n    token = event['ClientRequestToken']\n    step = event['Step']\n\n    metadata = service_client.describe_secret(SecretId=arn)\n    if not metadata['RotationEnabled']:\n        raise ValueError(f\"Secret {arn} is not enabled for rotation\")\n\n    versions = metadata['VersionIdsToStages']\n    if token not in versions:\n        raise ValueError(f\"Secret version {token} has no stage for rotation of secret {arn}.\")\n\n    if \"AWSCURRENT\" in versions[token]:\n        return\n\n    elif \"AWSPENDING\" not in versions[token]:\n        raise ValueError(f\"Secret version {token} not set as AWSPENDING for rotation of secret {arn}.\")\n\n    if step == \"createSecret\":\n        create_secret(service_client, arn, token)\n\n    elif step == \"setSecret\":\n        set_secret(service_client, arn, token)\n\n    elif step == \"testSecret\":\n        test_secret(service_client, arn, token)\n\n    elif step == \"finishSecret\":\n        finish_secret(service_client, arn, token)\n\n    else:\n        raise ValueError(\"Invalid step parameter\")\n\ndef create_secret(service_client, arn, token):\n    \"\"\"Generate a new secret\"\"\"\n    service_client.get_secret_value(SecretId=arn, VersionStage=\"AWSCURRENT\")\n\n    try:\n        service_client.get_secret_value(SecretId=arn, VersionId=token, VersionStage=\"AWSPENDING\")\n    except service_client.exceptions.ResourceNotFoundException:\n        passwd = service_client.get_random_password(ExcludeCharacters='/@\"\\'', PasswordLength=32)\n        current_dict = json.loads(service_client.get_secret_value(SecretId=arn, VersionStage=\"AWSCURRENT\")['SecretString'])\n        current_dict['password'] = passwd['RandomPassword']\n        service_client.put_secret_value(SecretId=arn, ClientRequestToken=token, SecretString=json.dumps(current_dict), VersionStages=['AWSPENDING'])\n\ndef set_secret(service_client, arn, token):\n    \"\"\"Set the pending secret in the database\"\"\"\n    pending_dict = json.loads(service_client.get_secret_value(SecretId=arn, VersionId=token, VersionStage=\"AWSPENDING\")['SecretString'])\n    current_dict = json.loads(service_client.get_secret_value(SecretId=arn, VersionStage=\"AWSCURRENT\")['SecretString'])\n\n    # This would connect to RDS and update the password\n    # Implementation depends on RDS endpoint availability\n\ndef test_secret(service_client, arn, token):\n    \"\"\"Test the pending secret\"\"\"\n    pending_dict = json.loads(service_client.get_secret_value(SecretId=arn, VersionId=token, VersionStage=\"AWSPENDING\")['SecretString'])\n    # Test connection with new credentials\n\ndef finish_secret(service_client, arn, token):\n    \"\"\"Finish the rotation by marking the pending secret as current\"\"\"\n    metadata = service_client.describe_secret(SecretId=arn)\n    current_version = None\n    for version in metadata[\"VersionIdsToStages\"]:\n        if \"AWSCURRENT\" in metadata[\"VersionIdsToStages\"][version]:\n            if version == token:\n                return\n            current_version = version\n            break\n\n    service_client.update_secret_version_stage(SecretId=arn, VersionStage=\"AWSCURRENT\", MoveToVersionId=token, RemoveFromVersionId=current_version)\n"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secret-rotation-lambda-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SecretRotationLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "secretsmanager.amazonaws.com"
+      }
+    },
+    "CacheSubnetGroup": {
+      "Type": "AWS::ElastiCache::SubnetGroup",
+      "Properties": {
+        "CacheSubnetGroupName": {
+          "Fn::Sub": "elasticache-subnet-group-${EnvironmentSuffix}"
+        },
+        "Description": {
+          "Fn::Sub": "Subnet group for ElastiCache Redis - ${EnvironmentSuffix}"
+        },
+        "SubnetIds": {
+          "Fn::If": [
+            "UseProvidedSubnets",
+            {
+              "Ref": "PrivateSubnetIds"
+            },
+            [
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "ElastiCacheReplicationGroup": {
+      "Type": "AWS::ElastiCache::ReplicationGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "ReplicationGroupId": {
+          "Fn::Sub": "redis-cluster-${EnvironmentSuffix}"
+        },
+        "ReplicationGroupDescription": {
+          "Fn::Sub": "Redis cluster for student records session management - ${EnvironmentSuffix}"
+        },
+        "Engine": "redis",
+        "EngineVersion": "7.0",
+        "CacheNodeType": {
+          "Ref": "CacheNodeType"
+        },
+        "NumCacheClusters": 2,
+        "AutomaticFailoverEnabled": true,
+        "MultiAZEnabled": true,
+        "AtRestEncryptionEnabled": true,
+        "KmsKeyId": {
+          "Ref": "ElastiCacheKMSKey"
+        },
+        "TransitEncryptionEnabled": true,
+        "AuthToken": {
+          "Fn::Sub": "{{resolve:secretsmanager:${CacheAuthSecret}:SecretString:token}}"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "ElastiCacheSecurityGroup"
+          }
+        ],
+        "CacheSubnetGroupName": {
+          "Ref": "CacheSubnetGroup"
+        },
+        "PreferredMaintenanceWindow": "sun:05:00-sun:06:00",
+        "SnapshotRetentionLimit": 5,
+        "SnapshotWindow": "03:00-04:00",
+        "LogDeliveryConfigurations": [
+          {
+            "DestinationType": "cloudwatch-logs",
+            "DestinationDetails": {
+              "CloudWatchLogsDetails": {
+                "LogGroup": {
+                  "Ref": "ElastiCacheLogGroup"
+                }
+              }
+            },
+            "LogFormat": "json",
+            "LogType": "slow-log"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "redis-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "student-records"
+          }
+        ]
+      }
+    },
+    "CacheAuthSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "elasticache-auth-token-${EnvironmentSuffix}"
+        },
+        "Description": {
+          "Fn::Sub": "Auth token for ElastiCache Redis - ${EnvironmentSuffix}"
+        },
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{}",
+          "GenerateStringKey": "token",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "@%*()_+=`~{}|[]\\\\:\";'<>,.?/",
+          "RequireEachIncludedType": true
+        }
+      }
+    },
+    "RDSLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/rds/studentrecords-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "ElastiCacheLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/elasticache/redis-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "RDSCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "rds-high-cpu-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when RDS CPU exceeds 80%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Ref": "RDSInstance"
+            }
+          }
+        ]
+      }
+    },
+    "RDSConnectionsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "rds-high-connections-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when RDS connections are high",
+        "MetricName": "DatabaseConnections",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Ref": "RDSInstance"
+            }
+          }
+        ]
+      }
+    },
+    "ElastiCacheCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "elasticache-high-cpu-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when ElastiCache CPU exceeds 75%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/ElastiCache",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 75,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ReplicationGroupId",
+            "Value": {
+              "Ref": "ElastiCacheReplicationGroup"
+            }
+          }
+        ]
+      }
+    },
+    "ElastiCacheMemoryAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "elasticache-high-memory-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when ElastiCache memory usage exceeds 80%",
+        "MetricName": "DatabaseMemoryUsagePercentage",
+        "Namespace": "AWS/ElastiCache",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ReplicationGroupId",
+            "Value": {
+              "Ref": "ElastiCacheReplicationGroup"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "RDSInstanceEndpoint": {
+      "Description": "RDS PostgreSQL instance endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "RDSInstance",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSEndpoint"
+        }
+      }
+    },
+    "RDSInstancePort": {
+      "Description": "RDS PostgreSQL instance port",
+      "Value": {
+        "Fn::GetAtt": [
+          "RDSInstance",
+          "Endpoint.Port"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSPort"
+        }
+      }
+    },
+    "RDSInstanceArn": {
+      "Description": "RDS instance ARN",
+      "Value": {
+        "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${RDSInstance}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSArn"
+        }
+      }
+    },
+    "DBSecretArn": {
+      "Description": "Secrets Manager secret ARN for database credentials",
+      "Value": {
+        "Ref": "DBSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecretArn"
+        }
+      }
+    },
+    "ElastiCacheEndpoint": {
+      "Description": "ElastiCache Redis primary endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "ElastiCacheReplicationGroup",
+          "PrimaryEndPoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RedisEndpoint"
+        }
+      }
+    },
+    "ElastiCachePort": {
+      "Description": "ElastiCache Redis port",
+      "Value": {
+        "Fn::GetAtt": [
+          "ElastiCacheReplicationGroup",
+          "PrimaryEndPoint.Port"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RedisPort"
+        }
+      }
+    },
+    "ElastiCacheReaderEndpoint": {
+      "Description": "ElastiCache Redis reader endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "ElastiCacheReplicationGroup",
+          "ReaderEndPoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RedisReaderEndpoint"
+        }
+      }
+    },
+    "CacheAuthSecretArn": {
+      "Description": "Secrets Manager secret ARN for ElastiCache auth token",
+      "Value": {
+        "Ref": "CacheAuthSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CacheAuthSecretArn"
+        }
+      }
+    },
+    "RDSKMSKeyId": {
+      "Description": "KMS key ID for RDS encryption",
+      "Value": {
+        "Ref": "RDSKMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSKMSKeyId"
+        }
+      }
+    },
+    "ElastiCacheKMSKeyId": {
+      "Description": "KMS key ID for ElastiCache encryption",
+      "Value": {
+        "Ref": "ElastiCacheKMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ElastiCacheKMSKeyId"
+        }
+      }
+    },
+    "AppSecurityGroupId": {
+      "Description": "Security group ID for application instances",
+      "Value": {
+        "Ref": "AppSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AppSecurityGroup"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "CloudFormation stack name",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350112",
+  "team": "4",
+  "startedAt": "2025-11-15T19:28:08.297Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "CloudFront",
+    "EC2",
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups",
+    "IAM Roles",
+    "IAM Instance Profile",
+    "EC2 Key Pair",
+    "Elastic IP",
+    "RDS PostgreSQL",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "VPC Flow Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

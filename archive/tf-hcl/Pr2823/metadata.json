@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "354072",
+  "team": "5",
+  "startedAt": "2025-09-06T10:26:26.917Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Access Control",
+    "Performance Optimization",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "KMS",
+    "S3",
+    "CloudTrail",
+    "CloudFront",
+    "RDS",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "ACM",
+    "VPC",
+    "EC2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sadaf-jamal-au27",
+  "dockerS3Location": ""
+}

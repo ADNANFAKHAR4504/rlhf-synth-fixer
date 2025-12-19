@@ -85,7 +85,7 @@ data "aws_availability_zones" "available" {
 locals {
   # Resource naming with environment suffix
   resource_prefix = var.environment_suffix != "" ? "${var.name_prefix}-${var.environment_suffix}" : var.name_prefix
-  
+
   azs           = slice(data.aws_availability_zones.available.names, 0, 2)
   public_cidrs  = [for i in range(2) : cidrsubnet(var.vpc_cidr, 8, i)]
   private_cidrs = [for i in range(2) : cidrsubnet(var.vpc_cidr, 8, i + 10)]
@@ -136,11 +136,11 @@ module "vpc" {
   public_subnets  = local.public_cidrs
   private_subnets = local.private_cidrs
 
-  enable_nat_gateway       = true
-  single_nat_gateway       = true
-  enable_dns_hostnames     = true
-  enable_dns_support       = true
-  map_public_ip_on_launch  = false
+  enable_nat_gateway      = true
+  single_nat_gateway      = true
+  enable_dns_hostnames    = true
+  enable_dns_support      = true
+  map_public_ip_on_launch = false
 
   tags = local.common_tags
 }
@@ -301,9 +301,9 @@ data "aws_ssm_parameter" "al2023_ami" {
 }
 
 resource "aws_launch_template" "app" {
-  name_prefix   = "${local.resource_prefix}-lt-"
-  image_id      = data.aws_ssm_parameter.al2023_ami.value
-  instance_type = var.instance_type
+  name_prefix            = "${local.resource_prefix}-lt-"
+  image_id               = data.aws_ssm_parameter.al2023_ami.value
+  instance_type          = var.instance_type
   vpc_security_group_ids = [aws_security_group.app.id]
   user_data = base64encode(<<-EOT
     #!/bin/bash
@@ -318,7 +318,7 @@ resource "aws_launch_template" "app" {
   )
   tag_specifications {
     resource_type = "instance"
-    tags = local.common_tags
+    tags          = local.common_tags
   }
 }
 
@@ -348,8 +348,8 @@ resource "aws_autoscaling_group" "app" {
 # RDS MySQL (Multi-AZ + KMS)
 ########################
 data "aws_secretsmanager_random_password" "db" {
-  password_length = 20
-  exclude_characters = "\"'\\/`$"
+  password_length            = 20
+  exclude_characters         = "\"'\\/`$"
   require_each_included_type = true
 }
 
@@ -360,7 +360,7 @@ resource "aws_secretsmanager_secret" "db" {
 }
 
 resource "aws_secretsmanager_secret_version" "db" {
-  secret_id     = aws_secretsmanager_secret.db.id
+  secret_id = aws_secretsmanager_secret.db.id
   secret_string = jsonencode({
     username = var.db_username
     password = data.aws_secretsmanager_random_password.db.random_password
@@ -379,15 +379,15 @@ module "rds" {
   major_engine_version = "8.0"
   instance_class       = "db.t4g.micro"
 
-  allocated_storage      = 20
-  max_allocated_storage  = 100
-  multi_az               = true
-  storage_encrypted      = true
-  kms_key_id             = aws_kms_key.rds.arn
-  deletion_protection    = true
-  skip_final_snapshot    = true
+  allocated_storage       = 20
+  max_allocated_storage   = 100
+  multi_az                = true
+  storage_encrypted       = true
+  kms_key_id              = aws_kms_key.rds.arn
+  deletion_protection     = true
+  skip_final_snapshot     = true
   backup_retention_period = 7
-  publicly_accessible    = false
+  publicly_accessible     = false
 
   username = var.db_username
   password = data.aws_secretsmanager_random_password.db.random_password
@@ -487,11 +487,11 @@ data "archive_file" "lambda_zip" {
 }
 
 resource "aws_lambda_function" "handler" {
-  function_name = "${local.resource_prefix}-handler"
-  role          = aws_iam_role.lambda.arn
-  runtime       = "python3.11"
-  handler       = "index.handler"
-  filename      = data.archive_file.lambda_zip.output_path
+  function_name    = "${local.resource_prefix}-handler"
+  role             = aws_iam_role.lambda.arn
+  runtime          = "python3.11"
+  handler          = "index.handler"
+  filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = filebase64sha256(data.archive_file.lambda_zip.output_path)
 
   environment {
@@ -527,14 +527,14 @@ resource "aws_cognito_user_pool" "this" {
     require_uppercase = true
   }
   mfa_configuration = "OFF"
-  tags = local.common_tags
+  tags              = local.common_tags
 }
 
 resource "aws_cognito_user_pool_client" "this" {
-  name                    = "${local.resource_prefix}-client"
-  user_pool_id            = aws_cognito_user_pool.this.id
-  generate_secret         = true
-  explicit_auth_flows     = [
+  name            = "${local.resource_prefix}-client"
+  user_pool_id    = aws_cognito_user_pool.this.id
+  generate_secret = true
+  explicit_auth_flows = [
     "ALLOW_USER_PASSWORD_AUTH",
     "ALLOW_REFRESH_TOKEN_AUTH",
     "ALLOW_USER_SRP_AUTH"
@@ -592,7 +592,7 @@ resource "aws_api_gateway_deployment" "api" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   triggers    = { redeploy = timestamp() }
   lifecycle { create_before_destroy = true }
-  
+
   depends_on = [
     aws_api_gateway_method.hello_any,
     aws_api_gateway_integration.hello_integration
@@ -600,9 +600,9 @@ resource "aws_api_gateway_deployment" "api" {
 }
 
 resource "aws_api_gateway_stage" "prod" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  deployment_id = aws_api_gateway_deployment.api.id
-  stage_name    = "prod"
+  rest_api_id          = aws_api_gateway_rest_api.api.id
+  deployment_id        = aws_api_gateway_deployment.api.id
+  stage_name           = "prod"
   xray_tracing_enabled = true
   tags                 = local.common_tags
 
@@ -663,7 +663,7 @@ resource "aws_api_gateway_account" "this" {
   cloudwatch_role_arn = aws_iam_role.apigw_logs.arn
 }
 
- 
+
 
 resource "aws_api_gateway_method_settings" "all_methods" {
   rest_api_id = aws_api_gateway_rest_api.api.id
@@ -671,9 +671,9 @@ resource "aws_api_gateway_method_settings" "all_methods" {
   method_path = "*/*"
 
   settings {
-    metrics_enabled      = true
-    logging_level        = "OFF"
-    data_trace_enabled   = false
+    metrics_enabled        = true
+    logging_level          = "OFF"
+    data_trace_enabled     = false
     throttling_burst_limit = 1000
     throttling_rate_limit  = 500
   }
@@ -747,11 +747,11 @@ module "vpc_dr" {
   public_subnets  = local.dr_public_cidrs
   private_subnets = local.dr_private_cidrs
 
-  enable_nat_gateway       = true
-  single_nat_gateway       = true
-  enable_dns_hostnames     = true
-  enable_dns_support       = true
-  map_public_ip_on_launch  = false
+  enable_nat_gateway      = true
+  single_nat_gateway      = true
+  enable_dns_hostnames    = true
+  enable_dns_support      = true
+  map_public_ip_on_launch = false
 
   tags = merge(local.common_tags, { Region = var.dr_region })
 }
@@ -852,10 +852,10 @@ data "aws_ssm_parameter" "al2023_ami_dr" {
 }
 
 resource "aws_launch_template" "app_dr" {
-  provider      = aws.secondary
-  name_prefix   = "${local.resource_prefix}-lt-dr-"
-  image_id      = data.aws_ssm_parameter.al2023_ami_dr.value
-  instance_type = var.instance_type
+  provider               = aws.secondary
+  name_prefix            = "${local.resource_prefix}-lt-dr-"
+  image_id               = data.aws_ssm_parameter.al2023_ami_dr.value
+  instance_type          = var.instance_type
   vpc_security_group_ids = [aws_security_group.app_dr.id]
   user_data = base64encode(<<-EOT
     #!/bin/bash
@@ -868,19 +868,19 @@ resource "aws_launch_template" "app_dr" {
   )
   tag_specifications {
     resource_type = "instance"
-    tags = local.common_tags
+    tags          = local.common_tags
   }
 }
 
 resource "aws_autoscaling_group" "app_dr" {
-  provider                 = aws.secondary
+  provider                  = aws.secondary
   name                      = "${local.resource_prefix}-asg-dr"
-  vpc_zone_identifier      = module.vpc_dr.private_subnets
-  min_size                 = 1
-  max_size                 = var.max_capacity
-  desired_capacity         = 1
-  target_group_arns        = module.alb_dr.target_group_arns
-  health_check_type        = "EC2"
+  vpc_zone_identifier       = module.vpc_dr.private_subnets
+  min_size                  = 1
+  max_size                  = var.max_capacity
+  desired_capacity          = 1
+  target_group_arns         = module.alb_dr.target_group_arns
+  health_check_type         = "EC2"
   health_check_grace_period = 120
 
   launch_template {

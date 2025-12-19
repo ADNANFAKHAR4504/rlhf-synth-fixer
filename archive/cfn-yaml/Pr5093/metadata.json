@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350014",
+  "team": "6",
+  "startedAt": "2025-10-17T09:14:25.474Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "Lambda",
+    "IAM",
+    "Secrets Manager",
+    "KMS",
+    "RDS",
+    "ElasticLoadBalancingV2",
+    "AutoScaling",
+    "CloudWatch",
+    "SSM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
+}

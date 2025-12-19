@@ -1,0 +1,30 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350123",
+  "team": "4",
+  "startedAt": "2025-10-20T06:23:50.034Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "S3 Bucket, VPC, IAM, IGW, ALB, DNS, EC2, Auto Scaling, NAT Gateway, Route Tables, Security Groups",
+  "training_quality": 10,
+  "background": "Production-grade web application infrastructure deployed in AWS us-east-1 with high availability across multiple AZs. Includes secure S3 storage with versioning and blocked public access, VPC with public/private subnet isolation, EC2 instances with Elastic IPs, Auto Scaling Group (min=2, max=4), Application Load Balancer for traffic distribution, IAM roles following least-privilege principles, and comprehensive security groups. All infrastructure consolidated in single tap_stack.tf file. Includes 118 passing tests (81 unit + 37 integration) with 100% success rate.",
+  "testDependencies": [
+    "@aws-sdk/client-ec2",
+    "@aws-sdk/client-s3",
+    "@aws-sdk/client-iam",
+    "@aws-sdk/client-elastic-load-balancing-v2",
+    "@aws-sdk/client-auto-scaling",
+    "axios"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "348982",
+  "team": "5",
+  "startedAt": "2025-10-17T07:23:32.904Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Cognito",
+    "Lambda",
+    "DynamoDB",
+    "CloudFront",
+    "Route 53",
+    "CloudWatch",
+    "X-Ray",
+    "IAM",
+    "S3",
+    "SNS"
+  ],
+  "training_quality": 9,
+  "background": "Production-ready serverless API for mobile app with 1M daily users requiring Cognito authentication, global scalability via DynamoDB Global Tables and CloudFront, comprehensive monitoring with CloudWatch and X-Ray, and proper security with least-privilege IAM roles. Infrastructure follows AWS best practices with encryption, versioning, and observability built-in. Modular Terraform structure with separate files for each service, Lambda Python application code in dedicated folder, complete CRUD API with user profile management, and full E2E integration tests validating real-world workflows including authentication, API operations, multi-region replication, and monitoring.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

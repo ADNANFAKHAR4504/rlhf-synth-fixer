@@ -1,0 +1,27 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "52841679",
+  "team": "synth",
+  "startedAt": "2025-10-08T16:26:27+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Route53",
+    "CloudWatch",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

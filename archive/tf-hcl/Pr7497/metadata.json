@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912832",
+  "team": "synth",
+  "startedAt": "2025-11-28T01:01:54+00:00",
+  "subtask": "EKS Cluster with Karpenter Autoscaling",
+  "subject_labels": [
+    "Kubernetes",
+    "Container Orchestration",
+    "Infrastructure as Code",
+    "Auto Scaling",
+    "Network Security"
+  ],
+  "aws_services": [
+    "VPC",
+    "EKS",
+    "IAM",
+    "EC2",
+    "SQS",
+    "EventBridge"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

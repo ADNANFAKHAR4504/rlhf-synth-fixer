@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "6711828194",
+  "team": "synth",
+  "subtask": "Application Deployment",
+  "background": "ManufactureTech Inc. needs to process data from thousands of IoT sensors in their smart manufacturing facility. The data must be processed in real-time, cached for quick access, and stored securely for compliance purposes. The solution needs to handle approximately 10,000 requests per minute during peak operations.",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "startedAt": "2025-10-21T12:09:31.970962",
+  "aws_services": [
+    "API Gateway",
+    "ElastiCache Redis",
+    "RDS Aurora PostgreSQL Serverless v2",
+    "Secrets Manager",
+    "VPC",
+    "EC2 Security Groups",
+    "EC2 Subnets",
+    "EC2 Internet Gateway",
+    "EC2 Route Tables"
+  ],
+  "training_quality": 9.0,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

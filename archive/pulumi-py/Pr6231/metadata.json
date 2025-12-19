@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-10T21:57:46+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "v5kei",
+  "aws_services": [
+    "VPC",
+    "ALB",
+    "ECS",
+    "RDS",
+    "DynamoDB",
+    "ECR",
+    "CloudWatch",
+    "Secrets Manager",
+    "Auto Scaling",
+    "NAT Gateway",
+    "IAM"
+  ],
+  "region": "us-east-2",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

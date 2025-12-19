@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "f7o52n",
+  "team": "synth",
+  "startedAt": "2025-11-17T14:14:54+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "EKS",
+    "EC2",
+    "VPC",
+    "EBS",
+    "IAM",
+    "ELB",
+    "Auto Scaling"
+  ],
+  "author": "mayanksethi-turing",
+  "region": "us-east-2",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

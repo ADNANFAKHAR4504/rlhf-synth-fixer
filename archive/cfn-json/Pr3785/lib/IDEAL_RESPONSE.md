@@ -1,0 +1,1672 @@
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "TAP Stack - Task Assignment Platform CloudFormation Template",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Project Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix",
+            "ProjectPrefix",
+            "Environment"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Network Configuration"
+          },
+          "Parameters": [
+            "VpcCidr",
+            "PublicSubnet1Cidr",
+            "PublicSubnet2Cidr",
+            "PrivateSubnet1Cidr",
+            "PrivateSubnet2Cidr"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Compute Configuration"
+          },
+          "Parameters": [
+            "BastionInstanceType",
+            "AppInstanceType",
+            "KeyPairName",
+            "AllowedBastionSshCidr",
+            "LatestAmiId"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Database Configuration"
+          },
+          "Parameters": [
+            "RdsEngineVersion",
+            "RdsInstanceClass",
+            "RdsAllocatedStorage",
+            "RdsUsername",
+            "RdsSecretArn"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Storage & Security"
+          },
+          "Parameters": [
+            "S3DataBucketName",
+            "KmsKeyArn"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Monitoring"
+          },
+          "Parameters": [
+            "SnsEmailForAlarms"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "Description": "Environment suffix (e.g., dev, stg, prod)"
+    },
+    "ProjectPrefix": {
+      "Type": "String",
+      "Default": "securex",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "MinLength": 3,
+      "MaxLength": 20,
+      "Description": "Resource prefix"
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "dev",
+      "AllowedValues": [
+        "dev",
+        "stg",
+        "prod"
+      ],
+      "Description": "Environment name"
+    },
+    "VpcCidr": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "AllowedPattern": "^(10|172|192)\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(16|17|18|19|20|21|22|23|24)$"
+    },
+    "PublicSubnet1Cidr": {
+      "Type": "String",
+      "Default": "10.0.1.0/24",
+      "AllowedPattern": "^(10|172|192)\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(24|25|26|27|28)$"
+    },
+    "PublicSubnet2Cidr": {
+      "Type": "String",
+      "Default": "10.0.2.0/24",
+      "AllowedPattern": "^(10|172|192)\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(24|25|26|27|28)$"
+    },
+    "PrivateSubnet1Cidr": {
+      "Type": "String",
+      "Default": "10.0.11.0/24",
+      "AllowedPattern": "^(10|172|192)\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(24|25|26|27|28)$"
+    },
+    "PrivateSubnet2Cidr": {
+      "Type": "String",
+      "Default": "10.0.12.0/24",
+      "AllowedPattern": "^(10|172|192)\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(24|25|26|27|28)$"
+    },
+    "BastionInstanceType": {
+      "Type": "String",
+      "Default": "t3.micro",
+      "AllowedValues": [
+        "t3.micro",
+        "t3.small",
+        "t3.medium"
+      ]
+    },
+    "AppInstanceType": {
+      "Type": "String",
+      "Default": "t3.micro",
+      "AllowedValues": [
+        "t3.micro",
+        "t3.small",
+        "t3.medium",
+        "t3.large"
+      ]
+    },
+    "KeyPairName": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Optional EC2 key pair for bastion SSH"
+    },
+    "KmsKeyArn": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Existing KMS key ARN for encryption (optional)"
+    },
+    "S3DataBucketName": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Use existing S3 bucket for logs/data (optional)"
+    },
+    "RdsEngineVersion": {
+      "Type": "String",
+      "Default": "15.10",
+      "Description": "PostgreSQL engine version (use plain x.y, e.g., 15.10)"
+    },
+    "RdsInstanceClass": {
+      "Type": "String",
+      "Default": "db.t4g.micro",
+      "Description": "RDS instance class"
+    },
+    "RdsAllocatedStorage": {
+      "Type": "Number",
+      "Default": 20,
+      "MinValue": 20,
+      "MaxValue": 100,
+      "Description": "RDS storage (GB)"
+    },
+    "RdsUsername": {
+      "Type": "String",
+      "Default": "masteruser",
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9_]*$",
+      "MinLength": 1,
+      "MaxLength": 16,
+      "Description": "RDS master username (used when secret is auto-created)"
+    },
+    "RdsSecretArn": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Secrets Manager ARN with SecretString keys: username, password"
+    },
+    "AllowedBastionSshCidr": {
+      "Type": "String",
+      "Default": "203.0.113.0/32",
+      "AllowedPattern": "^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})$"
+    },
+    "SnsEmailForAlarms": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    },
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64",
+      "Description": "Latest Amazon Linux 2023 AMI (x86_64). Use ARM path if you pick Graviton instances."
+    }
+  },
+  "Mappings": {
+    "RegionMap": {
+      "eu-central-1": {
+        "Partition": "aws",
+        "S3Principal": "s3.amazonaws.com",
+        "CloudTrailPrincipal": "cloudtrail.amazonaws.com",
+        "Ec2Principal": "ec2.amazonaws.com"
+      },
+      "eu-west-1": {
+        "Partition": "aws",
+        "S3Principal": "s3.amazonaws.com",
+        "CloudTrailPrincipal": "cloudtrail.amazonaws.com",
+        "Ec2Principal": "ec2.amazonaws.com"
+      },
+      "us-east-1": {
+        "Partition": "aws",
+        "S3Principal": "s3.amazonaws.com",
+        "CloudTrailPrincipal": "cloudtrail.amazonaws.com",
+        "Ec2Principal": "ec2.amazonaws.com"
+      },
+      "us-west-2": {
+        "Partition": "aws",
+        "S3Principal": "s3.amazonaws.com",
+        "CloudTrailPrincipal": "cloudtrail.amazonaws.com",
+        "Ec2Principal": "ec2.amazonaws.com"
+      },
+      "us-gov-west-1": {
+        "Partition": "aws-us-gov",
+        "S3Principal": "s3.amazonaws.com",
+        "CloudTrailPrincipal": "cloudtrail.amazonaws.com",
+        "Ec2Principal": "ec2.amazonaws.com"
+      }
+    },
+    "EnvConfig": {
+      "dev": {
+        "RdsBackupRetention": "7",
+        "RdsDeletionProtection": "false"
+      },
+      "stg": {
+        "RdsBackupRetention": "14",
+        "RdsDeletionProtection": "true"
+      },
+      "prod": {
+        "RdsBackupRetention": "30",
+        "RdsDeletionProtection": "true"
+      }
+    }
+  },
+  "Conditions": {
+    "CreateKmsKey": {
+      "Fn::Equals": [
+        {
+          "Ref": "KmsKeyArn"
+        },
+        ""
+      ]
+    },
+    "CreateDataBucket": {
+      "Fn::Equals": [
+        {
+          "Ref": "S3DataBucketName"
+        },
+        ""
+      ]
+    },
+    "UseExistingDataBucket": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "S3DataBucketName"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "EmailSubscriptionEnabled": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "SnsEmailForAlarms"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "HasKeyPair": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "KeyPairName"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "UseProvidedRdsSecret": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "RdsSecretArn"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "CreateRdsSecret": {
+      "Fn::Equals": [
+        {
+          "Ref": "RdsSecretArn"
+        },
+        ""
+      ]
+    }
+  },
+  "Resources": {
+    "TurnAroundPromptTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "TAP"
+          }
+        ]
+      }
+    },
+    "Vpc": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VpcCidr"
+        },
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectPrefix}-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway"
+    },
+    "VpcGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet1Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet2Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet1Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        }
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet2Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        }
+      }
+    },
+    "ElasticIp": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "VpcGatewayAttachment",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "NatGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "ElasticIp",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        }
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "VpcGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway"
+        }
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "S3VpcEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+        },
+        "RouteTableIds": [
+          {
+            "Ref": "PrivateRouteTable"
+          },
+          {
+            "Ref": "PublicRouteTable"
+          }
+        ]
+      }
+    },
+    "SgBastion": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Bastion SG",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": {
+              "Ref": "AllowedBastionSshCidr"
+            }
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "SgAppPrivate": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "App SG",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "SgAppPrivateIngressFromBastion": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "SgAppPrivate"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 22,
+        "ToPort": 22,
+        "SourceSecurityGroupId": {
+          "Ref": "SgBastion"
+        }
+      }
+    },
+    "SgRds": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "RDS SG",
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "SgRdsIngressFromApp": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "SgRds"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 5432,
+        "ToPort": 5432,
+        "SourceSecurityGroupId": {
+          "Ref": "SgAppPrivate"
+        }
+      }
+    },
+    "KmsKey": {
+      "Type": "AWS::KMS::Key",
+      "Condition": "CreateKmsKey",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for ${ProjectPrefix}-${Environment}-${EnvironmentSuffix}"
+        },
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Root",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Services",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "rds.amazonaws.com",
+                  "logs.amazonaws.com",
+                  "dynamodb.amazonaws.com",
+                  {
+                    "Fn::FindInMap": [
+                      "RegionMap",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      "S3Principal"
+                    ]
+                  },
+                  {
+                    "Fn::FindInMap": [
+                      "RegionMap",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      "CloudTrailPrincipal"
+                    ]
+                  },
+                  {
+                    "Fn::FindInMap": [
+                      "RegionMap",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      "Ec2Principal"
+                    ]
+                  }
+                ]
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      }
+    },
+    "KmsKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Condition": "CreateKmsKey",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/${ProjectPrefix}-${Environment}-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "KmsKey"
+        }
+      }
+    },
+    "DataBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "CreateDataBucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${ProjectPrefix}-data-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerPreferred"
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Fn::If": [
+                    "CreateKmsKey",
+                    {
+                      "Ref": "KmsKey"
+                    },
+                    {
+                      "Ref": "KmsKeyArn"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "DataBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Condition": "CreateDataBucket",
+      "Properties": {
+        "Bucket": {
+          "Ref": "DataBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "DataBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${DataBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Sid": "AWSCloudTrailAclCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::FindInMap": [
+                    "RegionMap",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    "CloudTrailPrincipal"
+                  ]
+                }
+              },
+              "Action": [
+                "s3:GetBucketAcl",
+                "s3:GetBucketLocation"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "DataBucket",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "AWSCloudTrailWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::FindInMap": [
+                    "RegionMap",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    "CloudTrailPrincipal"
+                  ]
+                }
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${DataBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "DynamoDbReadOnlyPolicy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "Description": "Read-only access to TurnAroundPrompt DynamoDB table",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:DescribeTable",
+                "dynamodb:Query",
+                "dynamodb:Scan",
+                "dynamodb:GetItem",
+                "dynamodb:BatchGetItem"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TurnAroundPromptTable",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "AppInstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::FindInMap": [
+                    "RegionMap",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    "Ec2Principal"
+                  ]
+                }
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {
+            "Ref": "DynamoDbReadOnlyPolicy"
+          }
+        ],
+        "Policies": [
+          {
+            "PolicyName": "CloudWatchLogs",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${ProjectPrefix}-*"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchMetrics",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData",
+                    "cloudwatch:GetMetricStatistics",
+                    "cloudwatch:ListMetrics"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "S3DataBucketAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::If": [
+                        "CreateDataBucket",
+                        {
+                          "Fn::GetAtt": [
+                            "DataBucket",
+                            "Arn"
+                          ]
+                        },
+                        {
+                          "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3DataBucketName}"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::If": [
+                        "CreateDataBucket",
+                        {
+                          "Fn::Sub": "${DataBucket.Arn}/*"
+                        },
+                        {
+                          "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3DataBucketName}/*"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "KmsAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:Encrypt",
+                    "kms:GenerateDataKey",
+                    "kms:DescribeKey"
+                  ],
+                  "Resource": {
+                    "Fn::If": [
+                      "CreateKmsKey",
+                      {
+                        "Fn::GetAtt": [
+                          "KmsKey",
+                          "Arn"
+                        ]
+                      },
+                      {
+                        "Ref": "KmsKeyArn"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AppInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "AppInstanceRole"
+          }
+        ]
+      }
+    },
+    "BastionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::FindInMap": [
+                    "RegionMap",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    "Ec2Principal"
+                  ]
+                }
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "SSMSessionManager",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:UpdateInstanceInformation",
+                    "ssmmessages:CreateControlChannel",
+                    "ssmmessages:CreateDataChannel",
+                    "ssmmessages:OpenControlChannel",
+                    "ssmmessages:OpenDataChannel"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "BastionInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "BastionRole"
+          }
+        ]
+      }
+    },
+    "BastionInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Condition": "HasKeyPair",
+      "Properties": {
+        "InstanceType": {
+          "Ref": "BastionInstanceType"
+        },
+        "ImageId": {
+          "Ref": "LatestAmiId"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "SgBastion"
+          }
+        ],
+        "KeyName": {
+          "Ref": "KeyPairName"
+        },
+        "IamInstanceProfile": {
+          "Ref": "BastionInstanceProfile"
+        },
+        "Monitoring": true,
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeType": "gp3",
+              "VolumeSize": 20,
+              "Encrypted": true,
+              "DeleteOnTermination": true,
+              "KmsKeyId": {
+                "Fn::If": [
+                  "CreateKmsKey",
+                  {
+                    "Ref": "KmsKey"
+                  },
+                  {
+                    "Ref": "KmsKeyArn"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
+        }
+      }
+    },
+    "AppInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "InstanceType": {
+          "Ref": "AppInstanceType"
+        },
+        "ImageId": {
+          "Ref": "LatestAmiId"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "SgAppPrivate"
+          }
+        ],
+        "IamInstanceProfile": {
+          "Ref": "AppInstanceProfile"
+        },
+        "Monitoring": true,
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeType": "gp3",
+              "VolumeSize": 20,
+              "Encrypted": true,
+              "DeleteOnTermination": true,
+              "KmsKeyId": {
+                "Fn::If": [
+                  "CreateKmsKey",
+                  {
+                    "Ref": "KmsKey"
+                  },
+                  {
+                    "Ref": "KmsKeyArn"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-ssm-agent postgresql15\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
+        }
+      }
+    },
+    "DbSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnet group for RDS",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ]
+      }
+    },
+    "RdsEnhancedMonitoringRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "monitoring.rds.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+        ],
+        "Path": "/"
+      }
+    },
+    "RdsGeneratedSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Condition": "CreateRdsSecret",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "Auto-generated RDS master credentials for ${ProjectPrefix}-${Environment}-${EnvironmentSuffix}"
+        },
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\":\"${RdsUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 24,
+          "ExcludeCharacters": "\"'`/\\@",
+          "ExcludePunctuation": false,
+          "RequireEachIncludedType": true
+        }
+      }
+    },
+    "RdsInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "${ProjectPrefix}-db-${Environment}-${EnvironmentSuffix}"
+        },
+        "Engine": "postgres",
+        "EngineVersion": {
+          "Ref": "RdsEngineVersion"
+        },
+        "DBInstanceClass": {
+          "Ref": "RdsInstanceClass"
+        },
+        "AllocatedStorage": {
+          "Ref": "RdsAllocatedStorage"
+        },
+        "StorageType": "gp3",
+        "StorageEncrypted": true,
+        "KmsKeyId": {
+          "Fn::If": [
+            "CreateKmsKey",
+            {
+              "Ref": "KmsKey"
+            },
+            {
+              "Ref": "KmsKeyArn"
+            }
+          ]
+        },
+        "MasterUsername": {
+          "Fn::If": [
+            "UseProvidedRdsSecret",
+            {
+              "Fn::Sub": "{{resolve:secretsmanager:${RdsSecretArn}:SecretString:username}}"
+            },
+            {
+              "Fn::Sub": "{{resolve:secretsmanager:${RdsGeneratedSecret}:SecretString:username}}"
+            }
+          ]
+        },
+        "MasterUserPassword": {
+          "Fn::If": [
+            "UseProvidedRdsSecret",
+            {
+              "Fn::Sub": "{{resolve:secretsmanager:${RdsSecretArn}:SecretString:password}}"
+            },
+            {
+              "Fn::Sub": "{{resolve:secretsmanager:${RdsGeneratedSecret}:SecretString:password}}"
+            }
+          ]
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DbSubnetGroup"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "SgRds"
+          }
+        ],
+        "PubliclyAccessible": false,
+        "BackupRetentionPeriod": {
+          "Fn::FindInMap": [
+            "EnvConfig",
+            {
+              "Ref": "Environment"
+            },
+            "RdsBackupRetention"
+          ]
+        },
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "DeletionProtection": {
+          "Fn::FindInMap": [
+            "EnvConfig",
+            {
+              "Ref": "Environment"
+            },
+            "RdsDeletionProtection"
+          ]
+        },
+        "EnablePerformanceInsights": true,
+        "PerformanceInsightsRetentionPeriod": 7,
+        "MonitoringInterval": 60,
+        "MonitoringRoleArn": {
+          "Fn::GetAtt": [
+            "RdsEnhancedMonitoringRole",
+            "Arn"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "RdsSecretId",
+            "Value": {
+              "Fn::If": [
+                "UseProvidedRdsSecret",
+                {
+                  "Ref": "RdsSecretArn"
+                },
+                {
+                  "Ref": "RdsGeneratedSecret"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CloudTrailNewBucket": {
+      "Type": "AWS::CloudTrail::Trail",
+      "Condition": "CreateDataBucket",
+      "DependsOn": [
+        "DataBucketPolicy"
+      ],
+      "Properties": {
+        "TrailName": {
+          "Fn::Sub": "${ProjectPrefix}-trail-${Environment}-${EnvironmentSuffix}"
+        },
+        "S3BucketName": {
+          "Ref": "DataBucket"
+        },
+        "IncludeGlobalServiceEvents": true,
+        "IsLogging": true,
+        "IsMultiRegionTrail": true,
+        "EnableLogFileValidation": true,
+        "KMSKeyId": {
+          "Fn::If": [
+            "CreateKmsKey",
+            {
+              "Ref": "KmsKey"
+            },
+            {
+              "Ref": "KmsKeyArn"
+            }
+          ]
+        }
+      }
+    },
+    "CloudTrailExistingBucket": {
+      "Type": "AWS::CloudTrail::Trail",
+      "Condition": "UseExistingDataBucket",
+      "Properties": {
+        "TrailName": {
+          "Fn::Sub": "${ProjectPrefix}-trail-${Environment}-${EnvironmentSuffix}"
+        },
+        "S3BucketName": {
+          "Ref": "S3DataBucketName"
+        },
+        "IncludeGlobalServiceEvents": true,
+        "IsLogging": true,
+        "IsMultiRegionTrail": true,
+        "EnableLogFileValidation": true,
+        "KMSKeyId": {
+          "Fn::If": [
+            "CreateKmsKey",
+            {
+              "Ref": "KmsKey"
+            },
+            {
+              "Ref": "KmsKeyArn"
+            }
+          ]
+        }
+      }
+    },
+    "OpsSnsTopic": {
+      "Type": "AWS::SNS::Topic"
+    },
+    "OpsSnsTopicEmailSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Condition": "EmailSubscriptionEnabled",
+      "Properties": {
+        "Protocol": "email",
+        "TopicArn": {
+          "Ref": "OpsSnsTopic"
+        },
+        "Endpoint": {
+          "Ref": "SnsEmailForAlarms"
+        }
+      }
+    },
+    "OpsSnsTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "Topics": [
+          {
+            "Ref": "OpsSnsTopic"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowCloudWatchToPublish",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudwatch.amazonaws.com"
+              },
+              "Action": [
+                "SNS:Publish"
+              ],
+              "Resource": {
+                "Ref": "OpsSnsTopic"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "BastionCpuAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Condition": "HasKeyPair",
+      "Properties": {
+        "AlarmDescription": "Bastion CPU high",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "BastionInstance"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "OpsSnsTopic"
+          }
+        ],
+        "TreatMissingData": "breaching"
+      }
+    },
+    "BastionStatusCheckAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Condition": "HasKeyPair",
+      "Properties": {
+        "AlarmDescription": "Bastion status check failed",
+        "MetricName": "StatusCheckFailed",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 0,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "BastionInstance"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "OpsSnsTopic"
+          }
+        ],
+        "TreatMissingData": "breaching"
+      }
+    },
+    "AppCpuAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "App CPU high",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "AppInstance"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "OpsSnsTopic"
+          }
+        ],
+        "TreatMissingData": "breaching"
+      }
+    },
+    "RdsCpuAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "RDS CPU high",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 600,
+        "EvaluationPeriods": 1,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Ref": "RdsInstance"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "OpsSnsTopic"
+          }
+        ],
+        "TreatMissingData": "breaching"
+      }
+    },
+    "RdsStorageSpaceAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "RDS free storage low",
+        "MetricName": "FreeStorageSpace",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 600,
+        "EvaluationPeriods": 1,
+        "Threshold": 2147483648,
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Ref": "RdsInstance"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "OpsSnsTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "RdsSecretUsed": {
+      "Description": "ARN of the RDS secret actually used",
+      "Value": {
+        "Fn::If": [
+          "UseProvidedRdsSecret",
+          {
+            "Ref": "RdsSecretArn"
+          },
+          {
+            "Ref": "RdsGeneratedSecret"
+          }
+        ]
+      }
+    }
+  }
+}
+```

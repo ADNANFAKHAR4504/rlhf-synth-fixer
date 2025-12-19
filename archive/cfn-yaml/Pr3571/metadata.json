@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350070",
+  "team": "2",
+  "startedAt": "2025-10-02T14:31:10.170Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ELBv2",
+    "S3",
+    "IAM",
+    "Secrets Manager",
+    "CloudFormation"
+  ],
+  "training_quality": 8,
+  "reviewed_at": "2025-10-05T19:06:00.000Z",
+  "review_status": "approved",
+  "compliance_percentage": 100,
+  "test_coverage": "comprehensive",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

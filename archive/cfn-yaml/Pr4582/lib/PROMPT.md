@@ -1,0 +1,7 @@
+Design a production-ready serverless application architecture using AWS CloudFormation written in YAML, deployed in the us-west-2 region. The goal is to build a scalable, cost-efficient, and secure environment where backend logic runs entirely on Lambda functions, with API Gateway managing all incoming HTTP requests through a custom domain for secure and branded access.
+
+Each Lambda function should be configured with environment variables, versioning, robust error handling, and retries. The functions must also reside within a VPC, using specific subnets and security groups to control access while maintaining high availability. For data persistence, integrate DynamoDB tables with encryption at rest enabled and ensure all IAM roles follow the principle of least privilege to minimize security risks.
+
+Enable AWS X-Ray tracing to monitor interactions across services and set up CloudWatch alarms for Lambda performance metrics and fault detection. Code deployment and packaging should be managed through S3 buckets, and workflow orchestration between multiple functions should be handled by Step Functions.
+
+Comprehensive logging, tracing, and detailed in-template documentation are required for maintainability. The final output should be a CloudFormation YAML template that successfully defines all required resources in a single file, adheres to AWS best practices, and passes CloudFormation validation while optimizing cost and operational efficiency.

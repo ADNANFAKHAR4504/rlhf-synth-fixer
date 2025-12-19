@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350235",
+  "team": "4",
+  "startedAt": "2025-11-06T15:31:30.846Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "VPC",
+    "S3",
+    "KMS",
+    "RDS",
+    "CloudTrail",
+    "Config",
+    "CloudWatch",
+    "WAF",
+    "ALB",
+    "Secrets Manager",
+    "Security Groups",
+    "SNS",
+    "NAT Gateway",
+    "VPC Flow Logs",
+    "EBS",
+    "EIP"
+  ],
+  "training_quality": 9,
+  "background": "This project implements a production-ready, highly secure AWS infrastructure for financial applications using Terraform. It demonstrates comprehensive security controls including IAM least-privilege access, network segmentation with multi-AZ VPC, end-to-end encryption using KMS, continuous compliance monitoring with AWS Config, comprehensive logging via CloudTrail and VPC Flow Logs, application protection with AWS WAF, and CloudWatch alerting. The infrastructure follows AWS Well-Architected Framework principles and financial industry security best practices, ensuring reliability and compliance through comprehensive validation.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

@@ -9,7 +9,7 @@ locals {
     terraform.workspace != "default" ? terraform.workspace : "dev"
   )
   resource_prefix = "${var.project_name}-${local.environment_suffix}"
-  unique_suffix = random_id.resource_suffix.hex
+  unique_suffix   = random_id.resource_suffix.hex
 }
 
 # Data sources for existing infrastructure

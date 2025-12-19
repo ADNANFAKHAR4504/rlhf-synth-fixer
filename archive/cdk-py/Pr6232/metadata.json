@@ -1,0 +1,41 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-10T21:25:04+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "8v7c3",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "ECR",
+    "RDS",
+    "Secrets Manager",
+    "CloudWatch",
+    "ALB",
+    "IAM",
+    "X-Ray",
+    "Application Auto Scaling"
+  ],
+  "region": "ap-southeast-2",
+  "training_quality": 9,
+  "status": "completed",
+  "fixes_applied": [
+    "Added DockerImageAsset for Flask container build",
+    "Updated container image reference to use built Docker image",
+    "Reorganized container files to lib/container/",
+    "Aurora version confirmed at 15.8"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

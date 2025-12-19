@@ -1,0 +1,8 @@
+name: TapStack
+runtime: python
+description: Containerized Flask application infrastructure with ECS Fargate, RDS, and auto-scaling
+main: lib/__main__.py
+config:
+  environmentSuffix:
+    description: Environment suffix for resource naming
+    default: dev

@@ -1,0 +1,15 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292067",
+  "team": "3",
+  "startedAt": "2025-08-26T02:49:52.722Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "deepaktatineni",
+  "dockerS3Location": ""
+}

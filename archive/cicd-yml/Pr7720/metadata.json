@@ -1,0 +1,20 @@
+{
+  "platform": "cicd",
+  "language": "yml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-12-02T18:08:00-05:00",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "po_id": "j2t0k6m8",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

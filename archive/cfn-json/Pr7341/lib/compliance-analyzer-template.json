@@ -1,0 +1,863 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CloudFormation Compliance Analyzer Infrastructure - Automated template scanning and validation system",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming to ensure uniqueness",
+      "Default": "dev",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Description": "Email address for compliance violation notifications",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
+    },
+    "ExternalId": {
+      "Type": "String",
+      "Description": "External ID for cross-account assume role security",
+      "MinLength": 8,
+      "NoEcho": true
+    }
+  },
+  "Resources": {
+    "ComplianceReportsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "compliance-reports-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "ArchiveOldReports",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "TransitionInDays": 90,
+                  "StorageClass": "GLACIER"
+                }
+              ]
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "ComplianceReports"
+          }
+        ]
+      }
+    },
+    "ScanResultsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "compliance-scan-results-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "accountIdTimestamp",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "resourceId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "accountIdTimestamp",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "resourceId",
+            "KeyType": "RANGE"
+          }
+        ],
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "ComplianceScanResults"
+          }
+        ]
+      }
+    },
+    "ComplianceViolationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "compliance-violations-${EnvironmentSuffix}"
+        },
+        "DisplayName": "CloudFormation Compliance Violations",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "NotificationEmail"
+            },
+            "Protocol": "email"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "compliance-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ComplianceAnalyzerPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:s3:::compliance-reports-${EnvironmentSuffix}-${AWS::AccountId}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:s3:::compliance-reports-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:s3:::compliance-reports-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "ScanResultsTable",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": [
+                    {
+                      "Ref": "ComplianceViolationTopic"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "config:DescribeConfigRules",
+                    "config:GetComplianceDetailsByConfigRule"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sts:AssumeRole"
+                  ],
+                  "Resource": "arn:aws:iam::*:role/ComplianceScannerRole-*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudformation:DescribeStacks",
+                    "cloudformation:GetTemplate"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "TemplateParserFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "template-parser-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "template_parser.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "# Placeholder - actual code in separate file\nimport json\ndef lambda_handler(event, context):\n    return {'statusCode': 200, 'body': json.dumps('Template parser function')}\n"
+        },
+        "Timeout": 300,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {
+              "Ref": "ScanResultsTable"
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "ComplianceViolationTopic"
+            },
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "TracingConfig": {
+          "Mode": "Active"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ComplianceValidatorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "compliance-validator-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "compliance_validator.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "# Placeholder - actual code in separate file\nimport json\ndef lambda_handler(event, context):\n    return {'statusCode': 200, 'body': json.dumps('Compliance validator function')}\n"
+        },
+        "Timeout": 300,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {
+              "Ref": "ScanResultsTable"
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "ComplianceViolationTopic"
+            },
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "TracingConfig": {
+          "Mode": "Active"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ReportGeneratorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "report-generator-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "report_generator.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "# Placeholder - actual code in separate file\nimport json\ndef lambda_handler(event, context):\n    return {'statusCode': 200, 'body': json.dumps('Report generator function')}\n"
+        },
+        "Timeout": 300,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {
+              "Ref": "ScanResultsTable"
+            },
+            "REPORTS_BUCKET": {
+              "Ref": "ComplianceReportsBucket"
+            },
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "TracingConfig": {
+          "Mode": "Active"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "StepFunctionsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "compliance-stepfunctions-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "states.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "StepFunctionsExecutionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "TemplateParserFunction",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "ComplianceValidatorFunction",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "ReportGeneratorFunction",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "xray:PutTraceSegments",
+                    "xray:PutTelemetryRecords"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ComplianceScanStateMachine": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": {
+          "Fn::Sub": "compliance-scan-workflow-${EnvironmentSuffix}"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "StepFunctionsRole",
+            "Arn"
+          ]
+        },
+        "TracingConfiguration": {
+          "Enabled": true
+        },
+        "DefinitionString": {
+          "Fn::Sub": [
+            "{\n  \"Comment\": \"CloudFormation Compliance Scan Workflow\",\n  \"StartAt\": \"ParseTemplate\",\n  \"States\": {\n    \"ParseTemplate\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${TemplateParserArn}\",\n      \"ResultPath\": \"$.parsedResources\",\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"Lambda.ServiceException\", \"Lambda.TooManyRequestsException\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2\n        }\n      ],\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"ResultPath\": \"$.error\",\n          \"Next\": \"HandleError\"\n        }\n      ],\n      \"Next\": \"ValidateCompliance\"\n    },\n    \"ValidateCompliance\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${ValidatorArn}\",\n      \"ResultPath\": \"$.validationResults\",\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"Lambda.ServiceException\", \"Lambda.TooManyRequestsException\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2\n        }\n      ],\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"ResultPath\": \"$.error\",\n          \"Next\": \"HandleError\"\n        }\n      ],\n      \"Next\": \"GenerateReport\"\n    },\n    \"GenerateReport\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${ReportGeneratorArn}\",\n      \"ResultPath\": \"$.reportUrl\",\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"Lambda.ServiceException\", \"Lambda.TooManyRequestsException\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2\n        }\n      ],\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"ResultPath\": \"$.error\",\n          \"Next\": \"HandleError\"\n        }\n      ],\n      \"End\": true\n    },\n    \"HandleError\": {\n      \"Type\": \"Pass\",\n      \"Result\": \"Error occurred during compliance scan\",\n      \"End\": true\n    }\n  }\n}",
+            {
+              "TemplateParserArn": {
+                "Fn::GetAtt": [
+                  "TemplateParserFunction",
+                  "Arn"
+                ]
+              },
+              "ValidatorArn": {
+                "Fn::GetAtt": [
+                  "ComplianceValidatorFunction",
+                  "Arn"
+                ]
+              },
+              "ReportGeneratorArn": {
+                "Fn::GetAtt": [
+                  "ReportGeneratorFunction",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "EventBridgeRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "compliance-eventbridge-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "EventBridgeStepFunctionsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "states:StartExecution"
+                  ],
+                  "Resource": [
+                    {
+                      "Ref": "ComplianceScanStateMachine"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "CloudFormationEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "cfn-compliance-trigger-${EnvironmentSuffix}"
+        },
+        "Description": "Trigger compliance scan on CloudFormation stack events",
+        "EventPattern": {
+          "source": [
+            "aws.cloudformation"
+          ],
+          "detail-type": [
+            "CloudFormation Stack Status Change"
+          ],
+          "detail": {
+            "status-details": {
+              "status": [
+                "CREATE_COMPLETE",
+                "UPDATE_COMPLETE"
+              ]
+            }
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "ComplianceScanStateMachine"
+            },
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "EventBridgeRole",
+                "Arn"
+              ]
+            },
+            "Id": "ComplianceScanTarget"
+          }
+        ]
+      }
+    },
+    "S3EncryptionConfigRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "s3-bucket-encryption-check-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that S3 buckets have encryption enabled (AES256 or KMS)",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+        },
+        "Scope": {
+          "ComplianceResourceTypes": [
+            "AWS::S3::Bucket"
+          ]
+        }
+      }
+    },
+    "RDSEncryptionConfigRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "rds-encryption-check-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that RDS instances have encryption enabled",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
+        },
+        "Scope": {
+          "ComplianceResourceTypes": [
+            "AWS::RDS::DBInstance"
+          ]
+        }
+      }
+    },
+    "EC2InstanceTypeConfigRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "ec2-instance-type-check-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that EC2 instances are only t3.micro or t3.small types",
+        "InputParameters": {
+          "instanceType": "t3.micro,t3.small"
+        },
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "DESIRED_INSTANCE_TYPE"
+        },
+        "Scope": {
+          "ComplianceResourceTypes": [
+            "AWS::EC2::Instance"
+          ]
+        }
+      }
+    },
+    "ComplianceDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "compliance-metrics-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"ComplianceAnalyzer\", \"ComplianceScore\", {\"stat\": \"Average\"}],\n          [\".\", \"TotalResourcesScanned\", {\"stat\": \"Sum\"}],\n          [\".\", \"ViolationsDetected\", {\"stat\": \"Sum\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Compliance Overview\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"ComplianceAnalyzer\", \"S3Violations\", {\"stat\": \"Sum\"}],\n          [\".\", \"RDSViolations\", {\"stat\": \"Sum\"}],\n          [\".\", \"EC2Violations\", {\"stat\": \"Sum\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Violations by Service Type\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"log\",\n      \"properties\": {\n        \"query\": \"SOURCE '/aws/lambda/template-parser-${EnvironmentSuffix}' | fields @timestamp, @message | sort @timestamp desc | limit 20\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Recent Template Parser Logs\"\n      }\n    }\n  ]\n}"
+        }
+      }
+    },
+    "CrossAccountScanRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "compliance-cross-account-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "sts:ExternalId": {
+                    "Ref": "ExternalId"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CrossAccountScanPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudformation:DescribeStacks",
+                    "cloudformation:GetTemplate",
+                    "cloudformation:ListStacks"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": "arn:aws:s3:::*/cloudformation-templates/*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "CrossAccountCompliance"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ComplianceReportsBucketName": {
+      "Description": "S3 bucket for compliance reports",
+      "Value": {
+        "Ref": "ComplianceReportsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ReportsBucket"
+        }
+      }
+    },
+    "ScanResultsTableName": {
+      "Description": "DynamoDB table for scan results",
+      "Value": {
+        "Ref": "ScanResultsTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ScanResultsTable"
+        }
+      }
+    },
+    "ComplianceViolationTopicArn": {
+      "Description": "SNS topic ARN for violation notifications",
+      "Value": {
+        "Ref": "ComplianceViolationTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ViolationTopic"
+        }
+      }
+    },
+    "StateMachineArn": {
+      "Description": "Step Functions state machine ARN",
+      "Value": {
+        "Ref": "ComplianceScanStateMachine"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StateMachine"
+        }
+      }
+    },
+    "TemplateParserFunctionArn": {
+      "Description": "Template parser Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "TemplateParserFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TemplateParser"
+        }
+      }
+    },
+    "ComplianceValidatorFunctionArn": {
+      "Description": "Compliance validator Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "ComplianceValidatorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ComplianceValidator"
+        }
+      }
+    },
+    "ReportGeneratorFunctionArn": {
+      "Description": "Report generator Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "ReportGeneratorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ReportGenerator"
+        }
+      }
+    },
+    "ComplianceDashboardURL": {
+      "Description": "CloudWatch dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=compliance-metrics-${EnvironmentSuffix}"
+      }
+    },
+    "CrossAccountRoleArn": {
+      "Description": "Cross-account IAM role ARN for scanning",
+      "Value": {
+        "Fn::GetAtt": [
+          "CrossAccountScanRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CrossAccountRole"
+        }
+      }
+    }
+  }
+}

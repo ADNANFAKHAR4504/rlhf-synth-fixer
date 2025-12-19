@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912523",
+  "team": "synth",
+  "startedAt": "2025-11-20T10:31:21",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "migration",
+    "blue-green-deployment",
+    "pci-dss",
+    "database-migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "RDS",
+    "ALB",
+    "DMS",
+    "IAM",
+    "CloudWatch",
+    "KMS",
+    "ACM",
+    "NAT"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

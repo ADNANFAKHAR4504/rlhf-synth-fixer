@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth-1",
+  "po_id": "101912492",
+  "startedAt": "2025-11-13T00:00:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "RDS",
+    "Route53",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "SecretsManager",
+    "SNS",
+    "EC2"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

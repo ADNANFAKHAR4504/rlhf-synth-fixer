@@ -1,0 +1,36 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349397",
+  "team": "6",
+  "startedAt": "2025-10-28T07:04:18.555Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "ECS",
+    "EC2",
+    "IAM",
+    "CodePipeline",
+    "CodeBuild",
+    "ALB",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "NAT",
+    "InternetGateway",
+    "AutoScaling"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

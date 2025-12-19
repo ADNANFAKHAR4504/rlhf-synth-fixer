@@ -1,0 +1,55 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and fill in your resource identifiers
+
+environment_suffix = "prod-compliance-scan"
+aws_region         = "us-east-1"
+
+# EC2 Configuration
+ec2_instance_ids = [
+  "i-1234567890abcdef0",
+  "i-0987654321fedcba0",
+]
+
+approved_ami_ids = [
+  "ami-0c55b159cbfafe1f0",  # Example: Amazon Linux 2023
+  "ami-0abcdef1234567890",  # Example: Ubuntu 22.04
+]
+
+# RDS Configuration
+rds_instance_identifiers = [
+  "production-database",
+  "staging-database",
+]
+
+minimum_backup_retention_days = 7
+
+# S3 Configuration
+s3_bucket_names = [
+  "my-production-data-bucket",
+  "my-application-logs-bucket",
+  "my-backup-bucket",
+]
+
+production_bucket_names = [
+  "my-production-data-bucket",
+]
+
+# IAM Configuration
+iam_role_names = [
+  "ProductionAppRole",
+  "DataProcessingRole",
+  "AdminRole",
+]
+
+# VPC Configuration (leave empty to analyze all VPCs)
+vpc_ids = []
+
+# Tagging Requirements
+required_tags = {
+  Environment = "production"
+  Owner       = "platform-team"
+  Project     = "infrastructure-audit"
+}
+
+# Security Configuration
+sensitive_ports = [22, 3389, 3306, 5432, 1433, 27017, 6379, 9200]

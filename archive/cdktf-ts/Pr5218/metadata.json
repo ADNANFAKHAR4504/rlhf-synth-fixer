@@ -1,0 +1,21 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000320",
+  "team": "1",
+  "startedAt": "2025-10-28T10:20:05.732Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "[\"VPC\",\"EC2\",\"RDS\",\"ECS\",\"ALB\",\"S3\",\"CloudWatch\",\"Secrets Manager\",\"IAM\",\"Application Auto Scaling\",\"SNS\",\"WAF\",\"AWS Backup\"]",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

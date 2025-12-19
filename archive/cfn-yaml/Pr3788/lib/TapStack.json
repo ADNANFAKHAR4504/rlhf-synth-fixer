@@ -1,0 +1,978 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Scalable Media Processing Pipeline with S3, MediaConvert, and Lambda",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix",
+            "ProcessingConcurrency",
+            "MediaConvertEndpoint",
+            "NotificationEmail"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "ProcessingConcurrency": {
+      "Type": "Number",
+      "Default": 10,
+      "MinValue": 1,
+      "MaxValue": 100,
+      "Description": "Max concurrent Lambda executions for processing"
+    },
+    "MediaConvertEndpoint": {
+      "Type": "String",
+      "Default": "",
+      "Description": "MediaConvert endpoint URL (optional - will use default if empty)"
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Email for alarm notifications (optional)"
+    }
+  },
+  "Conditions": {
+    "CreateNotificationTopic": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "NotificationEmail"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "HasMediaConvertEndpoint": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "MediaConvertEndpoint"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "MediaKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for media pipeline encryption ${EnvironmentSuffix}"
+        },
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow use of the key for S3",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow MediaConvert to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "mediaconvert.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      }
+    },
+    "MediaKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/media-pipeline-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "MediaKMSKey"
+        }
+      }
+    },
+    "UploadsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "media-uploads-${AWS::AccountId}-${EnvironmentSuffix}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Ref": "MediaKMSKey"
+                }
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "NotificationConfiguration": {
+          "EventBridgeConfiguration": {
+            "EventBridgeEnabled": true
+          }
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldUploads",
+              "Status": "Enabled",
+              "ExpirationInDays": 7,
+              "NoncurrentVersionExpirationInDays": 1
+            }
+          ]
+        }
+      }
+    },
+    "OutputsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "media-outputs-${AWS::AccountId}-${EnvironmentSuffix}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Ref": "MediaKMSKey"
+                }
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToIA",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "StorageClass": "STANDARD_IA",
+                  "TransitionInDays": 30
+                },
+                {
+                  "StorageClass": "GLACIER",
+                  "TransitionInDays": 90
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "MediaAssetsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "MediaAssets-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false,
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "assetId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "status",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "uploaderId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "createdAt",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "assetId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "StatusIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "status",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "createdAt",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          },
+          {
+            "IndexName": "UploaderIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "uploaderId",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "createdAt",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "SSESpecification": {
+          "SSEEnabled": true
+        }
+      }
+    },
+    "ProcessingDLQ": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "media-processing-dlq-${EnvironmentSuffix}"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "KmsMasterKeyId": {
+          "Ref": "MediaKMSKey"
+        }
+      }
+    },
+    "ProcessingQueue": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "media-processing-queue-${EnvironmentSuffix}"
+        },
+        "VisibilityTimeout": 900,
+        "MessageRetentionPeriod": 86400,
+        "KmsMasterKeyId": {
+          "Ref": "MediaKMSKey"
+        },
+        "RedrivePolicy": {
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": [
+              "ProcessingDLQ",
+              "Arn"
+            ]
+          },
+          "maxReceiveCount": 3
+        }
+      }
+    },
+    "S3UploadEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "media-upload-rule-${EnvironmentSuffix}"
+        },
+        "Description": "Route S3 upload events to processing queue",
+        "EventPattern": {
+          "source": [
+            "aws.s3"
+          ],
+          "detail-type": [
+            "Object Created"
+          ],
+          "detail": {
+            "bucket": {
+              "name": [
+                {
+                  "Ref": "UploadsBucket"
+                }
+              ]
+            },
+            "object": {
+              "key": [
+                {
+                  "prefix": "uploads/"
+                }
+              ]
+            }
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "ProcessingQueue",
+                "Arn"
+              ]
+            },
+            "Id": "ProcessingQueueTarget"
+          }
+        ]
+      }
+    },
+    "ProcessingQueuePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "ProcessingQueue"
+          }
+        ],
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sqs:SendMessage",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ProcessingQueue",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "S3UploadEventRule",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "MediaConvertJobEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "mediaconvert-job-status-rule-${EnvironmentSuffix}"
+        },
+        "Description": "Route MediaConvert job status changes",
+        "EventPattern": {
+          "source": [
+            "aws.mediaconvert"
+          ],
+          "detail-type": [
+            "MediaConvert Job State Change"
+          ]
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "JobStatusProcessorFunction",
+                "Arn"
+              ]
+            },
+            "Id": "JobStatusLambdaTarget"
+          }
+        ]
+      }
+    },
+    "MediaConvertRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "MediaConvertRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "mediaconvert.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "MediaConvertPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${UploadsBucket.Arn}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:PutObjectAcl"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${OutputsBucket.Arn}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:GenerateDataKey"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "MediaKMSKey",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "MediaLambdaRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "MediaProcessingPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "MediaAssetsTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${MediaAssetsTable.Arn}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectAttributes"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${UploadsBucket.Arn}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "mediaconvert:CreateJob",
+                    "mediaconvert:GetJob",
+                    "mediaconvert:DescribeEndpoints"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:PassRole"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "MediaConvertRole",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ProcessingQueue",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:GenerateDataKey"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "MediaKMSKey",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/media-pipeline/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "IngestOrchestratorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "ingest-orchestrator-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "ReservedConcurrentExecutions": {
+          "Ref": "ProcessingConcurrency"
+        },
+        "Timeout": 300,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {
+              "Ref": "MediaAssetsTable"
+            },
+            "MEDIACONVERT_ROLE": {
+              "Fn::GetAtt": [
+                "MediaConvertRole",
+                "Arn"
+              ]
+            },
+            "MEDIACONVERT_ENDPOINT": {
+              "Fn::If": [
+                "HasMediaConvertEndpoint",
+                {
+                  "Ref": "MediaConvertEndpoint"
+                },
+                ""
+              ]
+            },
+            "OUTPUT_BUCKET": {
+              "Ref": "OutputsBucket"
+            },
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "# Placeholder - will be replaced with actual code\nimport json\ndef lambda_handler(event, context):\n    return {'statusCode': 200, 'body': json.dumps('Placeholder')}\n"
+        }
+      }
+    },
+    "IngestOrchestratorEventSourceMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "ProcessingQueue",
+            "Arn"
+          ]
+        },
+        "FunctionName": {
+          "Ref": "IngestOrchestratorFunction"
+        },
+        "BatchSize": 1,
+        "MaximumBatchingWindowInSeconds": 0
+      }
+    },
+    "JobStatusProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "job-status-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 60,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {
+              "Ref": "MediaAssetsTable"
+            },
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "# Placeholder - will be replaced with actual code\nimport json\ndef lambda_handler(event, context):\n    return {'statusCode': 200, 'body': json.dumps('Placeholder')}\n"
+        }
+      }
+    },
+    "JobStatusProcessorPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "JobStatusProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "MediaConvertJobEventRule",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "MediaProcessingDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "MediaProcessing-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\", \"QueueName\", \"${ProcessingQueue}\" ],\n          [ \".\", \"ApproximateNumberOfMessagesNotVisible\", \".\", \".\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Processing Queue Depth\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [ \"MediaPipeline\", \"ProcessedAssets\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"FailedAssets\", { \"stat\": \"Sum\" } ]\n        ],\n        \"period\": 3600,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Processing Status\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Duration\", \"FunctionName\", \"${IngestOrchestratorFunction}\" ],\n          [ \"...\", \"${JobStatusProcessorFunction}\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Execution Duration\"\n      }\n    }\n  ]\n}\n"
+        }
+      }
+    },
+    "HighQueueDepthAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Condition": "CreateNotificationTopic",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "HighQueueDepth-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Processing queue depth is too high",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Namespace": "AWS/SQS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 100,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "ProcessingQueue",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "NotificationTopic"
+          }
+        ]
+      }
+    },
+    "HighFailureRateAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Condition": "CreateNotificationTopic",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "HighFailureRate-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "High media processing failure rate",
+        "MetricName": "FailedAssets",
+        "Namespace": "MediaPipeline",
+        "Statistic": "Sum",
+        "Period": 3600,
+        "EvaluationPeriods": 1,
+        "Threshold": 50,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "AlarmActions": [
+          {
+            "Ref": "NotificationTopic"
+          }
+        ]
+      }
+    },
+    "NotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Condition": "CreateNotificationTopic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "media-pipeline-alerts-${EnvironmentSuffix}"
+        },
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "NotificationEmail"
+            },
+            "Protocol": "email"
+          }
+        ]
+      }
+    },
+    "MediaConvertPresetsParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/media-pipeline/${EnvironmentSuffix}/mediaconvert-presets"
+        },
+        "Type": "String",
+        "Description": "MediaConvert job presets configuration",
+        "Value": {
+          "Fn::Sub": "{\n  \"presets\": {\n    \"hls\": {\n      \"name\": \"HLS_Adaptive\",\n      \"outputs\": [\n        {\n          \"nameModifier\": \"_720p\",\n          \"videoSettings\": {\n            \"width\": 1280,\n            \"height\": 720,\n            \"bitrate\": 2000000,\n            \"codec\": \"H_264\"\n          },\n          \"audioSettings\": {\n            \"codec\": \"AAC\",\n            \"sampleRate\": 48000,\n            \"bitrate\": 128000\n          }\n        },\n        {\n          \"nameModifier\": \"_480p\",\n          \"videoSettings\": {\n            \"width\": 854,\n            \"height\": 480,\n            \"bitrate\": 1000000,\n            \"codec\": \"H_264\"\n          },\n          \"audioSettings\": {\n            \"codec\": \"AAC\",\n            \"sampleRate\": 48000,\n            \"bitrate\": 96000\n          }\n        }\n      ],\n      \"outputGroup\": {\n        \"type\": \"HLS_GROUP\",\n        \"destination\": \"s3://${OutputsBucket}/hls/\",\n        \"segmentDuration\": 10,\n        \"minSegmentLength\": 0\n      }\n    },\n    \"dash\": {\n      \"name\": \"DASH_Adaptive\",\n      \"outputs\": [\n        {\n          \"nameModifier\": \"_720p\",\n          \"videoSettings\": {\n            \"width\": 1280,\n            \"height\": 720,\n            \"bitrate\": 2000000,\n            \"codec\": \"H_264\"\n          }\n        },\n        {\n          \"nameModifier\": \"_480p\",\n          \"videoSettings\": {\n            \"width\": 854,\n            \"height\": 480,\n            \"bitrate\": 1000000,\n            \"codec\": \"H_264\"\n          }\n        }\n      ],\n      \"outputGroup\": {\n        \"type\": \"DASH_ISO_GROUP\",\n        \"destination\": \"s3://${OutputsBucket}/dash/\",\n        \"segmentLength\": 30,\n        \"fragmentLength\": 2\n      }\n    },\n    \"mp4\": {\n      \"name\": \"MP4_Preview\",\n      \"outputs\": [\n        {\n          \"nameModifier\": \"_preview\",\n          \"videoSettings\": {\n            \"width\": 1280,\n            \"height\": 720,\n            \"bitrate\": 1500000,\n            \"codec\": \"H_264\"\n          },\n          \"audioSettings\": {\n            \"codec\": \"AAC\",\n            \"sampleRate\": 48000,\n            \"bitrate\": 128000\n          }\n        }\n      ],\n      \"outputGroup\": {\n        \"type\": \"FILE_GROUP\",\n        \"destination\": \"s3://${OutputsBucket}/mp4/\"\n      }\n    }\n  }\n}\n"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "UploadsBucketName": {
+      "Description": "S3 bucket for uploads",
+      "Value": {
+        "Ref": "UploadsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-UploadsBucket"
+        }
+      }
+    },
+    "OutputsBucketName": {
+      "Description": "S3 bucket for processed outputs",
+      "Value": {
+        "Ref": "OutputsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OutputsBucket"
+        }
+      }
+    },
+    "ProcessingQueueUrl": {
+      "Description": "SQS queue URL for processing",
+      "Value": {
+        "Ref": "ProcessingQueue"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ProcessingQueueUrl"
+        }
+      }
+    },
+    "MediaAssetsTableName": {
+      "Description": "DynamoDB table name",
+      "Value": {
+        "Ref": "MediaAssetsTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MediaAssetsTable"
+        }
+      }
+    },
+    "IngestOrchestratorFunctionArn": {
+      "Description": "Ingest orchestrator Lambda ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "IngestOrchestratorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-IngestOrchestrator"
+        }
+      }
+    },
+    "JobStatusProcessorFunctionArn": {
+      "Description": "Job status processor Lambda ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "JobStatusProcessorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-JobStatusProcessor"
+        }
+      }
+    },
+    "MediaConvertRoleArn": {
+      "Description": "MediaConvert IAM role ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "MediaConvertRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MediaConvertRole"
+        }
+      }
+    },
+    "KMSKeyId": {
+      "Description": "KMS Key ID",
+      "Value": {
+        "Ref": "MediaKMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKey"
+        }
+      }
+    },
+    "KMSKeyArn": {
+      "Description": "KMS Key ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "MediaKMSKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyArn"
+        }
+      }
+    }
+  }
+}

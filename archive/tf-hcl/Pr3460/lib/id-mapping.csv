@@ -1,0 +1,63 @@
+resource,address,old_id,new_id,notes
+VPC,aws_vpc.main,vpc-0abc123def456789a,vpc-0xyz789fed654321b,Main VPC CIDR 10.0.0.0/16 preserved
+InternetGateway,aws_internet_gateway.main,igw-01234567890abcdef,igw-0fedcba0987654321,Attached to new VPC in us-west-2
+PrivateSubnet1,aws_subnet.private[0],subnet-0111111111111111a,subnet-0222222222222222a,AZ us-west-1a -> us-west-2a
+PrivateSubnet2,aws_subnet.private[1],subnet-0111111111111111b,subnet-0222222222222222b,AZ us-west-1b -> us-west-2b
+PrivateSubnet3,aws_subnet.private[2],subnet-0111111111111111c,subnet-0222222222222222c,AZ us-west-1c -> us-west-2c
+PublicSubnet1,aws_subnet.public[0],subnet-0333333333333333a,subnet-0444444444444444a,AZ us-west-1a -> us-west-2a
+PublicSubnet2,aws_subnet.public[1],subnet-0333333333333333b,subnet-0444444444444444b,AZ us-west-1b -> us-west-2b
+PublicSubnet3,aws_subnet.public[2],subnet-0333333333333333c,subnet-0444444444444444c,AZ us-west-1c -> us-west-2c
+EIP_NAT1,aws_eip.nat[0],eipalloc-01111111111111111,eipalloc-02222222222222222,Elastic IP for NAT Gateway 1
+EIP_NAT2,aws_eip.nat[1],eipalloc-03333333333333333,eipalloc-04444444444444444,Elastic IP for NAT Gateway 2
+EIP_NAT3,aws_eip.nat[2],eipalloc-05555555555555555,eipalloc-06666666666666666,Elastic IP for NAT Gateway 3
+NATGateway1,aws_nat_gateway.main[0],nat-0aaa111111111111a,nat-0bbb222222222222b,NAT Gateway in public subnet 1
+NATGateway2,aws_nat_gateway.main[1],nat-0aaa111111111111b,nat-0bbb222222222222c,NAT Gateway in public subnet 2
+NATGateway3,aws_nat_gateway.main[2],nat-0aaa111111111111c,nat-0bbb222222222222d,NAT Gateway in public subnet 3
+PrivateRouteTable1,aws_route_table.private[0],rtb-0111111111111111a,rtb-0222222222222222a,Private route table 1
+PrivateRouteTable2,aws_route_table.private[1],rtb-0111111111111111b,rtb-0222222222222222b,Private route table 2
+PrivateRouteTable3,aws_route_table.private[2],rtb-0111111111111111c,rtb-0222222222222222c,Private route table 3
+PublicRouteTable,aws_route_table.public,rtb-0333333333333333a,rtb-0444444444444444a,Public route table
+KMSKey,aws_kms_key.master,arn:aws:kms:us-west-1:123456789012:key/aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb,arn:aws:kms:us-west-2:123456789012:key/cccccccc-4444-5555-6666-dddddddddddd,Master encryption key with rotation enabled
+KMSAlias,aws_kms_alias.master,alias/serverless-app-prod,alias/serverless-app-prod,KMS key alias (same name preserved)
+S3Bucket,aws_s3_bucket.data,serverless-app-data-123456789012-us-west-1,serverless-app-data-123456789012-us-west-2,Data bucket with versioning and encryption
+DynamoDBTable,aws_dynamodb_table.primary,serverless_app_primary_prod,serverless_app_primary_prod,Primary DynamoDB table with streams and PITR
+DynamoDBGSI,aws_dynamodb_table.primary.global_secondary_index[status-index],status-index,status-index,Global secondary index on status field
+DAXSubnetGroup,aws_dax_subnet_group.main,serverless-app-dax-prod,serverless-app-dax-prod,DAX subnet group (same name)
+DAXCluster,aws_dax_cluster.main,serverless-app-prod,serverless-app-prod,DAX cluster 3 nodes with encryption
+DAXEndpoint,aws_dax_cluster.main.cluster_address,serverless-app-prod.abcdef.dax-clusters.us-west-1.amazonaws.com,serverless-app-prod.ghijkl.dax-clusters.us-west-2.amazonaws.com,DAX cluster endpoint
+RedisSubnetGroup,aws_elasticache_subnet_group.redis,serverless-app-redis-prod,serverless-app-redis-prod,Redis subnet group
+RedisParameterGroup,aws_elasticache_parameter_group.redis,serverless-app-redis-prod,serverless-app-redis-prod,Redis parameter group
+RedisReplicationGroup,aws_elasticache_replication_group.redis,serverless-app-prod,serverless-app-prod,Redis cluster with 3 nodes
+RedisEndpoint,aws_elasticache_replication_group.redis.configuration_endpoint_address,serverless-app-prod.abcdef.clustercfg.usw1.cache.amazonaws.com,serverless-app-prod.ghijkl.clustercfg.usw2.cache.amazonaws.com,Redis configuration endpoint
+KinesisStream,aws_kinesis_stream.main,serverless-app-stream-prod,serverless-app-stream-prod,Kinesis stream with 10 shards
+KinesisFirehose,aws_kinesis_firehose_delivery_stream.s3,serverless-app-firehose-prod,serverless-app-firehose-prod,Firehose delivery stream to S3
+LambdaFunction,aws_lambda_function.processor,serverless-app-processor-prod,serverless-app-processor-prod,Lambda function in VPC
+LambdaARN,aws_lambda_function.processor.arn,arn:aws:lambda:us-west-1:123456789012:function:serverless-app-processor-prod,arn:aws:lambda:us-west-2:123456789012:function:serverless-app-processor-prod,Lambda function ARN
+APIGateway,aws_apigatewayv2_api.main,abcdef1234,ghijkl5678,HTTP API Gateway
+APIGatewayStage,aws_apigatewayv2_stage.main,prod,prod,API Gateway stage
+APIGatewayURL,aws_apigatewayv2_stage.main.invoke_url,https://abcdef1234.execute-api.us-west-1.amazonaws.com/prod,https://ghijkl5678.execute-api.us-west-2.amazonaws.com/prod,API Gateway invoke URL
+StepFunctionsStateMachine,aws_sfn_state_machine.main,serverless-app-workflow-prod,serverless-app-workflow-prod,Step Functions state machine
+StepFunctionsARN,aws_sfn_state_machine.main.arn,arn:aws:states:us-west-1:123456789012:stateMachine:serverless-app-workflow-prod,arn:aws:states:us-west-2:123456789012:stateMachine:serverless-app-workflow-prod,Step Functions ARN
+EventBridgeRule,aws_cloudwatch_event_rule.scheduled,serverless-app-scheduled-prod,serverless-app-scheduled-prod,EventBridge scheduled rule
+SNSTopic,aws_sns_topic.alerts,serverless-app-alerts-prod,serverless-app-alerts-prod,SNS topic for alerts
+SNSTopicARN,aws_sns_topic.alerts.arn,arn:aws:sns:us-west-1:123456789012:serverless-app-alerts-prod,arn:aws:sns:us-west-2:123456789012:serverless-app-alerts-prod,SNS topic ARN
+SQSQueue,aws_sqs_queue.main,serverless-app-queue-prod,serverless-app-queue-prod,SQS main queue
+SQSQueueDLQ,aws_sqs_queue.dlq,serverless-app-dlq-prod,serverless-app-dlq-prod,SQS dead letter queue
+SQSQueueURL,aws_sqs_queue.main.url,https://sqs.us-west-1.amazonaws.com/123456789012/serverless-app-queue-prod,https://sqs.us-west-2.amazonaws.com/123456789012/serverless-app-queue-prod,SQS queue URL
+SecretsManager,aws_secretsmanager_secret.app_secrets,serverless-app-secrets-prod,serverless-app-secrets-prod,Secrets Manager secret
+SecretsManagerARN,aws_secretsmanager_secret.app_secrets.arn,arn:aws:secretsmanager:us-west-1:123456789012:secret:serverless-app-secrets-prod-AbCdEf,arn:aws:secretsmanager:us-west-2:123456789012:secret:serverless-app-secrets-prod-GhIjKl,Secrets Manager ARN
+WAFWebACL,aws_wafv2_web_acl.main,serverless-app-waf-prod,serverless-app-waf-prod,WAF Web ACL for API protection
+CloudWatchLogGroupAPI,aws_cloudwatch_log_group.api_gateway,/aws/apigateway/serverless-app-prod,/aws/apigateway/serverless-app-prod,CloudWatch log group for API Gateway
+CloudWatchLogGroupLambda,aws_cloudwatch_log_group.lambda,/aws/lambda/serverless-app-processor-prod,/aws/lambda/serverless-app-processor-prod,CloudWatch log group for Lambda
+CloudWatchAlarmLambdaErrors,aws_cloudwatch_metric_alarm.lambda_errors,serverless-app-lambda-errors-prod,serverless-app-lambda-errors-prod,CloudWatch alarm for Lambda errors
+CloudWatchAlarmAPI5XX,aws_cloudwatch_metric_alarm.api_gateway_5xx,serverless-app-api-5xx-prod,serverless-app-api-5xx-prod,CloudWatch alarm for API 5xx errors
+IAMRoleLambda,aws_iam_role.lambda,serverless-app-lambda-prod,serverless-app-lambda-prod,IAM role for Lambda functions
+IAMRoleDAX,aws_iam_role.dax,serverless-app-dax-prod,serverless-app-dax-prod,IAM role for DAX cluster
+IAMRoleFirehose,aws_iam_role.firehose,serverless-app-firehose-prod,serverless-app-firehose-prod,IAM role for Firehose
+IAMRoleStepFunctions,aws_iam_role.step_functions,serverless-app-stepfunctions-prod,serverless-app-stepfunctions-prod,IAM role for Step Functions
+SecurityGroupLambda,aws_security_group.lambda,sg-01111111111111111,sg-02222222222222222,Security group for Lambda functions
+SecurityGroupRedis,aws_security_group.redis,sg-03333333333333333,sg-04444444444444444,Security group for ElastiCache Redis
+SecurityGroupDAX,aws_security_group.dax,sg-05555555555555555,sg-06666666666666666,Security group for DAX cluster
+SecurityGroupVPCEndpoints,aws_security_group.vpc_endpoints,sg-07777777777777777,sg-08888888888888888,Security group for VPC endpoints
+VPCEndpointDynamoDB,aws_vpc_endpoint.dynamodb,vpce-0aaa111111111111a,vpce-0bbb222222222222b,VPC endpoint for DynamoDB
+VPCEndpointS3,aws_vpc_endpoint.s3,vpce-0ccc333333333333c,vpce-0ddd444444444444d,VPC endpoint for S3

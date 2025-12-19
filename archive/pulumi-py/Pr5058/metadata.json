@@ -1,0 +1,22 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349155",
+  "team": "6",
+  "startedAt": "2025-10-22T13:11:49.048Z",
+  "subtask": "IaC Program Optimization",
+  "background": "This task involves leveraging AWS CloudFormation through the AWS SDK for Python (Boto3) to manage serverless application infrastructure. Python is used to create and manipulate AWS resources programmatically, providing flexibility beyond standard CloudFormation templates.",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": "S3 Bucket, Lambda, API Gateway, DynamoDB, DynamoDB Streams, SNS, CloudWatch LogGroup, CloudWatch Alarms, IAM Roles, IAM Policies",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

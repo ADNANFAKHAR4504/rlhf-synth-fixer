@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "JEA6GZ000",
+  "team": "1",
+  "startedAt": "2025-10-15T12:14:34.033Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Lambda",
+    "ECR",
+    "EFS",
+    "API Gateway",
+    "KMS",
+    "VPC",
+    "CloudWatch",
+    "WAF",
+    "X-Ray",
+    "SNS",
+    "SSM Parameter Store"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}

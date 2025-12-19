@@ -1,0 +1,902 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>iac-test-automations: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/TuringGpt/iac-test-automations/main.go (0.0%)</option>
+				
+				<option value="file1">github.com/TuringGpt/iac-test-automations/tap_stack.go (75.6%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">no coverage</span>
+				<span class="cov1">low coverage</span>
+				<span class="cov2">*</span>
+				<span class="cov3">*</span>
+				<span class="cov4">*</span>
+				<span class="cov5">*</span>
+				<span class="cov6">*</span>
+				<span class="cov7">*</span>
+				<span class="cov8">*</span>
+				<span class="cov9">*</span>
+				<span class="cov10">high coverage</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package main
+
+import "github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+
+func main() <span class="cov0" title="0">{
+        pulumi.Run(createInfrastructure)
+}</span>
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package main
+
+import (
+        "encoding/json"
+        "fmt"
+
+        "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
+        "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
+        "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ecs"
+        "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
+        "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/lb"
+        "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/rds"
+        "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/secretsmanager"
+        "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/sns"
+        "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/sqs"
+        "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ssm"
+        "github.com/pulumi/pulumi-random/sdk/v4/go/random"
+        "github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+        "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
+)
+
+func createInfrastructure(ctx *pulumi.Context) error <span class="cov6" title="7">{
+                // Get configuration
+                cfg := config.New(ctx, "")
+                environmentSuffix := cfg.Get("environmentSuffix")
+                if environmentSuffix == "" </span><span class="cov6" title="7">{
+                        environmentSuffix = "test"
+                }</span>
+                <span class="cov6" title="7">region := "us-east-1"
+
+                // Common tags
+                tags := pulumi.StringMap{
+                        "Environment":    pulumi.String("production"),
+                        "MigrationBatch": pulumi.String("phase-1"),
+                }
+
+                // Create VPC
+                vpc, err := ec2.NewVpc(ctx, fmt.Sprintf("payment-vpc-%s", environmentSuffix), &amp;ec2.VpcArgs{
+                        CidrBlock:          pulumi.String("10.0.0.0/16"),
+                        EnableDnsHostnames: pulumi.Bool(true),
+                        EnableDnsSupport:   pulumi.Bool(true),
+                        Tags:               tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create Internet Gateway
+                <span class="cov6" title="7">igw, err := ec2.NewInternetGateway(ctx, fmt.Sprintf("payment-igw-%s", environmentSuffix), &amp;ec2.InternetGatewayArgs{
+                        VpcId: vpc.ID(),
+                        Tags:  tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Get availability zones
+                <span class="cov6" title="7">azs := []string{"us-east-1a", "us-east-1b", "us-east-1c"}
+
+                // Create public subnets
+                var publicSubnets []*ec2.Subnet
+                for i, az := range azs </span><span class="cov10" title="21">{
+                        subnet, err := ec2.NewSubnet(ctx, fmt.Sprintf("public-subnet-%d-%s", i, environmentSuffix), &amp;ec2.SubnetArgs{
+                                VpcId:               vpc.ID(),
+                                CidrBlock:           pulumi.String(fmt.Sprintf("10.0.%d.0/24", i)),
+                                AvailabilityZone:    pulumi.String(az),
+                                MapPublicIpOnLaunch: pulumi.Bool(true),
+                                Tags:                tags,
+                        })
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        <span class="cov10" title="21">publicSubnets = append(publicSubnets, subnet)</span>
+                }
+
+                // Create private subnets
+                <span class="cov6" title="7">var privateSubnets []*ec2.Subnet
+                for i, az := range azs </span><span class="cov10" title="21">{
+                        subnet, err := ec2.NewSubnet(ctx, fmt.Sprintf("private-subnet-%d-%s", i, environmentSuffix), &amp;ec2.SubnetArgs{
+                                VpcId:            vpc.ID(),
+                                CidrBlock:        pulumi.String(fmt.Sprintf("10.0.%d.0/24", i+10)),
+                                AvailabilityZone: pulumi.String(az),
+                                Tags:             tags,
+                        })
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        <span class="cov10" title="21">privateSubnets = append(privateSubnets, subnet)</span>
+                }
+
+                // Create NAT Gateways (one per AZ)
+                <span class="cov6" title="7">var natGateways []*ec2.NatGateway
+                for i := range azs </span><span class="cov10" title="21">{
+                        eip, err := ec2.NewEip(ctx, fmt.Sprintf("nat-eip-%d-%s", i, environmentSuffix), &amp;ec2.EipArgs{
+                                Domain: pulumi.String("vpc"),
+                                Tags:   tags,
+                        })
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+
+                        <span class="cov10" title="21">nat, err := ec2.NewNatGateway(ctx, fmt.Sprintf("nat-gateway-%d-%s", i, environmentSuffix), &amp;ec2.NatGatewayArgs{
+                                SubnetId:     publicSubnets[i].ID(),
+                                AllocationId: eip.ID(),
+                                Tags:         tags,
+                        })
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        <span class="cov10" title="21">natGateways = append(natGateways, nat)</span>
+                }
+
+                // Create public route table
+                <span class="cov6" title="7">publicRouteTable, err := ec2.NewRouteTable(ctx, fmt.Sprintf("public-rt-%s", environmentSuffix), &amp;ec2.RouteTableArgs{
+                        VpcId: vpc.ID(),
+                        Tags:  tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Add route to internet gateway
+                <span class="cov6" title="7">_, err = ec2.NewRoute(ctx, fmt.Sprintf("public-route-%s", environmentSuffix), &amp;ec2.RouteArgs{
+                        RouteTableId:         publicRouteTable.ID(),
+                        DestinationCidrBlock: pulumi.String("0.0.0.0/0"),
+                        GatewayId:            igw.ID(),
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Associate public subnets with public route table
+                <span class="cov6" title="7">for i, subnet := range publicSubnets </span><span class="cov10" title="21">{
+                        _, err = ec2.NewRouteTableAssociation(ctx, fmt.Sprintf("public-rta-%d-%s", i, environmentSuffix), &amp;ec2.RouteTableAssociationArgs{
+                                SubnetId:     subnet.ID(),
+                                RouteTableId: publicRouteTable.ID(),
+                        })
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+
+                // Create private route tables (one per NAT Gateway)
+                <span class="cov6" title="7">for i, nat := range natGateways </span><span class="cov10" title="21">{
+                        privateRouteTable, err := ec2.NewRouteTable(ctx, fmt.Sprintf("private-rt-%d-%s", i, environmentSuffix), &amp;ec2.RouteTableArgs{
+                                VpcId: vpc.ID(),
+                                Tags:  tags,
+                        })
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+
+                        <span class="cov10" title="21">_, err = ec2.NewRoute(ctx, fmt.Sprintf("private-route-%d-%s", i, environmentSuffix), &amp;ec2.RouteArgs{
+                                RouteTableId:         privateRouteTable.ID(),
+                                DestinationCidrBlock: pulumi.String("0.0.0.0/0"),
+                                NatGatewayId:         nat.ID(),
+                        })
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+
+                        <span class="cov10" title="21">_, err = ec2.NewRouteTableAssociation(ctx, fmt.Sprintf("private-rta-%d-%s", i, environmentSuffix), &amp;ec2.RouteTableAssociationArgs{
+                                SubnetId:     privateSubnets[i].ID(),
+                                RouteTableId: privateRouteTable.ID(),
+                        })
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+
+                // Create security group for ALB
+                <span class="cov6" title="7">albSecurityGroup, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("alb-sg-%s", environmentSuffix), &amp;ec2.SecurityGroupArgs{
+                        VpcId:       vpc.ID(),
+                        Description: pulumi.String("Security group for Application Load Balancer"),
+                        Ingress: ec2.SecurityGroupIngressArray{
+                                &amp;ec2.SecurityGroupIngressArgs{
+                                        Protocol:   pulumi.String("tcp"),
+                                        FromPort:   pulumi.Int(80),
+                                        ToPort:     pulumi.Int(80),
+                                        CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+                                },
+                                &amp;ec2.SecurityGroupIngressArgs{
+                                        Protocol:   pulumi.String("tcp"),
+                                        FromPort:   pulumi.Int(443),
+                                        ToPort:     pulumi.Int(443),
+                                        CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+                                },
+                        },
+                        Egress: ec2.SecurityGroupEgressArray{
+                                &amp;ec2.SecurityGroupEgressArgs{
+                                        Protocol:   pulumi.String("-1"),
+                                        FromPort:   pulumi.Int(0),
+                                        ToPort:     pulumi.Int(0),
+                                        CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+                                },
+                        },
+                        Tags: tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create security group for ECS tasks
+                <span class="cov6" title="7">ecsSecurityGroup, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("ecs-sg-%s", environmentSuffix), &amp;ec2.SecurityGroupArgs{
+                        VpcId:       vpc.ID(),
+                        Description: pulumi.String("Security group for ECS Fargate tasks"),
+                        Ingress: ec2.SecurityGroupIngressArray{
+                                &amp;ec2.SecurityGroupIngressArgs{
+                                        Protocol:       pulumi.String("tcp"),
+                                        FromPort:       pulumi.Int(8080),
+                                        ToPort:         pulumi.Int(8080),
+                                        SecurityGroups: pulumi.StringArray{albSecurityGroup.ID()},
+                                },
+                        },
+                        Egress: ec2.SecurityGroupEgressArray{
+                                &amp;ec2.SecurityGroupEgressArgs{
+                                        Protocol:   pulumi.String("-1"),
+                                        FromPort:   pulumi.Int(0),
+                                        ToPort:     pulumi.Int(0),
+                                        CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+                                },
+                        },
+                        Tags: tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create security group for RDS
+                <span class="cov6" title="7">rdsSecurityGroup, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("rds-sg-%s", environmentSuffix), &amp;ec2.SecurityGroupArgs{
+                        VpcId:       vpc.ID(),
+                        Description: pulumi.String("Security group for RDS Aurora cluster"),
+                        Ingress: ec2.SecurityGroupIngressArray{
+                                &amp;ec2.SecurityGroupIngressArgs{
+                                        Protocol:       pulumi.String("tcp"),
+                                        FromPort:       pulumi.Int(5432),
+                                        ToPort:         pulumi.Int(5432),
+                                        SecurityGroups: pulumi.StringArray{ecsSecurityGroup.ID()},
+                                },
+                        },
+                        Tags: tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create DB subnet group
+                <span class="cov6" title="7">dbSubnetGroup, err := rds.NewSubnetGroup(ctx, fmt.Sprintf("db-subnet-group-%s", environmentSuffix), &amp;rds.SubnetGroupArgs{
+                        SubnetIds: pulumi.StringArray{
+                                privateSubnets[0].ID(),
+                                privateSubnets[1].ID(),
+                                privateSubnets[2].ID(),
+                        },
+                        Tags: tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Generate random password for RDS
+                <span class="cov6" title="7">dbPassword, err := random.NewRandomPassword(ctx, fmt.Sprintf("db-password-%s", environmentSuffix), &amp;random.RandomPasswordArgs{
+                        Length:         pulumi.Int(32),
+                        Special:        pulumi.Bool(true),
+                        OverrideSpecial: pulumi.String("!#$%&amp;*()-_=+[]{}|:;&lt;&gt;,.?"),
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create RDS Aurora Cluster
+                <span class="cov6" title="7">cluster, err := rds.NewCluster(ctx, fmt.Sprintf("payment-db-cluster-%s", environmentSuffix), &amp;rds.ClusterArgs{
+                        ClusterIdentifier:     pulumi.String(fmt.Sprintf("payment-cluster-%s", environmentSuffix)),
+                        Engine:                pulumi.String("aurora-postgresql"),
+                        EngineVersion:         pulumi.String("14.6"),
+                        DatabaseName:          pulumi.String("payments"),
+                        MasterUsername:        pulumi.String("dbadmin"),
+                        MasterPassword:        dbPassword.Result,
+                        DbSubnetGroupName:     dbSubnetGroup.Name,
+                        VpcSecurityGroupIds:   pulumi.StringArray{rdsSecurityGroup.ID()},
+                        BackupRetentionPeriod: pulumi.Int(7),
+                        PreferredBackupWindow: pulumi.String("03:00-04:00"),
+                        StorageEncrypted:      pulumi.Bool(true),
+                        Tags:                  tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create RDS cluster instances (1 writer + 2 readers)
+                <span class="cov6" title="7">_, err = rds.NewClusterInstance(ctx, fmt.Sprintf("payment-db-writer-%s", environmentSuffix), &amp;rds.ClusterInstanceArgs{
+                        Identifier:         pulumi.String(fmt.Sprintf("payment-writer-%s", environmentSuffix)),
+                        ClusterIdentifier:  cluster.ID(),
+                        InstanceClass:      pulumi.String("db.t3.medium"),
+                        Engine:             cluster.Engine,
+                        EngineVersion:      cluster.EngineVersion,
+                        PubliclyAccessible: pulumi.Bool(false),
+                        Tags:               tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov6" title="7">for i := 0; i &lt; 2; i++ </span><span class="cov8" title="14">{
+                        _, err = rds.NewClusterInstance(ctx, fmt.Sprintf("payment-db-reader-%d-%s", i, environmentSuffix), &amp;rds.ClusterInstanceArgs{
+                                Identifier:         pulumi.String(fmt.Sprintf("payment-reader-%d-%s", i, environmentSuffix)),
+                                ClusterIdentifier:  cluster.ID(),
+                                InstanceClass:      pulumi.String("db.t3.medium"),
+                                Engine:             cluster.Engine,
+                                EngineVersion:      cluster.EngineVersion,
+                                PubliclyAccessible: pulumi.Bool(false),
+                                Tags:               tags,
+                        })
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+
+                // Store database credentials in Secrets Manager
+                <span class="cov6" title="7">dbSecret, err := secretsmanager.NewSecret(ctx, fmt.Sprintf("db-credentials-%s", environmentSuffix), &amp;secretsmanager.SecretArgs{
+                        Description: pulumi.String("Database credentials for payment processing"),
+                        Tags:        tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov6" title="7">secretValue := pulumi.All(cluster.Endpoint, dbPassword.Result).ApplyT(func(args []interface{}) (string, error) </span><span class="cov6" title="7">{
+                        endpoint := args[0].(string)
+                        password := args[1].(string)
+                        secretData := map[string]string{
+                                "username": "dbadmin",
+                                "password": password,
+                                "endpoint": endpoint,
+                                "database": "payments",
+                        }
+                        jsonData, err := json.Marshal(secretData)
+                        return string(jsonData), err
+                }</span>).(pulumi.StringOutput)
+
+                <span class="cov6" title="7">_, err = secretsmanager.NewSecretVersion(ctx, fmt.Sprintf("db-secret-version-%s", environmentSuffix), &amp;secretsmanager.SecretVersionArgs{
+                        SecretId:     dbSecret.ID(),
+                        SecretString: secretValue,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create SQS DLQ
+                <span class="cov6" title="7">dlq, err := sqs.NewQueue(ctx, fmt.Sprintf("payment-jobs-dlq-%s", environmentSuffix), &amp;sqs.QueueArgs{
+                        MessageRetentionSeconds: pulumi.Int(604800), // 7 days
+                        Tags:                    tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create SQS main queue
+                <span class="cov6" title="7">queue, err := sqs.NewQueue(ctx, fmt.Sprintf("payment-jobs-%s", environmentSuffix), &amp;sqs.QueueArgs{
+                        MessageRetentionSeconds:  pulumi.Int(1209600), // 14 days
+                        VisibilityTimeoutSeconds: pulumi.Int(300),
+                        RedrivePolicy: dlq.Arn.ApplyT(func(dlqArn string) (string, error) </span><span class="cov6" title="7">{
+                                policy := map[string]interface{}{
+                                        "deadLetterTargetArn": dlqArn,
+                                        "maxReceiveCount":     3,
+                                }
+                                jsonPolicy, err := json.Marshal(policy)
+                                return string(jsonPolicy), err
+                        }</span>).(pulumi.StringOutput),
+                        Tags: tags,
+                })
+                <span class="cov6" title="7">if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create SNS topic
+                <span class="cov6" title="7">topic, err := sns.NewTopic(ctx, fmt.Sprintf("payment-alerts-%s", environmentSuffix), &amp;sns.TopicArgs{
+                        DisplayName: pulumi.String("Payment Processing Alerts"),
+                        Tags:        tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create SNS email subscription
+                <span class="cov6" title="7">_, err = sns.NewTopicSubscription(ctx, fmt.Sprintf("payment-alerts-sub-%s", environmentSuffix), &amp;sns.TopicSubscriptionArgs{
+                        Topic:    topic.Arn,
+                        Protocol: pulumi.String("email"),
+                        Endpoint: pulumi.String("ops-team@example.com"),
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create CloudWatch log groups
+                <span class="cov6" title="7">apiLogGroup, err := cloudwatch.NewLogGroup(ctx, fmt.Sprintf("payment-api-logs-%s", environmentSuffix), &amp;cloudwatch.LogGroupArgs{
+                        RetentionInDays: pulumi.Int(30),
+                        Tags:            tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov6" title="7">jobLogGroup, err := cloudwatch.NewLogGroup(ctx, fmt.Sprintf("job-processor-logs-%s", environmentSuffix), &amp;cloudwatch.LogGroupArgs{
+                        RetentionInDays: pulumi.Int(30),
+                        Tags:            tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create Systems Manager parameters
+                <span class="cov6" title="7">_, err = ssm.NewParameter(ctx, fmt.Sprintf("api-timeout-%s", environmentSuffix), &amp;ssm.ParameterArgs{
+                        Type:  pulumi.String("String"),
+                        Value: pulumi.String("30"),
+                        Tags:  tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov6" title="7">_, err = ssm.NewParameter(ctx, fmt.Sprintf("retry-count-%s", environmentSuffix), &amp;ssm.ParameterArgs{
+                        Type:  pulumi.String("String"),
+                        Value: pulumi.String("3"),
+                        Tags:  tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create ECS cluster
+                <span class="cov6" title="7">ecsCluster, err := ecs.NewCluster(ctx, fmt.Sprintf("payment-cluster-%s", environmentSuffix), &amp;ecs.ClusterArgs{
+                        Settings: ecs.ClusterSettingArray{
+                                &amp;ecs.ClusterSettingArgs{
+                                        Name:  pulumi.String("containerInsights"),
+                                        Value: pulumi.String("enabled"),
+                                },
+                        },
+                        Tags: tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create IAM role for ECS task execution
+                <span class="cov6" title="7">taskExecutionRole, err := iam.NewRole(ctx, fmt.Sprintf("ecs-task-execution-role-%s", environmentSuffix), &amp;iam.RoleArgs{
+                        AssumeRolePolicy: pulumi.String(`{
+                                "Version": "2012-10-17",
+                                "Statement": [{
+                                        "Action": "sts:AssumeRole",
+                                        "Principal": {
+                                                "Service": "ecs-tasks.amazonaws.com"
+                                        },
+                                        "Effect": "Allow"
+                                }]
+                        }`),
+                        ManagedPolicyArns: pulumi.StringArray{
+                                pulumi.String("arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"),
+                        },
+                        Tags: tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create IAM role for ECS tasks
+                <span class="cov6" title="7">taskRole, err := iam.NewRole(ctx, fmt.Sprintf("ecs-task-role-%s", environmentSuffix), &amp;iam.RoleArgs{
+                        AssumeRolePolicy: pulumi.String(`{
+                                "Version": "2012-10-17",
+                                "Statement": [{
+                                        "Action": "sts:AssumeRole",
+                                        "Principal": {
+                                                "Service": "ecs-tasks.amazonaws.com"
+                                        },
+                                        "Effect": "Allow"
+                                }]
+                        }`),
+                        Tags: tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Attach policies to task role
+                <span class="cov6" title="7">_, err = iam.NewRolePolicy(ctx, fmt.Sprintf("ecs-task-policy-%s", environmentSuffix), &amp;iam.RolePolicyArgs{
+                        Role: taskRole.ID(),
+                        Policy: pulumi.All(queue.Arn, dbSecret.Arn).ApplyT(func(args []interface{}) (string, error) </span><span class="cov6" title="7">{
+                                queueArn := args[0].(string)
+                                secretArn := args[1].(string)
+                                policy := map[string]interface{}{
+                                        "Version": "2012-10-17",
+                                        "Statement": []map[string]interface{}{
+                                                {
+                                                        "Effect": "Allow",
+                                                        "Action": []string{
+                                                                "sqs:SendMessage",
+                                                                "sqs:ReceiveMessage",
+                                                                "sqs:DeleteMessage",
+                                                        },
+                                                        "Resource": queueArn,
+                                                },
+                                                {
+                                                        "Effect": "Allow",
+                                                        "Action": []string{
+                                                                "secretsmanager:GetSecretValue",
+                                                        },
+                                                        "Resource": secretArn,
+                                                },
+                                                {
+                                                        "Effect":   "Allow",
+                                                        "Action":   []string{"ssm:GetParameter"},
+                                                        "Resource": "*",
+                                                },
+                                        },
+                                }
+                                jsonPolicy, err := json.Marshal(policy)
+                                return string(jsonPolicy), err
+                        }</span>).(pulumi.StringOutput),
+                })
+                <span class="cov6" title="7">if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create Application Load Balancer
+                <span class="cov6" title="7">alb, err := lb.NewLoadBalancer(ctx, fmt.Sprintf("payment-alb-%s", environmentSuffix), &amp;lb.LoadBalancerArgs{
+                        LoadBalancerType: pulumi.String("application"),
+                        Subnets: pulumi.StringArray{
+                                publicSubnets[0].ID(),
+                                publicSubnets[1].ID(),
+                                publicSubnets[2].ID(),
+                        },
+                        SecurityGroups: pulumi.StringArray{albSecurityGroup.ID()},
+                        Tags:           tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create target group for payment-api
+                <span class="cov6" title="7">apiTargetGroup, err := lb.NewTargetGroup(ctx, fmt.Sprintf("api-tg-%s", environmentSuffix), &amp;lb.TargetGroupArgs{
+                        Port:       pulumi.Int(8080),
+                        Protocol:   pulumi.String("HTTP"),
+                        VpcId:      vpc.ID(),
+                        TargetType: pulumi.String("ip"),
+                        HealthCheck: &amp;lb.TargetGroupHealthCheckArgs{
+                                Path:               pulumi.String("/health"),
+                                Interval:           pulumi.Int(30),
+                                Timeout:            pulumi.Int(5),
+                                HealthyThreshold:   pulumi.Int(2),
+                                UnhealthyThreshold: pulumi.Int(3),
+                        },
+                        Tags: tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create target group for job-processor
+                <span class="cov6" title="7">jobTargetGroup, err := lb.NewTargetGroup(ctx, fmt.Sprintf("job-tg-%s", environmentSuffix), &amp;lb.TargetGroupArgs{
+                        Port:       pulumi.Int(8080),
+                        Protocol:   pulumi.String("HTTP"),
+                        VpcId:      vpc.ID(),
+                        TargetType: pulumi.String("ip"),
+                        HealthCheck: &amp;lb.TargetGroupHealthCheckArgs{
+                                Path:               pulumi.String("/health"),
+                                Interval:           pulumi.Int(30),
+                                Timeout:            pulumi.Int(5),
+                                HealthyThreshold:   pulumi.Int(2),
+                                UnhealthyThreshold: pulumi.Int(3),
+                        },
+                        Tags: tags,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create ALB listener
+                <span class="cov6" title="7">listener, err := lb.NewListener(ctx, fmt.Sprintf("payment-listener-%s", environmentSuffix), &amp;lb.ListenerArgs{
+                        LoadBalancerArn: alb.Arn,
+                        Port:            pulumi.Int(80),
+                        Protocol:        pulumi.String("HTTP"),
+                        DefaultActions: lb.ListenerDefaultActionArray{
+                                &amp;lb.ListenerDefaultActionArgs{
+                                        Type:           pulumi.String("forward"),
+                                        TargetGroupArn: apiTargetGroup.Arn,
+                                },
+                        },
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create listener rule for /api/*
+                <span class="cov6" title="7">_, err = lb.NewListenerRule(ctx, fmt.Sprintf("api-rule-%s", environmentSuffix), &amp;lb.ListenerRuleArgs{
+                        ListenerArn: listener.Arn,
+                        Priority:    pulumi.Int(100),
+                        Actions: lb.ListenerRuleActionArray{
+                                &amp;lb.ListenerRuleActionArgs{
+                                        Type:           pulumi.String("forward"),
+                                        TargetGroupArn: apiTargetGroup.Arn,
+                                },
+                        },
+                        Conditions: lb.ListenerRuleConditionArray{
+                                &amp;lb.ListenerRuleConditionArgs{
+                                        PathPattern: &amp;lb.ListenerRuleConditionPathPatternArgs{
+                                                Values: pulumi.StringArray{pulumi.String("/api/*")},
+                                        },
+                                },
+                        },
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create listener rule for /health
+                <span class="cov6" title="7">_, err = lb.NewListenerRule(ctx, fmt.Sprintf("health-rule-%s", environmentSuffix), &amp;lb.ListenerRuleArgs{
+                        ListenerArn: listener.Arn,
+                        Priority:    pulumi.Int(200),
+                        Actions: lb.ListenerRuleActionArray{
+                                &amp;lb.ListenerRuleActionArgs{
+                                        Type:           pulumi.String("forward"),
+                                        TargetGroupArn: jobTargetGroup.Arn,
+                                },
+                        },
+                        Conditions: lb.ListenerRuleConditionArray{
+                                &amp;lb.ListenerRuleConditionArgs{
+                                        PathPattern: &amp;lb.ListenerRuleConditionPathPatternArgs{
+                                                Values: pulumi.StringArray{pulumi.String("/health")},
+                                        },
+                                },
+                        },
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create ECS task definition for payment-api
+                <span class="cov6" title="7">apiTaskDef, err := ecs.NewTaskDefinition(ctx, fmt.Sprintf("payment-api-task-%s", environmentSuffix), &amp;ecs.TaskDefinitionArgs{
+                        Family:                  pulumi.String(fmt.Sprintf("payment-api-%s", environmentSuffix)),
+                        NetworkMode:             pulumi.String("awsvpc"),
+                        RequiresCompatibilities: pulumi.StringArray{pulumi.String("FARGATE")},
+                        Cpu:                     pulumi.String("256"),
+                        Memory:                  pulumi.String("512"),
+                        ExecutionRoleArn:        taskExecutionRole.Arn,
+                        TaskRoleArn:             taskRole.Arn,
+                        ContainerDefinitions: pulumi.All(apiLogGroup.Name).ApplyT(func(args []interface{}) (string, error) </span><span class="cov6" title="7">{
+                                logGroupName := args[0].(string)
+                                containers := []map[string]interface{}{
+                                        {
+                                                "name":  "payment-api",
+                                                "image": "nginx:latest",
+                                                "portMappings": []map[string]interface{}{
+                                                        {
+                                                                "containerPort": 8080,
+                                                                "protocol":      "tcp",
+                                                        },
+                                                },
+                                                "logConfiguration": map[string]interface{}{
+                                                        "logDriver": "awslogs",
+                                                        "options": map[string]string{
+                                                                "awslogs-group":         logGroupName,
+                                                                "awslogs-region":        region,
+                                                                "awslogs-stream-prefix": "payment-api",
+                                                        },
+                                                },
+                                        },
+                                }
+                                jsonContainers, err := json.Marshal(containers)
+                                return string(jsonContainers), err
+                        }</span>).(pulumi.StringOutput),
+                        Tags: tags,
+                })
+                <span class="cov6" title="7">if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create ECS service for payment-api
+                <span class="cov6" title="7">_, err = ecs.NewService(ctx, fmt.Sprintf("payment-api-service-%s", environmentSuffix), &amp;ecs.ServiceArgs{
+                        Cluster:        ecsCluster.Arn,
+                        TaskDefinition: apiTaskDef.Arn,
+                        DesiredCount:   pulumi.Int(3),
+                        LaunchType:     pulumi.String("FARGATE"),
+                        NetworkConfiguration: &amp;ecs.ServiceNetworkConfigurationArgs{
+                                Subnets: pulumi.StringArray{
+                                        privateSubnets[0].ID(),
+                                        privateSubnets[1].ID(),
+                                        privateSubnets[2].ID(),
+                                },
+                                SecurityGroups: pulumi.StringArray{ecsSecurityGroup.ID()},
+                        },
+                        LoadBalancers: ecs.ServiceLoadBalancerArray{
+                                &amp;ecs.ServiceLoadBalancerArgs{
+                                        TargetGroupArn: apiTargetGroup.Arn,
+                                        ContainerName:  pulumi.String("payment-api"),
+                                        ContainerPort:  pulumi.Int(8080),
+                                },
+                        },
+                        Tags: tags,
+                }, pulumi.DependsOn([]pulumi.Resource{listener}))
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create ECS task definition for job-processor
+                <span class="cov6" title="7">jobTaskDef, err := ecs.NewTaskDefinition(ctx, fmt.Sprintf("job-processor-task-%s", environmentSuffix), &amp;ecs.TaskDefinitionArgs{
+                        Family:                  pulumi.String(fmt.Sprintf("job-processor-%s", environmentSuffix)),
+                        NetworkMode:             pulumi.String("awsvpc"),
+                        RequiresCompatibilities: pulumi.StringArray{pulumi.String("FARGATE")},
+                        Cpu:                     pulumi.String("256"),
+                        Memory:                  pulumi.String("512"),
+                        ExecutionRoleArn:        taskExecutionRole.Arn,
+                        TaskRoleArn:             taskRole.Arn,
+                        ContainerDefinitions: pulumi.All(jobLogGroup.Name).ApplyT(func(args []interface{}) (string, error) </span><span class="cov6" title="7">{
+                                logGroupName := args[0].(string)
+                                containers := []map[string]interface{}{
+                                        {
+                                                "name":  "job-processor",
+                                                "image": "nginx:latest",
+                                                "portMappings": []map[string]interface{}{
+                                                        {
+                                                                "containerPort": 8080,
+                                                                "protocol":      "tcp",
+                                                        },
+                                                },
+                                                "logConfiguration": map[string]interface{}{
+                                                        "logDriver": "awslogs",
+                                                        "options": map[string]string{
+                                                                "awslogs-group":         logGroupName,
+                                                                "awslogs-region":        region,
+                                                                "awslogs-stream-prefix": "job-processor",
+                                                        },
+                                                },
+                                        },
+                                }
+                                jsonContainers, err := json.Marshal(containers)
+                                return string(jsonContainers), err
+                        }</span>).(pulumi.StringOutput),
+                        Tags: tags,
+                })
+                <span class="cov6" title="7">if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Create ECS service for job-processor
+                <span class="cov6" title="7">_, err = ecs.NewService(ctx, fmt.Sprintf("job-processor-service-%s", environmentSuffix), &amp;ecs.ServiceArgs{
+                        Cluster:        ecsCluster.Arn,
+                        TaskDefinition: jobTaskDef.Arn,
+                        DesiredCount:   pulumi.Int(2),
+                        LaunchType:     pulumi.String("FARGATE"),
+                        NetworkConfiguration: &amp;ecs.ServiceNetworkConfigurationArgs{
+                                Subnets: pulumi.StringArray{
+                                        privateSubnets[0].ID(),
+                                        privateSubnets[1].ID(),
+                                        privateSubnets[2].ID(),
+                                },
+                                SecurityGroups: pulumi.StringArray{ecsSecurityGroup.ID()},
+                        },
+                        LoadBalancers: ecs.ServiceLoadBalancerArray{
+                                &amp;ecs.ServiceLoadBalancerArgs{
+                                        TargetGroupArn: jobTargetGroup.Arn,
+                                        ContainerName:  pulumi.String("job-processor"),
+                                        ContainerPort:  pulumi.Int(8080),
+                                },
+                        },
+                        Tags: tags,
+                }, pulumi.DependsOn([]pulumi.Resource{listener}))
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // Export stack outputs
+                <span class="cov6" title="7">ctx.Export("vpcId", vpc.ID())
+                ctx.Export("albDnsName", alb.DnsName)
+                ctx.Export("rdsClusterEndpoint", cluster.Endpoint)
+                ctx.Export("sqsQueueUrl", queue.Url)
+                ctx.Export("dlqUrl", dlq.Url)
+                ctx.Export("snsTopicArn", topic.Arn)
+
+        return nil</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

@@ -1,0 +1,11 @@
+Create a single CloudFormation template that deploys a comprehensive data processing pipeline for a financial analytics platform handling real time market data from multiple exchanges. The platform processes approximately 50TB of trading data daily, requiring both batch processing capabilities for historical analysis and real time streaming for risk monitoring.
+
+The pipeline architecture needs to ingest continuous JSON formatted market feeds (trades, order books, market depth) through Kinesis Data Streams configured with 10 shards to handle peak trading volumes. Raw data should flow into an S3 based data lake with three distinct buckets for raw, processed, and archived data, each with appropriate lifecycle policies that transition data to Glacier storage after 90 days for compliance and cost optimization.
+
+Your template should implement AWS Glue crawlers that automatically catalog incoming data and Glue ETL jobs to transform raw JSON market data into Parquet format for efficient analytical queries. Include Lambda functions triggered by S3 events to validate data quality against predefined schemas, with dead letter queues capturing any failed processing attempts for investigation.
+
+For metadata tracking and audit requirements, configure DynamoDB tables using on demand billing mode to record processing job details and maintain data lineage. Set up comprehensive CloudWatch dashboards displaying data ingestion rates, processing latency, and error counts, with SNS topics configured to alert on pipeline failures or data quality issues that fall below acceptable thresholds.
+
+Security and compliance requirements mandate AWS KMS encryption for all data at rest, S3 versioning for regulatory audit trails, and IAM roles following least privilege principles with explicit deny statements where necessary. Include cross account access configurations for data consumers and VPC endpoints for private connectivity to AWS services. Lambda functions should have reserved concurrent executions configured to prevent throttling during peak loads.
+
+Expected output: A production ready CloudFormation YAML template that creates all required resources with proper encryption, monitoring, and access controls for a 24/7 financial data processing environment.

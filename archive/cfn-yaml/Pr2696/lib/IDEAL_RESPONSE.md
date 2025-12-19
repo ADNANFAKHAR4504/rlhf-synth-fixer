@@ -1,0 +1,671 @@
+Summary
+
+Deliver a single-file CloudFormation template named TapStack.yml that a user can deploy as a brand-new stack in us-east-1 with zero edits. It stands up a secure, highly available web app environment: VPC, public/private subnets across two Availability Zones, NAT per AZ, ALB, Auto Scaling Group of private EC2 instances, S3 logging, and least-privilege IAM. Every resource is tagged with Environment: Production.
+
+Must-haves
+
+Networking
+
+VPC: 10.0.0.0/16, DNS hostnames/support enabled.
+
+Two public subnets and two private subnets, each pair spread across at least two AZs using Fn::GetAZs (no hard-coded AZ names).
+
+Internet Gateway + public route tables with default route to IGW.
+
+One NAT Gateway per AZ in public subnets; private route tables default to the same-AZ NAT (zonal HA).
+
+Security Groups
+
+ALB SG: inbound 80 and 443 from the internet, outbound open.
+
+App SG: inbound 80 only from the ALB SG; outbound open for package installs.
+
+Compute
+
+Launch Template with:
+
+AMI via SSM dynamic reference (Amazon Linux 2 family).
+
+IMDSv2 enforced.
+
+UserData that installs a tiny web server, serves / and a fast /health returning 200.
+
+Auto Scaling Group in private subnets (min=2, desired=2, max=4), registered to a Target Group on port 80.
+
+Load Balancing
+
+Internet-facing Application Load Balancer across public subnets.
+
+HTTP listener (80) forwarding to the Target Group.
+
+Health check path /health with sensible thresholds for quick stabilization.
+
+Logging
+
+S3 bucket dedicated for ALB access logs:
+
+Bucket owner preferred object ownership, public access block on, SSE-S3 encryption.
+
+Bucket policy allows regional ELB account 127311923021 (us-east-1) to s3:PutObject into the account-scoped prefix and s3:GetBucketAcl for ownership checks.
+
+Optional conditions restricting aws:SourceAccount and aws:SourceArn to this account and region (no circular references).
+
+ALB attributes configured to write access logs to that bucket with a fixed prefix (e.g., alb/).
+
+IAM
+
+Instance role + instance profile granting minimal S3 permissions for the logs bucket (ListBucket, GetObject, PutObject on the bucket/prefix), fulfilling the stated requirement.
+
+Tagging
+
+All resources include the tag: Environment: Production.
+
+Outputs
+
+VpcId, PublicSubnetIds, PrivateSubnetIds, AlbDnsName, TargetGroupArn, AutoScalingGroupName, InstanceRoleArn, LogsBucketName, AlbSecurityGroupId, AppSecurityGroupId.
+
+Non-negotiables
+
+No references to any pre-existing resources.
+
+No manual post-deploy steps; deploys cleanly in a fresh account/region.
+
+No hard-coded AZ names; rely on Fn::GetAZs.
+
+Lint-clean: avoid unnecessary substitutions that trigger warnings.
+
+Health checks pass; the ALB DNS responds with the index page.
+
+Design choices that reflect best practice
+
+Zonal NAT Gateways with zonal private routing for real HA.
+
+IMDSv2 required for instance metadata.
+
+AMI sourced via SSM public parameter to avoid drift.
+
+Restrictive App SG: traffic only from ALB SG on port 80.
+
+Access log bucket policy uses the account principal for us-east-1 ELB logs (127311923021) and correct object ARNs.
+
+Ownership controls set to BucketOwnerPreferred to prevent ACL conflicts.
+
+Validation checklist
+
+Run a linter and confirm no warnings about unnecessary substitutions.
+
+Deploy the stack in us-east-1 with default parameters.
+
+Wait for ASG targets to register healthy on /health.
+
+Resolve the ALB DNS name in outputs and hit http://<alb-dns>.
+
+Confirm access log objects appear in s3://<bucket>/alb/AWSLogs/<account-id>/....
+
+Confirm all resources carry Environment: Production.
+
+Out-of-scope (intentionally not included)
+
+HTTPS/ACM certificate issuance and DNS validation.
+
+Domain records in Route 53.
+
+Custom app code or databases.
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TapStack - Production-ready multi-AZ web application infrastructure with ALB, ASG, and S3 logging'
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: EC2 instance type for the application servers
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      ALBLogDeliveryAccount: '127311923021'
+
+Resources:
+  # VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: TapStack-VPC
+        - Key: Environment
+          Value: Production
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TapStack-IGW
+        - Key: Environment
+          Value: Production
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: TapStack-Public-Subnet-1
+        - Key: Environment
+          Value: Production
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: TapStack-Public-Subnet-2
+        - Key: Environment
+          Value: Production
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.11.0/24
+      Tags:
+        - Key: Name
+          Value: TapStack-Private-Subnet-1
+        - Key: Environment
+          Value: Production
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.12.0/24
+      Tags:
+        - Key: Name
+          Value: TapStack-Private-Subnet-2
+        - Key: Environment
+          Value: Production
+
+  # NAT Gateways and Elastic IPs
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: TapStack-NAT-EIP-1
+        - Key: Environment
+          Value: Production
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: TapStack-NAT-EIP-2
+        - Key: Environment
+          Value: Production
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: TapStack-NAT-1
+        - Key: Environment
+          Value: Production
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: TapStack-NAT-2
+        - Key: Environment
+          Value: Production
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: TapStack-Public-Routes
+        - Key: Environment
+          Value: Production
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: TapStack-Private-Routes-1
+        - Key: Environment
+          Value: Production
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: TapStack-Private-Routes-2
+        - Key: Environment
+          Value: Production
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  # Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: TapStack-ALB-SG
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP from internet
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS from internet
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: All outbound
+      Tags:
+        - Key: Name
+          Value: TapStack-ALB-SG
+        - Key: Environment
+          Value: Production
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: TapStack-App-SG
+      GroupDescription: Security group for application instances
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: HTTP from ALB
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: All outbound traffic for package installs
+      Tags:
+        - Key: Name
+          Value: TapStack-App-SG
+        - Key: Environment
+          Value: Production
+
+  # S3 Bucket for ALB Access Logs
+  ALBLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'tapstack-alb-logs-${AWS::AccountId}-${AWS::Region}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Name
+          Value: TapStack-ALB-Logs
+        - Key: Environment
+          Value: Production
+
+  ALBLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ALBLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              AWS: !Sub
+                - 'arn:aws:iam::${ALBLogAccount}:root'
+                - ALBLogAccount: !FindInMap [RegionMap, !Ref 'AWS::Region', ALBLogDeliveryAccount]
+            Action: s3:PutObject
+            Resource: !Sub
+              - '${BucketArn}/alb/AWSLogs/${AWS::AccountId}/*'
+              - { BucketArn: !GetAtt ALBLogsBucket.Arn }
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Principal:
+              AWS: !Sub
+                - 'arn:aws:iam::${ALBLogAccount}:root'
+                - ALBLogAccount: !FindInMap [RegionMap, !Ref 'AWS::Region', ALBLogDeliveryAccount]
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt ALBLogsBucket.Arn
+
+  # IAM Role and Instance Profile
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'TapStack-InstanceRole-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3LogsBucketAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt ALBLogsBucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub
+                  - '${BucketArn}/alb/*'
+                  - { BucketArn: !GetAtt ALBLogsBucket.Arn }
+      Tags:
+        - Key: Name
+          Value: TapStack-InstanceRole
+        - Key: Environment
+          Value: Production
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub 'TapStack-InstanceProfile-${AWS::Region}'
+      Roles:
+        - !Ref InstanceRole
+
+  # Launch Template
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: TapStack-LaunchTemplate
+      LaunchTemplateData:
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref AppSecurityGroup
+        MetadataOptions:
+          HttpTokens: required
+          HttpEndpoint: enabled
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            set -euxo pipefail
+            yum update -y
+            yum install -y httpd
+            systemctl enable --now httpd
+
+            cat > /var/www/html/index.html << 'EOF'
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>TapStack Application</title>
+            </head>
+            <body>
+                <h1>Welcome to TapStack</h1>
+                <p>This is a production-ready web application running on AWS.</p>
+                <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+                <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+            </body>
+            </html>
+            EOF
+
+            echo "OK" > /var/www/html/health
+            chown apache:apache /var/www/html/index.html /var/www/html/health
+            systemctl restart httpd
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: TapStack-Instance
+              - Key: Environment
+                Value: Production
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub 'TapStack-ALB-${AWS::StackName}'
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      LoadBalancerAttributes:
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref ALBLogsBucket
+        - Key: access_logs.s3.prefix
+          Value: 'alb'
+      Tags:
+        - Key: Name
+          Value: TapStack-ALB
+        - Key: Environment
+          Value: Production
+
+  # Target Group
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 10
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetType: instance
+      Tags:
+        - Key: Name
+          Value: TapStack-TG
+        - Key: Environment
+          Value: Production
+
+  # ALB Listener
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # Auto Scaling Group
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: TapStack-ASG-Instance
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: Production
+          PropagateAtLaunch: true
+
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VpcId'
+
+  PublicSubnetIds:
+    Description: Public subnet IDs
+    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnetIds'
+
+  PrivateSubnetIds:
+    Description: Private subnet IDs
+    Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnetIds'
+
+  AlbDnsName:
+    Description: ALB DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-AlbDnsName'
+
+  TargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-TargetGroupArn'
+
+  AutoScalingGroupName:
+    Description: Auto Scaling Group Name
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-AutoScalingGroupName'
+
+  InstanceRoleArn:
+    Description: Instance Role ARN
+    Value: !GetAtt InstanceRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceRoleArn'
+
+  LogsBucketName:
+    Description: S3 Logs Bucket Name
+    Value: !Ref ALBLogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-LogsBucketName'
+
+  AlbSecurityGroupId:
+    Description: ALB Security Group ID
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-AlbSecurityGroupId'
+
+  AppSecurityGroupId:
+    Description: Application Security Group ID
+    Value: !Ref AppSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-AppSecurityGroupId'
+```

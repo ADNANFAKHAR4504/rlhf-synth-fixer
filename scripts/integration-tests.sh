@@ -22,12 +22,57 @@ echo "Environment suffix: $ENVIRONMENT_SUFFIX"
 echo "CI mode: $CI"
 
 # Run integration tests based on language
-if [ "$LANGUAGE" = "py" ]; then
+if [ "$LANGUAGE" = "java" ]; then
+  echo "✅ Java project detected, running integration tests..."
+  chmod +x ./gradlew
+  ./gradlew integrationTest jacocoIntegrationTestReport --build-cache --no-daemon
+
+elif [ "$LANGUAGE" = "py" ] || [ "$LANGUAGE" = "python" ]; then
   echo "✅ Python project detected, running integration tests..."
   pipenv run test-py-integration
+
+elif [ "$LANGUAGE" = "go" ]; then
+  echo "✅ Go project detected, running integration tests..."
+  if [ "$PLATFORM" = "cdktf" ]; then
+    echo "🔧 Ensuring .gen exists for CDKTF Go integration tests"
+    # Ensure CDKTF Go deps and .gen are prepared (idempotent, uses cache)
+    bash ./scripts/cdktf-go-prepare.sh
+
+    # --- FIX: remove legacy terraform.tfstate for clean CI runs ---
+    if [ -f "terraform.tfstate" ]; then
+      echo "⚠️ Found legacy terraform.tfstate. Removing for clean CI run..."
+      rm -f terraform.tfstate
+    fi
+
+    if [ ! -d ".gen" ] || [ ! -d ".gen/aws" ]; then
+      echo "Running cdktf get to generate .gen..."
+      npm run cdktf:get || npx --yes cdktf get
+    fi
+    if [ ! -d ".gen/aws" ]; then
+      echo "❌ .gen/aws missing after cdktf get; aborting"
+      exit 1
+    fi
+
+  fi
+
+  if [ -d "lib" ]; then
+    if [ -d "tests/integration" ]; then
+      echo "📦 Copying integration *_test.go files into lib/ for package alignment"
+      cp tests/integration/*_test.go lib/ || true
+    fi
+    cd lib
+    echo "🔧 Updating go.sum for integration test dependencies..."
+    go mod tidy
+    go test ./... -v -tags "integration"
+    cd ..
+  else
+    echo "ℹ️ lib directory not found, skipping Go integration tests"
+  fi
+
 elif [ "$LANGUAGE" = "js" ]; then
   echo "✅ JavaScript project detected, running integration tests..."
   npm run test:integration-js
+
 else
   echo "✅ Running default integration tests..."
   npm run test:integration

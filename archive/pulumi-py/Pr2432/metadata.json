@@ -1,0 +1,15 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "985",
+  "team": "4",
+  "startedAt": "2025-08-28T17:11:43.944Z",
+  "author": "abdullahj2",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

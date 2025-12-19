@@ -1,0 +1,281 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Transaction Processing Infrastructure - Refactored to eliminate circular dependencies",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Resource Configuration"
+          },
+          "Parameters": [
+            "TableName",
+            "FunctionName"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "TableName": {
+      "Type": "String",
+      "Default": "TransactionTable",
+      "Description": "Base name for the DynamoDB table",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "FunctionName": {
+      "Type": "String",
+      "Default": "PaymentProcessor",
+      "Description": "Base name for the Lambda function",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    }
+  },
+  "Resources": {
+    "TransactionTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${TableName}-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "transactionId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "transactionId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "TransactionProcessing"
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "PaymentProcessorRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DynamoDBAccessPolicy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "ManagedPolicyName": {
+          "Fn::Sub": "DynamoDBAccessPolicy-${EnvironmentSuffix}"
+        },
+        "Description": "Consolidated policy for DynamoDB access from Lambda",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:PutItem",
+                "dynamodb:GetItem",
+                "dynamodb:UpdateItem",
+                "dynamodb:Query",
+                "dynamodb:Scan"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TransactionTable",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "LambdaExecutionRole"
+          }
+        ]
+      }
+    },
+    "PaymentProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DependsOn": [
+        "DynamoDBAccessPolicy"
+      ],
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${FunctionName}-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 256,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "TransactionTable"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom datetime import datetime\n\ndynamodb = boto3.resource('dynamodb')\ntable_name = os.environ['TABLE_NAME']\ntable = dynamodb.Table(table_name)\n\ndef lambda_handler(event, context):\n    try:\n        transaction_id = event.get('transactionId', 'test-123')\n        amount = event.get('amount', 100.00)\n        timestamp = int(datetime.now().timestamp())\n        \n        response = table.put_item(\n            Item={\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'amount': str(amount),\n                'status': 'processed'\n            }\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Transaction processed successfully',\n                'transactionId': transaction_id\n            })\n        }\n    except Exception as e:\n        print(f'Error processing transaction: {str(e)}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'error': str(e)\n            })\n        }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "TransactionTableName": {
+      "Description": "Name of the DynamoDB transaction table",
+      "Value": {
+        "Ref": "TransactionTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TransactionTableName"
+        }
+      }
+    },
+    "TransactionTableArn": {
+      "Description": "ARN of the DynamoDB transaction table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TransactionTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TransactionTableArn"
+        }
+      }
+    },
+    "PaymentProcessorFunctionArn": {
+      "Description": "ARN of the Lambda payment processor function",
+      "Value": {
+        "Fn::GetAtt": [
+          "PaymentProcessorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PaymentProcessorFunctionArn"
+        }
+      }
+    },
+    "PaymentProcessorFunctionName": {
+      "Description": "Name of the Lambda payment processor function",
+      "Value": {
+        "Ref": "PaymentProcessorFunction"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PaymentProcessorFunctionName"
+        }
+      }
+    },
+    "LambdaExecutionRoleArn": {
+      "Description": "ARN of the Lambda execution role",
+      "Value": {
+        "Fn::GetAtt": [
+          "LambdaExecutionRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaExecutionRoleArn"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291813",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T08:54:32.062Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "RDS",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "EC2",
+    "VPC",
+    "AWS Backup"
+  ],
+  "provider": "localstack",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

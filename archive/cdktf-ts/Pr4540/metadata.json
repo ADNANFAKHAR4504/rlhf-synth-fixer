@@ -1,0 +1,39 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "19DC43",
+  "team": "1",
+  "startedAt": "2025-10-15T15:54:28.222Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "Provision a highly available and resilient single-region infrastructure for a financial transaction processing application, including automated failover and backup mechanisms to meet stringent uptime requirements.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "Route53",
+    "DynamoDB",
+    "Application Load Balancer",
+    "ECS Fargate",
+    "Aurora PostgreSQL",
+    "Lambda",
+    "VPC",
+    "CloudWatch",
+    "IAM",
+    "Security Groups",
+    "KMS",
+    "Secrets Manager",
+    "SNS",
+    "SSM",
+    "AWS Backup",
+    "EventBridge"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "akshat-jain355",
+  "dockerS3Location": ""
+}

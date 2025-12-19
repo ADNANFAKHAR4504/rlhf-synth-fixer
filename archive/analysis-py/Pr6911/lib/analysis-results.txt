@@ -1,0 +1,117 @@
+2025-11-21 07:03:01,438 - INFO - Found credentials in environment variables.
+2025-11-21 07:03:01,543 - INFO - Found endpoint for ec2 via: environment_global.
+2025-11-21 07:03:01,594 - INFO - Found endpoint for ec2 via: environment_global.
+2025-11-21 07:03:01,616 - INFO - Found endpoint for rds via: environment_global.
+2025-11-21 07:03:01,624 - INFO - Found endpoint for elbv2 via: environment_global.
+2025-11-21 07:03:01,631 - INFO - Found endpoint for lambda via: environment_global.
+2025-11-21 07:03:01,633 - INFO - Starting security group analysis...
+2025-11-21 07:03:01,633 - INFO - Loading security groups...
+2025-11-21 07:03:01,667 - INFO - Loaded 13 security groups for analysis
+2025-11-21 07:03:01,668 - INFO - Checking for unrestricted inbound access...
+2025-11-21 07:03:01,692 - INFO - Checking for unrestricted outbound access...
+2025-11-21 07:03:01,828 - INFO - Checking for unused security groups...
+2025-11-21 07:03:01,846 - INFO - Checking for default security group usage...
+2025-11-21 07:03:01,860 - INFO - Checking for overly broad source ranges...
+2025-11-21 07:03:01,902 - INFO - Checking for duplicate rules...
+2025-11-21 07:03:01,902 - INFO - Checking for rules without descriptions...
+2025-11-21 07:03:02,047 - INFO - Checking for cross-VPC references...
+2025-11-21 07:03:02,053 - INFO - Checking for deprecated protocols...
+2025-11-21 07:03:02,063 - INFO - Checking for IPv6 exposure...
+2025-11-21 07:03:02,063 - INFO - Checking for all traffic rules...
+2025-11-21 07:03:02,204 - INFO - Checking for management port exposure...
+2025-11-21 07:03:02,223 - INFO - Checking for unnecessary ICMP rules...
+2025-11-21 07:03:02,233 - INFO - Checking load balancer security...
+2025-11-21 07:03:02,245 - INFO - JSON output saved to security_group_audit.json and aws_audit_results.json
+2025-11-21 07:03:02,245 - INFO - HTML dashboard saved to security_posture_dashboard.html
+2025-11-21 07:03:02,246 - INFO - CSV output saved to compliance_violations.csv
+2025-11-21 07:03:02,246 - INFO - Security group analysis completed successfully
+
+================================================================================
+AWS Security Group Audit Results
+================================================================================
+
++--------------------------------+---------+
+| Metric                         |   Count |
++================================+=========+
+| Total Findings                 |      63 |
++--------------------------------+---------+
+| Critical                       |       4 |
++--------------------------------+---------+
+| High                           |       3 |
++--------------------------------+---------+
+| Medium                         |      17 |
++--------------------------------+---------+
+| Low                            |      39 |
++--------------------------------+---------+
+| Total Security Groups Analyzed |      13 |
++--------------------------------+---------+
+| Unused Security Groups         |      10 |
++--------------------------------+---------+
+
+================================================================================
+Critical and High Severity Findings (Top 20)
+================================================================================
+
++------------+--------------------------+----------------------+----------------------+------------------------------------------+--------------+
+| Severity   | Finding Type             | SG ID                | Security Group       | Risk Description                         | Risk Score   |
++============+==========================+======================+======================+==========================================+==============+
+| CRITICAL   | unrestricted_inbound     | sg-ac520aee4202473f4 | sg-unrestricted-ssh  | Unrestricted access from Internet to hig | 10.0/10      |
++------------+--------------------------+----------------------+----------------------+------------------------------------------+--------------+
+| CRITICAL   | unrestricted_inbound     | sg-3159ccf1f7394c91c | sg-rdp-exposed       | Unrestricted access from Internet to hig | 10.0/10      |
++------------+--------------------------+----------------------+----------------------+------------------------------------------+--------------+
+| CRITICAL   | management_port_exposure | sg-ac520aee4202473f4 | sg-unrestricted-ssh  | SSH port 22 exposed to Internet          | 10.0/10      |
++------------+--------------------------+----------------------+----------------------+------------------------------------------+--------------+
+| CRITICAL   | management_port_exposure | sg-3159ccf1f7394c91c | sg-rdp-exposed       | RDP port 3389 exposed to Internet        | 10.0/10      |
++------------+--------------------------+----------------------+----------------------+------------------------------------------+--------------+
+| HIGH       | unrestricted_outbound    | sg-d8ab521425a95cedf | sg-database-tier     | Sensitive tier has unrestricted outbound | 9.5/10       |
++------------+--------------------------+----------------------+----------------------+------------------------------------------+--------------+
+| HIGH       | deprecated_protocols     | sg-9444c4961480a2e35 | sg-deprecated-telnet | Allows deprecated protocol Telnet (port  | 9.5/10       |
++------------+--------------------------+----------------------+----------------------+------------------------------------------+--------------+
+| HIGH       | all_traffic_rule         | sg-80e50637aeec4198b | sg-all-traffic       | Allows all protocols inbound             | 9.5/10       |
++------------+--------------------------+----------------------+----------------------+------------------------------------------+--------------+
+
+================================================================================
+Finding Types Summary
+================================================================================
+
++--------------------------+---------+
+| Finding Type             |   Count |
++==========================+=========+
+| duplicate_rules          |      15 |
++--------------------------+---------+
+| all_traffic_rule         |      14 |
++--------------------------+---------+
+| no_description           |      13 |
++--------------------------+---------+
+| unused_security_group    |      10 |
++--------------------------+---------+
+| overly_broad_source      |       4 |
++--------------------------+---------+
+| unrestricted_inbound     |       2 |
++--------------------------+---------+
+| management_port_exposure |       2 |
++--------------------------+---------+
+| unrestricted_outbound    |       1 |
++--------------------------+---------+
+| deprecated_protocols     |       1 |
++--------------------------+---------+
+| unnecessary_icmp         |       1 |
++--------------------------+---------+
+
+================================================================================
+Compliance Violations Summary
+================================================================================
+
++-------------+----------------------------+
+| Framework   |   Affected Security Groups |
++=============+============================+
+| HIPAA       |                         13 |
++-------------+----------------------------+
+| PCI-DSS     |                         13 |
++-------------+----------------------------+
+| SOC2        |                         13 |
++-------------+----------------------------+
+
+================================================================================
+Analysis Complete
+================================================================================

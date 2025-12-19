@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000894",
+  "team": "synth",
+  "startedAt": "2025-11-11T04:56:27+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Database",
+    "Aurora",
+    "RDS",
+    "Security",
+    "High Availability"
+  ],
+  "aws_services": [
+    "RDS",
+    "VPC",
+    "Secrets Manager",
+    "CloudWatch",
+    "KMS"
+  ],
+  "region": "eu-west-2",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

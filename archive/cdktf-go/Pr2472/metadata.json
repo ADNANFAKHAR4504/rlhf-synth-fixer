@@ -1,0 +1,41 @@
+{
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "292001",
+  "team": "2",
+  "startedAt": "2025-08-29T10:06:54.665Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Database Management",
+    "Security Configuration",
+    "Resource Scaling",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ELB",
+    "AutoScaling",
+    "CloudWatch",
+    "IAM",
+    "S3",
+    "KMS",
+    "Secrets Manager",
+    "Route53",
+    "ACM",
+    "CloudTrail",
+    "SSM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anshuk-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,22 @@
+# Example Terraform variables file
+# Copy this file to terraform.tfvars and update with your values
+
+environment_suffix = "dev-001"
+aws_region        = "us-east-1"
+
+# Lambda configuration
+lambda_runtime              = "python3.11"
+lambda_architecture         = "arm64"
+lambda_reserved_concurrency = 10
+
+# API Gateway throttling
+api_throttle_rate_limit  = 1000
+api_throttle_burst_limit = 2000
+
+# CloudWatch configuration
+cloudwatch_log_retention_days = 30
+
+# Alarm configuration
+alarm_error_rate_threshold = 1
+alarm_evaluation_periods   = 1
+alarm_period_seconds       = 300

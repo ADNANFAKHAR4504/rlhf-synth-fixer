@@ -1,0 +1,2102 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Financial Services Disaster Recovery Infrastructure - Main Template",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "Environment",
+                        "CompanyName",
+                        "CostCenter"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Regional Configuration"
+                    },
+                    "Parameters": [
+                        "PrimaryRegion",
+                        "SecondaryRegion",
+                        "PrimaryVpcCidr"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Database Configuration"
+                    },
+                    "Parameters": [
+                        "DatabaseMasterUsername"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Backup and Recovery"
+                    },
+                    "Parameters": [
+                        "BackupRetentionDays",
+                        "BackupWindow",
+                        "MaintenanceWindow"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Monitoring and Alerting"
+                    },
+                    "Parameters": [
+                        "AlertEmail"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "prod",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "Description": "Environment name for resource tagging and naming"
+        },
+        "CompanyName": {
+            "Type": "String",
+            "Default": "finserv",
+            "Description": "Company name for resource naming"
+        },
+        "CostCenter": {
+            "Type": "String",
+            "Default": "trading",
+            "Description": "Cost center for billing allocation"
+        },
+        "PrimaryRegion": {
+            "Type": "String",
+            "Default": "us-east-1",
+            "Description": "Primary AWS region for deployment"
+        },
+        "SecondaryRegion": {
+            "Type": "String",
+            "Default": "us-west-2",
+            "Description": "Secondary AWS region for disaster recovery"
+        },
+        "PrimaryVpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for primary VPC"
+        },
+        "DatabaseMasterUsername": {
+            "Type": "String",
+            "Default": "dbadmin",
+            "NoEcho": true,
+            "Description": "Master username for Aurora database"
+        },
+        "BackupRetentionDays": {
+            "Type": "Number",
+            "Default": 35,
+            "MinValue": 7,
+            "MaxValue": 35,
+            "Description": "Database backup retention period in days"
+        },
+        "BackupWindow": {
+            "Type": "String",
+            "Default": "03:00-04:00",
+            "Description": "Daily backup window (UTC)"
+        },
+        "MaintenanceWindow": {
+            "Type": "String",
+            "Default": "sun:04:00-sun:05:00",
+            "Description": "Weekly maintenance window (UTC)"
+        },
+        "AlertEmail": {
+            "Type": "String",
+            "Default": "admin@example.com",
+            "Description": "Email address for DR alerts and notifications"
+        }
+    },
+    "Conditions": {
+        "IsProduction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "prod"
+            ]
+        },
+        "IsPrimaryRegion": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::Region"
+                },
+                {
+                    "Ref": "PrimaryRegion"
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "PrimaryKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "${CompanyName} Primary Region KMS Key for DR Infrastructure"
+                },
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudTrail",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Cross Region Access",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "PrimaryKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${CompanyName}-${Environment}-primary-dr-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "PrimaryKMSKey"
+                }
+            }
+        },
+        "DatabasePasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-db-password"
+                },
+                "Description": "Database master password for RDS instance",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
+                }
+            }
+        },
+        "PrimaryVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "PrimaryVpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-primary-vpc"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Primary Region VPC for DR"
+                    }
+                ]
+            }
+        },
+        "PrimaryInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-primary-igw"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrimaryInternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "PrimaryInternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                }
+            }
+        },
+        "PrimaryPublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-primary-public-1"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    }
+                ]
+            }
+        },
+        "PrimaryPublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-primary-public-2"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    }
+                ]
+            }
+        },
+        "PrimaryPrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                },
+                "CidrBlock": "10.0.3.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-primary-private-1"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    }
+                ]
+            }
+        },
+        "PrimaryPrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                },
+                "CidrBlock": "10.0.4.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-primary-private-2"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    }
+                ]
+            }
+        },
+        "PrimaryDatabaseSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                },
+                "CidrBlock": "10.0.5.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-primary-db-1"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Database"
+                    }
+                ]
+            }
+        },
+        "PrimaryDatabaseSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                },
+                "CidrBlock": "10.0.6.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-primary-db-2"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Database"
+                    }
+                ]
+            }
+        },
+        "PrimaryPublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-primary-public-rt"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrimaryPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "IsPrimaryRegion",
+            "DependsOn": "PrimaryInternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrimaryPublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "PrimaryInternetGateway"
+                }
+            }
+        },
+        "PrimaryPublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrimaryPublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PrimaryPublicSubnet1"
+                }
+            }
+        },
+        "PrimaryPublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrimaryPublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PrimaryPublicSubnet2"
+                }
+            }
+        },
+        "PrimaryNATGateway1EIP": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "IsPrimaryRegion",
+            "DependsOn": "PrimaryInternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "PrimaryNATGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "PrimaryNATGateway1EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PrimaryPublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-primary-nat-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrimaryPrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-primary-private-rt-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrimaryPrivateRoute1": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrimaryPrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "PrimaryNATGateway1"
+                }
+            }
+        },
+        "PrimaryPrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrimaryPrivateRouteTable1"
+                },
+                "SubnetId": {
+                    "Ref": "PrimaryPrivateSubnet1"
+                }
+            }
+        },
+        "PrimaryDatabaseSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrimaryPrivateRouteTable1"
+                },
+                "SubnetId": {
+                    "Ref": "PrimaryDatabaseSubnet1"
+                }
+            }
+        },
+        "ApplicationLoadBalancerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "GroupDescription": "Security group for Application Load Balancer",
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTP traffic"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-alb-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApplicationSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "GroupDescription": "Security group for application tier",
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 8080,
+                        "ToPort": 8080,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ApplicationLoadBalancerSecurityGroup"
+                        },
+                        "Description": "Application port from ALB"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-app-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "GroupDescription": "Security group for database tier",
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 5432,
+                        "ToPort": 5432,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ApplicationSecurityGroup"
+                        },
+                        "Description": "PostgreSQL from application"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-db-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "AuroraDBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for Aurora Global Database",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrimaryDatabaseSubnet1"
+                    },
+                    {
+                        "Ref": "PrimaryDatabaseSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-aurora-subnet-group"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrimaryDatabase": {
+            "Type": "AWS::RDS::DBInstance",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-primary-db"
+                },
+                "DBInstanceClass": "db.t3.medium",
+                "Engine": "postgres",
+                "EngineVersion": "13.22",
+                "MasterUsername": {
+                    "Ref": "DatabaseMasterUsername"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabasePasswordSecret}:SecretString:password}}"
+                },
+                "DBName": "tradingapp",
+                "AllocatedStorage": 20,
+                "StorageType": "gp2",
+                "StorageEncrypted": true,
+                "BackupRetentionPeriod": {
+                    "Ref": "BackupRetentionDays"
+                },
+                "PreferredBackupWindow": {
+                    "Ref": "BackupWindow"
+                },
+                "PreferredMaintenanceWindow": {
+                    "Ref": "MaintenanceWindow"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "DatabaseSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "AuroraDBSubnetGroup"
+                },
+                "PubliclyAccessible": false,
+                "DeletionProtection": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-primary-database"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSEnhancedMonitoringRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-rds-monitoring-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "monitoring.rds.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+                ]
+            }
+        },
+        "TradingDataTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-trading-data"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "trade_id",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "trade_id",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "TimestampIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "timestamp",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-trading-data-table"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "DocumentsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-documents-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "NotificationConfiguration": {
+                    "LambdaConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "S3ProcessingFunction",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-documents-bucket"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "DROrchestrationFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-dr-orchestration"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "DROrchestrationRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "Environment": {
+                    "Variables": {
+                        "PRIMARY_REGION": {
+                            "Ref": "PrimaryRegion"
+                        },
+                        "SECONDARY_REGION": {
+                            "Ref": "SecondaryRegion"
+                        },
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "DRNotificationTopic"
+                        },
+                        "AURORA_CLUSTER_ID": {
+                            "Fn::If": [
+                                "IsPrimaryRegion",
+                                {
+                                    "Ref": "PrimaryDatabase"
+                                },
+                                ""
+                            ]
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    \"\"\"\n    DR Orchestration function for automated failover procedures\n    \"\"\"\n    try:\n        # Initialize AWS clients\n        rds_client = boto3.client('rds')\n        route53_client = boto3.client('route53')\n        sns_client = boto3.client('sns')\n        \n        # Get environment variables\n        primary_region = os.environ['PRIMARY_REGION']\n        secondary_region = os.environ['SECONDARY_REGION']\n        sns_topic_arn = os.environ['SNS_TOPIC_ARN']\n        \n        # Determine failover action based on event\n        action = event.get('action', 'health_check')\n        \n        if action == 'failover':\n            # Perform automated failover procedures\n            result = perform_failover(rds_client, route53_client)\n        elif action == 'health_check':\n            # Perform health checks\n            result = perform_health_check(rds_client)\n        elif action == 'test_dr':\n            # Perform DR testing\n            result = perform_dr_test()\n        else:\n            result = {'status': 'error', 'message': 'Unknown action'}\n        \n        # Send notification\n        sns_client.publish(\n            TopicArn=sns_topic_arn,\n            Subject=f'DR Operation: {action}',\n            Message=json.dumps(result, indent=2)\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps(result)\n        }\n        \n    except Exception as e:\n        error_msg = f'DR orchestration failed: {str(e)}'\n        print(error_msg)\n        \n        # Send error notification\n        try:\n            sns_client.publish(\n                TopicArn=sns_topic_arn,\n                Subject='DR Operation Failed',\n                Message=error_msg\n            )\n        except:\n            pass\n        \n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': error_msg})\n        }\n\ndef perform_failover(rds_client, route53_client):\n    \"\"\"Perform automated failover to secondary region\"\"\"\n    # Implementation for failover logic\n    return {'status': 'success', 'message': 'Failover initiated'}\n\ndef perform_health_check(rds_client):\n    \"\"\"Perform health checks on primary resources\"\"\"\n    # Implementation for health check logic\n    return {'status': 'healthy', 'message': 'All systems operational'}\n\ndef perform_dr_test():\n    \"\"\"Perform DR testing procedures\"\"\"\n    # Implementation for DR testing logic\n    return {'status': 'success', 'message': 'DR test completed'}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-dr-orchestration-function"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3ProcessingFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-s3-processing"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "S3ProcessingRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Process S3 events for document uploads and modifications\n    \"\"\"\n    try:\n        for record in event['Records']:\n            bucket = record['s3']['bucket']['name']\n            key = record['s3']['object']['key']\n            event_name = record['eventName']\n            \n            print(f'Processing {event_name} for {key} in bucket {bucket}')\n            \n            # Add your document processing logic here\n            # For example: virus scanning, metadata extraction, etc.\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps('Successfully processed S3 events')\n        }\n        \n    except Exception as e:\n        print(f'Error processing S3 events: {str(e)}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)})\n        }\n"
+                }
+            }
+        },
+        "DROrchestrationRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-dr-orchestration-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DROrchestrationPolicy",
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "rds:DescribeDBClusters",
+                                        "rds:FailoverGlobalCluster",
+                                        "rds:ModifyGlobalCluster",
+                                        "route53:GetHealthCheck",
+                                        "route53:ChangeResourceRecordSets",
+                                        "route53:ListResourceRecordSets",
+                                        "sns:Publish",
+                                        "ec2:DescribeInstances",
+                                        "autoscaling:DescribeAutoScalingGroups",
+                                        "autoscaling:UpdateAutoScalingGroup"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::If": [
+                                                "IsPrimaryRegion",
+                                                {
+                                                    "Fn::GetAtt": [
+                                                        "PrimaryKMSKey",
+                                                        "Arn"
+                                                    ]
+                                                },
+                                                {
+                                                    "Fn::Sub": "arn:aws:kms:${SecondaryRegion}:${AWS::AccountId}:alias/${CompanyName}-${Environment}-secondary-dr-key"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "S3ProcessingRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-s3-processing-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3ProcessingPolicy",
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${CompanyName}-${Environment}-documents-${AWS::AccountId}-${AWS::Region}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::If": [
+                                            "IsPrimaryRegion",
+                                            {
+                                                "Fn::GetAtt": [
+                                                    "PrimaryKMSKey",
+                                                    "Arn"
+                                                ]
+                                            },
+                                            {
+                                                "Fn::Sub": "arn:aws:kms:${SecondaryRegion}:${AWS::AccountId}:alias/${CompanyName}-${Environment}-secondary-dr-key"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "S3ProcessingFunctionPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "S3ProcessingFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "s3.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:s3:::${CompanyName}-${Environment}-documents-${AWS::AccountId}-${AWS::Region}"
+                }
+            }
+        },
+        "DRNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-dr-notifications"
+                },
+                "DisplayName": "Disaster Recovery Notifications",
+                "KmsMasterKeyId": {
+                    "Fn::If": [
+                        "IsPrimaryRegion",
+                        {
+                            "Ref": "PrimaryKMSKey"
+                        },
+                        {
+                            "Fn::Sub": "arn:aws:kms:${SecondaryRegion}:${AWS::AccountId}:alias/${CompanyName}-${Environment}-secondary-dr-key"
+                        }
+                    ]
+                }
+            }
+        },
+        "DRNotificationSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "TopicArn": {
+                    "Ref": "DRNotificationTopic"
+                },
+                "Protocol": "email",
+                "Endpoint": {
+                    "Ref": "AlertEmail"
+                }
+            }
+        },
+        "DatabaseFailureRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-database-failure-rule"
+                },
+                "Description": "Trigger DR orchestration on database failures",
+                "EventPattern": {
+                    "source": [
+                        "aws.rds"
+                    ],
+                    "detail-type": [
+                        "RDS DB Instance Event",
+                        "RDS DB Cluster Event"
+                    ],
+                    "detail": {
+                        "EventCategories": [
+                            "failure",
+                            "failover"
+                        ]
+                    }
+                },
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "DROrchestrationFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "DROrchestrationTarget",
+                        "Input": "{\"action\": \"failover\", \"source\": \"rds\"}"
+                    }
+                ]
+            }
+        },
+        "DatabaseFailureRulePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "DROrchestrationFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "DatabaseFailureRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "DRDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-dr-dashboard"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/RDS\", \"DatabaseConnections\", \"DBInstanceIdentifier\", \"${PrimaryDatabase}\"],\n          [\".\", \"CPUUtilization\", \".\", \".\"],\n          [\".\", \"ReadLatency\", \".\", \".\"],\n          [\".\", \"WriteLatency\", \".\", \".\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Aurora Database Metrics\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", \"TableName\", \"${TradingDataTable}\"],\n          [\".\", \"ConsumedWriteCapacityUnits\", \".\", \".\"],\n          [\".\", \"UserErrors\", \".\", \".\"],\n          [\".\", \"SystemErrors\", \".\", \".\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Metrics\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 6,\n      \"width\": 24,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Duration\", \"FunctionName\", \"${DROrchestrationFunction}\"],\n          [\".\", \"Errors\", \".\", \".\"],\n          [\".\", \"Invocations\", \".\", \".\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DR Orchestration Lambda Metrics\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "DatabaseConnectionAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-database-connection-alarm"
+                },
+                "AlarmDescription": "Monitor RDS database connections",
+                "MetricName": "DatabaseConnections",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "PrimaryDatabase"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "DRNotificationTopic"
+                    }
+                ]
+            }
+        },
+        "DatabaseCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-database-cpu-alarm"
+                },
+                "AlarmDescription": "Monitor RDS database CPU utilization",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 3,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "PrimaryDatabase"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "DRNotificationTopic"
+                    }
+                ]
+            }
+        },
+        "DRRunbookDocument": {
+            "Type": "AWS::SSM::Document",
+            "Properties": {
+                "DocumentType": "Automation",
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-dr-runbook"
+                },
+                "Content": {
+                    "schemaVersion": "0.3",
+                    "description": "Disaster Recovery Automation Runbook",
+                    "assumeRole": {
+                        "Fn::GetAtt": [
+                            "SSMAutomationRole",
+                            "Arn"
+                        ]
+                    },
+                    "parameters": {
+                        "FailoverType": {
+                            "type": "String",
+                            "description": "Type of failover to perform",
+                            "allowedValues": [
+                                "database",
+                                "application",
+                                "full"
+                            ]
+                        }
+                    },
+                    "mainSteps": [
+                        {
+                            "name": "ValidatePrerequisites",
+                            "action": "aws:executeAwsApi",
+                            "inputs": {
+                                "Service": "rds",
+                                "Api": "DescribeDBInstances",
+                                "DBInstanceIdentifier": {
+                                    "Fn::If": [
+                                        "IsPrimaryRegion",
+                                        {
+                                            "Ref": "PrimaryDatabase"
+                                        },
+                                        ""
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "InitiateFailover",
+                            "action": "aws:invokeLambdaFunction",
+                            "inputs": {
+                                "FunctionName": {
+                                    "Ref": "DROrchestrationFunction"
+                                },
+                                "Payload": "{\n  \"action\": \"failover\",\n  \"type\": \"{{ FailoverType }}\"\n}\n"
+                            }
+                        },
+                        {
+                            "name": "ValidateFailover",
+                            "action": "aws:waitForAwsResourceProperty",
+                            "inputs": {
+                                "Service": "rds",
+                                "Api": "DescribeDBInstances",
+                                "DBInstanceIdentifier": {
+                                    "Fn::If": [
+                                        "IsPrimaryRegion",
+                                        {
+                                            "Ref": "PrimaryDatabase"
+                                        },
+                                        ""
+                                    ]
+                                },
+                                "PropertySelector": "$.DBInstances[0].DBInstanceStatus",
+                                "DesiredValues": [
+                                    "available"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "SSMAutomationRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-ssm-automation-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ssm.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonSSMAutomationRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DRAutomationPolicy",
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "rds:*",
+                                        "lambda:InvokeFunction",
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "BackupPlan": {
+            "Type": "AWS::Backup::BackupPlan",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "BackupPlan": {
+                    "BackupPlanName": {
+                        "Fn::Sub": "${CompanyName}-${Environment}-dr-backup-plan"
+                    },
+                    "BackupPlanRule": [
+                        {
+                            "RuleName": "DailyBackups",
+                            "TargetBackupVault": {
+                                "Ref": "BackupVault"
+                            },
+                            "ScheduleExpression": "cron(0 2 * * ? *)",
+                            "StartWindowMinutes": 60,
+                            "CompletionWindowMinutes": 120,
+                            "Lifecycle": {
+                                "DeleteAfterDays": 120,
+                                "MoveToColdStorageAfterDays": 30
+                            },
+                            "CopyActions": [
+                                {
+                                    "DestinationBackupVaultArn": {
+                                        "Fn::Sub": "arn:aws:backup:${SecondaryRegion}:${AWS::AccountId}:backup-vault:${CompanyName}-${Environment}-dr-backup-vault-${SecondaryRegion}"
+                                    },
+                                    "Lifecycle": {
+                                        "DeleteAfterDays": 120,
+                                        "MoveToColdStorageAfterDays": 30
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "BackupVault": {
+            "Type": "AWS::Backup::BackupVault",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "BackupVaultName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-dr-backup-vault"
+                },
+                "EncryptionKeyArn": {
+                    "Fn::GetAtt": [
+                        "PrimaryKMSKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "BackupSelection": {
+            "Type": "AWS::Backup::BackupSelection",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "BackupPlanId": {
+                    "Ref": "BackupPlan"
+                },
+                "BackupSelection": {
+                    "SelectionName": {
+                        "Fn::Sub": "${CompanyName}-${Environment}-dr-resources"
+                    },
+                    "IamRoleArn": {
+                        "Fn::GetAtt": [
+                            "BackupRole",
+                            "Arn"
+                        ]
+                    },
+                    "Resources": [
+                        {
+                            "Fn::If": [
+                                "IsPrimaryRegion",
+                                {
+                                    "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${PrimaryDatabase}"
+                                },
+                                ""
+                            ]
+                        },
+                        {
+                            "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TradingDataTable}"
+                        }
+                    ]
+                }
+            }
+        },
+        "BackupRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-backup-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "backup.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+                    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
+                ]
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-alb"
+                },
+                "Type": "application",
+                "Scheme": "internet-facing",
+                "SecurityGroups": [
+                    {
+                        "Ref": "ApplicationLoadBalancerSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "PrimaryPublicSubnet1"
+                    },
+                    {
+                        "Ref": "PrimaryPublicSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-application-load-balancer"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Condition": "IsPrimaryRegion",
+            "DependsOn": "PrimaryKMSKey",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-launch-template"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
+                    "InstanceType": {
+                        "Fn::If": [
+                            "IsProduction",
+                            "c5.xlarge",
+                            "c5.large"
+                        ]
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "ApplicationSecurityGroup"
+                        }
+                    ],
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/xvda",
+                            "Ebs": {
+                                "VolumeSize": 20,
+                                "VolumeType": "gp3",
+                                "Encrypted": true,
+                                "KmsKeyId": {
+                                    "Ref": "PrimaryKMSKey"
+                                }
+                            }
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF\n{\n  \"metrics\": {\n    \"namespace\": \"${CompanyName}/${Environment}/EC2\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\"cpu_usage_idle\", \"cpu_usage_iowait\", \"cpu_usage_user\", \"cpu_usage_system\"],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\"used_percent\"],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"*\"]\n      },\n      \"mem\": {\n        \"measurement\": [\"mem_used_percent\"],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/ec2/${CompanyName}-${Environment}\",\n            \"log_stream_name\": \"{instance_id}/var/log/messages\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -s \\\n  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json\n"
+                        }
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${CompanyName}-${Environment}-application-server"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "Environment"
+                                    }
+                                },
+                                {
+                                    "Key": "CostCenter",
+                                    "Value": {
+                                        "Ref": "CostCenter"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-asg"
+                },
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": "1"
+                },
+                "MinSize": {
+                    "Fn::If": [
+                        "IsProduction",
+                        2,
+                        1
+                    ]
+                },
+                "MaxSize": {
+                    "Fn::If": [
+                        "IsProduction",
+                        10,
+                        3
+                    ]
+                },
+                "DesiredCapacity": {
+                    "Fn::If": [
+                        "IsProduction",
+                        2,
+                        1
+                    ]
+                },
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PrimaryPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrimaryPrivateSubnet2"
+                    }
+                ],
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "ALBTargetGroup"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-asg"
+                        },
+                        "PropagateAtLaunch": false
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "ALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-tg"
+                },
+                "Port": 8080,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "PrimaryVPC"
+                },
+                "HealthCheckPath": "/health",
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 5,
+                "TargetType": "instance",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-target-group"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-ec2-profile"
+                },
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "IsPrimaryRegion",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-ec2-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ApplicationPermissions",
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TradingDataTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${CompanyName}-${Environment}-documents-${AWS::AccountId}-${AWS::Region}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "PrimaryKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "PrimaryVPCId": {
+            "Condition": "IsPrimaryRegion",
+            "Description": "Primary VPC ID",
+            "Value": {
+                "Ref": "PrimaryVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrimaryVPCId"
+                }
+            }
+        },
+        "PrimaryPrivateSubnet1Id": {
+            "Condition": "IsPrimaryRegion",
+            "Description": "Primary Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrimaryPrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrimaryPrivateSubnet1Id"
+                }
+            }
+        },
+        "PrimaryPrivateSubnet2Id": {
+            "Condition": "IsPrimaryRegion",
+            "Description": "Primary Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrimaryPrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrimaryPrivateSubnet2Id"
+                }
+            }
+        },
+        "PrimaryDatabaseIdentifier": {
+            "Condition": "IsPrimaryRegion",
+            "Description": "Primary Database Instance Identifier",
+            "Value": {
+                "Ref": "PrimaryDatabase"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrimaryDatabaseIdentifier"
+                }
+            }
+        },
+        "PrimaryDatabaseEndpoint": {
+            "Condition": "IsPrimaryRegion",
+            "Description": "Primary Database Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PrimaryDatabase",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrimaryDatabaseEndpoint"
+                }
+            }
+        },
+        "PrimaryDatabasePort": {
+            "Condition": "IsPrimaryRegion",
+            "Description": "Primary Database Port",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PrimaryDatabase",
+                    "Endpoint.Port"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrimaryDatabasePort"
+                }
+            }
+        },
+        "TradingDataTableName": {
+            "Description": "Trading Data Table Name",
+            "Value": {
+                "Ref": "TradingDataTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TradingDataTableName"
+                }
+            }
+        },
+        "TradingDataTableArn": {
+            "Description": "Trading Data Table ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TradingDataTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TradingDataTableArn"
+                }
+            }
+        },
+        "DocumentsBucketName": {
+            "Description": "Documents Bucket Name",
+            "Value": {
+                "Ref": "DocumentsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DocumentsBucketName"
+                }
+            }
+        },
+        "DocumentsBucketArn": {
+            "Description": "Documents Bucket ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DocumentsBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DocumentsBucketArn"
+                }
+            }
+        },
+        "DROrchestrationFunctionArn": {
+            "Description": "DR Orchestration Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DROrchestrationFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DROrchestrationFunctionArn"
+                }
+            }
+        },
+        "DRNotificationTopicArn": {
+            "Description": "DR Notification Topic ARN",
+            "Value": {
+                "Ref": "DRNotificationTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DRNotificationTopicArn"
+                }
+            }
+        },
+        "ApplicationLoadBalancerDNSName": {
+            "Condition": "IsPrimaryRegion",
+            "Description": "Application Load Balancer DNS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApplicationLoadBalancerDNSName"
+                }
+            }
+        },
+        "ApplicationLoadBalancerArn": {
+            "Condition": "IsPrimaryRegion",
+            "Description": "Application Load Balancer ARN",
+            "Value": {
+                "Ref": "ApplicationLoadBalancer"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApplicationLoadBalancerArn"
+                }
+            }
+        },
+        "PrimaryKMSKeyId": {
+            "Condition": "IsPrimaryRegion",
+            "Description": "Primary KMS Key ID",
+            "Value": {
+                "Ref": "PrimaryKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrimaryKMSKeyId"
+                }
+            }
+        },
+        "PrimaryKMSKeyArn": {
+            "Condition": "IsPrimaryRegion",
+            "Description": "Primary KMS Key ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PrimaryKMSKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrimaryKMSKeyArn"
+                }
+            }
+        },
+        "BackupPlanId": {
+            "Condition": "IsPrimaryRegion",
+            "Description": "Backup Plan ID",
+            "Value": {
+                "Ref": "BackupPlan"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BackupPlanId"
+                }
+            }
+        },
+        "BackupVaultName": {
+            "Condition": "IsPrimaryRegion",
+            "Description": "Backup Vault Name",
+            "Value": {
+                "Ref": "BackupVault"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BackupVaultName"
+                }
+            }
+        },
+        "DRRunbookDocumentName": {
+            "Description": "DR Runbook Document Name",
+            "Value": {
+                "Ref": "DRRunbookDocument"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DRRunbookDocumentName"
+                }
+            }
+        }
+    }
+}

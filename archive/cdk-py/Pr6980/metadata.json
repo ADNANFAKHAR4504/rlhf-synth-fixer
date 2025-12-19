@@ -1,0 +1,35 @@
+{
+  "task_id": "v6w1q4",
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "v6w1q4",
+  "team": "synth",
+  "startedAt": "2025-11-20T16:50:00Z",
+  "subtask": "Failure Recovery and High Availability",
+  "aws_services": [
+    "rds",
+    "ecs",
+    "dynamodb",
+    "s3",
+    "lambda",
+    "cloudwatch",
+    "ec2",
+    "iam",
+    "kms",
+    "logs",
+    "sns",
+    "elasticloadbalancingv2"
+  ],
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

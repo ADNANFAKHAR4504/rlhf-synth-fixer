@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "348982",
+  "team": "5",
+  "startedAt": "2025-10-28T05:50:04.328Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Amazon Aurora Serverless (RDS)",
+    "Amazon VPC",
+    "AWS KMS",
+    "Amazon CloudWatch",
+    "Amazon EventBridge",
+    "Amazon S3",
+    "AWS IAM",
+    "Security Groups",
+    "Application Auto Scaling",
+    "AWS Lambda",
+    "Amazon SNS"
+  ],
+  "training_quality": 9,
+  "background": "Aurora Serverless MySQL infrastructure for a gaming platform supporting 1 million daily players with unpredictable workloads. Implements complete auto-scaling, monitoring, security (GDPR-compliant encryption), backup lifecycle management, and operational event capture. The initial model response had critical issues including missing environment_suffix for CI/CD isolation, outdated Aurora version, Performance Insights incompatibility with db.serverless instances, missing Lambda function implementation, IAM wildcard permissions violating least privilege, missing SNS topic policy for EventBridge, and incomplete resource dependencies. The ideal response addresses all issues with production-ready infrastructure following AWS best practices.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

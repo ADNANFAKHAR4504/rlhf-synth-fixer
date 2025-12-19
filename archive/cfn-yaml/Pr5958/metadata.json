@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "356255",
+  "team": "3",
+  "startedAt": "2025-11-06T13:10:52.182Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "RDS",
+    "Route 53",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "KMS",
+    "Systems Manager",
+    "Secrets Manager",
+    "Certificate Manager"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
+}

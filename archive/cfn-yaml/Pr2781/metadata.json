@@ -1,0 +1,15 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348884",
+  "team": "5",
+  "startedAt": "2025-09-05T10:00:41.567Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "waqara-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,47 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349344",
+  "team": "6",
+  "startedAt": "2025-10-10T06:06:54.535Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "Security Groups",
+    "Elastic IPs",
+    "ECR",
+    "ECS",
+    "Application Load Balancer",
+    "Target Groups",
+    "Listeners",
+    "S3",
+    "KMS",
+    "IAM",
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "Lambda",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Dashboard",
+    "SNS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "OMO-NOSA",
+  "dockerS3Location": ""
+}

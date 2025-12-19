@@ -1,0 +1,47 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "292050",
+  "team": "3",
+  "startedAt": "2025-08-27T08:10:28.969Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization",
+    "Environment Management",
+    "Database Management",
+    "Application Load Balancing",
+    "Auto Scaling",
+    "VPC Endpoints"
+  ],
+  "training_quality": 10,
+  "aws_services": [
+    "EC2",
+    "S3",
+    "IAM",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "WAFv2",
+    "SNS",
+    "Application Load Balancer",
+    "Auto Scaling Groups",
+    "RDS",
+    "VPC Endpoints"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chiragp-turing",
+  "dockerS3Location": ""
+}

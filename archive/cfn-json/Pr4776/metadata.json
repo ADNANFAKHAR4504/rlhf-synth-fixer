@@ -1,0 +1,22 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349067",
+  "team": "6",
+  "startedAt": "2025-10-17T12:07:35.078Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, EC2, RDS, S3, Auto Scaling, Route 53, CloudWatch, IAM, Secrets Manager, NAT Gateway, Internet Gateway, AWS WAF, AWS Backup",
+  "training_quality": 10,
+  "background": "Comprehensive cloud environment setup with VPC, Auto Scaling, RDS Multi-AZ, S3, WAF, Route 53, VPC Flow Logs, and AWS Backup. Model initially provided fixed EC2 instances, single NAT Gateway, and missing several AWS services. IDEAL_RESPONSE implements full enterprise-grade architecture with high availability, security best practices, and disaster recovery.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
+}

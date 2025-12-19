@@ -1,0 +1,42 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912498",
+  "team": "synth",
+  "startedAt": "2025-11-18T06:25:28+00:00",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "failure-recovery-and-high-availability"
+  ],
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Application Load Balancer",
+    "ECS",
+    "ECS Fargate",
+    "Aurora PostgreSQL",
+    "RDS",
+    "ElastiCache Redis",
+    "Route 53",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS",
+    "IAM",
+    "Security Groups",
+    "Auto Scaling"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

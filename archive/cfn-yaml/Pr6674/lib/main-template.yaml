@@ -1,0 +1,187 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Multi-Region Disaster Recovery Payment Processing System - Main Stack'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Unique suffix for resource naming
+    MinLength: 3
+    MaxLength: 10
+    AllowedPattern: '^[a-z0-9-]+$'
+
+  DeploymentRegion:
+    Type: String
+    Description: Primary or DR region
+    AllowedValues:
+      - primary
+      - dr
+    Default: primary
+
+  PrimaryRegion:
+    Type: String
+    Description: Primary AWS Region
+    Default: ap-southeast-1
+
+  DRRegion:
+    Type: String
+    Description: Disaster Recovery AWS Region
+    Default: ap-southeast-2
+
+  DBSecretArn:
+    Type: String
+    Description: ARN of existing Secrets Manager secret for database credentials
+    Default: arn:aws:secretsmanager:ap-southeast-1:123456789012:secret:payment-db-credentials
+
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for the domain
+    AllowedPattern: '^Z[0-9A-Z]+$'
+    ConstraintDescription: Must be a valid Route53 Hosted Zone ID starting with Z
+
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/network-stack.yaml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+  DatabaseStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/database-stack.yaml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        VPCId: !GetAtt NetworkStack.Outputs.VPCId
+        VPCCIDR: !GetAtt NetworkStack.Outputs.VPCCIDR
+        PrivateSubnet1: !GetAtt NetworkStack.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt NetworkStack.Outputs.PrivateSubnet2
+        PrivateSubnet3: !GetAtt NetworkStack.Outputs.PrivateSubnet3
+        DBSecretArn: !Ref DBSecretArn
+        DeploymentRegion: !Ref DeploymentRegion
+        SourceRegion: !Ref PrimaryRegion
+        DRRegion: !Ref DRRegion
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+  ComputeStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/compute-stack.yaml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        VPCId: !GetAtt NetworkStack.Outputs.VPCId
+        PublicSubnet1: !GetAtt NetworkStack.Outputs.PublicSubnet1
+        PublicSubnet2: !GetAtt NetworkStack.Outputs.PublicSubnet2
+        PrivateSubnet1: !GetAtt NetworkStack.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt NetworkStack.Outputs.PrivateSubnet2
+        DBEndpoint: !GetAtt DatabaseStack.Outputs.DBClusterEndpoint
+        TransactionQueueUrl: !GetAtt QueueStack.Outputs.TransactionQueueUrl
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+  QueueStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/queue-stack.yaml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+  MonitoringStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/monitoring-stack.yaml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        DBClusterIdentifier: !GetAtt DatabaseStack.Outputs.DBClusterIdentifier
+        ALBFullName: !GetAtt ComputeStack.Outputs.ALBFullName
+        APIGatewayId: !GetAtt ComputeStack.Outputs.APIGatewayId
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+  CloudFrontStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/cloudfront-stack.yaml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        ALBDNSName: !GetAtt ComputeStack.Outputs.LoadBalancerDNS
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+  Route53FailoverStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/route53-failover.yaml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        DomainName: !Sub 'payment-api-${EnvironmentSuffix}.example.com'
+        PrimaryALBDNS: !GetAtt ComputeStack.Outputs.LoadBalancerDNS
+        DRALBName: !GetAtt ComputeStack.Outputs.LoadBalancerDNS
+        HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !GetAtt NetworkStack.Outputs.VPCId
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  DBClusterEndpoint:
+    Description: RDS Cluster Endpoint
+    Value: !GetAtt DatabaseStack.Outputs.DBClusterEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-DBClusterEndpoint'
+
+  APIEndpoint:
+    Description: API Gateway Endpoint
+    Value: !GetAtt ComputeStack.Outputs.APIEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-APIEndpoint'
+
+  LoadBalancerDNS:
+    Description: Application Load Balancer DNS
+    Value: !GetAtt ComputeStack.Outputs.LoadBalancerDNS
+    Export:
+      Name: !Sub '${AWS::StackName}-LoadBalancerDNS'

@@ -1,0 +1,27 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "313925",
+  "team": "6",
+  "startedAt": "2025-10-01T18:39:27.233Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "API Gateway",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
+}

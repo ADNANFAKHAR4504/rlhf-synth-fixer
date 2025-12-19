@@ -1,0 +1,49 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912179",
+  "team": "4",
+  "startedAt": "2025-11-28T14:47:31.126Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Route Tables",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Security Groups",
+    "Application Load Balancer",
+    "Target Groups",
+    "Load Balancer Listeners",
+    "Launch Template",
+    "Auto Scaling Group",
+    "EC2",
+    "RDS PostgreSQL Instance",
+    "DB Subnet Group",
+    "RDS Parameter Group",
+    "S3 Bucket",
+    "S3 Bucket Versioning",
+    "S3 Lifecycle Rules",
+    "KMS Key",
+    "IAM Role",
+    "IAM Instance Profile",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "Elastic IP",
+    "SSM Parameter Store"
+  ],
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

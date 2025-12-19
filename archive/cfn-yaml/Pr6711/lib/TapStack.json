@@ -1,0 +1,2833 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Financial Analytics Data Processing Pipeline - Production-grade real-time market data processing with comprehensive security, monitoring, and compliance",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "production",
+            "AllowedValues": [
+                "development",
+                "staging",
+                "production"
+            ],
+            "Description": "Environment name for resource tagging and naming"
+        },
+        "CostCenter": {
+            "Type": "String",
+            "Description": "Cost center code for billing and resource allocation",
+            "AllowedPattern": "^[A-Z]{2}-[0-9]{4}$",
+            "ConstraintDescription": "Must be in format XX-0000 (e.g., FI-1001)",
+            "Default": "FI-1001"
+        },
+        "DataConsumerAccountId": {
+            "Type": "String",
+            "Description": "AWS Account ID for cross-account data access (optional)",
+            "Default": "",
+            "AllowedPattern": "^(\\d{12})?$",
+            "ConstraintDescription": "Must be a valid 12-digit AWS Account ID or empty"
+        },
+        "AlertEmail": {
+            "Type": "String",
+            "Default": "alerts@example.com",
+            "Description": "Email address for pipeline alerts",
+            "AllowedPattern": "[^@]+@[^@]+\\.[^@]+",
+            "ConstraintDescription": "Must be a valid email address"
+        },
+        "VpcCidrBlock": {
+            "Type": "String",
+            "Description": "CIDR block of the VPC for security group rules",
+            "Default": "10.0.0.0/16",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$",
+            "ConstraintDescription": "Must be a valid CIDR block"
+        },
+        "KinesisShardCount": {
+            "Type": "Number",
+            "Description": "Number of shards for Kinesis Data Stream",
+            "Default": 10,
+            "MinValue": 1,
+            "MaxValue": 100
+        },
+        "DataRetentionDays": {
+            "Type": "Number",
+            "Description": "Days before transitioning data to Glacier",
+            "Default": 90,
+            "MinValue": 1,
+            "MaxValue": 365
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "Environment",
+                        "CostCenter",
+                        "AlertEmail"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VpcCidrBlock"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Security Configuration"
+                    },
+                    "Parameters": [
+                        "DataConsumerAccountId"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Performance Configuration"
+                    },
+                    "Parameters": [
+                        "KinesisShardCount",
+                        "DataRetentionDays"
+                    ]
+                }
+            ]
+        }
+    },
+    "Conditions": {
+        "HasDataConsumerAccount": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DataConsumerAccountId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "IsProduction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "production"
+            ]
+        }
+    },
+    "Resources": {
+        "DataEncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for encrypting financial data at rest - ${Environment}"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow services to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "s3.amazonaws.com",
+                                    "kinesis.amazonaws.com",
+                                    "glue.amazonaws.com",
+                                    "lambda.amazonaws.com",
+                                    "dynamodb.amazonaws.com",
+                                    "cloudwatch.amazonaws.com",
+                                    "sns.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Fn::If": [
+                                "HasDataConsumerAccount",
+                                {
+                                    "Sid": "Allow cross-account access if configured",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "AWS": {
+                                            "Fn::Sub": "arn:aws:iam::${DataConsumerAccountId}:root"
+                                        }
+                                    },
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:ListGrants"
+                                    ],
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "kms:ViaService": [
+                                                {
+                                                    "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                                                },
+                                                {
+                                                    "Fn::Sub": "dynamodb.${AWS::Region}.amazonaws.com"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "Ref": "AWS::NoValue"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "EnableKeyRotation": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Financial Data Encryption"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DataEncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/financial-pipeline-${Environment}-${AWS::Region}"
+                },
+                "TargetKeyId": {
+                    "Ref": "DataEncryptionKey"
+                }
+            }
+        },
+        "RawDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DependsOn": [
+                "RawDataBucketInvokePermission",
+                "DataValidationFunctionPermission"
+            ],
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "financial-raw-data-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "DataEncryptionKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "TransitionToGlacier",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "StorageClass": "GLACIER",
+                                    "TransitionInDays": {
+                                        "Ref": "DataRetentionDays"
+                                    }
+                                },
+                                {
+                                    "StorageClass": "DEEP_ARCHIVE",
+                                    "TransitionInDays": 365
+                                }
+                            ]
+                        },
+                        {
+                            "Id": "DeleteOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 730
+                        },
+                        {
+                            "Id": "AbortIncompleteMultipartUploads",
+                            "Status": "Enabled",
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 7
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "NotificationConfiguration": {
+                    "LambdaConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "DataValidationFunction",
+                                    "Arn"
+                                ]
+                            },
+                            "Filter": {
+                                "S3Key": {
+                                    "Rules": [
+                                        {
+                                            "Name": "prefix",
+                                            "Value": "market-data/"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "CorsConfiguration": {
+                    "CorsRules": [
+                        {
+                            "AllowedMethods": [
+                                "GET",
+                                "HEAD"
+                            ],
+                            "AllowedOrigins": [
+                                "*"
+                            ],
+                            "AllowedHeaders": [
+                                "*"
+                            ],
+                            "MaxAge": 3000
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "Confidential"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "ProcessedDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "financial-processed-data-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "DataEncryptionKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "TransitionToGlacier",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "StorageClass": "INTELLIGENT_TIERING",
+                                    "TransitionInDays": 30
+                                },
+                                {
+                                    "StorageClass": "GLACIER",
+                                    "TransitionInDays": {
+                                        "Ref": "DataRetentionDays"
+                                    }
+                                },
+                                {
+                                    "StorageClass": "DEEP_ARCHIVE",
+                                    "TransitionInDays": 365
+                                }
+                            ]
+                        },
+                        {
+                            "Id": "DeleteOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 730
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "Confidential"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "ArchivedDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "financial-archived-data-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "DataEncryptionKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "GlacierDeepArchive",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "StorageClass": "GLACIER",
+                                    "TransitionInDays": {
+                                        "Ref": "DataRetentionDays"
+                                    }
+                                },
+                                {
+                                    "StorageClass": "DEEP_ARCHIVE",
+                                    "TransitionInDays": 365
+                                }
+                            ]
+                        },
+                        {
+                            "Id": "ExpireOldData",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 2555
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "Archive"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "ProcessedDataBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Condition": "HasDataConsumerAccount",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ProcessedDataBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "CrossAccountReadAccess",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${DataConsumerAccountId}:root"
+                                }
+                            },
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:GetObjectVersion",
+                                "s3:ListBucket",
+                                "s3:GetBucketLocation"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "ProcessedDataBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${ProcessedDataBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-server-side-encryption": "aws:kms",
+                                    "s3:x-amz-server-side-encryption-aws-kms-key-id": {
+                                        "Fn::GetAtt": [
+                                            "DataEncryptionKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "MarketDataStream": {
+            "Type": "AWS::Kinesis::Stream",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "financial-market-stream-${Environment}-${AWS::Region}"
+                },
+                "ShardCount": {
+                    "Ref": "KinesisShardCount"
+                },
+                "RetentionPeriodHours": 168,
+                "StreamEncryption": {
+                    "EncryptionType": "KMS",
+                    "KeyId": {
+                        "Ref": "DataEncryptionKey"
+                    }
+                },
+                "StreamModeDetails": {
+                    "StreamMode": "PROVISIONED"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Real-time Market Data Ingestion"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "ProcessingJobTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "processing-jobs-${Environment}-${AWS::Region}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "JobId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "Timestamp",
+                        "AttributeType": "N"
+                    },
+                    {
+                        "AttributeName": "Status",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "DataSource",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "JobId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "Timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "StatusIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "Status",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "Timestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    },
+                    {
+                        "IndexName": "DataSourceIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "DataSource",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "Timestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": {
+                        "Ref": "DataEncryptionKey"
+                    }
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "TimeToLiveSpecification": {
+                    "Enabled": true,
+                    "AttributeName": "TTL"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DataLineageTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "data-lineage-${Environment}-${AWS::Region}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "DatasetId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "ProcessingTimestamp",
+                        "AttributeType": "N"
+                    },
+                    {
+                        "AttributeName": "SourceLocation",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "TransformationType",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "DatasetId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "ProcessingTimestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "SourceIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "SourceLocation",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "ProcessingTimestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    },
+                    {
+                        "IndexName": "TransformationIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "TransformationType",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "ProcessingTimestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "INCLUDE",
+                            "NonKeyAttributes": [
+                                "DatasetId",
+                                "SourceLocation",
+                                "TargetLocation"
+                            ]
+                        }
+                    }
+                ],
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": {
+                        "Ref": "DataEncryptionKey"
+                    }
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DataPipelineVpc": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidrBlock"
+                },
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "financial-vpc-${Environment}-${AWS::Region}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DataPipelinePrivateSubnetA": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCidrBlock"
+                                },
+                                4,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "VpcId": {
+                    "Ref": "DataPipelineVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "financial-subnet-a-${Environment}-${AWS::Region}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DataPipelinePrivateSubnetB": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCidrBlock"
+                                },
+                                4,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "VpcId": {
+                    "Ref": "DataPipelineVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "financial-subnet-b-${Environment}-${AWS::Region}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DataPipelineRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DataPipelineVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "financial-rt-${Environment}-${AWS::Region}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DataPipelineSubnetARouteAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "DataPipelinePrivateSubnetA"
+                },
+                "RouteTableId": {
+                    "Ref": "DataPipelineRouteTable"
+                }
+            }
+        },
+        "DataPipelineSubnetBRouteAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "DataPipelinePrivateSubnetB"
+                },
+                "RouteTableId": {
+                    "Ref": "DataPipelineRouteTable"
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "financial-lambda-role-${Environment}-${AWS::Region}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DataProcessingPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "S3Access",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::financial-raw-data-${Environment}-${AWS::AccountId}-${AWS::Region}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::financial-processed-data-${Environment}-${AWS::AccountId}-${AWS::Region}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::glue-scripts-${Environment}-${AWS::AccountId}-${AWS::Region}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "S3ListBucket",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket",
+                                        "s3:GetBucketLocation"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::financial-raw-data-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::financial-processed-data-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::glue-scripts-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "DynamoDBAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:BatchWriteItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ProcessingJobTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "DataLineageTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${ProcessingJobTable.Arn}/index/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${DataLineageTable.Arn}/index/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "KinesisAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kinesis:GetRecords",
+                                        "kinesis:GetShardIterator",
+                                        "kinesis:DescribeStream",
+                                        "kinesis:ListStreams",
+                                        "kinesis:ListShards"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MarketDataStream",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "KMSAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DataEncryptionKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "SQSAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage",
+                                        "sqs:ReceiveMessage",
+                                        "sqs:DeleteMessage",
+                                        "sqs:GetQueueAttributes"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ValidationDeadLetterQueue",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "SNSPublish",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Ref": "PipelineAlertTopic"
+                                        },
+                                        {
+                                            "Ref": "DataQualityAlertTopic"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "CloudWatchMetrics",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData",
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "ExplicitDenyUnencryptedUploads",
+                                    "Effect": "Deny",
+                                    "Action": [
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::financial-raw-data-${Environment}-${AWS::AccountId}-${AWS::Region}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::financial-processed-data-${Environment}-${AWS::AccountId}-${AWS::Region}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::financial-archived-data-${Environment}-${AWS::AccountId}-${AWS::Region}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::glue-scripts-${Environment}-${AWS::AccountId}-${AWS::Region}/*"
+                                        }
+                                    ],
+                                    "Condition": {
+                                        "StringNotEquals": {
+                                            "s3:x-amz-server-side-encryption": "aws:kms",
+                                            "s3:x-amz-server-side-encryption-aws-kms-key-id": {
+                                                "Fn::GetAtt": [
+                                                    "DataEncryptionKey",
+                                                    "Arn"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "GlueServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "financial-glue-role-${Environment}-${AWS::Region}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "glue.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "GlueDataAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "S3DataAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${RawDataBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${ProcessedDataBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${ArchivedDataBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${GlueScriptsBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "S3ListAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket",
+                                        "s3:GetBucketLocation"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "RawDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ProcessedDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ArchivedDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "GlueScriptsBucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "KMSAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:CreateGrant"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DataEncryptionKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "DynamoDBLogging",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ProcessingJobTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "DataLineageTable",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "CloudWatchLogs",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "ExplicitDenyUnencryptedS3",
+                                    "Effect": "Deny",
+                                    "Action": "s3:PutObject",
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringNotEquals": {
+                                            "s3:x-amz-server-side-encryption": "aws:kms"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "CrossAccountDataConsumerRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "HasDataConsumerAccount",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "financial-data-consumer-role-${Environment}-${AWS::Region}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${DataConsumerAccountId}:root"
+                                }
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "StringEquals": {
+                                    "sts:ExternalId": {
+                                        "Fn::Sub": "${AWS::StackName}-${Environment}"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "DataConsumerAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "S3ReadAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ProcessedDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${ProcessedDataBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "KMSDecrypt",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DataEncryptionKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DataValidationFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "data-validation-${Environment}-${AWS::Region}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "MemorySize": 1024,
+                "Environment": {
+                    "Variables": {
+                        "PROCESSING_TABLE": {
+                            "Ref": "ProcessingJobTable"
+                        },
+                        "LINEAGE_TABLE": {
+                            "Ref": "DataLineageTable"
+                        },
+                        "DLQ_URL": {
+                            "Ref": "ValidationDeadLetterQueue"
+                        },
+                        "PROCESSED_BUCKET": {
+                            "Ref": "ProcessedDataBucket"
+                        },
+                        "SNS_ALERT_TOPIC": {
+                            "Ref": "DataQualityAlertTopic"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "ValidationDeadLetterQueue",
+                            "Arn"
+                        ]
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nimport uuid\nfrom decimal import Decimal\nimport logging\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\n# Initialize AWS clients\ns3_client = boto3.client('s3')\ndynamodb = boto3.resource('dynamodb')\nsqs = boto3.client('sqs')\nsns = boto3.client('sns')\ncloudwatch = boto3.client('cloudwatch')\n\ndef validate_market_data_schema(data):\n    \"\"\"Validate market data against predefined schema\"\"\"\n    required_fields = ['symbol', 'price', 'volume', 'timestamp', 'exchange']\n    \n    # Check for required fields\n    for field in required_fields:\n        if field not in data:\n            return False, f\"Missing required field: {field}\"\n    \n    # Validate data types and ranges\n    if not isinstance(data['price'], (int, float)) or data['price'] <= 0:\n        return False, \"Invalid price value\"\n    \n    if not isinstance(data['volume'], (int, float)) or data['volume'] < 0:\n        return False, \"Invalid volume value\"\n    \n    # Validate exchange code\n    valid_exchanges = ['NYSE', 'NASDAQ', 'LSE', 'TSE', 'HKSE', 'SSE', 'NSE']\n    if data['exchange'] not in valid_exchanges:\n        return False, f\"Invalid exchange: {data['exchange']}\"\n    \n    # Validate timestamp format\n    try:\n        if isinstance(data['timestamp'], str):\n            datetime.fromisoformat(data['timestamp'])\n    except:\n        return False, \"Invalid timestamp format\"\n    \n    return True, \"Valid\"\n\ndef send_alert(subject, message):\n    \"\"\"Send alert via SNS\"\"\"\n    try:\n        sns.publish(\n            TopicArn=os.environ['SNS_ALERT_TOPIC'],\n            Subject=subject,\n            Message=message\n        )\n    except Exception as e:\n        logger.error(f\"Failed to send alert: {str(e)}\")\n\ndef handler(event, context):\n    processing_table = dynamodb.Table(os.environ['PROCESSING_TABLE'])\n    lineage_table = dynamodb.Table(os.environ['LINEAGE_TABLE'])\n    \n    batch_results = {'success': 0, 'failure': 0}\n    \n    for record in event['Records']:\n        bucket = record['s3']['bucket']['name']\n        key = record['s3']['object']['key']\n        job_id = str(uuid.uuid4())\n        \n        try:\n            # Get object from S3\n            response = s3_client.get_object(Bucket=bucket, Key=key)\n            data = json.loads(response['Body'].read())\n            \n            # Support batch processing\n            if isinstance(data, list):\n                for item in data:\n                    is_valid, message = validate_market_data_schema(item)\n                    if is_valid:\n                        batch_results['success'] += 1\n                    else:\n                        batch_results['failure'] += 1\n            else:\n                is_valid, message = validate_market_data_schema(data)\n                if is_valid:\n                    batch_results['success'] += 1\n                else:\n                    batch_results['failure'] += 1\n            \n            # Record processing job\n            processing_table.put_item(\n                Item={\n                    'JobId': job_id,\n                    'Timestamp': Decimal(str(datetime.now().timestamp())),\n                    'Status': 'SUCCESS' if batch_results['failure'] == 0 else 'PARTIAL',\n                    'SourceFile': f\"s3://{bucket}/{key}\",\n                    'Message': f\"Processed {batch_results['success']} success, {batch_results['failure']} failures\",\n                    'DataSource': data.get('exchange', 'UNKNOWN') if not isinstance(data, list) else 'BATCH',\n                    'TTL': int((datetime.now().timestamp() + 2592000))  # 30 days TTL\n                }\n            )\n            \n            # Update lineage\n            lineage_table.put_item(\n                Item={\n                    'DatasetId': job_id,\n                    'ProcessingTimestamp': Decimal(str(datetime.now().timestamp())),\n                    'SourceLocation': f\"s3://{bucket}/{key}\",\n                    'TargetLocation': f\"s3://{os.environ['PROCESSED_BUCKET']}/validated/{key}\",\n                    'TransformationType': 'VALIDATION',\n                    'RecordsProcessed': batch_results['success'] + batch_results['failure']\n                }\n            )\n            \n            # Send metrics\n            cloudwatch.put_metric_data(\n                Namespace='FinancialPipeline',\n                MetricData=[\n                    {\n                        'MetricName': 'ValidatedRecords',\n                        'Value': batch_results['success'],\n                        'Unit': 'Count',\n                        'Dimensions': [\n                            {'Name': 'Environment', 'Value': os.environ['ENVIRONMENT']}\n                        ]\n                    },\n                    {\n                        'MetricName': 'ValidationFailures',\n                        'Value': batch_results['failure'],\n                        'Unit': 'Count',\n                        'Dimensions': [\n                            {'Name': 'Environment', 'Value': os.environ['ENVIRONMENT']}\n                        ]\n                    }\n                ]\n            )\n            \n            # Send alert if failure rate is high\n            if batch_results['failure'] > 0:\n                failure_rate = batch_results['failure'] / (batch_results['success'] + batch_results['failure'])\n                if failure_rate > 0.1:  # More than 10% failure\n                    send_alert(\n                        f\"High Validation Failure Rate - {os.environ['ENVIRONMENT']}\",\n                        f\"File: {key}\\nFailure Rate: {failure_rate:.2%}\\nFailed: {batch_results['failure']}\"\n                    )\n            \n        except Exception as e:\n            logger.error(f\"Error processing {key}: {str(e)}\")\n            \n            # Log error to DynamoDB\n            processing_table.put_item(\n                Item={\n                    'JobId': job_id,\n                    'Timestamp': Decimal(str(datetime.now().timestamp())),\n                    'Status': 'ERROR',\n                    'SourceFile': f\"s3://{bucket}/{key}\",\n                    'Message': str(e),\n                    'DataSource': 'ERROR',\n                    'TTL': int((datetime.now().timestamp() + 2592000))\n                }\n            )\n            \n            # Send to DLQ\n            sqs.send_message(\n                QueueUrl=os.environ['DLQ_URL'],\n                MessageBody=json.dumps({\n                    'jobId': job_id,\n                    'source': f\"s3://{bucket}/{key}\",\n                    'error': str(e),\n                    'timestamp': datetime.now().isoformat()\n                })\n            )\n            \n            raise\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps({\n            'message': 'Processing complete',\n            'results': batch_results\n        })\n    }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "RawDataBucketInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "DataValidationFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "s3.amazonaws.com",
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                },
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:s3:::financial-raw-data-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                }
+            }
+        },
+        "DataValidationFunctionPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "DataValidationFunction",
+                        "Arn"
+                    ]
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "s3.amazonaws.com",
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                },
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:s3:::financial-raw-data-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                }
+            }
+        },
+        "KinesisConsumerFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "kinesis-consumer-${Environment}-${AWS::Region}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "MemorySize": 512,
+                "Environment": {
+                    "Variables": {
+                        "RAW_BUCKET": {
+                            "Ref": "RawDataBucket"
+                        },
+                        "PROCESSING_TABLE": {
+                            "Ref": "ProcessingJobTable"
+                        },
+                        "LINEAGE_TABLE": {
+                            "Ref": "DataLineageTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport base64\nimport os\nfrom datetime import datetime\nimport uuid\nfrom decimal import Decimal\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ns3_client = boto3.client('s3')\ndynamodb = boto3.resource('dynamodb')\ncloudwatch = boto3.client('cloudwatch')\n\ndef handler(event, context):\n    processing_table = dynamodb.Table(os.environ['PROCESSING_TABLE'])\n    lineage_table = dynamodb.Table(os.environ['LINEAGE_TABLE'])\n    \n    records_processed = 0\n    batch_size = len(event['Records'])\n    \n    for record in event['Records']:\n        try:\n            # Decode Kinesis data\n            payload = base64.b64decode(record['kinesis']['data']).decode('utf-8')\n            data = json.loads(payload)\n            \n            # Generate S3 key with partitioning by exchange and date\n            now = datetime.now()\n            exchange = data.get('exchange', 'unknown').lower()\n            partition_key = f\"market-data/exchange={exchange}/year={now.year}/month={now.month:02d}/day={now.day:02d}/hour={now.hour:02d}\"\n            file_name = f\"{record['kinesis']['sequenceNumber']}_{uuid.uuid4()}.json\"\n            s3_key = f\"{partition_key}/{file_name}\"\n            \n            # Write to S3 with server-side encryption\n            s3_client.put_object(\n                Bucket=os.environ['RAW_BUCKET'],\n                Key=s3_key,\n                Body=json.dumps(data),\n                ServerSideEncryption='aws:kms',\n                Metadata={\n                    'source': 'kinesis',\n                    'stream': record['eventSourceARN'].split('/')[-1],\n                    'sequence': record['kinesis']['sequenceNumber']\n                }\n            )\n            \n            job_id = str(uuid.uuid4())\n            \n            # Log to processing table\n            processing_table.put_item(\n                Item={\n                    'JobId': job_id,\n                    'Timestamp': Decimal(str(now.timestamp())),\n                    'Status': 'INGESTED',\n                    'SourceFile': f\"kinesis://{record['eventSourceARN']}/{record['kinesis']['sequenceNumber']}\",\n                    'Message': f\"Written to s3://{os.environ['RAW_BUCKET']}/{s3_key}\",\n                    'DataSource': exchange.upper(),\n                    'TTL': int(now.timestamp() + 2592000)\n                }\n            )\n            \n            # Update lineage\n            lineage_table.put_item(\n                Item={\n                    'DatasetId': job_id,\n                    'ProcessingTimestamp': Decimal(str(now.timestamp())),\n                    'SourceLocation': f\"kinesis://{record['kinesis']['sequenceNumber']}\",\n                    'TargetLocation': f\"s3://{os.environ['RAW_BUCKET']}/{s3_key}\",\n                    'TransformationType': 'INGESTION',\n                    'RecordsProcessed': 1\n                }\n            )\n            \n            records_processed += 1\n            \n        except Exception as e:\n            logger.error(f\"Error processing Kinesis record: {str(e)}\")\n            # Continue processing other records\n            continue\n    \n    # Send batch metrics\n    cloudwatch.put_metric_data(\n        Namespace='FinancialPipeline',\n        MetricData=[\n            {\n                'MetricName': 'KinesisRecordsProcessed',\n                'Value': records_processed,\n                'Unit': 'Count',\n                'Dimensions': [\n                    {'Name': 'Environment', 'Value': os.environ['ENVIRONMENT']}\n                ]\n            },\n            {\n                'MetricName': 'KinesisProcessingSuccess',\n                'Value': (records_processed / batch_size) * 100 if batch_size > 0 else 0,\n                'Unit': 'Percent',\n                'Dimensions': [\n                    {'Name': 'Environment', 'Value': os.environ['ENVIRONMENT']}\n                ]\n            }\n        ]\n    )\n    \n    logger.info(f\"Processed {records_processed}/{batch_size} records\")\n    \n    return {\n        'statusCode': 200,\n        'batchItemFailures': []  # Return failed items for retry\n    }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "KinesisEventSourceMapping": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "Properties": {
+                "EventSourceArn": {
+                    "Fn::GetAtt": [
+                        "MarketDataStream",
+                        "Arn"
+                    ]
+                },
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "KinesisConsumerFunction",
+                        "Arn"
+                    ]
+                },
+                "StartingPosition": "LATEST",
+                "MaximumBatchingWindowInSeconds": 10,
+                "ParallelizationFactor": 1,
+                "MaximumRecordAgeInSeconds": 3600,
+                "BisectBatchOnFunctionError": true,
+                "MaximumRetryAttempts": 3,
+                "TumblingWindowInSeconds": 60,
+                "FunctionResponseTypes": [
+                    "ReportBatchItemFailures"
+                ]
+            }
+        },
+        "ValidationDeadLetterQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "validation-dlq-${Environment}-${AWS::Region}"
+                },
+                "MessageRetentionPeriod": 1209600,
+                "KmsMasterKeyId": {
+                    "Ref": "DataEncryptionKey"
+                },
+                "RedriveAllowPolicy": {
+                    "redrivePermission": "allowAll"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Failed Data Validation"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "GlueDatabase": {
+            "Type": "AWS::Glue::Database",
+            "Properties": {
+                "CatalogId": {
+                    "Ref": "AWS::AccountId"
+                },
+                "DatabaseInput": {
+                    "Name": {
+                        "Fn::Sub": "financial_data_${Environment}"
+                    },
+                    "Description": "Financial market data catalog for analytics and reporting"
+                }
+            }
+        },
+        "RawDataCrawler": {
+            "Type": "AWS::Glue::Crawler",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "raw-data-crawler-${Environment}-${AWS::Region}"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "GlueServiceRole",
+                        "Arn"
+                    ]
+                },
+                "DatabaseName": {
+                    "Ref": "GlueDatabase"
+                },
+                "Targets": {
+                    "S3Targets": [
+                        {
+                            "Path": {
+                                "Fn::Sub": "s3://${RawDataBucket}/market-data/"
+                            },
+                            "Exclusions": [
+                                "**/_temporary/**",
+                                "**/.sparkStaging/**"
+                            ]
+                        }
+                    ]
+                },
+                "SchemaChangePolicy": {
+                    "UpdateBehavior": "LOG",
+                    "DeleteBehavior": "LOG"
+                },
+                "RecrawlPolicy": {
+                    "RecrawlBehavior": "CRAWL_NEW_FOLDERS_ONLY"
+                },
+                "Schedule": {
+                    "ScheduleExpression": "cron(0 * * * ? *)"
+                },
+                "Configuration": "{\n  \"Version\": 1.0,\n  \"CrawlerOutput\": {\n    \"Partitions\": {\"AddOrUpdateBehavior\": \"InheritFromTable\"}\n  }\n}\n",
+                "Tags": {
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "CostCenter": {
+                        "Ref": "CostCenter"
+                    },
+                    "iac-rlhf-amazon": "true"
+                }
+            }
+        },
+        "ProcessedDataCrawler": {
+            "Type": "AWS::Glue::Crawler",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "processed-data-crawler-${Environment}-${AWS::Region}"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "GlueServiceRole",
+                        "Arn"
+                    ]
+                },
+                "DatabaseName": {
+                    "Ref": "GlueDatabase"
+                },
+                "Targets": {
+                    "S3Targets": [
+                        {
+                            "Path": {
+                                "Fn::Sub": "s3://${ProcessedDataBucket}/parquet/"
+                            }
+                        }
+                    ]
+                },
+                "LakeFormationConfiguration": {
+                    "UseLakeFormationCredentials": false
+                },
+                "SchemaChangePolicy": {
+                    "UpdateBehavior": "LOG",
+                    "DeleteBehavior": "LOG"
+                },
+                "RecrawlPolicy": {
+                    "RecrawlBehavior": "CRAWL_NEW_FOLDERS_ONLY"
+                },
+                "Schedule": {
+                    "ScheduleExpression": "cron(0 * * * ? *)"
+                },
+                "Tags": {
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "CostCenter": {
+                        "Ref": "CostCenter"
+                    },
+                    "iac-rlhf-amazon": "true"
+                }
+            }
+        },
+        "GlueScriptsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "glue-scripts-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "DataEncryptionKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "GlueScriptUploader": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "glue-script-uploader-${Environment}-${AWS::Region}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport cfnresponse\n\ns3 = boto3.client('s3')\n\ndef handler(event, context):\n    try:\n        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':\n            bucket = event['ResourceProperties']['Bucket']\n            key = event['ResourceProperties']['Key']\n            script_content = event['ResourceProperties']['ScriptContent']\n            \n            s3.put_object(\n                Bucket=bucket,\n                Key=key,\n                Body=script_content.encode('utf-8'),\n                ServerSideEncryption='aws:kms'\n            )\n            \n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Message': 'Script uploaded successfully'})\n        elif event['RequestType'] == 'Delete':\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Message': 'Delete complete'})\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "GlueScriptUpload": {
+            "Type": "Custom::GlueScriptUpload",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "GlueScriptUploader",
+                        "Arn"
+                    ]
+                },
+                "Bucket": {
+                    "Ref": "GlueScriptsBucket"
+                },
+                "Key": "scripts/json_to_parquet.py",
+                "ScriptContent": "import sys\nfrom awsglue.transforms import *\nfrom awsglue.utils import getResolvedOptions\nfrom pyspark.context import SparkContext\nfrom awsglue.context import GlueContext\nfrom awsglue.job import Job\nfrom awsglue.dynamicframe import DynamicFrame\nfrom datetime import datetime\nimport boto3\n\n# Get job parameters\nargs = getResolvedOptions(sys.argv, [\n    'JOB_NAME',\n    'source_database',\n    'source_table',\n    'target_path',\n    'processing_table',\n    'lineage_table'\n])\n\nsc = SparkContext()\nglueContext = GlueContext(sc)\nspark = glueContext.spark_session\njob = Job(glueContext)\njob.init(args['JOB_NAME'], args)\n\n# Initialize DynamoDB client for logging\ndynamodb = boto3.resource('dynamodb')\nprocessing_table = dynamodb.Table(args.get('processing_table', 'processing-jobs'))\nlineage_table = dynamodb.Table(args.get('lineage_table', 'data-lineage'))\n\ntry:\n    # Read from Glue Catalog\n    datasource = glueContext.create_dynamic_frame.from_catalog(\n        database=args['source_database'],\n        table_name=args['source_table'],\n        transformation_ctx=\"datasource\"\n    )\n    \n    # Apply mappings for financial data schema\n    mapped_df = ApplyMapping.apply(\n        frame=datasource,\n        mappings=[\n            (\"symbol\", \"string\", \"symbol\", \"string\"),\n            (\"price\", \"double\", \"price\", \"decimal(10,2)\"),\n            (\"volume\", \"long\", \"volume\", \"bigint\"),\n            (\"timestamp\", \"string\", \"timestamp\", \"timestamp\"),\n            (\"exchange\", \"string\", \"exchange\", \"string\"),\n            (\"bid\", \"double\", \"bid\", \"decimal(10,2)\"),\n            (\"ask\", \"double\", \"ask\", \"decimal(10,2)\"),\n            (\"high\", \"double\", \"high\", \"decimal(10,2)\"),\n            (\"low\", \"double\", \"low\", \"decimal(10,2)\"),\n            (\"open\", \"double\", \"open\", \"decimal(10,2)\"),\n            (\"close\", \"double\", \"close\", \"decimal(10,2)\")\n        ],\n        transformation_ctx=\"mapped_df\"\n    )\n    \n    # Convert to DataFrame for additional transformations\n    df = mapped_df.toDF()\n    \n    # Add processing metadata\n    from pyspark.sql.functions import lit, current_timestamp\n    df_with_metadata = df.withColumn(\"processing_timestamp\", current_timestamp()) \\\n                         .withColumn(\"processing_date\", lit(datetime.now().strftime(\"%Y-%m-%d\")))\n    \n    # Repartition for optimal file sizes (aim for ~128MB files)\n    record_count = df_with_metadata.count()\n    num_partitions = max(1, int(record_count / 100000))  # ~100k records per partition\n    df_partitioned = df_with_metadata.repartition(num_partitions)\n    \n    # Convert back to DynamicFrame\n    final_df = DynamicFrame.fromDF(df_partitioned, glueContext, \"final_df\")\n    \n    # Write to S3 in Parquet format with partitioning\n    glueContext.write_dynamic_frame.from_options(\n        frame=final_df,\n        connection_type=\"s3\",\n        connection_options={\n            \"path\": args['target_path'],\n            \"partitionKeys\": [\"exchange\", \"processing_date\"]\n        },\n        format=\"parquet\",\n        format_options={\n            \"compression\": \"snappy\"\n        },\n        transformation_ctx=\"write_parquet\"\n    )\n    \n    # Log successful processing\n    job_id = args['JOB_NAME'] + \"_\" + datetime.now().strftime(\"%Y%m%d%H%M%S\")\n    processing_table.put_item(\n        Item={\n            'JobId': job_id,\n            'Timestamp': int(datetime.now().timestamp()),\n            'Status': 'SUCCESS',\n            'SourceFile': f\"{args['source_database']}.{args['source_table']}\",\n            'Message': f\"Processed {record_count} records to Parquet\",\n            'DataSource': 'GLUE_ETL',\n            'TTL': int(datetime.now().timestamp() + 2592000)\n        }\n    )\n    \n    lineage_table.put_item(\n        Item={\n            'DatasetId': job_id,\n            'ProcessingTimestamp': int(datetime.now().timestamp()),\n            'SourceLocation': f\"glue://{args['source_database']}.{args['source_table']}\",\n            'TargetLocation': args['target_path'],\n            'TransformationType': 'JSON_TO_PARQUET',\n            'RecordsProcessed': record_count\n        }\n    )\n    \n    print(f\"Successfully processed {record_count} records\")\n    \nexcept Exception as e:\n    print(f\"Error in Glue job: {str(e)}\")\n    \n    # Log error\n    processing_table.put_item(\n        Item={\n            'JobId': args['JOB_NAME'] + \"_error_\" + datetime.now().strftime(\"%Y%m%d%H%M%S\"),\n            'Timestamp': int(datetime.now().timestamp()),\n            'Status': 'ERROR',\n            'SourceFile': f\"{args['source_database']}.{args['source_table']}\",\n            'Message': str(e),\n            'DataSource': 'GLUE_ETL',\n            'TTL': int(datetime.now().timestamp() + 2592000)\n        }\n    )\n    raise\n\njob.commit()\n"
+            }
+        },
+        "JsonToParquetJob": {
+            "Type": "AWS::Glue::Job",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "json-to-parquet-${Environment}-${AWS::Region}"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "GlueServiceRole",
+                        "Arn"
+                    ]
+                },
+                "Command": {
+                    "Name": "glueetl",
+                    "ScriptLocation": {
+                        "Fn::Sub": "s3://${GlueScriptsBucket}/scripts/json_to_parquet.py"
+                    },
+                    "PythonVersion": "3"
+                },
+                "DefaultArguments": {
+                    "--job-bookmark-option": "job-bookmark-enable",
+                    "--enable-metrics": "",
+                    "--enable-continuous-cloudwatch-log": "true",
+                    "--enable-spark-ui": "true",
+                    "--spark-event-logs-path": {
+                        "Fn::Sub": "s3://${GlueScriptsBucket}/spark-logs/"
+                    },
+                    "--TempDir": {
+                        "Fn::Sub": "s3://${GlueScriptsBucket}/temp/"
+                    },
+                    "--source_database": {
+                        "Ref": "GlueDatabase"
+                    },
+                    "--source_table": "market_data",
+                    "--target_path": {
+                        "Fn::Sub": "s3://${ProcessedDataBucket}/parquet/"
+                    },
+                    "--processing_table": {
+                        "Ref": "ProcessingJobTable"
+                    },
+                    "--lineage_table": {
+                        "Ref": "DataLineageTable"
+                    },
+                    "--encryption-type": "sse-kms",
+                    "--kms-key-id": {
+                        "Ref": "DataEncryptionKey"
+                    },
+                    "--enable-auto-scaling": "true"
+                },
+                "ExecutionProperty": {
+                    "MaxConcurrentRuns": 2
+                },
+                "GlueVersion": "3.0",
+                "MaxRetries": 1,
+                "Timeout": 2880,
+                "NumberOfWorkers": 10,
+                "WorkerType": "G.2X",
+                "Tags": {
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "CostCenter": {
+                        "Ref": "CostCenter"
+                    },
+                    "iac-rlhf-amazon": "true"
+                }
+            }
+        },
+        "GlueETLTrigger": {
+            "Type": "AWS::Glue::Trigger",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "json-to-parquet-trigger-${Environment}"
+                },
+                "Type": "SCHEDULED",
+                "Schedule": "rate(1 hour)",
+                "Actions": [
+                    {
+                        "JobName": {
+                            "Ref": "JsonToParquetJob"
+                        },
+                        "Arguments": {
+                            "--job-bookmark-option": "job-bookmark-enable"
+                        }
+                    }
+                ],
+                "StartOnCreation": {
+                    "Fn::If": [
+                        "IsProduction",
+                        true,
+                        false
+                    ]
+                },
+                "Tags": {
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "CostCenter": {
+                        "Ref": "CostCenter"
+                    },
+                    "iac-rlhf-amazon": "true"
+                }
+            }
+        },
+        "S3VPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DataPipelineVpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": [
+                    {
+                        "Ref": "DataPipelineRouteTable"
+                    }
+                ]
+            }
+        },
+        "DynamoDBVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DataPipelineVpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": [
+                    {
+                        "Ref": "DataPipelineRouteTable"
+                    }
+                ]
+            }
+        },
+        "KinesisVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DataPipelineVpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.kinesis-streams"
+                },
+                "VpcEndpointType": "Interface",
+                "SubnetIds": [
+                    {
+                        "Ref": "DataPipelinePrivateSubnetA"
+                    },
+                    {
+                        "Ref": "DataPipelinePrivateSubnetB"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "VPCEndpointSecurityGroup"
+                    }
+                ],
+                "PrivateDnsEnabled": true
+            }
+        },
+        "GlueVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DataPipelineVpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.glue"
+                },
+                "VpcEndpointType": "Interface",
+                "SubnetIds": [
+                    {
+                        "Ref": "DataPipelinePrivateSubnetA"
+                    },
+                    {
+                        "Ref": "DataPipelinePrivateSubnetB"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "VPCEndpointSecurityGroup"
+                    }
+                ],
+                "PrivateDnsEnabled": true
+            }
+        },
+        "LambdaVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DataPipelineVpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.lambda"
+                },
+                "VpcEndpointType": "Interface",
+                "SubnetIds": [
+                    {
+                        "Ref": "DataPipelinePrivateSubnetA"
+                    },
+                    {
+                        "Ref": "DataPipelinePrivateSubnetB"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "VPCEndpointSecurityGroup"
+                    }
+                ],
+                "PrivateDnsEnabled": true
+            }
+        },
+        "VPCEndpointSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "vpc-endpoints-sg-${Environment}-${AWS::Region}"
+                },
+                "GroupDescription": "Security group for VPC endpoints with HTTPS access",
+                "VpcId": {
+                    "Ref": "DataPipelineVpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": {
+                            "Ref": "VpcCidrBlock"
+                        },
+                        "Description": "HTTPS access from VPC"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "vpc-endpoints-sg-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PipelineAlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "pipeline-alerts-${Environment}-${AWS::Region}"
+                },
+                "DisplayName": {
+                    "Fn::Sub": "Financial Pipeline Alerts - ${Environment}"
+                },
+                "KmsMasterKeyId": {
+                    "Ref": "DataEncryptionKey"
+                },
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "AlertEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DataQualityAlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "data-quality-alerts-${Environment}-${AWS::Region}"
+                },
+                "DisplayName": {
+                    "Fn::Sub": "Data Quality Alerts - ${Environment}"
+                },
+                "KmsMasterKeyId": {
+                    "Ref": "DataEncryptionKey"
+                },
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "AlertEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "KinesisShardIteratorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "kinesis-iterator-age-${Environment}-${AWS::Region}"
+                },
+                "AlarmDescription": "Alert when Kinesis iterator age exceeds threshold",
+                "MetricName": "GetRecords.IteratorAgeMilliseconds",
+                "Namespace": "AWS/Kinesis",
+                "Statistic": "Maximum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 60000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "StreamName",
+                        "Value": {
+                            "Ref": "MarketDataStream"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "PipelineAlertTopic"
+                    }
+                ],
+                "OKActions": [
+                    {
+                        "Ref": "PipelineAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "lambda-validation-errors-${Environment}-${AWS::Region}"
+                },
+                "AlarmDescription": "Alert on Lambda validation function errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "DataValidationFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "PipelineAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "lambda-throttles-${Environment}-${AWS::Region}"
+                },
+                "AlarmDescription": "Alert on Lambda throttling",
+                "MetricName": "Throttles",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "DataValidationFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "PipelineAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "KinesisLambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "kinesis-consumer-errors-${Environment}-${AWS::Region}"
+                },
+                "AlarmDescription": "Alert on Kinesis consumer Lambda errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "KinesisConsumerFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "PipelineAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DLQMessageAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "dlq-messages-${Environment}-${AWS::Region}"
+                },
+                "AlarmDescription": "Alert when messages appear in DLQ",
+                "MetricName": "ApproximateNumberOfMessagesVisible",
+                "Namespace": "AWS/SQS",
+                "Statistic": "Maximum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "QueueName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ValidationDeadLetterQueue",
+                                "QueueName"
+                            ]
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "DataQualityAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DataQualityMetricAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "data-quality-failures-${Environment}-${AWS::Region}"
+                },
+                "AlarmDescription": "Alert on high validation failure rate",
+                "MetricName": "ValidationFailures",
+                "Namespace": "FinancialPipeline",
+                "Statistic": "Sum",
+                "Period": 900,
+                "EvaluationPeriods": 2,
+                "Threshold": 100,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "DataQualityAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "GlueJobFailureAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "glue-job-failures-${Environment}-${AWS::Region}"
+                },
+                "AlarmDescription": "Alert on Glue job failures",
+                "MetricName": "glue.driver.aggregate.numFailedTasks",
+                "Namespace": "AWS/Glue",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "JobName",
+                        "Value": {
+                            "Ref": "JsonToParquetJob"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "PipelineAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "HighIngestionRateAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "high-ingestion-rate-${Environment}-${AWS::Region}"
+                },
+                "AlarmDescription": "Alert on unusually high data ingestion rate",
+                "MetricName": "IncomingRecords",
+                "Namespace": "AWS/Kinesis",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 1000000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "StreamName",
+                        "Value": {
+                            "Ref": "MarketDataStream"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "PipelineAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "PipelineDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "financial-pipeline-${Environment}-${AWS::Region}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Kinesis Incoming Records\",\n        \"metrics\": [\n          [\"AWS/Kinesis\", \"IncomingRecords\", \"StreamName\", \"${MarketDataStream}\"]\n        ],\n        \"period\": 60,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Kinesis Incoming Bytes\",\n        \"metrics\": [\n          [\"AWS/Kinesis\", \"IncomingBytes\", \"StreamName\", \"${MarketDataStream}\"]\n        ],\n        \"period\": 60,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Validation Lambda Avg Duration\",\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Duration\", \"FunctionName\", \"${DataValidationFunction}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Validation Lambda Max Duration\",\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Duration\", \"FunctionName\", \"${DataValidationFunction}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Maximum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Kinesis Consumer Avg Duration\",\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Duration\", \"FunctionName\", \"${KinesisConsumerFunction}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Kinesis Consumer Max Duration\",\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Duration\", \"FunctionName\", \"${KinesisConsumerFunction}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Maximum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Lambda Errors\",\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Errors\", \"FunctionName\", \"${DataValidationFunction}\"],\n          [\".\", \".\", \"FunctionName\", \"${KinesisConsumerFunction}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\",\n        \"yAxis\": {\"left\": {\"min\": 0}}\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Validation Failures\",\n        \"metrics\": [\n          [\"FinancialPipeline\", \"ValidationFailures\", \"Environment\", \"${Environment}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\",\n        \"yAxis\": {\"left\": {\"min\": 0}}\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Dead Letter Queue\",\n        \"metrics\": [\n          [\"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\", \"QueueName\", \"${ValidationDeadLetterQueue.QueueName}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Maximum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\",\n        \"yAxis\": {\"left\": {\"min\": 0}}\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Raw Data Bucket Size\",\n        \"metrics\": [\n          [\"AWS/S3\", \"BucketSizeBytes\", \"BucketName\", \"${RawDataBucket}\", \"StorageType\", \"StandardStorage\"]\n        ],\n        \"period\": 86400,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"singleValue\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Processed Data Bucket Size\",\n        \"metrics\": [\n          [\"AWS/S3\", \"BucketSizeBytes\", \"BucketName\", \"${ProcessedDataBucket}\", \"StorageType\", \"StandardStorage\"]\n        ],\n        \"period\": 86400,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"singleValue\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Archived Data Bucket Size\",\n        \"metrics\": [\n          [\"AWS/S3\", \"BucketSizeBytes\", \"BucketName\", \"${ArchivedDataBucket}\", \"StorageType\", \"StandardStorage\"]\n        ],\n        \"period\": 86400,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"singleValue\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Processing Job Table Read\",\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", \"TableName\", \"${ProcessingJobTable}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Processing Job Table Write\",\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedWriteCapacityUnits\", \"TableName\", \"${ProcessingJobTable}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Data Lineage Table Read\",\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", \"TableName\", \"${DataLineageTable}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Data Lineage Table Write\",\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedWriteCapacityUnits\", \"TableName\", \"${DataLineageTable}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Glue Completed Tasks\",\n        \"metrics\": [\n          [\"AWS/Glue\", \"glue.driver.aggregate.numCompletedTasks\", \"JobName\", \"${JsonToParquetJob}\", \"JobRunId\", \"ALL\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Glue Failed Tasks\",\n        \"metrics\": [\n          [\"AWS/Glue\", \"glue.driver.aggregate.numFailedTasks\", \"JobName\", \"${JsonToParquetJob}\", \"JobRunId\", \"ALL\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Glue Job Elapsed Time\",\n        \"metrics\": [\n          [\"AWS/Glue\", \"glue.driver.aggregate.elapsedTime\", \"JobName\", \"${JsonToParquetJob}\", \"JobRunId\", \"ALL\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Validated Records\",\n        \"metrics\": [\n          [\"FinancialPipeline\", \"ValidatedRecords\", \"Environment\", \"${Environment}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Kinesis Records Processed\",\n        \"metrics\": [\n          [\"FinancialPipeline\", \"KinesisRecordsProcessed\", \"Environment\", \"${Environment}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Pipeline Health Score\",\n        \"metrics\": [\n          [\"FinancialPipeline\", \"KinesisProcessingSuccess\", \"Environment\", \"${Environment}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"singleValue\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "StackName": {
+            "Description": "CloudFormation Stack Name",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "Region": {
+            "Description": "AWS Region",
+            "Value": {
+                "Ref": "AWS::Region"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Region"
+                }
+            }
+        },
+        "KinesisStreamArn": {
+            "Description": "ARN of the Kinesis Data Stream for market data ingestion",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MarketDataStream",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KinesisStreamArn"
+                }
+            }
+        },
+        "KinesisStreamName": {
+            "Description": "Name of the Kinesis Data Stream",
+            "Value": {
+                "Ref": "MarketDataStream"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KinesisStreamName"
+                }
+            }
+        },
+        "RawDataBucketName": {
+            "Description": "S3 bucket for raw market data",
+            "Value": {
+                "Ref": "RawDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RawDataBucket"
+                }
+            }
+        },
+        "RawDataBucketArn": {
+            "Description": "ARN of the raw data S3 bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RawDataBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RawDataBucketArn"
+                }
+            }
+        },
+        "ProcessedDataBucketName": {
+            "Description": "S3 bucket for processed data",
+            "Value": {
+                "Ref": "ProcessedDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProcessedDataBucket"
+                }
+            }
+        },
+        "ProcessedDataBucketArn": {
+            "Description": "ARN of the processed data S3 bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ProcessedDataBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProcessedDataBucketArn"
+                }
+            }
+        },
+        "ArchivedDataBucketName": {
+            "Description": "S3 bucket for archived data",
+            "Value": {
+                "Ref": "ArchivedDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ArchivedDataBucket"
+                }
+            }
+        },
+        "GlueDatabaseName": {
+            "Description": "Glue database for data catalog",
+            "Value": {
+                "Ref": "GlueDatabase"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-GlueDatabase"
+                }
+            }
+        },
+        "GlueJobName": {
+            "Description": "Name of the Glue ETL job",
+            "Value": {
+                "Ref": "JsonToParquetJob"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-GlueJobName"
+                }
+            }
+        },
+        "ProcessingJobTableName": {
+            "Description": "DynamoDB table for processing job metadata",
+            "Value": {
+                "Ref": "ProcessingJobTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProcessingJobTable"
+                }
+            }
+        },
+        "DataLineageTableName": {
+            "Description": "DynamoDB table for data lineage tracking",
+            "Value": {
+                "Ref": "DataLineageTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DataLineageTable"
+                }
+            }
+        },
+        "ValidationFunctionArn": {
+            "Description": "ARN of the data validation Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataValidationFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ValidationFunctionArn"
+                }
+            }
+        },
+        "KinesisConsumerFunctionArn": {
+            "Description": "ARN of the Kinesis consumer Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "KinesisConsumerFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KinesisConsumerFunctionArn"
+                }
+            }
+        },
+        "DeadLetterQueueUrl": {
+            "Description": "URL of the validation dead letter queue",
+            "Value": {
+                "Ref": "ValidationDeadLetterQueue"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DLQUrl"
+                }
+            }
+        },
+        "DeadLetterQueueArn": {
+            "Description": "ARN of the validation dead letter queue",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ValidationDeadLetterQueue",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DLQArn"
+                }
+            }
+        },
+        "DashboardURL": {
+            "Description": "CloudWatch Dashboard URL",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${PipelineDashboard}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DashboardURL"
+                }
+            }
+        },
+        "PipelineAlertTopicArn": {
+            "Description": "SNS Topic ARN for pipeline alerts",
+            "Value": {
+                "Ref": "PipelineAlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineAlertTopic"
+                }
+            }
+        },
+        "DataQualityAlertTopicArn": {
+            "Description": "SNS Topic ARN for data quality alerts",
+            "Value": {
+                "Ref": "DataQualityAlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DataQualityAlertTopic"
+                }
+            }
+        },
+        "DataEncryptionKeyArn": {
+            "Description": "KMS key ARN for data encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataEncryptionKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyArn"
+                }
+            }
+        },
+        "DataEncryptionKeyAlias": {
+            "Description": "KMS key alias for data encryption",
+            "Value": {
+                "Ref": "DataEncryptionKeyAlias"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyAlias"
+                }
+            }
+        },
+        "CrossAccountRoleArn": {
+            "Description": "ARN of the cross-account data consumer role (if configured)",
+            "Value": {
+                "Fn::If": [
+                    "HasDataConsumerAccount",
+                    {
+                        "Fn::GetAtt": [
+                            "CrossAccountDataConsumerRole",
+                            "Arn"
+                        ]
+                    },
+                    "Not Configured"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CrossAccountRoleArn"
+                }
+            }
+        },
+        "VPCEndpointSecurityGroupId": {
+            "Description": "Security Group ID for VPC endpoints",
+            "Value": {
+                "Ref": "VPCEndpointSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCEndpointSG"
+                }
+            }
+        }
+    }
+}

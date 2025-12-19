@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000042",
+  "team": "2",
+  "startedAt": "2025-11-05T10:04:12.808Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "EIP",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Group",
+    "Subnet",
+    "Route Table",
+    "DB Subnet Group",
+    "DB Parameter Group",
+    "IAM Role",
+    "SNS",
+    "CloudWatch",
+    "CloudWatch Dashboard"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
+}

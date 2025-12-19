@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-17T05:37:33+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "4y4va7",
+  "aws_services": [
+    "Amazon EKS",
+    "Amazon VPC",
+    "Amazon EC2",
+    "AWS IAM",
+    "Amazon CloudWatch Logs",
+    "AWS Systems Manager",
+    "AWS Auto Scaling"
+  ],
+  "region": "us-east-1",
+  "author": "mayanksethi-turing",
+  "reviewer": "akshat-jain355",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

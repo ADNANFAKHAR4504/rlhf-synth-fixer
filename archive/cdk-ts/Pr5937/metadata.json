@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349437",
+  "team": "2",
+  "startedAt": "2025-10-15T11:46:30.139Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "MISSING - MUST BE SET FROM tasks.csv",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "Lambda",
+    "ELB",
+    "Route53",
+    "CloudFront",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "AutoScaling",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
+}

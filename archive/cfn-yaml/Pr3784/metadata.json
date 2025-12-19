@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350034",
+  "team": "2",
+  "startedAt": "2025-10-02T09:38:38.038Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "AWS IAM",
+    "AWS Config",
+    "AWS CloudTrail",
+    "Amazon VPC",
+    "Amazon CloudWatch",
+    "Amazon EBS",
+    "Amazon RDS",
+    "AWS Shield",
+    "AWS WAF",
+    "Amazon S3",
+    "AWS Secrets Manager",
+    "Amazon SNS",
+    "Elastic Load Balancing",
+    "Amazon EC2",
+    "AWS Systems Manager"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
+}

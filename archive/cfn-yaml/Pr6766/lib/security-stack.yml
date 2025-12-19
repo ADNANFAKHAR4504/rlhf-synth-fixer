@@ -1,0 +1,283 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Security stack with IAM roles, security groups, and permission boundaries'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Unique suffix for environment resources'
+
+  Environment:
+    Type: String
+    Description: 'Environment name'
+
+  VpcId:
+    Type: String
+    Description: 'VPC ID'
+
+  Application:
+    Type: String
+    Description: 'Application name'
+
+  CostCenter:
+    Type: String
+    Description: 'Cost center'
+
+Resources:
+  # Permission Boundary
+  PermissionBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub 'permission-boundary-${EnvironmentSuffix}'
+      Description: 'Permission boundary for all IAM roles'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowAllExceptIAM
+            Effect: Allow
+            Action:
+              - '*'
+            Resource: '*'
+          - Sid: DenyIAMOperations
+            Effect: Deny
+            Action:
+              - iam:CreateUser
+              - iam:DeleteUser
+              - iam:CreateGroup
+              - iam:DeleteGroup
+              - iam:AttachUserPolicy
+              - iam:DetachUserPolicy
+              - iam:PutUserPermissionsBoundary
+              - iam:DeleteUserPermissionsBoundary
+            Resource: '*'
+
+  # ECS Task Execution Role
+  ECSExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ecs-execution-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      PermissionsBoundary: !Ref PermissionBoundary
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # ECS Task Role
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ecs-task-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      PermissionsBoundary: !Ref PermissionBoundary
+      Policies:
+        - PolicyName: ECSTaskPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::payment-artifacts-${EnvironmentSuffix}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/payment-sessions-${EnvironmentSuffix}'
+              - Effect: Allow
+                Action:
+                  - rds:DescribeDBClusters
+                  - rds:DescribeDBInstances
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Environment}/*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Lambda Execution Role for Compliance Checks
+  ComplianceLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'compliance-lambda-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      PermissionsBoundary: !Ref PermissionBoundary
+      Policies:
+        - PolicyName: ComplianceChecks
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:DetectStackDrift
+                  - cloudformation:DescribeStackDriftDetectionStatus
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:drift-detection-${EnvironmentSuffix}'
+              - Effect: Allow
+                Action:
+                  - dynamodb:DescribeTable
+                  - rds:DescribeDBClusters
+                  - s3:GetBucketVersioning
+                  - s3:GetReplicationConfiguration
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'alb-sg-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for Application Load Balancer'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTPS from internet'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTP from internet'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub 'alb-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'ecs-sg-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for ECS tasks'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: 'HTTP from ALB'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub 'ecs-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'database-sg-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for Aurora PostgreSQL'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref ECSSecurityGroup
+          Description: 'PostgreSQL from ECS tasks'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub 'database-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+Outputs:
+  ECSExecutionRoleArn:
+    Description: 'ECS execution role ARN'
+    Value: !GetAtt ECSExecutionRole.Arn
+
+  ECSTaskRoleArn:
+    Description: 'ECS task role ARN'
+    Value: !GetAtt ECSTaskRole.Arn
+
+  ComplianceLambdaRoleArn:
+    Description: 'Compliance Lambda role ARN'
+    Value: !GetAtt ComplianceLambdaRole.Arn
+
+  ALBSecurityGroupId:
+    Description: 'ALB security group ID'
+    Value: !Ref ALBSecurityGroup
+
+  ECSSecurityGroupId:
+    Description: 'ECS security group ID'
+    Value: !Ref ECSSecurityGroup
+
+  DatabaseSecurityGroupId:
+    Description: 'Database security group ID'
+    Value: !Ref DatabaseSecurityGroup
+
+  PermissionBoundaryArn:
+    Description: 'Permission boundary ARN'
+    Value: !Ref PermissionBoundary

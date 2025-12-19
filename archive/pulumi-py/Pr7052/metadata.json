@@ -1,0 +1,40 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "turn_type": "single",
+  "po_id": "101912526",
+  "team": "synth",
+  "startedAt": "2025-11-21T09:20:27.863202",
+  "subtask": "Cloud Environment for Transaction Processing",
+  "subject_labels": [
+    "vpc",
+    "ecs",
+    "rds",
+    "alb",
+    "iam",
+    "s3",
+    "cloudwatch",
+    "security-groups"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ELB",
+    "IAM",
+    "S3",
+    "CloudWatch",
+    "Route53",
+    "NAT Gateway"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912266",
+  "team": "3",
+  "startedAt": "2025-11-12T12:50:34.397Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "KMS Key",
+    "IAM Role",
+    "IAM Policy",
+    "SNS Topic",
+    "SNS Subscription",
+    "CloudWatch Alarm",
+    "CloudWatch Dashboard",
+    "CloudWatch Log Group",
+    "S3 Bucket Policy",
+    "S3 Replication Configuration",
+    "S3 Object Lock Configuration",
+    "S3 Lifecycle Configuration"
+  ],
+  "training_quality": 9,
+  "background": "Deploy a secure multi-region S3 disaster recovery environment using a single CloudFormation template. The stack provisions KMS-encrypted S3 buckets with Object Lock (Compliance mode), versioning, lifecycle transitions to Glacier, and cross-region replication. It includes per-region KMS keys, IAM roles for replication, least-privilege policies, and optional CloudWatch monitoring (alarms, dashboards, SNS notifications). The template ensures data durability, compliance retention, VPC endpoint–restricted access, and automated replication metrics for operational resilience across us-east-1 and us-west-2.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

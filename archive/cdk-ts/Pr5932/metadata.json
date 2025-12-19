@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000325",
+  "team": "3",
+  "startedAt": "2025-11-06T05:22:05.175Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "VPC",
+    "Transit Gateway",
+    "NAT Gateway",
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "Route53",
+    "SSM",
+    "EventBridge",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

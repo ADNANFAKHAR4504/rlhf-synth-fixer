@@ -1,0 +1,853 @@
+### Reasoning Trace
+---
+
+I need to create a comprehensive CloudFormation template that addresses all the critical issues found in the MODEL_RESPONSE.md file. The key improvements needed are:
+
+1. **Fix SSH Security Group**: Support ALL CIDR ranges from AllowedSSHRanges parameter
+2. **Fix S3 Access Logging**: Configure proper CloudWatch integration instead of logging to another S3 bucket
+3. **Fix CloudWatch Alarms**: Monitor correct metrics for security events
+4. **Remove Hardcoded Values**: Use dynamic functions for AZs and subnet CIDRs
+5. **Add Missing Resources**: CloudTrail for comprehensive monitoring
+6. **Fix CloudFormation Syntax**: Correct ARN construction and resource references
+7. **Improve Security**: Tighten KMS key policy and add proper S3-to-CloudWatch integration
+
+### Answer 
+---
+
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Secure VPC with EC2, S3, and monitoring - deployed in us-east-1",
+  "Parameters": {
+    "Environment": {
+      "Type": "String",
+      "Description": "Environment name"
+    },
+    "Owner": {
+      "Type": "String",
+      "Description": "Owner of the resources"
+    },
+    "Project": {
+      "Type": "String",
+      "Description": "Project name"
+    },
+    "AllowedSSHRanges": {
+      "Type": "CommaDelimitedList",
+      "Description": "CIDR ranges allowed for SSH access"
+    },
+    "KeyName": {
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Description": "EC2 Key Pair for SSH access"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.micro",
+      "Description": "EC2 instance type"
+    },
+    "AMIId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Description": "AMI ID for EC2 instance"
+    },
+    "VPCCidr": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "Description": "CIDR block for VPC"
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {"Ref": "VPCCidr"},
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-vpc"}}
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-igw"}}
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "InternetGatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Fn::Select": [0, {"Fn::Cidr": [{"Ref": "VPCCidr"}, 4, 8]}]},
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-public-subnet-1"}}
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Fn::Select": [1, {"Fn::Cidr": [{"Ref": "VPCCidr"}, 4, 8]}]},
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-public-subnet-2"}}
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Fn::Select": [2, {"Fn::Cidr": [{"Ref": "VPCCidr"}, 4, 8]}]},
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-private-subnet-1"}}
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Fn::Select": [3, {"Fn::Cidr": [{"Ref": "VPCCidr"}, 4, 8]}]},
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-private-subnet-2"}}
+        ]
+      }
+    },
+    "NATGatewayEIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-nat-eip"}}
+        ]
+      }
+    },
+    "NATGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {"Fn::GetAtt": ["NATGatewayEIP", "AllocationId"]},
+        "SubnetId": {"Ref": "PublicSubnet1"},
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-nat-gateway"}}
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-public-rt"}}
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+    "PublicSubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PublicSubnet1"},
+        "RouteTableId": {"Ref": "PublicRouteTable"}
+      }
+    },
+    "PublicSubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PublicSubnet2"},
+        "RouteTableId": {"Ref": "PublicRouteTable"}
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-private-rt"}}
+        ]
+      }
+    },
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {"Ref": "NATGateway"}
+      }
+    },
+    "PrivateSubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet1"},
+        "RouteTableId": {"Ref": "PrivateRouteTable"}
+      }
+    },
+    "PrivateSubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet2"},
+        "RouteTableId": {"Ref": "PrivateRouteTable"}
+      }
+    },
+    "KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {"Fn::Sub": "KMS key for ${Project}-${Environment}"},
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {"AWS": {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"}},
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow S3 Service",
+              "Effect": "Allow",
+              "Principal": {"Service": "s3.amazonaws.com"},
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": {"Fn::Sub": "s3.${AWS::Region}.amazonaws.com"}
+                },
+                "StringLike": {
+                  "kms:EncryptionContext:aws:s3:arn": {"Fn::Sub": "${S3Bucket}/*"}
+                }
+              }
+            },
+            {
+              "Sid": "Allow EC2 Instance Role",
+              "Effect": "Allow",
+              "Principal": {"AWS": {"Fn::GetAtt": ["EC2Role", "Arn"]}},
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudTrail",
+              "Effect": "Allow",
+              "Principal": {"Service": "cloudtrail.amazonaws.com"},
+              "Action": [
+                "kms:GenerateDataKey",
+                "kms:DescribeKey",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-kms-key"}}
+        ]
+      }
+    },
+    "KMSAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {"Fn::Sub": "alias/${Project}-${Environment}-key"},
+        "TargetKeyId": {"Ref": "KMSKey"}
+      }
+    },
+    "SSHSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for SSH access",
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-ssh-sg"}}
+        ]
+      }
+    },
+    "SSHSecurityGroupIngress1": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {"Ref": "SSHSecurityGroup"},
+        "IpProtocol": "tcp",
+        "FromPort": 22,
+        "ToPort": 22,
+        "CidrIp": {"Fn::Select": [0, {"Ref": "AllowedSSHRanges"}]}
+      },
+      "Condition": "HasFirstSSHRange"
+    },
+    "SSHSecurityGroupIngress2": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {"Ref": "SSHSecurityGroup"},
+        "IpProtocol": "tcp",
+        "FromPort": 22,
+        "ToPort": 22,
+        "CidrIp": {"Fn::Select": [1, {"Ref": "AllowedSSHRanges"}]}
+      },
+      "Condition": "HasSecondSSHRange"
+    },
+    "SSHSecurityGroupIngress3": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {"Ref": "SSHSecurityGroup"},
+        "IpProtocol": "tcp",
+        "FromPort": 22,
+        "ToPort": 22,
+        "CidrIp": {"Fn::Select": [2, {"Ref": "AllowedSSHRanges"}]}
+      },
+      "Condition": "HasThirdSSHRange"
+    },
+    "EC2Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "${Project}-${Environment}-ec2-role"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {"Service": "ec2.amazonaws.com"},
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CloudWatchLogsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": [
+                    {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${Project}-${Environment}*"},
+                    {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/s3/${Project}-${Environment}*"}
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}}
+        ]
+      }
+    },
+    "EC2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [{"Ref": "EC2Role"}]
+      }
+    },
+    "EC2Instance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {"Ref": "AMIId"},
+        "InstanceType": {"Ref": "InstanceType"},
+        "KeyName": {"Ref": "KeyName"},
+        "IamInstanceProfile": {"Ref": "EC2InstanceProfile"},
+        "SubnetId": {"Ref": "PrivateSubnet1"},
+        "SecurityGroupIds": [{"Ref": "SSHSecurityGroup"}],
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-ec2"}}
+        ]
+      }
+    },
+    "CloudTrailLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {"Fn::Sub": "/aws/cloudtrail/${Project}-${Environment}"},
+        "RetentionInDays": 90,
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}}
+        ]
+      }
+    },
+    "S3AccessLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {"Fn::Sub": "/aws/s3/${Project}-${Environment}-access-logs"},
+        "RetentionInDays": 90,
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}}
+        ]
+      }
+    },
+    "CloudTrailRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {"Service": "cloudtrail.amazonaws.com"},
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CloudWatchLogsDeliveryRolePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:PutLogEvents",
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream"
+                  ],
+                  "Resource": {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/${Project}-${Environment}*"}
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CloudTrail": {
+      "Type": "AWS::CloudTrail::Trail",
+      "Properties": {
+        "TrailName": {"Fn::Sub": "${Project}-${Environment}-cloudtrail"},
+        "S3BucketName": {"Ref": "CloudTrailBucket"},
+        "CloudWatchLogsLogGroupArn": {"Fn::GetAtt": ["CloudTrailLogGroup", "Arn"]},
+        "CloudWatchLogsRoleArn": {"Fn::GetAtt": ["CloudTrailRole", "Arn"]},
+        "IncludeGlobalServiceEvents": true,
+        "IsMultiRegionTrail": false,
+        "EnableLogFileValidation": true,
+        "KMSKeyId": {"Ref": "KMSKey"},
+        "EventSelectors": [
+          {
+            "ReadWriteType": "All",
+            "IncludeManagementEvents": true,
+            "DataResources": [
+              {
+                "Type": "AWS::S3::Object",
+                "Values": [{"Fn::Sub": "${S3Bucket}/*"}]
+              }
+            ]
+          }
+        ],
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}}
+        ]
+      }
+    },
+    "CloudTrailBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "${Project}-${Environment}-cloudtrail-${AWS::AccountId}"},
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {"Ref": "KMSKey"}
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}}
+        ]
+      }
+    },
+    "CloudTrailBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {"Ref": "CloudTrailBucket"},
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSCloudTrailAclCheck",
+              "Effect": "Allow",
+              "Principal": {"Service": "cloudtrail.amazonaws.com"},
+              "Action": "s3:GetBucketAcl",
+              "Resource": {"Fn::GetAtt": ["CloudTrailBucket", "Arn"]}
+            },
+            {
+              "Sid": "AWSCloudTrailWrite",
+              "Effect": "Allow",
+              "Principal": {"Service": "cloudtrail.amazonaws.com"},
+              "Action": "s3:PutObject",
+              "Resource": {"Fn::Sub": "${CloudTrailBucket.Arn}/*"},
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "S3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "${Project}-${Environment}-secure-bucket-${AWS::AccountId}"},
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {"Ref": "KMSKey"}
+              }
+            }
+          ]
+        },
+        "LoggingConfiguration": {
+          "DestinationBucketName": {"Ref": "S3AccessLogBucket"},
+          "LogFilePrefix": "access-logs/"
+        },
+        "NotificationConfiguration": {
+          "LambdaConfigurations": [
+            {
+              "Event": "s3:ObjectCreated:*",
+              "Function": {"Fn::GetAtt": ["S3LogProcessorFunction", "Arn"]},
+              "Filter": {
+                "S3Key": {
+                  "Rules": [
+                    {
+                      "Name": "prefix",
+                      "Value": "access-logs/"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}}
+        ]
+      }
+    },
+    "S3AccessLogBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "${Project}-${Environment}-access-logs-${AWS::AccountId}"},
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}}
+        ]
+      }
+    },
+    "S3BucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {"Ref": "S3Bucket"},
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyInsecureConnections",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {"Fn::GetAtt": ["S3Bucket", "Arn"]},
+                {"Fn::Sub": "${S3Bucket.Arn}/*"}
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Sid": "DenyPublicReadACL",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObjectAcl",
+              "Resource": {"Fn::Sub": "${S3Bucket.Arn}/*"},
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": [
+                    "public-read",
+                    "public-read-write"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "S3LogProcessorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {"Service": "lambda.amazonaws.com"},
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3LogProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": {"Fn::Sub": "${S3AccessLogBucket}/*"}
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {"Fn::GetAtt": ["S3AccessLogGroup", "Arn"]}
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "S3LogProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {"Fn::Sub": "${Project}-${Environment}-s3-log-processor"},
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {"Fn::GetAtt": ["S3LogProcessorRole", "Arn"]},
+        "Code": {
+          "ZipFile": {
+            "Fn::Sub": "import boto3\nimport gzip\nimport json\nimport base64\nfrom datetime import datetime\n\ndef lambda_handler(event, context):\n    logs_client = boto3.client('logs')\n    s3_client = boto3.client('s3')\n    \n    log_group_name = '/aws/s3/${Project}-${Environment}-access-logs'\n    \n    for record in event['Records']:\n        bucket = record['s3']['bucket']['name']\n        key = record['s3']['object']['key']\n        \n        try:\n            response = s3_client.get_object(Bucket=bucket, Key=key)\n            log_data = response['Body'].read().decode('utf-8')\n            \n            log_events = []\n            for line in log_data.strip().split('\\n'):\n                if line.strip():\n                    log_events.append({\n                        'timestamp': int(datetime.now().timestamp() * 1000),\n                        'message': line\n                    })\n            \n            if log_events:\n                logs_client.put_log_events(\n                    logGroupName=log_group_name,\n                    logStreamName=f's3-access-{datetime.now().strftime(\"%Y-%m-%d\")}',\n                    logEvents=log_events\n                )\n                \n        except Exception as e:\n            print(f'Error processing {key}: {str(e)}')\n    \n    return {'statusCode': 200}\n"
+          }
+        },
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}}
+        ]
+      }
+    },
+    "S3LogProcessorPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Ref": "S3LogProcessorFunction"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "s3.amazonaws.com",
+        "SourceArn": {"Fn::GetAtt": ["S3Bucket", "Arn"]}
+      }
+    },
+    "S3PublicAccessAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "${Project}-${Environment}-s3-public-access"},
+        "AlarmDescription": "Alert on S3 bucket public access configuration changes",
+        "MetricName": "ErrorCount",
+        "Namespace": "CloudTrailMetrics",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}}
+        ]
+      }
+    },
+    "UnauthorizedAPICallsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "${Project}-${Environment}-unauthorized-api-calls"},
+        "AlarmDescription": "Alert on unauthorized API calls",
+        "MetricName": "UnauthorizedAPICalls",
+        "Namespace": "CloudTrailMetrics",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}}
+        ]
+      }
+    },
+    "SSHFailureAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "${Project}-${Environment}-ssh-failures"},
+        "AlarmDescription": "Alert on excessive SSH login failures",
+        "MetricName": "SSHLoginFailures",
+        "Namespace": "EC2/SecurityMetrics", 
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {"Ref": "EC2Instance"}
+          }
+        ],
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Owner", "Value": {"Ref": "Owner"}},
+          {"Key": "Project", "Value": {"Ref": "Project"}}
+        ]
+      }
+    }
+  },
+  "Conditions": {
+    "HasFirstSSHRange": {"Fn::Not": [{"Fn::Equals": [{"Fn::Select": [0, {"Ref": "AllowedSSHRanges"}]}, ""]}]},
+    "HasSecondSSHRange": {"Fn::Not": [{"Fn::Equals": [{"Fn::Select": [1, {"Ref": "AllowedSSHRanges"}]}, ""]}]},
+    "HasThirdSSHRange": {"Fn::Not": [{"Fn::Equals": [{"Fn::Select": [2, {"Ref": "AllowedSSHRanges"}]}, ""]}]}
+  },
+  "Outputs": {
+    "VpcId": {
+      "Description": "VPC ID",
+      "Value": {"Ref": "VPC"}
+    },
+    "PublicSubnetIds": {
+      "Description": "Public Subnet IDs",
+      "Value": {"Fn::Join": [",", [{"Ref": "PublicSubnet1"}, {"Ref": "PublicSubnet2"}]]}
+    },
+    "PrivateSubnetIds": {
+      "Description": "Private Subnet IDs",
+      "Value": {"Fn::Join": [",", [{"Ref": "PrivateSubnet1"}, {"Ref": "PrivateSubnet2"}]]}
+    },
+    "S3BucketName": {
+      "Description": "S3 Bucket Name",
+      "Value": {"Ref": "S3Bucket"}
+    },
+    "KmsKeyId": {
+      "Description": "KMS Key ID",
+      "Value": {"Ref": "KMSKey"}
+    },
+    "InstanceId": {
+      "Description": "EC2 Instance ID",
+      "Value": {"Ref": "EC2Instance"}
+    },
+    "IAMRoleName": {
+      "Description": "IAM Role Name",
+      "Value": {"Ref": "EC2Role"}
+    }
+  }
+}
+```

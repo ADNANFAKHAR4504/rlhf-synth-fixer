@@ -1,0 +1,106 @@
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:267: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  print(f"🚀 Starting analysis at {datetime.utcnow().isoformat()}Z")
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:111: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'evaluationTime': datetime.utcnow().isoformat() + 'Z',
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:186: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'reportId': f"report-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:187: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'timestamp': datetime.utcnow().isoformat() + 'Z',
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:203: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  's3Location': f's3://config-snapshots-{env_suffix}/reports/report-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}.json'
+
+======================================================================
+  AWS Config Compliance System Analysis
+======================================================================
+
+🚀 Starting analysis at 2025-12-04T14:44:09.819927Z
+
+======================================================================
+  Environment Check
+======================================================================
+
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ***
+  AWS_SECRET_ACCESS_KEY: ***
+  ENVIRONMENT_SUFFIX: pr7816
+  AWS_ENDPOINT_URL: http://127.0.0.1:5001
+
+✅ Environment variables configured
+📍 Using AWS endpoint: http://127.0.0.1:5001
+
+======================================================================
+  AWS Config Setup Verification
+======================================================================
+
+📋 Checking AWS Config Configuration...
+  ✓ Configuration Recorder: compliance-recorder-pr7816
+  ✓ Delivery Channel: compliance-delivery-pr7816
+  ✓ S3 Bucket: config-snapshots-pr7816
+  ✓ Recording: ALL resource types
+
+✅ AWS Config is properly configured
+
+======================================================================
+  Compliance Rules Evaluation
+======================================================================
+
+🔍 Evaluating Compliance Rules...
+  ✓ s3-bucket-encryption-enabled
+  ✓ ec2-required-tags
+  ✓ cloudwatch-alarm-action-check
+
+📊 Compliance Summary:
+  Total Resources: 16
+  Compliant: 14 (87.5%)
+  Non-Compliant: 2
+
+======================================================================
+  Compliance Report Generation
+======================================================================
+
+📄 Generating Compliance Report...
+  ✓ Report ID: report-20251204144409
+  ✓ Timestamp: 2025-12-04T14:44:09.820367Z
+  ✓ Environment: pr7816
+
+📊 Summary Statistics:
+  Total Rules: 3
+  Compliant Rules: 2
+  Non-Compliant Rules: 1
+  Total Resources Evaluated: 16
+  Compliant: 14
+  Non-Compliant: 2
+
+🎯 Overall Compliance Score: 87.5%
+
+⚠️  2 resources require attention
+📧 SNS notifications sent to: arn:aws:sns:us-east-1:000000000000:compliance-alerts-pr7816
+
+✅ Report generated and stored at: s3://config-snapshots-pr7816/reports/report-20251204144409.json
+
+======================================================================
+  CloudWatch Monitoring Dashboard
+======================================================================
+
+📊 CloudWatch Dashboard Configuration...
+  ✓ Dashboard: ComplianceMonitoring-pr7816
+  ✓ Metrics:
+    - ComplianceScore
+    - NonCompliantResources
+    - RuleEvaluations
+    - ViolationsByResourceType
+  ✓ Alarms:
+    - ComplianceScoreBelow80Percent
+    - CriticalViolationDetected
+
+✅ CloudWatch monitoring is active
+
+======================================================================
+  Analysis Complete
+======================================================================
+
+✅ AWS Config compliance system is operational
+📋 Report ID: report-20251204144409
+🎯 Compliance Score: 14/16 resources compliant
+
+⚠️  Action Required: 2 resources need remediation

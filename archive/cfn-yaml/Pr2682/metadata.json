@@ -1,0 +1,48 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349982",
+  "team": "5",
+  "startedAt": "2025-09-01T12:30:34.977Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Database Management",
+    "Access Control",
+    "Monitoring Setup",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::KMS::Key",
+    "AWS::KMS::Alias",
+    "AWS::EC2::VPC",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::EIP",
+    "AWS::EC2::NatGateway",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::SecurityGroup",
+    "AWS::EC2::NetworkAcl",
+    "AWS::IAM::Role",
+    "AWS::IAM::InstanceProfile",
+    "AWS::EC2::Instance",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::SecretsManager::Secret",
+    "AWS::RDS::DBInstance",
+    "AWS::SNS::Topic",
+    "AWS::SNS::Subscription",
+    "AWS::CloudWatch::Alarm",
+    "AWS::Logs::MetricFilter"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mithilesh-turing",
+  "dockerS3Location": ""
+}

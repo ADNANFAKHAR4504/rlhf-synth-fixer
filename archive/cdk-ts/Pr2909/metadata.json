@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349806",
+  "team": "3",
+  "startedAt": "2025-09-09T05:08:21.476Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "Serverless Infrastructure",
+    "API Gateway Configuration",
+    "Lambda Functions",
+    "DynamoDB Setup",
+    "Security Configuration",
+    "Network Configuration",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "Amazon DynamoDB",
+    "Amazon VPC",
+    "Amazon CloudWatch",
+    "AWS IAM",
+    "Amazon SQS",
+    "AWS X-Ray"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

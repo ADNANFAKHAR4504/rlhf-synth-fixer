@@ -1,0 +1,821 @@
+
+```json
+
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Robust and migratable AWS infrastructure with VPC, EC2, monitoring, and security best practices",
+
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {"default": "Network Configuration"},
+          "Parameters": ["VPCCidr", "PublicSubnet1Cidr", "PublicSubnet2Cidr", "PrivateSubnet1Cidr", "PrivateSubnet2Cidr"]
+        },
+        {
+          "Label": {"default": "Instance Configuration"},
+          "Parameters": ["InstanceType"]
+        },
+        {
+          "Label": {"default": "Notification Configuration"},
+          "Parameters": ["EmailAddress", "EnableDetailedMonitoring"]
+        }
+      ]
+    }
+  },
+
+  "Parameters": {
+    "VPCCidr": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "Description": "CIDR block for the VPC",
+      "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
+    },
+    "PublicSubnet1Cidr": {
+      "Type": "String",
+      "Default": "10.0.1.0/24",
+      "Description": "CIDR block for public subnet 1"
+    },
+    "PublicSubnet2Cidr": {
+      "Type": "String",
+      "Default": "10.0.2.0/24",
+      "Description": "CIDR block for public subnet 2"
+    },
+    "PrivateSubnet1Cidr": {
+      "Type": "String",
+      "Default": "10.0.10.0/24",
+      "Description": "CIDR block for private subnet 1"
+    },
+    "PrivateSubnet2Cidr": {
+      "Type": "String",
+      "Default": "10.0.20.0/24",
+      "Description": "CIDR block for private subnet 2"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.micro",
+      "AllowedValues": ["t3.micro", "t3.small", "t3.medium", "t3.large"],
+      "Description": "EC2 instance type"
+    },
+    "EmailAddress": {
+      "Type": "String",
+      "Default": "default@email.com",
+      "Description": "Email address for SNS notifications",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    },
+    "EnableDetailedMonitoring": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": ["true", "false"],
+      "Description": "Enable detailed monitoring for EC2 instances"
+    },
+    "EnvironmentTag": {
+      "Type": "String",
+      "Default": "Production",
+      "AllowedValues": ["Development", "Staging", "Production"],
+      "Description": "Environment tag for resources"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment name for tagging",
+      "AllowedPattern": "^[a-zA-Z0-9-]+$"
+    }
+  },
+
+  "Mappings": {
+    "RegionAMIMap": {
+      "us-east-1": {"AmiId": "ami-052064a798f08f0d3"},
+      "us-east-2": {"AmiId": "ami-0f393ad09b0767896"},
+      "us-west-1": {"AmiId": "ami-0b967c22fe917319b"},
+      "us-west-2": {"AmiId": "ami-0caa91d6b7bee0ed0"},
+      "eu-west-1": {"AmiId": "ami-0d4ecc2431e0ef9e1"},
+      "ap-southeast-1": {"AmiId": "ami-0a92b8b70f323d169"}
+    }
+  },
+
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {"Ref": "VPCCidr"},
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-VPC"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-IGW"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "InternetGatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Ref": "PublicSubnet1Cidr"},
+        "AvailabilityZone": {"Fn::Select": ["0", {"Fn::GetAZs": ""}]},
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PublicSubnet1"}},
+          {"Key": "Type", "Value": "Public"},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Ref": "PublicSubnet2Cidr"},
+        "AvailabilityZone": {"Fn::Select": ["1", {"Fn::GetAZs": ""}]},
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PublicSubnet2"}},
+          {"Key": "Type", "Value": "Public"},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Ref": "PrivateSubnet1Cidr"},
+        "AvailabilityZone": {"Fn::Select": ["0", {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateSubnet1"}},
+          {"Key": "Type", "Value": "Private"},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Ref": "PrivateSubnet2Cidr"},
+        "AvailabilityZone": {"Fn::Select": ["1", {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateSubnet2"}},
+          {"Key": "Type", "Value": "Private"},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "NATGateway1EIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+
+    "NATGateway2EIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+
+    "NATGateway1": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {"Fn::GetAtt": ["NATGateway1EIP", "AllocationId"]},
+        "SubnetId": {"Ref": "PublicSubnet1"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-NATGateway1"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "NATGateway2": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {"Fn::GetAtt": ["NATGateway2EIP", "AllocationId"]},
+        "SubnetId": {"Ref": "PublicSubnet2"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-NATGateway2"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PublicRouteTable"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PublicSubnet1"},
+        "RouteTableId": {"Ref": "PublicRouteTable"}
+      }
+    },
+
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PublicSubnet2"},
+        "RouteTableId": {"Ref": "PublicRouteTable"}
+      }
+    },
+
+    "PrivateRouteTable1": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateRouteTable1"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "PrivateRoute1": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable1"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {"Ref": "NATGateway1"}
+      }
+    },
+
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet1"},
+        "RouteTableId": {"Ref": "PrivateRouteTable1"}
+      }
+    },
+
+    "PrivateRouteTable2": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateRouteTable2"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "PrivateRoute2": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable2"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {"Ref": "NATGateway2"}
+      }
+    },
+
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet2"},
+        "RouteTableId": {"Ref": "PrivateRouteTable2"}
+      }
+    },
+
+    "PrivateSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for private instances",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": {"Ref": "VPCCidr"}
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": {"Ref": "VPCCidr"}
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": {"Ref": "VPCCidr"}
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateSecurityGroup"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "EC2InstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "EC2MinimalAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeImages",
+                    "ec2:DescribeTags",
+                    "ec2:DescribeVolumes"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData",
+                    "cloudwatch:GetMetricStatistics",
+                    "cloudwatch:ListMetrics"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-EC2InstanceRole"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "EC2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [{"Ref": "EC2InstanceRole"}]
+      }
+    },
+
+    "LaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateName": {"Fn::Sub": "${EnvironmentSuffix}-LaunchTemplate"},
+        "LaunchTemplateData": {
+          "ImageId": {
+            "Fn::FindInMap": ["RegionAMIMap", {"Ref": "AWS::Region"}, "AmiId"]
+          },
+          "InstanceType": {"Ref": "InstanceType"},
+          "IamInstanceProfile": {
+            "Arn": {"Fn::GetAtt": ["EC2InstanceProfile", "Arn"]}
+          },
+          "SecurityGroupIds": [{"Ref": "PrivateSecurityGroup"}],
+          "BlockDeviceMappings": [
+            {
+              "DeviceName": "/dev/xvda",
+              "Ebs": {
+                "VolumeSize": 20,
+                "VolumeType": "gp3",
+                "Encrypted": true,
+                "DeleteOnTermination": true
+              }
+            }
+          ],
+          "Monitoring": {
+            "Enabled": {"Ref": "EnableDetailedMonitoring"}
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1
+          },
+          "UserData": {
+            "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\necho 'Instance launched successfully' > /var/log/startup.log"
+          },
+          "TagSpecifications": [
+            {
+              "ResourceType": "instance",
+              "Tags": [
+                {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-Instance"}},
+                {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+              ]
+            },
+            {
+              "ResourceType": "volume",
+              "Tags": [
+                {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-Volume"}},
+                {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+              ]
+            }
+          ]
+        }
+      }
+    },
+
+    "PrivateInstance1": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "LaunchTemplate": {
+          "LaunchTemplateId": {"Ref": "LaunchTemplate"},
+          "Version": {"Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"]}
+        },
+        "SubnetId": {"Ref": "PrivateSubnet1"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateInstance1"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "PrivateInstance2": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "LaunchTemplate": {
+          "LaunchTemplateId": {"Ref": "LaunchTemplate"},
+          "Version": {"Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"]}
+        },
+        "SubnetId": {"Ref": "PrivateSubnet2"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateInstance2"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {"Fn::Sub": "${EnvironmentSuffix}-Notifications"},
+        "DisplayName": "Stack Event Notifications",
+        "Subscription": [
+          {
+            "Endpoint": {"Ref": "EmailAddress"},
+            "Protocol": "email"
+          }
+        ],
+        "KmsMasterKeyId": "alias/aws/sns",
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-SNSTopic"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "SNSTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "Topics": [{"Ref": "SNSTopic"}],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "cloudwatch.amazonaws.com",
+                  "events.amazonaws.com"
+                ]
+              },
+              "Action": "SNS:Publish",
+              "Resource": {"Ref": "SNSTopic"}
+            }
+          ]
+        }
+      }
+    },
+
+    "CPUAlarmInstance1": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "${EnvironmentSuffix}-Instance1-CPUAlarm"},
+        "AlarmDescription": "Alarm when CPU exceeds 80%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {"Ref": "PrivateInstance1"}
+          }
+        ],
+        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "TreatMissingData": "breaching"
+      }
+    },
+
+    "CPUAlarmInstance2": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "${EnvironmentSuffix}-Instance2-CPUAlarm"},
+        "AlarmDescription": "Alarm when CPU exceeds 80%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {"Ref": "PrivateInstance2"}
+          }
+        ],
+        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "TreatMissingData": "breaching"
+      }
+    },
+
+    "StatusCheckAlarmInstance1": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "${EnvironmentSuffix}-Instance1-StatusCheckAlarm"},
+        "AlarmDescription": "Alarm when instance status check fails",
+        "MetricName": "StatusCheckFailed",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {"Ref": "PrivateInstance1"}
+          }
+        ],
+        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "TreatMissingData": "breaching"
+      }
+    },
+
+    "StatusCheckAlarmInstance2": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "${EnvironmentSuffix}-Instance2-StatusCheckAlarm"},
+        "AlarmDescription": "Alarm when instance status check fails",
+        "MetricName": "StatusCheckFailed",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {"Ref": "PrivateInstance2"}
+          }
+        ],
+        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "TreatMissingData": "breaching"
+      }
+    },
+
+    "StackEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-StackEventRule"},
+        "Description": "Capture all CloudFormation stack events",
+        "EventPattern": {
+          "source": ["aws.cloudformation"],
+          "detail-type": ["CloudFormation Stack Status Change"],
+          "detail": {
+            "stack-id": [{"Ref": "AWS::StackId"}]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {"Ref": "SNSTopic"},
+            "Id": "SNSTopic"
+          }
+        ]
+      }
+    },
+
+    "LogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {"Fn::Sub": "/aws/ec2/${EnvironmentSuffix}"},
+        "RetentionInDays": 30
+      }
+    },
+
+    "S3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${EnvironmentSuffix}-${AWS::AccountId}-data"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-S3Bucket"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
+        ]
+      }
+    },
+
+    "S3BucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {"Ref": "S3Bucket"},
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyInsecureConnections",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {"Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"},
+                {"Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}"}
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+
+  "Outputs": {
+    "StackName": {
+      "Description": "CloudFormation Stack Name",
+      "Value": {"Ref": "AWS::StackName"}
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment Suffix used for resource naming",
+      "Value": {"Ref": "EnvironmentSuffix"}
+    },
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {"Ref": "VPC"},
+      "Export": {
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-VPC-ID"}
+      }
+    },
+    "PublicSubnet1Id": {
+      "Description": "Public Subnet 1 ID",
+      "Value": {"Ref": "PublicSubnet1"},
+      "Export": {
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-PublicSubnet1-ID"}
+      }
+    },
+    "PublicSubnet2Id": {
+      "Description": "Public Subnet 2 ID",
+      "Value": {"Ref": "PublicSubnet2"},
+      "Export": {
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-PublicSubnet2-ID"}
+      }
+    },
+    "PrivateSubnet1Id": {
+      "Description": "Private Subnet 1 ID",
+      "Value": {"Ref": "PrivateSubnet1"},
+      "Export": {
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-PrivateSubnet1-ID"}
+      }
+    },
+    "PrivateSubnet2Id": {
+      "Description": "Private Subnet 2 ID",
+      "Value": {"Ref": "PrivateSubnet2"},
+      "Export": {
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-PrivateSubnet2-ID"}
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "SNS Topic ARN for notifications",
+      "Value": {"Ref": "SNSTopic"},
+      "Export": {
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-SNSTopic-ARN"}
+      }
+    },
+    "S3BucketName": {
+      "Description": "S3 Bucket Name",
+      "Value": {"Ref": "S3Bucket"},
+      "Export": {
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-S3Bucket-Name"}
+      }
+    },
+    "PrivateInstance1Id": {
+      "Description": "Private Instance 1 ID",
+      "Value": {"Ref": "PrivateInstance1"},
+      "Export": {
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-PrivateInstance1-ID"}
+      }
+    },
+    "PrivateInstance2Id": {
+      "Description": "Private Instance 2 ID",
+      "Value": {"Ref": "PrivateInstance2"},
+      "Export": {
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-PrivateInstance2-ID"}
+      }
+    },
+    "EC2InstanceRoleArn": {
+      "Description": "EC2 Instance Role ARN",
+      "Value": {"Fn::GetAtt": ["EC2InstanceRole", "Arn"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-EC2InstanceRole-ARN"}
+      }
+    }
+  }
+}
+
+```

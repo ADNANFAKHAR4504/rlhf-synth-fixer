@@ -1,0 +1,147 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS Backup plans for database clusters",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String"
+    },
+    "BlueDBCluster": {
+      "Type": "String"
+    },
+    "GreenDBCluster": {
+      "Type": "String"
+    },
+    "KMSKeyId": {
+      "Type": "String"
+    },
+    "Project": {
+      "Type": "String"
+    },
+    "CostCenter": {
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "BackupVault": {
+      "Type": "AWS::Backup::BackupVault",
+      "Properties": {
+        "BackupVaultName": {
+          "Fn::Sub": "payment-backup-vault-${EnvironmentSuffix}"
+        },
+        "EncryptionKeyArn": {
+          "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KMSKeyId}"
+        },
+        "BackupVaultTags": {
+          "Project": {
+            "Ref": "Project"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        }
+      }
+    },
+    "BackupPlan": {
+      "Type": "AWS::Backup::BackupPlan",
+      "Properties": {
+        "BackupPlan": {
+          "BackupPlanName": {
+            "Fn::Sub": "payment-backup-plan-${EnvironmentSuffix}"
+          },
+          "BackupPlanRule": [
+            {
+              "RuleName": "DailyBackup",
+              "TargetBackupVault": {
+                "Ref": "BackupVault"
+              },
+              "ScheduleExpression": "cron(0 3 * * ? *)",
+              "StartWindowMinutes": 60,
+              "CompletionWindowMinutes": 120,
+              "Lifecycle": {
+                "DeleteAfterDays": 7
+              }
+            }
+          ]
+        }
+      }
+    },
+    "BackupRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "backup.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+          "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "BackupSelection": {
+      "Type": "AWS::Backup::BackupSelection",
+      "Properties": {
+        "BackupPlanId": {
+          "Ref": "BackupPlan"
+        },
+        "BackupSelection": {
+          "SelectionName": {
+            "Fn::Sub": "payment-backup-selection-${EnvironmentSuffix}"
+          },
+          "IamRoleArn": {
+            "Fn::GetAtt": [
+              "BackupRole",
+              "Arn"
+            ]
+          },
+          "Resources": [
+            {
+              "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${BlueDBCluster}"
+            },
+            {
+              "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${GreenDBCluster}"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "BackupVaultArn": {
+      "Description": "Backup Vault ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "BackupVault",
+          "BackupVaultArn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BackupVaultArn"
+        }
+      }
+    }
+  }
+}

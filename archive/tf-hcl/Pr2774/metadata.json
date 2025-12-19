@@ -1,0 +1,15 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "354008",
+  "team": "5",
+  "startedAt": "2025-09-05T08:34:32.876Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sadaf-jamal-au27",
+  "dockerS3Location": ""
+}

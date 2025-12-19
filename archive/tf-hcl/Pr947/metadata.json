@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291735",
+  "team": "1",
+  "startedAt": "2025-08-21T13:46:15.125Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Database Management",
+    "Access Control",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "High-quality contrast between incorrect CDKTF model response and compliant single-file Terraform HCL with tests and failures documented; strong signal on AWS security best practices (S3 TLS-only, SSE-S3), VPC/NAT patterns, RDS private & encrypted, IAM least privilege.",
+  "aws_services": [
+    "VPC",
+    "EC2 (Elastic IP, NAT Gateway)",
+    "CloudWatch Logs",
+    "IAM",
+    "S3",
+    "RDS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}

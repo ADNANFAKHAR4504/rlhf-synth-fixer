@@ -1,0 +1,2 @@
+I ran terraform validate and plan and got errors in three places, all saying Error invalid function argument. Invalid value for "template" parameter: invalid template expression: templatestring is only for rendering templates retrieved dynamically from elsewhere, and so does not support providing a literal template; consider using a template string expression instead.
+Please help me fix it and provide the working terraform code.

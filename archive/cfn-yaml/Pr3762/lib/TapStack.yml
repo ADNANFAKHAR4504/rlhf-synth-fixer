@@ -1,0 +1,643 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Scalable Travel Platform API with Caching, Monitoring, and Event-Driven Integration"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Project Configuration"
+        Parameters:
+          - ProjectName
+          - EnvironmentSuffix
+      - Label:
+          default: "API Configuration"
+        Parameters:
+          - ApiThrottlingRate
+          - ApiThrottlingBurst
+          - CacheNodeType
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: "TravelPlatform"
+    Description: "Name of the project for resource tagging"
+    AllowedPattern: "^[a-zA-Z0-9-]+$"
+
+  EnvironmentSuffix:
+    Type: String
+    Default: "dev"
+    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
+
+  CacheNodeType:
+    Type: String
+    Default: "cache.t3.micro"
+    Description: "ElastiCache node instance type"
+    AllowedValues:
+      - cache.t3.micro
+      - cache.t3.small
+      - cache.t3.medium
+
+  ApiThrottlingRate:
+    Type: Number
+    Default: 10000
+    Description: "API Gateway throttling rate limit"
+
+  ApiThrottlingBurst:
+    Type: Number
+    Default: 5000
+    Description: "API Gateway throttling burst limit"
+
+Resources:
+  # DynamoDB Table for Travel Data
+  TravelDataTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub "TravelData${EnvironmentSuffix}"
+      AttributeDefinitions:
+        - AttributeName: "searchType"
+          AttributeType: "S"
+        - AttributeName: "searchId"
+          AttributeType: "S"
+        - AttributeName: "timestamp"
+          AttributeType: "N"
+      KeySchema:
+        - AttributeName: "searchType"
+          KeyType: "HASH"
+        - AttributeName: "searchId"
+          KeyType: "RANGE"
+      GlobalSecondaryIndexes:
+        - IndexName: "timestamp-index"
+          KeySchema:
+            - AttributeName: "searchType"
+              KeyType: "HASH"
+            - AttributeName: "timestamp"
+              KeyType: "RANGE"
+          Projection:
+            ProjectionType: "ALL"
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      BillingMode: "PROVISIONED"
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      StreamSpecification:
+        StreamViewType: "NEW_AND_OLD_IMAGES"
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: "Project"
+          Value: !Ref ProjectName
+        - Key: "Environment"
+          Value: !Ref EnvironmentSuffix
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+  # ElastiCache Subnet Group
+  CacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: "Subnet group for ElastiCache cluster"
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+
+  # ElastiCache Redis Cluster
+  CacheCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      CacheNodeType: !Ref CacheNodeType
+      Engine: "redis"
+      NumCacheNodes: 1
+      CacheSubnetGroupName: !Ref CacheSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref CacheSecurityGroup
+
+  # Security Groups
+  CacheSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for ElastiCache Redis cluster"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for Lambda functions"
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        - "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+      Policies:
+        - PolicyName: "TravelApiPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:GetItem"
+                  - "dynamodb:PutItem"
+                  - "dynamodb:Query"
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:BatchGetItem"
+                Resource:
+                  - !GetAtt TravelDataTable.Arn
+                  - !Sub "${TravelDataTable.Arn}/index/*"
+              - Effect: Allow
+                Action:
+                  - "elasticache:DescribeCacheClusters"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "events:PutEvents"
+                Resource: !GetAtt EventBus.Arn
+              - Effect: Allow
+                Action:
+                  - "cloudwatch:PutMetricData"
+                Resource: "*"
+
+  # Lambda Function for Search API
+  SearchLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "TravelSearchApi${EnvironmentSuffix}"
+      Description: "Lambda function for processing travel search requests with caching, performance monitoring, and real-time event publishing for external integrations"
+      Runtime: "python3.9"
+      Handler: "index.lambda_handler"
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          import time
+          import logging
+          from decimal import Decimal
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          # Initialize AWS clients
+          dynamodb = boto3.resource('dynamodb')
+          events = boto3.client('events')
+          cloudwatch = boto3.client('cloudwatch')
+
+          # Environment variables
+          TABLE_NAME = os.environ['TABLE_NAME']
+          EVENT_BUS_NAME = os.environ['EVENT_BUS_NAME']
+
+          def lambda_handler(event, context):
+              request_id = context.aws_request_id
+              start_time = time.time()
+              
+              try:
+                  # Parse request
+                  http_method = event.get('httpMethod', 'GET')
+                  path = event.get('path', '')
+                  query_params = event.get('queryStringParameters', {}) or {}
+                  
+                  # Route based on path and method
+                  if path == '/search' and http_method == 'GET':
+                      response = handle_search(query_params, request_id)
+                  else:
+                      response = {
+                          'statusCode': 404,
+                          'body': json.dumps({'error': 'Not Found'})
+                      }
+                  
+                  # Record metrics
+                  duration = (time.time() - start_time) * 1000
+                  record_metrics(path, response['statusCode'], duration)
+                  
+                  # Add CORS headers
+                  response['headers'] = {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*',
+                      'X-Request-ID': request_id
+                  }
+                  
+                  return response
+                  
+              except Exception as e:
+                  logger.error(f"Unhandled error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'X-Request-ID': request_id
+                      },
+                      'body': json.dumps({'error': 'Internal Server Error'})
+                  }
+
+          def handle_search(params, request_id):
+              search_type = params.get('type', 'flight')
+              search_query = params.get('q', '')
+              
+              if not search_query:
+                  return {
+                      'statusCode': 400,
+                      'body': json.dumps({'error': 'Query parameter "q" is required'})
+                  }
+              
+              # Query DynamoDB
+              table = dynamodb.Table(TABLE_NAME)
+              timestamp = int(time.time())
+              
+              try:
+                  response = table.get_item(
+                      Key={
+                          'searchType': search_type,
+                          'searchId': search_query
+                      }
+                  )
+                  
+                  if 'Item' in response:
+                      result = response['Item']
+                  else:
+                      # Simulate fetching from external API
+                      result = {
+                          'searchType': search_type,
+                          'query': search_query,
+                          'results': [
+                              {
+                                  'id': f"{search_type}-1",
+                                  'name': f"Sample {search_type} result",
+                                  'price': 299.99,
+                                  'currency': 'USD'
+                              }
+                          ],
+                          'timestamp': timestamp
+                      }
+                      
+                      # Store in DynamoDB
+                      table.put_item(Item={
+                          'searchType': search_type,
+                          'searchId': search_query,
+                          'timestamp': timestamp,
+                          'data': result,
+                          'ttl': timestamp + 3600  # 1 hour TTL
+                      })
+                      
+                      # Publish event for external integration
+                      publish_integration_event(search_type, search_query, request_id)
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps(result, cls=DecimalEncoder)
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Database error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': 'Failed to process search'})
+                  }
+
+          def publish_integration_event(search_type, query, request_id):
+              try:
+                  events.put_events(
+                      Entries=[
+                          {
+                              'Source': 'travel.platform.search',
+                              'DetailType': 'Search Request',
+                              'Detail': json.dumps({
+                                  'searchType': search_type,
+                                  'query': query,
+                                  'requestId': request_id,
+                                  'timestamp': int(time.time())
+                              }),
+                              'EventBusName': EVENT_BUS_NAME
+                          }
+                      ]
+                  )
+              except Exception as e:
+                  logger.error(f"Failed to publish event: {str(e)}")
+
+          def record_metrics(endpoint, status_code, duration):
+              try:
+                  cloudwatch.put_metric_data(
+                      Namespace='TravelPlatform/API',
+                      MetricData=[
+                          {
+                              'MetricName': 'RequestLatency',
+                              'Dimensions': [
+                                  {'Name': 'Endpoint', 'Value': endpoint},
+                                  {'Name': 'StatusCode', 'Value': str(status_code)}
+                              ],
+                              'Value': duration,
+                              'Unit': 'Milliseconds'
+                          }
+                      ]
+                  )
+              except Exception as e:
+                  logger.error(f"Failed to record metrics: {str(e)}")
+
+          class DecimalEncoder(json.JSONEncoder):
+              def default(self, obj):
+                  if isinstance(obj, Decimal):
+                      return float(obj)
+                  return super(DecimalEncoder, self).default(obj)
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TravelDataTable
+          EVENT_BUS_NAME: !Ref EventBus
+      MemorySize: 512
+      Timeout: 30
+      TracingConfig:
+        Mode: Active
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnetA
+          - !Ref PrivateSubnetB
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Tags:
+        - Key: "Project"
+          Value: !Ref ProjectName
+        - Key: "Environment"
+          Value: !Ref EnvironmentSuffix
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+  # API Gateway
+  TravelApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub "TravelApi${EnvironmentSuffix}"
+      Description: "Travel Platform REST API"
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Gateway Resource
+  SearchResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref TravelApi
+      ParentId: !GetAtt TravelApi.RootResourceId
+      PathPart: "search"
+
+  # API Gateway Method
+  SearchMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref TravelApi
+      ResourceId: !Ref SearchResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SearchLambdaFunction.Arn}/invocations"
+
+  # Lambda Permission for API Gateway
+  ApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SearchLambdaFunction
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TravelApi}/*/*/*"
+
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - SearchMethod
+    Properties:
+      RestApiId: !Ref TravelApi
+
+  # API Gateway Stage with Throttling
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref TravelApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: !Ref EnvironmentSuffix
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingRateLimit: !Ref ApiThrottlingRate
+          ThrottlingBurstLimit: !Ref ApiThrottlingBurst
+          LoggingLevel: INFO
+          DataTraceEnabled: false
+          MetricsEnabled: true
+      Tags:
+        - Key: "Project"
+          Value: !Ref ProjectName
+        - Key: "Environment"
+          Value: !Ref EnvironmentSuffix
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+  # EventBridge Event Bus
+  EventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub "TravelEvents${EnvironmentSuffix}"
+      Tags:
+        - Key: "Project"
+          Value: !Ref ProjectName
+        - Key: "Environment"
+          Value: !Ref EnvironmentSuffix
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+  # EventBridge Rule for External Integration
+  IntegrationRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "ExternalIntegration${EnvironmentSuffix}"
+      Description: "Route search events to external systems"
+      EventBusName: !Ref EventBus
+      EventPattern:
+        source:
+          - "travel.platform.search"
+        detail-type:
+          - "Search Request"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt IntegrationQueue.Arn
+          Id: "IntegrationTarget"
+
+  # SQS Queue for External Integration
+  IntegrationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "TravelIntegration${EnvironmentSuffix}"
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600
+      ReceiveMessageWaitTimeSeconds: 20
+      Tags:
+        - Key: "Project"
+          Value: !Ref ProjectName
+        - Key: "Environment"
+          Value: !Ref EnvironmentSuffix
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+  # SQS Queue Policy
+  IntegrationQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref IntegrationQueue
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action:
+              - "sqs:SendMessage"
+            Resource: !GetAtt IntegrationQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt IntegrationRule.Arn
+
+  # CloudWatch Dashboard
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "TravelPlatform${EnvironmentSuffix}"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/ApiGateway", "Count", "ApiName", "${TravelApi}", { "stat": "Sum" } ],
+                  [ ".", "4XXError", ".", ".", { "stat": "Sum", "color": "#ff7f00" } ],
+                  [ ".", "5XXError", ".", ".", { "stat": "Sum", "color": "#d62728" } ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "API Gateway Requests"
+              }
+            }
+          ]
+        }
+
+  # CloudWatch Alarms
+  ApiErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "TravelApi${EnvironmentSuffix}-Errors"
+      AlarmDescription: "Alert when API error rate exceeds threshold"
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref TravelApi
+      TreatMissingData: notBreaching
+
+  # X-Ray Service Map
+  XRayServiceMap:
+    Type: AWS::XRay::Group
+    Properties:
+      GroupName: !Sub "TravelPlatform${EnvironmentSuffix}"
+      FilterExpression: !Sub 'service("${SearchLambdaFunction}")'
+
+  # VPC Resources
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.0.1.0/24
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.0.2.0/24
+
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${TravelApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiEndpoint"
+
+  TravelDataTableName:
+    Description: "Name of the DynamoDB table"
+    Value: !Ref TravelDataTable
+    Export:
+      Name: !Sub "${AWS::StackName}-TravelDataTableName"
+
+  TravelDataTableArn:
+    Description: "ARN of the DynamoDB table"
+    Value: !GetAtt TravelDataTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TravelDataTableArn"
+
+  CacheEndpoint:
+    Description: "ElastiCache Redis endpoint"
+    Value: !GetAtt CacheCluster.RedisEndpoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-CacheEndpoint"
+
+  EventBusName:
+    Description: "EventBridge event bus name"
+    Value: !Ref EventBus
+    Export:
+      Name: !Sub "${AWS::StackName}-EventBusName"
+
+  DashboardURL:
+    Description: "CloudWatch Dashboard URL"
+    Value: !Sub "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${MonitoringDashboard}"
+    Export:
+      Name: !Sub "${AWS::StackName}-DashboardURL"
+
+  StackName:
+    Description: "Name of this CloudFormation stack"
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub "${AWS::StackName}-StackName"
+
+  EnvironmentSuffix:
+    Description: "Environment suffix used for this deployment"
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub "${AWS::StackName}-EnvironmentSuffix"

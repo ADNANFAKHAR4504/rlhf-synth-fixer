@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-19T13:12:08.000Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "a5p3b5",
+  "aws_services": [
+    "Lambda",
+    "EventBridge",
+    "S3",
+    "SNS",
+    "CloudWatch",
+    "VPC",
+    "IAM",
+    "KMS"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

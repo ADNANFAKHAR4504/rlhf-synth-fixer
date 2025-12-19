@@ -1,0 +1,45 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000851",
+  "team": "synth",
+  "startedAt": "2025-11-06T13:48:56+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "VPC",
+    "Networking",
+    "Security Groups",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "WAF",
+    "Lambda",
+    "DynamoDB",
+    "Secrets Manager",
+    "KMS",
+    "SNS",
+    "CloudWatch",
+    "Systems Manager",
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Tables",
+    "Security Groups",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

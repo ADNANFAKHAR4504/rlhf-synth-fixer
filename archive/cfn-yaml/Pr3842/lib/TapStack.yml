@@ -1,0 +1,516 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Serverless API with API Gateway, Lambda, DynamoDB, CloudWatch, and Parameter Store'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix to append to resource names (e.g., dev, staging, prod)
+    Default: dev
+
+Resources:
+  # DynamoDB Table for User Data
+  UserDataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'user-data-${EnvironmentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: ServerlessAPI
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub 'lambda-dynamodb-policy-${EnvironmentSuffix}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt UserDataTable.Arn
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/serverless-api/${EnvironmentSuffix}/*'
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda Function
+  ApiLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'api-handler-${EnvironmentSuffix}'
+      Runtime: python3.10
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref UserDataTable
+          ENVIRONMENT: !Ref EnvironmentSuffix
+          PARAMETER_PREFIX: !Sub '/serverless-api/${EnvironmentSuffix}'
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          from decimal import Decimal
+
+          dynamodb = boto3.resource('dynamodb')
+          ssm = boto3.client('ssm')
+          cloudwatch = boto3.client('cloudwatch')
+
+          table = dynamodb.Table(os.environ['TABLE_NAME'])
+          environment = os.environ['ENVIRONMENT']
+
+          class DecimalEncoder(json.JSONEncoder):
+              def default(self, obj):
+                  if isinstance(obj, Decimal):
+                      return float(obj)
+                  return super(DecimalEncoder, self).default(obj)
+
+          def publish_metric(metric_name, value, unit='Count'):
+              """Publish custom metrics to CloudWatch"""
+              try:
+                  cloudwatch.put_metric_data(
+                      Namespace=f'ServerlessAPI/{environment}',
+                      MetricData=[
+                          {
+                              'MetricName': metric_name,
+                              'Value': value,
+                              'Unit': unit,
+                              'Timestamp': datetime.utcnow()
+                          }
+                      ]
+                  )
+              except Exception as e:
+                  print(f"Error publishing metric: {str(e)}")
+
+          def lambda_handler(event, context):
+              """Main Lambda handler for API requests"""
+              try:
+                  # Extract HTTP method and path
+                  http_method = event.get('httpMethod', 'GET')
+                  path = event.get('path', '/')
+                  
+                  # Route handling
+                  if http_method == 'POST' and path == '/users':
+                      return create_user(event)
+                  elif http_method == 'GET' and path.startswith('/users/'):
+                      return get_user(event)
+                  elif http_method == 'GET' and path == '/health':
+                      return health_check()
+                  else:
+                      return {
+                          'statusCode': 404,
+                          'headers': {'Content-Type': 'application/json'},
+                          'body': json.dumps({'error': 'Endpoint not found'})
+                      }
+              
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  publish_metric('APIErrors', 1)
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': 'Internal server error'})
+                  }
+
+          def create_user(event):
+              """Create a new user record"""
+              try:
+                  body = json.loads(event.get('body', '{}'))
+                  user_id = body.get('userId')
+                  
+                  if not user_id:
+                      return {
+                          'statusCode': 400,
+                          'headers': {'Content-Type': 'application/json'},
+                          'body': json.dumps({'error': 'userId is required'})
+                      }
+                  
+                  timestamp = int(datetime.utcnow().timestamp())
+                  
+                  item = {
+                      'userId': user_id,
+                      'timestamp': timestamp,
+                      'data': body.get('data', {}),
+                      'createdAt': datetime.utcnow().isoformat()
+                  }
+                  
+                  table.put_item(Item=item)
+                  publish_metric('UserCreated', 1)
+                  
+                  return {
+                      'statusCode': 201,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'message': 'User created successfully', 'userId': user_id}, cls=DecimalEncoder)
+                  }
+              
+              except Exception as e:
+                  print(f"Error creating user: {str(e)}")
+                  raise
+
+          def get_user(event):
+              """Retrieve user data"""
+              try:
+                  path_parts = event['path'].split('/')
+                  user_id = path_parts[-1] if len(path_parts) > 2 else None
+                  
+                  if not user_id:
+                      return {
+                          'statusCode': 400,
+                          'headers': {'Content-Type': 'application/json'},
+                          'body': json.dumps({'error': 'userId is required'})
+                      }
+                  
+                  response = table.query(
+                      KeyConditionExpression='userId = :uid',
+                      ExpressionAttributeValues={':uid': user_id},
+                      Limit=10,
+                      ScanIndexForward=False
+                  )
+                  
+                  publish_metric('UserQueried', 1)
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'items': response.get('Items', [])}, cls=DecimalEncoder)
+                  }
+              
+              except Exception as e:
+                  print(f"Error getting user: {str(e)}")
+                  raise
+
+          def health_check():
+              """Health check endpoint"""
+              return {
+                  'statusCode': 200,
+                  'headers': {'Content-Type': 'application/json'},
+                  'body': json.dumps({
+                      'status': 'healthy',
+                      'environment': environment,
+                      'timestamp': datetime.utcnow().isoformat()
+                  })
+              }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda CloudWatch Log Group
+  ApiLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/api-handler-${EnvironmentSuffix}'
+      RetentionInDays: 30
+
+  # API Gateway REST API
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'serverless-api-${EnvironmentSuffix}'
+      Description: Serverless API for user data management
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # API Gateway Resource - /users
+  UsersResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: users
+
+  # API Gateway Resource - /users/{userId}
+  UserIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref UsersResource
+      PathPart: '{userId}'
+
+  # API Gateway Resource - /health
+  HealthResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: health
+
+  # POST /users Method
+  UsersPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref UsersResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambdaFunction.Arn}/invocations'
+
+  # GET /users/{userId} Method
+  UserIdGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref UserIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      RequestParameters:
+        method.request.path.userId: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambdaFunction.Arn}/invocations'
+
+  # GET /health Method
+  HealthGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref HealthResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambdaFunction.Arn}/invocations'
+
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - UsersPostMethod
+      - UserIdGetMethod
+      - HealthGetMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+
+  # API Gateway Stage
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref ApiGateway
+      DeploymentId: !Ref ApiDeployment
+      StageName: !Ref EnvironmentSuffix
+      Description: !Sub 'API Stage for ${EnvironmentSuffix} environment'
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          MetricsEnabled: true
+          DataTraceEnabled: true
+          LoggingLevel: INFO
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda Permission for API Gateway
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+  # CloudWatch Alarm - Lambda Errors
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'lambda-errors-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Lambda function errors exceed threshold
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApiLambdaFunction
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm - API Gateway 5XX Errors
+  ApiGateway5XXAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'api-5xx-errors-${EnvironmentSuffix}'
+      AlarmDescription: Alert when API Gateway 5XX errors exceed threshold
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub 'serverless-api-${EnvironmentSuffix}'
+      TreatMissingData: notBreaching
+
+  # CloudWatch Dashboard
+  ApiDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'serverlessapi-dashboard-${EnvironmentSuffix}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Lambda Invocations"}],
+                  [".", "Errors", {"stat": "Sum", "label": "Lambda Errors"}],
+                  [".", "Duration", {"stat": "Average", "label": "Avg Duration (ms)"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Lambda Metrics",
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/ApiGateway", "Count", {"stat": "Sum", "label": "API Requests"}],
+                  [".", "4XXError", {"stat": "Sum", "label": "4XX Errors"}],
+                  [".", "5XXError", {"stat": "Sum", "label": "5XX Errors"}],
+                  [".", "Latency", {"stat": "Average", "label": "Avg Latency (ms)"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "API Gateway Metrics",
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", {"stat": "Sum"}],
+                  [".", "ConsumedWriteCapacityUnits", {"stat": "Sum"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Capacity",
+                "yAxis": {"left": {"min": 0}}
+              }
+            }
+          ]
+        }
+
+  # SSM Parameters for Configuration
+  ApiConfigMaxRetries:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/serverless-api/${EnvironmentSuffix}/config/max-retries'
+      Type: String
+      Value: '3'
+      Description: Maximum number of retry attempts
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+
+  ApiConfigTimeout:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/serverless-api/${EnvironmentSuffix}/config/timeout'
+      Type: String
+      Value: '30'
+      Description: API timeout in seconds
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+
+  ApiConfigRateLimit:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/serverless-api/${EnvironmentSuffix}/config/rate-limit'
+      Type: String
+      Value: '1000'
+      Description: Rate limit per user per day
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiUrl'
+
+  LambdaFunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt ApiLambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaArn'
+
+  DynamoDBTableName:
+    Description: DynamoDB table name
+    Value: !Ref UserDataTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TableName'
+
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=serverlessapi-dashboard-${EnvironmentSuffix}'
+
+  ParameterStorePrefix:
+    Description: SSM Parameter Store prefix
+    Value: !Sub '/serverless-api/${EnvironmentSuffix}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ParameterPrefix'

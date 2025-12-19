@@ -1,0 +1,49 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "356232",
+  "team": "2",
+  "startedAt": "2025-10-16T17:55:28.542Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "EIP",
+    "Route Table",
+    "Security Group",
+    "RDS Aurora Global Cluster",
+    "RDS Cluster",
+    "RDS Cluster Instance",
+    "DB Subnet Group",
+    "KMS Key",
+    "Secrets Manager",
+    "EC2",
+    "IAM Role",
+    "IAM Policy",
+    "IAM Instance Profile",
+    "Application Load Balancer",
+    "ALB Target Group",
+    "ALB Listener",
+    "Route53 Hosted Zone",
+    "Route53 Health Check",
+    "Route53 Record",
+    "Lambda Function",
+    "CloudWatch Event Rule",
+    "CloudWatch Event Target",
+    "CloudWatch Log Group"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "caiof-turing",
+  "dockerS3Location": ""
+}

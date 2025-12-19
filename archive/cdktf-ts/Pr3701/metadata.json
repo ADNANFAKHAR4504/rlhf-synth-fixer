@@ -1,0 +1,31 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "380946",
+  "team": "6",
+  "startedAt": "2025-10-06T17:18:09.328Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "Subnets",
+    "Elastic IP",
+    "RDS MySQL",
+    "Security Groups",
+    "IAM Roles"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

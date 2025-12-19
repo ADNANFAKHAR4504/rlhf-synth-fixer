@@ -1,0 +1,90 @@
+{
+  "iac_subtasks_and_subject_labels": [
+    {
+      "subtask": "Provisioning of Infrastructure Environments",
+      "subject_labels": [
+        "Environment Migration",
+        "Cloud Environment Setup",
+        "Multi-Environment Consistency and Replication"
+      ]
+    },
+    {
+      "subtask": "Application Deployment",
+      "subject_labels": [
+        "Web Application Deployment",
+        "Serverless Infrastructure (Functions as Code)"
+      ]
+    },
+    {
+      "subtask": "CI/CD Pipeline Integration",
+      "subject_labels": [
+        "CI/CD Pipeline"
+      ],
+      "platform_requirements": {
+        "required_platform": "cicd",
+        "allowed_languages": [
+          "yaml",
+          "yml"
+        ],
+        "notes": "CI/CD tasks focus on GitHub Actions workflows for pipeline automation."
+      }
+    },
+    {
+      "subtask": "Failure Recovery and High Availability",
+      "subject_labels": [
+        "Failure Recovery Automation"
+      ]
+    },
+    {
+      "subtask": "Security, Compliance, and Governance",
+      "subject_labels": [
+        "Security Configuration as Code"
+      ]
+    },
+    {
+      "subtask": "IaC Program Optimization",
+      "subject_labels": [
+        "IaC Diagnosis/Edits",
+        "IaC Optimization"
+      ]
+    },
+    {
+      "subtask": "Infrastructure QA and Management",
+      "subject_labels": [
+        "Infrastructure Analysis/Monitoring",
+        "General Infrastructure Tooling QA"
+      ],
+      "platform_requirements": {
+        "required_platform": "analysis",
+        "allowed_languages": [
+          "py"
+        ],
+        "notes": "Analysis tasks use Python scripts with boto3 to analyze existing AWS resources. No infrastructure deployment."
+      }
+    }
+  ],
+  "platform_definitions": {
+    "analysis": {
+      "description": "Analysis platform for infrastructure monitoring and QA tasks",
+      "valid_languages": [
+        "py"
+      ],
+      "special_files": [
+        "lib/analyse.py",
+        "lib/analyze.py"
+      ],
+      "no_infrastructure_code": true
+    },
+    "cicd": {
+      "description": "CI/CD platform for pipeline integration tasks",
+      "valid_languages": [
+        "yaml",
+        "yml"
+      ],
+      "special_files": [
+        "lib/ci-cd.yml"
+      ],
+      "requires_infrastructure_code": true
+    }
+  }
+}

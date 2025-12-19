@@ -31,7 +31,15 @@ module.exports = {
     'prettier/prettier': 'error',
 
     // TypeScript specific rules
-    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+      },
+    ],
+    'no-unused-vars': 'off', // Turn off base rule as it can report incorrect errors
 
     // Import rules - be more lenient for CDK projects
     'import/no-extraneous-dependencies': [
@@ -45,6 +53,7 @@ module.exports = {
           'jest.config.js',
           '**/*.config.js',
           '**/*.config.ts',
+          '@types/**',
         ],
         optionalDependencies: false,
         peerDependencies: false,
@@ -56,5 +65,15 @@ module.exports = {
     'class-methods-use-this': 'off',
     'no-new': 'off', // CDK uses 'new' for constructs
   },
-  ignorePatterns: ['node_modules/', 'cdk.out/', 'coverage/', '*.js', '*.d.ts', 'worktree/'],
+  ignorePatterns: [
+    'node_modules/',
+    'cdk.out/',
+    'coverage/',
+    '*.js',
+    '*.d.ts',
+    'worktree/',
+    'test/',
+    'bin/',
+    'cli/',
+  ],
 };

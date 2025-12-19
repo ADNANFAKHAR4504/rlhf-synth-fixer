@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350079",
+  "team": "2",
+  "startedAt": "2025-10-14T18:45:24.666Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "Secrets Manager",
+    "IAM",
+    "SQS",
+    "CloudWatch",
+    "Route 53",
+    "WAF",
+    "Application Auto Scaling"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
+}

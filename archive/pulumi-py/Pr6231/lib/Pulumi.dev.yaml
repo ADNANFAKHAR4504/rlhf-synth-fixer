@@ -1,0 +1,4 @@
+encryptionsalt: v1:111yyXqpeL8=:v1:SH/lisIe0sZb+sgD:nN3cPib8GKcX5dpGLHCJV5tIFEO34g==
+config:
+  aws:region: us-east-2
+  flask-app-infrastructure:environmentSuffix: synthv5kei

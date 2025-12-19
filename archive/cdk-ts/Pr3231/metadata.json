@@ -1,0 +1,27 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "61220672",
+  "team": "synth",
+  "startedAt": "2025-10-01T13:47:12+00:00",
+  "training_quality": 8.5,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "S3",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM",
+    "VPC Flow Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,3 @@
+name: compliance-monitoring
+runtime: nodejs
+description: Automated compliance monitoring system with AWS Config, Lambda, and CloudWatch

@@ -1,0 +1,1391 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Migration Infrastructure - On-premises to AWS application migration with VPN, DMS, and Aurora",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix"
+          ]
+        },
+        {
+          "Label": {
+            "default": "VPN Configuration"
+          },
+          "Parameters": [
+            "OnPremisesCIDR",
+            "CustomerGatewayIP"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Database Configuration"
+          },
+          "Parameters": [
+            "DBMasterUsername",
+            "OnPremisesDBEndpoint",
+            "OnPremisesDBPort",
+            "OnPremisesDBName",
+            "OnPremisesDBUsername",
+            "OnPremisesDBPassword"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "OnPremisesCIDR": {
+      "Type": "String",
+      "Default": "192.168.0.0/16",
+      "Description": "CIDR block of the on-premises network",
+      "AllowedPattern": "^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$"
+    },
+    "CustomerGatewayIP": {
+      "Type": "String",
+      "Default": "203.0.113.1",
+      "Description": "Public IP address of the on-premises VPN device",
+      "AllowedPattern": "^(\\d{1,3}\\.){3}\\d{1,3}$"
+    },
+    "DBMasterUsername": {
+      "Type": "String",
+      "Default": "admin",
+      "Description": "Master username for Aurora MySQL cluster",
+      "MinLength": 1,
+      "MaxLength": 16,
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+    },
+    "OnPremisesDBEndpoint": {
+      "Type": "String",
+      "Default": "onprem-db.example.com",
+      "Description": "Endpoint of the on-premises MySQL database"
+    },
+    "OnPremisesDBPort": {
+      "Type": "Number",
+      "Default": 3306,
+      "Description": "Port of the on-premises MySQL database"
+    },
+    "OnPremisesDBName": {
+      "Type": "String",
+      "Default": "appdb",
+      "Description": "Database name on the on-premises MySQL"
+    },
+    "OnPremisesDBUsername": {
+      "Type": "String",
+      "Default": "onpremuser",
+      "Description": "Username for the on-premises MySQL database"
+    },
+    "OnPremisesDBPassword": {
+      "Type": "String",
+      "NoEcho": true,
+      "Default": "TempPassword123!",
+      "Description": "Password for the on-premises MySQL database"
+    }
+  },
+  "Conditions": {
+    "IsLocalStack": {
+      "Fn::Equals": [
+        {
+          "Ref": "AWS::AccountId"
+        },
+        "000000000000"
+      ]
+    },
+    "UseVPN": {
+      "Fn::Not": [
+        {
+          "Condition": "IsLocalStack"
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "DBMasterPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "migration-db-master-password-${EnvironmentSuffix}"
+        },
+        "Description": "Master password for Aurora MySQL cluster",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        }
+      }
+    },
+    "MigrationVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-vpc-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-igw-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-public-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-public-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "CidrBlock": "10.0.11.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "CidrBlock": "10.0.12.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NATGatewayEIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-nat-eip-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NATGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATGatewayEIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-nat-gateway-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-public-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-private-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NATGateway"
+        }
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "VPNGateway": {
+      "Type": "AWS::EC2::VPNGateway",
+      "Condition": "UseVPN",
+      "Properties": {
+        "Type": "ipsec.1",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-vpn-gateway-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AttachVPNGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Condition": "UseVPN",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "VpnGatewayId": {
+          "Ref": "VPNGateway"
+        }
+      }
+    },
+    "CustomerGateway": {
+      "Type": "AWS::EC2::CustomerGateway",
+      "Condition": "UseVPN",
+      "Properties": {
+        "Type": "ipsec.1",
+        "BgpAsn": 65000,
+        "IpAddress": {
+          "Ref": "CustomerGatewayIP"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-customer-gateway-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "VPNConnection": {
+      "Type": "AWS::EC2::VPNConnection",
+      "Condition": "UseVPN",
+      "Properties": {
+        "Type": "ipsec.1",
+        "StaticRoutesOnly": true,
+        "CustomerGatewayId": {
+          "Ref": "CustomerGateway"
+        },
+        "VpnGatewayId": {
+          "Ref": "VPNGateway"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-vpn-connection-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "VPNConnectionRoute": {
+      "Type": "AWS::EC2::VPNConnectionRoute",
+      "Condition": "UseVPN",
+      "Properties": {
+        "VpnConnectionId": {
+          "Ref": "VPNConnection"
+        },
+        "DestinationCidrBlock": {
+          "Ref": "OnPremisesCIDR"
+        }
+      }
+    },
+    "VPNGatewayRoutePropagation": {
+      "Type": "AWS::EC2::VPNGatewayRoutePropagation",
+      "Condition": "UseVPN",
+      "DependsOn": "AttachVPNGateway",
+      "Properties": {
+        "RouteTableIds": [
+          {
+            "Ref": "PrivateRouteTable"
+          }
+        ],
+        "VpnGatewayId": {
+          "Ref": "VPNGateway"
+        }
+      }
+    },
+    "ALBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Application Load Balancer",
+        "GroupName": {
+          "Fn::Sub": "migration-alb-sg-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-alb-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "WebTierSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for web tier instances",
+        "GroupName": {
+          "Fn::Sub": "migration-web-sg-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "SourceSecurityGroupId": {
+              "Ref": "ALBSecurityGroup"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "SourceSecurityGroupId": {
+              "Ref": "ALBSecurityGroup"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": {
+              "Ref": "OnPremisesCIDR"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-web-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for RDS Aurora cluster",
+        "GroupName": {
+          "Fn::Sub": "migration-db-sg-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "WebTierSecurityGroup"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "DMSSecurityGroup"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": {
+              "Ref": "OnPremisesCIDR"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-db-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DMSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for DMS replication instance",
+        "GroupName": {
+          "Fn::Sub": "migration-dms-sg-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": {
+              "Ref": "OnPremisesCIDR"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-dms-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraDBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "migration-aurora-credentials-${EnvironmentSuffix}"
+        },
+        "Description": "Aurora MySQL database credentials",
+        "SecretString": {
+          "Fn::Sub": "{\n  \"username\": \"${DBMasterUsername}\",\n  \"password\": \"{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}\"\n}\n"
+        }
+      }
+    },
+    "OnPremisesDBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "migration-onprem-db-credentials-${EnvironmentSuffix}"
+        },
+        "Description": "On-premises MySQL database credentials",
+        "SecretString": {
+          "Fn::Sub": "{\n  \"username\": \"${OnPremisesDBUsername}\",\n  \"password\": \"${OnPremisesDBPassword}\",\n  \"endpoint\": \"${OnPremisesDBEndpoint}\",\n  \"port\": ${OnPremisesDBPort},\n  \"dbname\": \"${OnPremisesDBName}\"\n}\n"
+        }
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "migration-db-subnet-group-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for Aurora MySQL cluster",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-db-subnet-group-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraDBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Fn::Sub": "migration-aurora-cluster-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "MasterUsername": {
+          "Ref": "DBMasterUsername"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}"
+        },
+        "DatabaseName": "appdb",
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+        "ServerlessV2ScalingConfiguration": {
+          "MinCapacity": 0.5,
+          "MaxCapacity": 1
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-aurora-cluster-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraDBInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "migration-aurora-instance-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "AuroraDBCluster"
+        },
+        "Engine": "aurora-mysql",
+        "DBInstanceClass": "db.serverless",
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-aurora-instance-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DMSSubnetGroup": {
+      "Type": "AWS::DMS::ReplicationSubnetGroup",
+      "Properties": {
+        "ReplicationSubnetGroupIdentifier": {
+          "Fn::Sub": "migration-dms-subnet-group-${EnvironmentSuffix}"
+        },
+        "ReplicationSubnetGroupDescription": "Subnet group for DMS replication instance",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-dms-subnet-group-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DMSReplicationInstance": {
+      "Type": "AWS::DMS::ReplicationInstance",
+      "Properties": {
+        "ReplicationInstanceIdentifier": {
+          "Fn::Sub": "migration-dms-instance-${EnvironmentSuffix}"
+        },
+        "ReplicationInstanceClass": "dms.t3.medium",
+        "AllocatedStorage": 50,
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DMSSecurityGroup"
+          }
+        ],
+        "ReplicationSubnetGroupIdentifier": {
+          "Ref": "DMSSubnetGroup"
+        },
+        "PubliclyAccessible": false,
+        "MultiAZ": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-dms-instance-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DMSSourceEndpoint": {
+      "Type": "AWS::DMS::Endpoint",
+      "Properties": {
+        "EndpointIdentifier": {
+          "Fn::Sub": "migration-dms-source-${EnvironmentSuffix}"
+        },
+        "EndpointType": "source",
+        "EngineName": "mysql",
+        "ServerName": {
+          "Ref": "OnPremisesDBEndpoint"
+        },
+        "Port": {
+          "Ref": "OnPremisesDBPort"
+        },
+        "DatabaseName": {
+          "Ref": "OnPremisesDBName"
+        },
+        "Username": {
+          "Ref": "OnPremisesDBUsername"
+        },
+        "Password": {
+          "Ref": "OnPremisesDBPassword"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-dms-source-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DMSTargetEndpoint": {
+      "Type": "AWS::DMS::Endpoint",
+      "DependsOn": "AuroraDBInstance",
+      "Properties": {
+        "EndpointIdentifier": {
+          "Fn::Sub": "migration-dms-target-${EnvironmentSuffix}"
+        },
+        "EndpointType": "target",
+        "EngineName": "aurora",
+        "ServerName": {
+          "Fn::GetAtt": [
+            "AuroraDBCluster",
+            "Endpoint.Address"
+          ]
+        },
+        "Port": {
+          "Fn::GetAtt": [
+            "AuroraDBCluster",
+            "Endpoint.Port"
+          ]
+        },
+        "DatabaseName": "appdb",
+        "Username": {
+          "Ref": "DBMasterUsername"
+        },
+        "Password": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-dms-target-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DMSReplicationTask": {
+      "Type": "AWS::DMS::ReplicationTask",
+      "Properties": {
+        "ReplicationTaskIdentifier": {
+          "Fn::Sub": "migration-dms-task-${EnvironmentSuffix}"
+        },
+        "MigrationType": "full-load-and-cdc",
+        "ReplicationInstanceArn": {
+          "Ref": "DMSReplicationInstance"
+        },
+        "SourceEndpointArn": {
+          "Ref": "DMSSourceEndpoint"
+        },
+        "TargetEndpointArn": {
+          "Ref": "DMSTargetEndpoint"
+        },
+        "TableMappings": "{\n  \"rules\": [\n    {\n      \"rule-type\": \"selection\",\n      \"rule-id\": \"1\",\n      \"rule-name\": \"1\",\n      \"object-locator\": {\n        \"schema-name\": \"%\",\n        \"table-name\": \"%\"\n      },\n      \"rule-action\": \"include\"\n    }\n  ]\n}\n",
+        "ReplicationTaskSettings": "{\n  \"TargetMetadata\": {\n    \"TargetSchema\": \"\",\n    \"SupportLobs\": true,\n    \"FullLobMode\": false,\n    \"LobChunkSize\": 64,\n    \"LimitedSizeLobMode\": true,\n    \"LobMaxSize\": 32\n  },\n  \"FullLoadSettings\": {\n    \"TargetTablePrepMode\": \"DO_NOTHING\",\n    \"CreatePkAfterFullLoad\": false,\n    \"StopTaskCachedChangesApplied\": false,\n    \"StopTaskCachedChangesNotApplied\": false,\n    \"MaxFullLoadSubTasks\": 8,\n    \"TransactionConsistencyTimeout\": 600,\n    \"CommitRate\": 10000\n  },\n  \"Logging\": {\n    \"EnableLogging\": true,\n    \"LogComponents\": [\n      {\n        \"Id\": \"TRANSFORMATION\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"SOURCE_UNLOAD\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"IO\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"TARGET_LOAD\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"PERFORMANCE\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"SOURCE_CAPTURE\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"SORTER\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"REST_SERVER\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"VALIDATOR_EXT\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"TARGET_APPLY\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"TASK_MANAGER\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"TABLES_MANAGER\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"METADATA_MANAGER\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"FILE_FACTORY\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"COMMON\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"ADDONS\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"DATA_STRUCTURE\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"COMMUNICATION\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      },\n      {\n        \"Id\": \"FILE_TRANSFER\",\n        \"Severity\": \"LOGGER_SEVERITY_DEFAULT\"\n      }\n    ]\n  },\n  \"ChangeProcessingDdlHandlingPolicy\": {\n    \"HandleSourceTableDropped\": true,\n    \"HandleSourceTableTruncated\": true,\n    \"HandleSourceTableAltered\": true\n  },\n  \"ChangeProcessingTuning\": {\n    \"BatchApplyPreserveTransaction\": true,\n    \"BatchApplyTimeoutMin\": 1,\n    \"BatchApplyTimeoutMax\": 30,\n    \"BatchApplyMemoryLimit\": 500,\n    \"BatchSplitSize\": 0,\n    \"MinTransactionSize\": 1000,\n    \"CommitTimeout\": 1,\n    \"MemoryLimitTotal\": 1024,\n    \"MemoryKeepTime\": 60,\n    \"StatementCacheSize\": 50\n  }\n}\n",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-dms-task-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "ApplicationLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "migration-alb-${EnvironmentSuffix}"
+        },
+        "Type": "application",
+        "Scheme": "internet-facing",
+        "IpAddressType": "ipv4",
+        "Subnets": [
+          {
+            "Ref": "PublicSubnet1"
+          },
+          {
+            "Ref": "PublicSubnet2"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "Ref": "ALBSecurityGroup"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-alb-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "ALBTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "migration-alb-tg-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "MigrationVPC"
+        },
+        "Protocol": "HTTP",
+        "Port": 80,
+        "TargetType": "instance",
+        "HealthCheckEnabled": true,
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckPath": "/health",
+        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 3,
+        "Matcher": {
+          "HttpCode": "200"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-alb-tg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "ALBListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
+        "Protocol": "HTTP",
+        "Port": 80,
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "ALBTargetGroup"
+            }
+          }
+        ]
+      }
+    },
+    "DMSReplicationLagAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "migration-dms-replication-lag-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when DMS replication lag exceeds threshold",
+        "MetricName": "CDCLatencySource",
+        "Namespace": "AWS/DMS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 300,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ReplicationInstanceIdentifier",
+            "Value": {
+              "Ref": "DMSReplicationInstance"
+            }
+          },
+          {
+            "Name": "ReplicationTaskIdentifier",
+            "Value": {
+              "Ref": "DMSReplicationTask"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DMSReplicationTaskFailedAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "migration-dms-task-failed-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when DMS replication task fails",
+        "MetricName": "ReplicationTaskStatus",
+        "Namespace": "AWS/DMS",
+        "Statistic": "Maximum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 0,
+        "ComparisonOperator": "LessThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "ReplicationInstanceIdentifier",
+            "Value": {
+              "Ref": "DMSReplicationInstance"
+            }
+          },
+          {
+            "Name": "ReplicationTaskIdentifier",
+            "Value": {
+              "Ref": "DMSReplicationTask"
+            }
+          }
+        ],
+        "TreatMissingData": "breaching"
+      }
+    },
+    "AuroraDBConnectionsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "migration-aurora-connections-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Aurora database connections are high",
+        "MetricName": "DatabaseConnections",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": {
+              "Ref": "AuroraDBCluster"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "AuroraCPUUtilizationAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "migration-aurora-cpu-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Aurora CPU utilization is high",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": {
+              "Ref": "AuroraDBCluster"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID for the migration infrastructure",
+      "Value": {
+        "Ref": "MigrationVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
+      }
+    },
+    "PublicSubnet1Id": {
+      "Description": "Public Subnet 1 ID",
+      "Value": {
+        "Ref": "PublicSubnet1"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PublicSubnet1Id"
+        }
+      }
+    },
+    "PublicSubnet2Id": {
+      "Description": "Public Subnet 2 ID",
+      "Value": {
+        "Ref": "PublicSubnet2"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PublicSubnet2Id"
+        }
+      }
+    },
+    "PrivateSubnet1Id": {
+      "Description": "Private Subnet 1 ID",
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet1Id"
+        }
+      }
+    },
+    "PrivateSubnet2Id": {
+      "Description": "Private Subnet 2 ID",
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet2Id"
+        }
+      }
+    },
+    "VPNGatewayId": {
+      "Description": "VPN Gateway ID",
+      "Value": {
+        "Ref": "VPNGateway"
+      },
+      "Condition": "UseVPN",
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPNGatewayId"
+        }
+      }
+    },
+    "CustomerGatewayId": {
+      "Description": "Customer Gateway ID",
+      "Value": {
+        "Ref": "CustomerGateway"
+      },
+      "Condition": "UseVPN",
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CustomerGatewayId"
+        }
+      }
+    },
+    "VPNConnectionId": {
+      "Description": "VPN Connection ID for on-premises connectivity",
+      "Value": {
+        "Ref": "VPNConnection"
+      },
+      "Condition": "UseVPN",
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPNConnectionId"
+        }
+      }
+    },
+    "AuroraClusterEndpoint": {
+      "Description": "Aurora MySQL cluster endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraDBCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuroraClusterEndpoint"
+        }
+      }
+    },
+    "AuroraClusterReadEndpoint": {
+      "Description": "Aurora MySQL cluster read endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraDBCluster",
+          "ReadEndpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuroraClusterReadEndpoint"
+        }
+      }
+    },
+    "AuroraClusterPort": {
+      "Description": "Aurora MySQL cluster port",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraDBCluster",
+          "Endpoint.Port"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuroraClusterPort"
+        }
+      }
+    },
+    "AuroraDBSecretArn": {
+      "Description": "ARN of the Secrets Manager secret for Aurora credentials",
+      "Value": {
+        "Ref": "AuroraDBSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuroraDBSecretArn"
+        }
+      }
+    },
+    "OnPremisesDBSecretArn": {
+      "Description": "ARN of the Secrets Manager secret for on-premises DB credentials",
+      "Value": {
+        "Ref": "OnPremisesDBSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OnPremisesDBSecretArn"
+        }
+      }
+    },
+    "DMSReplicationInstanceArn": {
+      "Description": "DMS Replication Instance ARN",
+      "Value": {
+        "Ref": "DMSReplicationInstance"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DMSReplicationInstanceArn"
+        }
+      }
+    },
+    "DMSReplicationTaskArn": {
+      "Description": "DMS Replication Task ARN",
+      "Value": {
+        "Ref": "DMSReplicationTask"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DMSReplicationTaskArn"
+        }
+      }
+    },
+    "ApplicationLoadBalancerDNS": {
+      "Description": "DNS name of the Application Load Balancer",
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "DNSName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApplicationLoadBalancerDNS"
+        }
+      }
+    },
+    "ApplicationLoadBalancerArn": {
+      "Description": "ARN of the Application Load Balancer",
+      "Value": {
+        "Ref": "ApplicationLoadBalancer"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApplicationLoadBalancerArn"
+        }
+      }
+    },
+    "ALBTargetGroupArn": {
+      "Description": "ARN of the ALB Target Group",
+      "Value": {
+        "Ref": "ALBTargetGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALBTargetGroupArn"
+        }
+      }
+    },
+    "WebTierSecurityGroupId": {
+      "Description": "Security Group ID for web tier instances",
+      "Value": {
+        "Ref": "WebTierSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-WebTierSecurityGroupId"
+        }
+      }
+    },
+    "DatabaseSecurityGroupId": {
+      "Description": "Security Group ID for database",
+      "Value": {
+        "Ref": "DatabaseSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabaseSecurityGroupId"
+        }
+      }
+    },
+    "CloudWatchDashboardURL": {
+      "Description": "CloudWatch Console URL for monitoring",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#alarmsV2:?search=${AWS::StackName}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CloudWatchDashboardURL"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    }
+  }
+}

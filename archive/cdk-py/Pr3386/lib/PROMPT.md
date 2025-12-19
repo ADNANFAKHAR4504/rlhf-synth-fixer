@@ -1,0 +1,5 @@
+I want to build an AWS infrastructure for a task management API using CDK in Python, deployed in us-west-2. The API should use API Gateway for REST endpoints, and Lambda functions (Python 3.9) to handle CRUD operations. For data storage, I need DynamoDB tables for both tasks and projects, with global secondary indexes to make querying by project and user efficient.
+
+I’d like to set up EventBridge scheduled rules to send reminders for tasks, and use SNS to send notifications—both email and SMS. User authentication should be handled by Cognito, with groups to manage team-based access control, and the API should be secured using a Cognito authorizer. S3 should be available for file attachments, and CloudWatch should collect metrics. IAM roles need to be set up for fine-grained access control.
+
+Please generate the CDK Python code to deploy this infrastructure, making sure to use DynamoDB GSIs for efficient queries, EventBridge for reminders, Cognito groups for access control, SNS for notifications, and secure the API with Cognito. Let me know if you need any more details!

@@ -1,0 +1,9 @@
+name: TapStack
+runtime:
+  name: python
+description: Serverless Transaction Processing System with Pulumi Python
+main: lib/__main__.py
+config:
+  environmentSuffix:
+    description: Environment suffix for resource naming
+    default: dev

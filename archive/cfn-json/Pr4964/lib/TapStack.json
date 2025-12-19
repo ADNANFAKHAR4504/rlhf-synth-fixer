@@ -1,0 +1,479 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Carbon Credit Trading Platform - Serverless Architecture with QLDB",
+  
+  "Parameters": {
+    "Environment": {
+      "Type": "String",
+      "Default": "dev",
+      "AllowedValues": ["dev", "staging", "prod"],
+      "Description": "Environment type for conditional resource configuration"
+    }
+  },
+
+  "Resources": {
+    "LedgerTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": { "Fn::Sub": "CarbonCreditLedger-${Environment}" },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "RecordID",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "TransactionTime",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "Version",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "RecordID",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "Version",
+            "KeyType": "RANGE"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "TransactionTimeIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "TransactionTime",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            },
+            "ProvisionedThroughput": {
+              "ReadCapacityUnits": 5,
+              "WriteCapacityUnits": 5
+            }
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 5
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "Environment" }
+          }
+        ]
+      }
+    },
+
+    "AdminCredentials": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": { "Fn::Sub": "carbon-credit-platform/${Environment}/admin" },
+        "Description": "Admin credentials for Carbon Credit Platform",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 30,
+          "ExcludeCharacters": "\"@/\\"
+        }
+      }
+    },
+
+    "TradeTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": { "Fn::Sub": "CarbonCreditTradeTable-${Environment}" },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "TradeID",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "Status",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "VintageYear",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "TradeID",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "StatusIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "Status",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            },
+            "ProvisionedThroughput": {
+              "ReadCapacityUnits": 5,
+              "WriteCapacityUnits": 5
+            }
+          },
+          {
+            "IndexName": "VintageYearIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "VintageYear",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            },
+            "ProvisionedThroughput": {
+              "ReadCapacityUnits": 5,
+              "WriteCapacityUnits": 5
+            }
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 5
+        }
+      }
+    },
+
+    "CertificateTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": { "Fn::Sub": "CarbonCreditCertificateTable-${Environment}" },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "CertificateID",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "CreditID",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "OwnerID",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "CertificateID",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "CreditIDIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "CreditID",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            },
+            "ProvisionedThroughput": {
+              "ReadCapacityUnits": 5,
+              "WriteCapacityUnits": 5
+            }
+          },
+          {
+            "IndexName": "OwnerIDIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "OwnerID",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            },
+            "ProvisionedThroughput": {
+              "ReadCapacityUnits": 5,
+              "WriteCapacityUnits": 5
+            }
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 5
+        }
+      }
+    },
+
+    "StateMachineLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": { "Fn::Sub": "/aws/states/CarbonCreditVerification-${Environment}" },
+        "RetentionInDays": 30
+      }
+    },
+
+    "StateMachineRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "states.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "StepFunctionsBasicExecution",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "xray:PutTraceSegments",
+                    "xray:PutTelemetryRecords",
+                    "xray:GetSamplingRules",
+                    "xray:GetSamplingTargets"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogDelivery",
+                    "logs:GetLogDelivery",
+                    "logs:UpdateLogDelivery",
+                    "logs:DeleteLogDelivery",
+                    "logs:ListLogDeliveries",
+                    "logs:PutResourcePolicy",
+                    "logs:DescribeResourcePolicies",
+                    "logs:DescribeLogGroups",
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:PutMetricFilter",
+                    "logs:PutRetentionPolicy"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "StateMachineExecutionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": [
+                    { "Fn::GetAtt": ["ApiGatewayHandlerFunction", "Arn"] }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+
+    "ApiGatewayHandlerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ApiGatewayHandlerPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:Query",
+                    "dynamodb:UpdateItem"
+                  ],
+                  "Resource": [
+                    { "Fn::GetAtt": ["TradeTable", "Arn"] },
+                    { "Fn::GetAtt": ["LedgerTable", "Arn"] },
+                    { "Fn::Sub": "${TradeTable.Arn}/index/*" },
+                    { "Fn::Sub": "${LedgerTable.Arn}/index/*" }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter"
+                  ],
+                  "Resource": { "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/carbon-credit/*" }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+
+    "ApiGatewayHandlerFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": { "Fn::Sub": "ApiGatewayHandler-${Environment}" },
+        "Runtime": "nodejs20.x",
+        "Handler": "index.handler",
+        "Role": { "Fn::GetAtt": ["ApiGatewayHandlerRole", "Arn"] },
+        "Timeout": 10,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "TRADE_TABLE": { "Ref": "TradeTable" },
+            "ENVIRONMENT": { "Ref": "Environment" }
+          }
+        },
+        "Code": {
+          "ZipFile": "exports.handler = async (event) => { console.log('API Gateway handler implementation'); return { statusCode: 200, body: JSON.stringify({ message: 'Success' }) }; };"
+        }
+      }
+    },
+
+    "InitialStateMachine": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": { "Fn::Sub": "CarbonCreditVerification-Initial-${Environment}" },
+        "RoleArn": { "Fn::GetAtt": ["StateMachineRole", "Arn"] },
+        "LoggingConfiguration": {
+          "Level": "ALL",
+          "IncludeExecutionData": true,
+          "Destinations": [
+            {
+              "CloudWatchLogsLogGroup": {
+                "LogGroupArn": { "Fn::GetAtt": ["StateMachineLogGroup", "Arn"] }
+              }
+            }
+          ]
+        },
+        "Definition": {
+          "StartAt": "ValidateRequest",
+          "States": {
+            "ValidateRequest": {
+              "Type": "Pass",
+              "End": true
+            }
+          }
+        }
+      }
+    },
+
+    "VerificationStateMachine": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": { "Fn::Sub": "CarbonCreditVerification-${Environment}" },
+        "RoleArn": { "Fn::GetAtt": ["StateMachineRole", "Arn"] },
+        "LoggingConfiguration": {
+          "Level": "ALL",
+          "IncludeExecutionData": true,
+          "Destinations": [
+            {
+              "CloudWatchLogsLogGroup": {
+                "LogGroupArn": { "Fn::GetAtt": ["StateMachineLogGroup", "Arn"] }
+              }
+            }
+          ]
+        },
+        "Definition": {
+          "StartAt": "InitializeVerification",
+          "States": {
+            "InitializeVerification": {
+              "Type": "Task",
+              "Resource": { "Fn::GetAtt": ["ApiGatewayHandlerFunction", "Arn"] },
+              "Next": "ValidateRequest"
+            },
+            "ValidateRequest": {
+              "Type": "Pass",
+              "End": true
+            }
+          }
+        }
+      }
+    },
+
+    "StateMachineArnParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "DependsOn": "VerificationStateMachine",
+      "Properties": {
+        "Name": { "Fn::Sub": "/carbon-credit/${Environment}/state-machine-arn" },
+        "Type": "String",
+        "Value": { "Ref": "InitialStateMachine" },
+        "Description": "ARN of the initial state machine"
+      }
+    }
+  },
+
+  "Outputs": {
+    "ApiGatewayHandlerArn": {
+      "Description": "ARN of the API Gateway handler Lambda function",
+      "Value": { "Fn::GetAtt": ["ApiGatewayHandlerFunction", "Arn"] }
+    },
+    "VerificationStateMachineArn": {
+      "Description": "ARN of the verification state machine",
+      "Value": { "Ref": "VerificationStateMachine" }
+    },
+    "TradeTableName": {
+      "Description": "Name of the trade DynamoDB table",
+      "Value": { "Ref": "TradeTable" }
+    },
+    "CertificateTableName": {
+      "Description": "Name of the certificate DynamoDB table",
+      "Value": { "Ref": "CertificateTable" }
+    },
+    "LedgerTableName": {
+      "Description": "Name of the immutable ledger DynamoDB table",
+      "Value": { "Ref": "LedgerTable" }
+    },
+    "LedgerTableArn": {
+      "Description": "ARN of the immutable ledger DynamoDB table",
+      "Value": { "Fn::GetAtt": ["LedgerTable", "Arn"] }
+    }
+  }
+}

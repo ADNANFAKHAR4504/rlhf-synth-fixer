@@ -1,105 +1,233 @@
 name: "Setup Environment"
-description: "Sets up Node.js, Python and Terraform environment and restores build artifacts"
+description: "Sets up environment dynamically based on platform and language with optimized caching and consistent Python version"
+
 inputs:
   node-version:
-    description: "Node.js version to use"
-    required: true
-    default: "22.17.0"
-  download-artifacts:
-    description: "Whether to download build artifacts"
-    required: false
-    default: "true"
+    default: '22.17.0'
   terraform-version:
-    description: "Terraform version to use"
-    required: false
-    default: "1.12.2"
+    default: '1.12.2'
   pulumi-version:
-    description: "Pulumi version to use"
-    required: false
-    default: "3.109.0"
-  upload-artifacts:
-    description: "Whether to upload build artifacts (only for build job)"
-    required: false
-    default: "false"
+    default: '3.109.0'
+  python-version:
+    default: '3.12.11'
+  language:
+    default: ''
   platform:
-    description: "The platform type (cdk, cdktf, cfn, pulumi, terraform)"
+    default: ''
+  is-analysis:
+    default: 'false'
+  download-artifacts:
+    description: 'Whether to download build artifacts'
     required: false
-    default: ""
+    default: 'false'
+  upload-artifacts:
+    description: 'Whether to upload build artifacts'
+    required: false
+    default: 'false'
+  provider:
+    description: 'Cloud provider (aws or localstack)'
+    required: false
+    default: 'aws'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
-    - name: Download build artifacts
-      if: inputs.download-artifacts == 'true'
-      id: download-artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: build-artifacts
-      continue-on-error: true
+    # === Checkout ===
+    - name: Checkout
+      uses: actions/checkout@v4
 
-    - name: Set artifact status
-      if: inputs.download-artifacts == 'true'
+    # === Configure pipenv venv path ===
+    - name: Configure pipenv venv path
       shell: bash
-      run: echo "ARTIFACTS_FOUND=${{ steps.download-artifacts.outcome == 'success' && 'true' || 'false' }}" >> $GITHUB_ENV
-        
+      run: echo "PIPENV_VENV_IN_PROJECT=1" >> "$GITHUB_ENV"
+
+    # === Cache CDKTF generated providers (.gen) ===
+    - name: Cache CDKTF generated providers
+      if: ${{ inputs.platform == 'cdktf' }}
+      uses: actions/cache@v4
+      with:
+        path: .gen
+        key: gen-${{ runner.os }}-${{ hashFiles('cdktf.json', 'package-lock.json', 'Pipfile.lock', '**/*.tf', '**/*.tf.json') }}
+        restore-keys: |
+          gen-${{ runner.os }}-
+
+    # === Cache npm global tools (e.g., cdktf-cli, jest) ===
+    - name: Cache global npm tools
+      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'cdk' || inputs.platform == 'pulumi' }}
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm-global
+        key: npm-global-${{ runner.os }}-${{ inputs.platform }}-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          npm-global-${{ runner.os }}-
+
+    # === Setup Node.js ===
     - name: Setup Node.js
+      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' }}
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-        cache: "npm"
+        cache: 'npm'
 
-    - name: Setup Python 3.12.11
+    # === Cache node_modules ===
+    - name: Cache node_modules
+      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' || inputs.platform == 'pulumi' }}
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.npm
+        key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          node-modules-${{ runner.os }}-
+
+    # === Setup Python (consistent version) ===
+    - name: Setup Python
+      if: ${{ inputs.language == 'py' || inputs.platform == 'cfn' || (inputs.platform == 'pulumi' && inputs.language == 'py') || inputs.platform == 'cdktf' }}
       uses: actions/setup-python@v5
       with:
-        python-version: "3.12.11"
-        check-latest: true
+        python-version: ${{ inputs.python-version }}
 
+    # === Cache pipenv virtualenv (per Python version) ===
+    - name: Cache pipenv virtualenv
+      if: ${{ hashFiles('Pipfile.lock') != '' }}
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ inputs.python-version }}-${{ hashFiles('Pipfile.lock') }}
+        restore-keys: |
+          venv-${{ runner.os }}-
+
+    # === Cache pip packages (per Python version) ===
+    - name: Cache pip packages
+      if: ${{ hashFiles('Pipfile.lock') != '' }}
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: pip-cache-${{ runner.os }}-${{ inputs.python-version }}-${{ hashFiles('Pipfile.lock') }}
+        restore-keys: |
+          pip-cache-${{ runner.os }}-
+
+    # === Ensure pipenv is installed for whichever Python setup.sh uses ===
+    - name: Ensure pipenv available in PATH
+      shell: bash
+      run: |
+        echo "🔧 Making sure pipenv is available..."
+        python3 -m pip install --user --upgrade pipenv
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        which pipenv || echo "⚠️ pipenv not found!"
+        pipenv --version || true
+
+    # === Prepare Go cache directory ===
+    - name: Prepare Go cache directory
+      if: ${{ (inputs.platform == 'cdktf' || inputs.platform == 'cdk') && inputs.language == 'go' }}
+      shell: bash
+      run: |
+        echo "🧹 Cleaning up Go cache directories to prevent tar warnings..."
+        rm -rf ~/.cache/go-mod || true
+        mkdir -p ~/.cache/go-mod
+        rm -rf ~/go/pkg/mod || true
+        mkdir -p ~/go/pkg/mod
+
+    # === Setup Go ===
+    - name: Setup Go
+      if: ${{ (inputs.platform == 'cdktf' || inputs.platform == 'cdk') && inputs.language == 'go' }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23.12'
+
+    # === Cache Go modules ===
+    - name: Cache Go modules
+      if: ${{ (inputs.platform == 'cdktf' || inputs.platform == 'cdk') && inputs.language == 'go' }}
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-mod
+        key: go-mod-cache-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          go-mod-cache-${{ runner.os }}-
+
+    # === Setup Java ===
+    - name: Setup Java
+      if: ${{ inputs.language == 'java' }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    # === Setup Terraform ===
     - name: Setup Terraform
-      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' || inputs.platform == '' }}
+      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' }}
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
 
-    - name: Install Pulumi CLI
-      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
+    # === Cache Terraform providers ===
+    - name: Cache Terraform providers
+      if: ${{ inputs.platform == 'tf' || (inputs.platform == 'cdktf' && inputs.language == 'go') }}
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.terraform.d/plugin-cache
+          lib/.terraform
+        key: terraform-${{ runner.os }}-${{ hashFiles('**/*.tf', '**/*.lock.hcl') }}
+        restore-keys: |
+          terraform-${{ runner.os }}-
+
+    # === Setup Pulumi ===
+    - name: Setup Pulumi
+      if: ${{ inputs.platform == 'pulumi' }}
       uses: pulumi/actions@v5
       with:
         pulumi-version: ${{ inputs.pulumi-version }}
 
-    - name: Cache Python virtual environment
-      uses: actions/cache@v4
-      with:
-        path: .venv
-        key: ${{ runner.os }}-python-${{ hashFiles('Pipfile.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-python-
+    # === Install LocalStack Dependencies ===
+    - name: Install LocalStack Dependencies
+      if: ${{ inputs.provider == 'localstack' }}
+      shell: bash
+      run: |
+        echo "🚀 Installing LocalStack dependencies..."
 
-    - name: Setup environment using script
+        # Install LocalStack CLI
+        pip install --upgrade localstack localstack-ext
+
+        # Install AWS CLI LocalStack wrappers
+        pip install awscli-local[ver1]
+
+        # Install CDK LocalStack wrapper
+        npm install -g aws-cdk-local aws-cdk
+
+        # Install Terraform LocalStack wrapper
+        pip install terraform-local
+
+        # Install CDKTF CLI if needed
+        if [ "${{ inputs.platform }}" == "cdktf" ]; then
+          npm install -g cdktf-cli
+        fi
+
+        # Install Pulumi LocalStack plugin if needed
+        if [ "${{ inputs.platform }}" == "pulumi" ]; then
+          echo "✅ Pulumi already installed, will configure for LocalStack in deploy script"
+        fi
+
+        # Verify installations
+        echo "✅ LocalStack CLI version:"
+        localstack --version || echo "⚠️ LocalStack CLI not found"
+
+        echo "✅ CDKLocal version:"
+        cdklocal --version || echo "⚠️ CDKLocal not found"
+
+        echo "✅ TFLocal version:"
+        tflocal --version || echo "⚠️ TFLocal not found"
+
+        echo "✅ AWS CLI Local version:"
+        awslocal --version || echo "⚠️ AWS Local not found"
+
+    # === Execute setup.sh ===
+    - name: Setup dependencies
       shell: bash
       run: ./scripts/setup.sh
       env:
-        NODE_VERSION: ${{ inputs.node-version }}
-        TERRAFORM_VERSION: ${{ inputs.terraform-version }}
-        PULUMI_VERSION: ${{ inputs.pulumi-version }}
-        DOWNLOAD_ARTIFACTS: ${{ inputs.download-artifacts }}
-        UPLOAD_ARTIFACTS: ${{ inputs.upload-artifacts }}
         PLATFORM: ${{ inputs.platform }}
-
-    - name: Upload build artifacts
-      if: inputs.upload-artifacts == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-artifacts
-        include-hidden-files: true
-        path: |
-          bin/
-          lib/
-          package*.json
-          Pipfile
-          Pipfile.lock
-          tsconfig.json
-          cdk.json
-          metadata.json
-          lambda/
-
-
+        LANGUAGE: ${{ inputs.language }}

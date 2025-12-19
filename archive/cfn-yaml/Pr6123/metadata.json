@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912277",
+  "team": "1",
+  "startedAt": "2025-11-07T14:26:41.405Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "ALB",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "SSM",
+    "ServiceDiscovery",
+    "AutoScaling"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "training_quality": 10,
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
+}

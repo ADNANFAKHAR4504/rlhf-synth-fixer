@@ -1,0 +1,988 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Serverless Quiz Platform Infrastructure with Personalization'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - development
+      - staging
+      - production
+    Description: Environment name for resource tagging
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    Description: Unique suffix for resource naming to avoid conflicts
+
+Resources:
+  # S3 Bucket for Quiz Results Export
+  QuizResultsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'quiz-results-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 7
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: QuizPlatform
+
+  # DynamoDB Table for Questions
+  QuestionsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'quiz-questions-${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: question_id
+          AttributeType: S
+        - AttributeName: category
+          AttributeType: S
+        - AttributeName: difficulty
+          AttributeType: N
+      KeySchema:
+        - AttributeName: question_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: CategoryIndex
+          KeySchema:
+            - AttributeName: category
+              KeyType: HASH
+            - AttributeName: difficulty
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 10
+        WriteCapacityUnits: 10
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # DynamoDB Table for Quiz Results with TTL
+  ResultsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'quiz-results-${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: quiz_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: N
+      KeySchema:
+        - AttributeName: quiz_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserIndex
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 10
+        WriteCapacityUnits: 10
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # IAM Role for Quiz Generation Lambda
+  QuizGenerationLambdaRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RoleName: !Sub 'quiz-generation-lambda-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt QuestionsTable.Arn
+                  - !GetAtt ResultsTable.Arn
+                  - !Sub '${QuestionsTable.Arn}/index/*'
+                  - !Sub '${ResultsTable.Arn}/index/*'
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${QuizResultsBucket.Arn}/*'
+
+  # Quiz Generation Lambda Function
+  QuizGenerationFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      FunctionName: !Sub 'quiz-generation-${EnvironmentSuffix}'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt QuizGenerationLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          QUESTIONS_TABLE: !Ref QuestionsTable
+          RESULTS_TABLE: !Ref ResultsTable
+          S3_BUCKET: !Ref QuizResultsBucket
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import uuid
+          from datetime import datetime, timedelta
+          import random
+
+          dynamodb = boto3.resource('dynamodb')
+          s3 = boto3.client('s3')
+
+          def handler(event, context):
+              # Parse request
+              body = json.loads(event.get('body', '{}'))
+              user_id = body.get('user_id')
+              quiz_type = body.get('quiz_type', 'general')
+              difficulty = body.get('difficulty', 2)
+
+              # Generate quiz ID
+              quiz_id = str(uuid.uuid4())
+
+              # Get questions table
+              questions_table = dynamodb.Table(os.environ['QUESTIONS_TABLE'])
+
+              try:
+                  # Fetch questions from DynamoDB
+                  # Using scan for simplicity since we don't have pre-populated data
+                  response = questions_table.scan(Limit=10)
+                  questions = response.get('Items', [])
+
+                  # If no questions found, create sample questions
+                  if not questions:
+                      questions = [
+                          {
+                              'question_id': str(uuid.uuid4()),
+                              'category': quiz_type,
+                              'difficulty': difficulty,
+                              'content': f'Sample question {i+1} for {quiz_type}'
+                          }
+                          for i in range(10)
+                      ]
+
+                  # Create quiz object
+                  quiz = {
+                      'quiz_id': quiz_id,
+                      'user_id': user_id,
+                      'questions': questions,
+                      'created_at': int(datetime.now().timestamp()),
+                      'ttl': int((datetime.now() + timedelta(days=365)).timestamp()),
+                      'status': 'active'
+                  }
+
+                  # Save to results table
+                  results_table = dynamodb.Table(os.environ['RESULTS_TABLE'])
+                  results_table.put_item(Item=quiz)
+
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'quiz_id': quiz_id,
+                          'questions': questions,
+                          'message': 'Quiz generated successfully'
+                      })
+                  }
+
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'error': 'Failed to generate quiz',
+                          'message': str(e)
+                      })
+                  }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # IAM Role for Scoring Lambda
+  QuizScoringLambdaRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RoleName: !Sub 'quiz-scoring-lambda-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt ResultsTable.Arn
+                  - !Sub '${ResultsTable.Arn}/index/*'
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub '${QuizResultsBucket.Arn}/*'
+
+  # Quiz Scoring Lambda Function
+  QuizScoringFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      FunctionName: !Sub 'quiz-scoring-${EnvironmentSuffix}'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt QuizScoringLambdaRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          RESULTS_TABLE: !Ref ResultsTable
+          S3_BUCKET: !Ref QuizResultsBucket
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+
+          dynamodb = boto3.resource('dynamodb')
+          s3 = boto3.client('s3')
+
+          def handler(event, context):
+              # Parse request
+              body = json.loads(event.get('body', '{}'))
+              quiz_id = body.get('quiz_id')
+              answers = body.get('answers', [])
+
+              if not quiz_id or not answers:
+                  return {
+                      'statusCode': 400,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': 'Missing quiz_id or answers'})
+                  }
+
+              try:
+                  # Get quiz from DynamoDB
+                  results_table = dynamodb.Table(os.environ['RESULTS_TABLE'])
+                  response = results_table.get_item(Key={'quiz_id': quiz_id})
+
+                  if 'Item' not in response:
+                      return {
+                          'statusCode': 404,
+                          'headers': {'Content-Type': 'application/json'},
+                          'body': json.dumps({'error': 'Quiz not found'})
+                      }
+
+                  quiz = response['Item']
+                  questions = quiz.get('questions', [])
+
+                  # Calculate score
+                  score = 0
+                  total = len(questions)
+                  results = []
+
+                  for i, question in enumerate(questions):
+                      if i < len(answers):
+                          is_correct = answers[i] == question.get('correct_answer')
+                          if is_correct:
+                              score += 1
+                          results.append({
+                              'question_id': question['question_id'],
+                              'user_answer': answers[i],
+                              'correct_answer': question.get('correct_answer'),
+                              'is_correct': is_correct
+                          })
+
+                  # Calculate percentage
+                  percentage = (score / total * 100) if total > 0 else 0
+
+                  # Update quiz with results
+                  results_table.update_item(
+                      Key={'quiz_id': quiz_id},
+                      UpdateExpression='SET #s = :score, #p = :percentage, #r = :results, #st = :status',
+                      ExpressionAttributeNames={
+                          '#s': 'score',
+                          '#p': 'percentage',
+                          '#r': 'results',
+                          '#st': 'status'
+                      },
+                      ExpressionAttributeValues={
+                          ':score': score,
+                          ':percentage': percentage,
+                          ':results': results,
+                          ':status': 'completed'
+                      }
+                  )
+
+                  # Export to S3
+                  result_data = {
+                      'quiz_id': quiz_id,
+                      'user_id': quiz.get('user_id'),
+                      'score': score,
+                      'total': total,
+                      'percentage': percentage,
+                      'results': results,
+                      'completed_at': datetime.now().isoformat()
+                  }
+
+                  s3_key = f"quiz-results/{quiz_id}.json"
+                  s3.put_object(
+                      Bucket=os.environ['S3_BUCKET'],
+                      Key=s3_key,
+                      Body=json.dumps(result_data),
+                      ContentType='application/json'
+                  )
+
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'quiz_id': quiz_id,
+                          'score': score,
+                          'total': total,
+                          'percentage': percentage,
+                          'message': 'Quiz scored successfully',
+                          's3_location': f"s3://{os.environ['S3_BUCKET']}/{s3_key}"
+                      })
+                  }
+
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': 'Failed to score quiz', 'message': str(e)})
+                  }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # API Gateway Rest API
+  QuizAPI:
+    Type: AWS::ApiGateway::RestApi
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub 'quiz-platform-api-${EnvironmentSuffix}'
+      Description: Quiz Platform API Gateway
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Gateway Resources
+  QuizResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref QuizAPI
+      ParentId: !GetAtt QuizAPI.RootResourceId
+      PathPart: quiz
+
+  GenerateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref QuizAPI
+      ParentId: !Ref QuizResource
+      PathPart: generate
+
+  SubmitResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref QuizAPI
+      ParentId: !Ref QuizResource
+      PathPart: submit
+
+  QuizIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref QuizAPI
+      ParentId: !Ref QuizResource
+      PathPart: '{id}'
+
+  ResultsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref QuizAPI
+      ParentId: !Ref QuizIdResource
+      PathPart: results
+
+  # IAM Role for Quiz Retrieval Lambda
+  QuizRetrievalLambdaRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RoleName: !Sub 'quiz-retrieval-lambda-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt ResultsTable.Arn
+                  - !Sub '${ResultsTable.Arn}/index/*'
+
+  # Quiz Retrieval Lambda Function
+  QuizRetrievalFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      FunctionName: !Sub 'quiz-retrieval-${EnvironmentSuffix}'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt QuizRetrievalLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          RESULTS_TABLE: !Ref ResultsTable
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+
+          dynamodb = boto3.resource('dynamodb')
+
+          def handler(event, context):
+              # Get quiz ID from path parameters
+              quiz_id = event.get('pathParameters', {}).get('id')
+              
+              # Check if this is a results request
+              is_results_request = event.get('resource', '').endswith('/results')
+              
+              if not quiz_id:
+                  return {
+                      'statusCode': 400,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({'error': 'Missing quiz ID'})
+                  }
+
+              try:
+                  # Get quiz from DynamoDB
+                  results_table = dynamodb.Table(os.environ['RESULTS_TABLE'])
+                  response = results_table.get_item(Key={'quiz_id': quiz_id})
+
+                  if 'Item' not in response:
+                      return {
+                          'statusCode': 404,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({'error': 'Quiz not found'})
+                      }
+
+                  quiz = response['Item']
+                  
+                  if is_results_request:
+                      # Return results data - only if quiz is completed
+                      if quiz.get('status') != 'completed':
+                          return {
+                              'statusCode': 400,
+                              'headers': {
+                                  'Content-Type': 'application/json',
+                                  'Access-Control-Allow-Origin': '*'
+                              },
+                              'body': json.dumps({'error': 'Quiz not completed yet'})
+                          }
+                      
+                      results_data = {
+                          'quiz_id': quiz['quiz_id'],
+                          'user_id': quiz.get('user_id'),
+                          'score': quiz.get('score', 0),
+                          'percentage': quiz.get('percentage', 0.0),
+                          'results': quiz.get('results', []),
+                          'completed_at': quiz.get('completed_at'),
+                          'total_questions': len(quiz.get('questions', []))
+                      }
+                      
+                      return {
+                          'statusCode': 200,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps(results_data)
+                      }
+                  else:
+                      # Return quiz details (hide answers if not completed)
+                      quiz_data = {
+                          'quiz_id': quiz['quiz_id'],
+                          'user_id': quiz.get('user_id'),
+                          'questions': quiz.get('questions', []),
+                          'created_at': quiz.get('created_at'),
+                          'status': quiz.get('status', 'active')
+                      }
+
+                      return {
+                          'statusCode': 200,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps(quiz_data)
+                      }
+
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'error': 'Failed to retrieve quiz',
+                          'message': str(e)
+                      })
+                  }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # AWS Personalize Dataset Group
+  PersonalizeDatasetGroup:
+    Type: AWS::Personalize::DatasetGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub 'quiz-personalization-${EnvironmentSuffix}'
+
+  # AWS Personalize Schema for Interactions
+  PersonalizeSchema:
+    Type: AWS::Personalize::Schema
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub 'quiz-interactions-schema-${EnvironmentSuffix}'
+      Schema: |
+        {
+          "type": "record",
+          "name": "Interactions",
+          "namespace": "com.amazonaws.personalize.schema",
+          "fields": [
+            {
+              "name": "USER_ID",
+              "type": "string"
+            },
+            {
+              "name": "ITEM_ID",
+              "type": "string"
+            },
+            {
+              "name": "TIMESTAMP",
+              "type": "long"
+            },
+            {
+              "name": "SCORE",
+              "type": "float"
+            }
+          ],
+          "version": "1.0"
+        }
+
+  # AWS Personalize Dataset
+  PersonalizeDataset:
+    Type: AWS::Personalize::Dataset
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DatasetGroupArn: !Ref PersonalizeDatasetGroup
+      DatasetType: Interactions
+      Name: !Sub 'quiz-interactions-${EnvironmentSuffix}'
+      SchemaArn: !Ref PersonalizeSchema
+
+  # IAM Role for Personalize
+  PersonalizeRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RoleName: !Sub 'personalize-service-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: personalize.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PersonalizeAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${QuizResultsBucket.Arn}/*'
+                  - !GetAtt QuizResultsBucket.Arn
+              - Effect: Allow
+                Action:
+                  - personalize:*
+                Resource: '*'
+
+  # API Gateway Methods
+  GenerateMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref QuizAPI
+      ResourceId: !Ref GenerateResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QuizGenerationFunction.Arn}/invocations'
+
+  SubmitMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref QuizAPI
+      ResourceId: !Ref SubmitResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QuizScoringFunction.Arn}/invocations'
+
+  GetQuizMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref QuizAPI
+      ResourceId: !Ref QuizIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QuizRetrievalFunction.Arn}/invocations'
+
+  GetResultsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref QuizAPI
+      ResourceId: !Ref ResultsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QuizRetrievalFunction.Arn}/invocations'
+
+  # Lambda Permissions for API Gateway
+  GenerateLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref QuizGenerationFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuizAPI}/*/*'
+
+  ScoringLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref QuizScoringFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuizAPI}/*/*'
+
+  RetrievalLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref QuizRetrievalFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuizAPI}/*/*'
+
+  # API Gateway Deployment
+  APIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - GenerateMethod
+      - SubmitMethod
+      - GetQuizMethod
+      - GetResultsMethod
+    Properties:
+      RestApiId: !Ref QuizAPI
+      StageName: !Ref Environment
+
+  # CloudWatch Dashboard
+  QuizMetricsDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DashboardName: !Sub 'quiz-platform-metrics-${EnvironmentSuffix}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", { "stat": "Sum", "label": "Quiz Generation Invocations" } ],
+                  [ ".", "Errors", { "stat": "Sum", "label": "Generation Errors" } ],
+                  [ ".", "Duration", { "stat": "Average", "label": "Generation Duration (ms)" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Quiz Generation Metrics",
+                "period": 300,
+                "dimensions": {
+                  "FunctionName": "${QuizGenerationFunction}"
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", { "stat": "Sum", "label": "Scoring Invocations" } ],
+                  [ ".", "Errors", { "stat": "Sum", "label": "Scoring Errors" } ],
+                  [ ".", "Duration", { "stat": "Average", "label": "Scoring Duration (ms)" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Quiz Scoring Metrics",
+                "period": 300,
+                "dimensions": {
+                  "FunctionName": "${QuizScoringFunction}"
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/DynamoDB", "UserErrors", { "stat": "Sum" } ],
+                  [ ".", "SystemErrors", { "stat": "Sum" } ],
+                  [ ".", "ConsumedReadCapacityUnits", { "stat": "Sum" } ],
+                  [ ".", "ConsumedWriteCapacityUnits", { "stat": "Sum" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Performance",
+                "period": 300,
+                "dimensions": {
+                  "TableName": "${QuestionsTable}"
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/ApiGateway", "Count", { "stat": "Sum", "label": "API Requests" } ],
+                  [ ".", "4XXError", { "stat": "Sum", "label": "4XX Errors" } ],
+                  [ ".", "5XXError", { "stat": "Sum", "label": "5XX Errors" } ],
+                  [ ".", "Latency", { "stat": "Average", "label": "Latency (ms)" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "API Gateway Metrics",
+                "period": 300,
+                "dimensions": {
+                  "ApiName": "${QuizAPI}"
+                }
+              }
+            }
+          ]
+        }
+
+  # CloudWatch Alarms
+  GenerationErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AlarmName: !Sub 'quiz-generation-errors-${EnvironmentSuffix}'
+      AlarmDescription: Alert when quiz generation Lambda has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref QuizGenerationFunction
+
+  HighLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AlarmName: !Sub 'api-high-latency-${EnvironmentSuffix}'
+      AlarmDescription: Alert when API latency is high
+      MetricName: Latency
+      Namespace: AWS/ApiGateway
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref QuizAPI
+
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${QuizAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+
+  QuizResultsBucketName:
+    Description: S3 bucket for quiz results
+    Value: !Ref QuizResultsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ResultsBucket'
+
+  QuestionsTableName:
+    Description: DynamoDB table for questions
+    Value: !Ref QuestionsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-QuestionsTable'
+
+  ResultsTableName:
+    Description: DynamoDB table for results
+    Value: !Ref ResultsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ResultsTable'
+
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${QuizMetricsDashboard}'
+
+  PersonalizeDatasetGroupArn:
+    Description: AWS Personalize Dataset Group ARN
+    Value: !Ref PersonalizeDatasetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-PersonalizeDatasetGroup'
+
+  QuizRetrievalFunctionArn:
+    Description: Quiz Retrieval Lambda Function ARN
+    Value: !GetAtt QuizRetrievalFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RetrievalFunction'

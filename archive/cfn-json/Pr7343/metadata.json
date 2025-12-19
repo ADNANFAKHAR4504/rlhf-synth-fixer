@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912662",
+  "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "startedAt": "2025-11-26T06:25:32",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "database",
+    "disaster-recovery",
+    "multi-region",
+    "aurora",
+    "high-availability"
+  ],
+  "aws_services": [
+    "RDS Aurora",
+    "Route 53",
+    "CloudWatch",
+    "KMS",
+    "VPC",
+    "EC2",
+    "IAM",
+    "SNS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

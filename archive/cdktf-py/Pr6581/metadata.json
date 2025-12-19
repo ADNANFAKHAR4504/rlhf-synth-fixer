@@ -1,0 +1,41 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth-2",
+  "startedAt": "2025-11-14T21:46:00+05:30",
+  "completedAt": "2025-11-14T22:45:00+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "3s6w0x",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "SQS",
+    "EventBridge",
+    "KMS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 8,
+  "errors_fixed": 5,
+  "synth_status": "passed",
+  "deployment_status": "blocked_by_environment",
+  "deployment_blockers": [
+    "S3 backend access denied (iac-rlhf-tf-states bucket permissions)",
+    "Terraform registry connectivity issues (registry.terraform.io DNS resolution)"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

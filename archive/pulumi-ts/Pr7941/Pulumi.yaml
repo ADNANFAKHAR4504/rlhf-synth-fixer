@@ -1,0 +1,5 @@
+name: MonitoringStack
+runtime:
+  name: nodejs
+description: Pulumi monitoring and observability infrastructure for payment processing
+main: bin/tap.ts

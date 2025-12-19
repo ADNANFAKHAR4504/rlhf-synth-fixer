@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-10T04:04:58.328988Z",
+  "po_id": "101000872",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "staging",
+    "multi-environment",
+    "environment-parity"
+  ],
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "RDS",
+    "SQS",
+    "ALB",
+    "SSM",
+    "CloudWatch",
+    "S3",
+    "IAM",
+    "NAT Gateway"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,12 @@
+environment_suffix    = "synthr1z4o2a6"
+primary_region        = "us-east-1"
+secondary_region      = "us-west-2"
+db_master_password    = "TempPassword123!ChangeMe"
+domain_name           = "example-synthr1z4o2a6.com"
+vpc_cidr_primary      = "10.0.0.0/16"
+vpc_cidr_secondary    = "10.1.0.0/16"
+db_master_username    = "dbadmin"
+db_name               = "transactiondb"
+instance_type         = "t3.medium"
+s3_bucket_prefix      = "transaction-data"
+backup_retention_days = 7

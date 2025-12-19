@@ -1,0 +1,33 @@
+{
+  "platform": "cdktf",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348941",
+  "team": "6",
+  "startedAt": "2025-10-01T22:06:12.451Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "VPC",
+    "EventBridge",
+    "CloudWatch Logs",
+    "SNS",
+    "SQS",
+    "KMS",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "antny-turing",
+  "dockerS3Location": ""
+}

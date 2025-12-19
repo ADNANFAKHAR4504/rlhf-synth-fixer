@@ -1,0 +1,43 @@
+{
+  "task_id": "b8i0b2",
+  "po_id": "b8i0b2",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T15:00:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "NatGateway",
+    "RouteTable",
+    "SecurityGroup",
+    "RDS",
+    "ElasticIP",
+    "ApplicationLoadBalancer",
+    "TargetGroup",
+    "AutoScaling",
+    "LaunchTemplate",
+    "EC2",
+    "S3",
+    "KMS",
+    "IAM",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch",
+    "SNS",
+    "Route53"
+  ],
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349064",
+  "team": "4",
+  "startedAt": "2025-10-17T10:31:05.096Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "IGW",
+    "NAT Gateway",
+    "EC2",
+    "Load Balancer",
+    "Auto Scaling",
+    "S3",
+    "RDS",
+    "IAM",
+    "CloudFront",
+    "KMS",
+    "Secrets Manager",
+    "SSM Parameter Store",
+    "CloudWatch"
+  ],
+  "training_quality": 9,
+  "background": "Comprehensive multi-tier infrastructure with VPC, EC2 auto-scaling, RDS Aurora, S3, and CloudFront",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

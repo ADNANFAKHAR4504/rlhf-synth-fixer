@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-17T05:03:26+05:30",
+  "subtask": "Application Deployment",
+  "background": "StreamTech Japan, a media streaming company, needs to process thousands of video files daily. They require a scalable infrastructure to handle video metadata extraction, storage, and quick access to popular content. The solution must comply with Japanese broadcasting regulations and maintain low latency for the AP region.",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
+  ],
+  "po_id": "1184609787",
+  "aws_services": [
+    "VPC",
+    "EC2 (Security Groups)",
+    "ECS (Fargate)",
+    "RDS (PostgreSQL)",
+    "ElastiCache (Redis)",
+    "EFS",
+    "API Gateway",
+    "Secrets Manager",
+    "KMS",
+    "CloudWatch (Logs)",
+    "IAM"
+  ],
+  "region": "ap-northeast-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

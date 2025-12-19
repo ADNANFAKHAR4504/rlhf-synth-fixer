@@ -3,7 +3,6 @@ name: CI/CD Pipeline
 # Special keyword [skip-jobs] can be added to commit messages to skip most jobs
 # The upload-task-to-s3 job will still run when a PR is merged, regardless of this tag
 # The cleanup-pr job will still run when a PR is closed, regardless of this tag
-
 on:
   push:
     branches: [main]
@@ -11,48 +10,158 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
+    inputs:
+      environment_suffix:
+        description: 'Environment suffix for resource naming (e.g., pr123, dev, test)'
+        required: false
+        default: 'manual'
+        type: string
+      skip_cleanup:
+        description: 'Skip cleanup/destroy step after deployment'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 env:
   NODE_VERSION: '22.17.0'
-  # Use PR number for resource isolation, fallback to 'dev' for main branch
+  GO_VERSION: '1.23.12'
+  # Use PR number for resource isolation, manual input, or fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
-  ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
-  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release'
-  TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states'
+  ENVIRONMENT_SUFFIX: ${{ github.event.inputs.environment_suffix || (github.event.number && format('pr{0}', github.event.number)) || 'dev' }}
+  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release-342597974367-us-east-1'
+  TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states-342597974367'
   TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
   TERRAFORM_STATE_BUCKET_KEY: ${{ github.event.pull_request.number }}
-  S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
-  PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
+  PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states-342597974367'
   PULUMI_BUCKET_REGION: 'us-east-1'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: 'organization'
   AWS_REGION: ${{ vars.AWS_REGION }}
+  CDK_DEFAULT_REGION: ${{ vars.CDK_DEFAULT_REGION || vars.AWS_REGION || 'us-east-1' }}
+  CURRENT_ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  MODEL_S3_URI: 's3://social-platform-sagemaker-342597974367-dev/model.tar.gz'
+  # Go caching optimization
+  GOCACHE: ${{ github.workspace }}/.cache/go-build
+  GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
+  IAC_ANALYSIS_SUBJECT_LABEL: 'Infrastructure Analysis/Monitoring'
+  CICD_PIPELINE_SUBJECT_LABEL: 'CI/CD Pipeline'
 
 jobs:
   detect-metadata:
     name: Detect Project Files
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     outputs:
       platform: ${{ steps.metadata.outputs.platform }}
       language: ${{ steps.metadata.outputs.language }}
       po_id: ${{ steps.metadata.outputs.po_id }}
+      team: ${{ steps.metadata.outputs.team }}
+      provider: ${{ steps.metadata.outputs.provider }}
+      subtask: ${{ steps.metadata.outputs.subtask }}
+      subject_labels: ${{ steps.metadata.outputs.subject_labels }}
+      analysis_subject_label: ${{ env.IAC_ANALYSIS_SUBJECT_LABEL }}
+      cicd_pipeline_subject_label: ${{ env.CICD_PIPELINE_SUBJECT_LABEL }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        run: git fetch origin main:main
+
+      - name: Validate metadata.json
+        uses: cardinalby/schema-validator-action@v3
+        with:
+          file: 'metadata.json'
+          schema: 'config/schemas/metadata.schema.json'
+
+      - name: Check Project Files
+        id: check-files
+        run: ./scripts/check-project-files.sh
 
       - name: Detect metadata and validate project
         id: metadata
         run: ./scripts/detect-metadata.sh
 
+  validate-commit-message:
+    name: Validate Commit Message
+    runs-on: ubuntu-24.04
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to fetch all history for commitlint
+
+      - name: Setup Node for Commitlint
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Commitlint locally
+        run: |
+          npm install --no-save \
+            @commitlint/{cli,config-conventional}
+
+      - name: Validate commit message
+        run: npx commitlint --last
+
+  validate-jest-config:
+    name: Validate Jest Config
+    runs-on: ubuntu-24.04
+    needs: detect-metadata
+    # Only run for TypeScript/JavaScript projects (Jest is not used for Python, Go, Java)
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && (needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js') }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate jest.config.js test folder
+        run: |
+          echo "🔍 Validating jest.config.js configuration..."
+          echo "Language: ${{ needs.detect-metadata.outputs.language }}"
+
+          # Valid config requires ONLY 'test/' directory (singular)
+          # Do NOT include 'tests/' - that's for Python/Go/Java projects using their own test runners
+          ROOTS_LINE=$(grep 'roots:' jest.config.js || echo '')
+
+          # Check for the correct configuration: only 'test/' folder
+          if echo "$ROOTS_LINE" | grep -q "roots: \['<rootDir>/test'\]"; then
+            echo "✅ jest.config.js validation passed - using 'test/' folder (singular)"
+            echo "Found: $ROOTS_LINE"
+          else
+            echo ""
+            echo "❌ ERROR: jest.config.js has incorrect roots configuration!"
+            echo ""
+            echo "Expected: roots: ['<rootDir>/test']"
+            echo "Found:    $ROOTS_LINE"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Jest is ONLY used for TypeScript/JavaScript projects."
+            echo "TS/JS projects must use 'test/' folder (singular)."
+            echo ""
+            echo "Other languages use their own test runners:"
+            echo "  - Python: pytest with 'tests/' folder"
+            echo "  - Go: go test with 'tests/' folder"
+            echo "  - Java: JUnit/Gradle with 'tests/' folder"
+            echo ""
+            echo "Do NOT add 'tests/' to Jest roots - it will break validation!"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            exit 1
+          fi
+
   build:
     name: Build
     runs-on: ubuntu-24.04
     needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: dev
 
     steps:
@@ -66,15 +175,32 @@ jobs:
           download-artifacts: 'false'
           upload-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
+
+      - name: Validate Stack Naming
+        run: |
+          echo "🔍 Validating stack naming conventions..."
+          if [ -f "scripts/validate-stack-naming.sh" ]; then
+            ./scripts/validate-stack-naming.sh || echo "⚠️ Stack naming validation found issues (non-blocking)"
+          else
+            echo "⚠️ validate-stack-naming.sh not found, skipping"
+          fi
 
       - name: Build
         run: ./scripts/build.sh
+
+      - name: Upload build artifacts (dist/)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-dist
+          path: dist
+          if-no-files-found: ignore
 
   synth:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
     environment: dev
     permissions:
       contents: read
@@ -86,13 +212,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Skip Synth for non-CDK/CDKTF platforms
+        if: ${{ needs.detect-metadata.outputs.platform != 'cdk' && needs.detect-metadata.outputs.platform != 'cdktf' }}
+        run: |
+          echo "✅ Synth step not required for platform: ${{ needs.detect-metadata.outputs.platform }}"
+          echo "This platform does not require synthesis. Job passes automatically."
+
       - name: Setup Environment
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
+          download-artifacts: 'false'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
@@ -112,11 +245,176 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+  infracost:
+    name: Infracost (Terraform Cost Estimation)
+    needs: [detect-metadata, build, synth]
+    runs-on: ubuntu-24.04
+    # if: >
+    #   ${{
+    #   github.event_name == 'pull_request' &&
+    #   github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') &&
+    #   needs.detect-metadata.outputs.platform == 'tf'}}
+    if: false
+    environment: dev
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for Terraform files
+        id: tf-check
+        run: |
+          if ! find lib -maxdepth 1 -name "*.tf" | grep -q .; then
+            echo "No Terraform files found in lib/. Skipping Infracost job."
+            echo "skip_infracost=true" >> $GITHUB_ENV
+            exit 0
+          fi
+
+      - name: Setup Terraform
+        if: env.skip_infracost != 'true'
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup Infracost
+        if: env.skip_infracost != 'true'
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      - name: Setup Environment (variables)
+        if: env.skip_infracost != 'true'
+        run: |
+          echo "TERRAFORM_STATE_BUCKET=${{ env.TERRAFORM_STATE_BUCKET }}" >> $GITHUB_ENV
+          echo "TERRAFORM_STATE_BUCKET_REGION=${{ env.TERRAFORM_STATE_BUCKET_REGION }}" >> $GITHUB_ENV
+          echo "ENVIRONMENT_SUFFIX=${{ env.ENVIRONMENT_SUFFIX }}" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: terraform init
+
+      - name: Terraform Plan
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: terraform plan -out=tfplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
+
+      - name: Convert plan to JSON
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: terraform show -json tfplan > plan.json
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
+
+      - name: Run Infracost breakdown
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: infracost breakdown --path=plan.json --format=json --out-file=../infracost.json
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
+
+      - name: Post Infracost comment
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: |
+          infracost comment github --path=../infracost.json \
+                                 --pull-request=${{ github.event.pull_request.number }} \
+                                 --repo=${{ github.repository }} \
+                                 --github-token=${{ secrets.GITHUB_TOKEN }} \
+                                 --behavior=update
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
+  analysis:
+    name: Analysis
+    runs-on: ubuntu-24.04
+    needs: [detect-metadata, lint, unit-tests]
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && needs.lint.result == 'success' && needs.unit-tests.result == 'success' }}
+    environment: dev
+    env:
+      AWS_ENDPOINT_URL: http://127.0.0.1:5001
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'false'
+          is-analysis: 'true'
+
+      - name: Run analysis
+        run: ./scripts/analysis.sh
+        env:
+          IAC_ANALYSIS_SUBJECT_LABEL: ${{ needs.detect-metadata.outputs.analysis_subject_label }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+
+      - name: Upload analysis results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis-results
+          path: lib/analysis-results.txt
+          if-no-files-found: warn
+
+  cicd-pipeline-optimization:
+    name: CICD Pipeline Optimization
+    runs-on: ubuntu-24.04
+    needs: detect-metadata
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    environment: dev
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      - name: Execute CI/CD Pipeline Script
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+        run: ./scripts/cicd-pipeline.sh
+
+      - name: Upload Pipeline Configuration
+        uses: actions/upload-artifact@v4
+        with:
+          name: cicd-pipeline-config
+          path: lib/ci-cd.yml
+          if-no-files-found: error
+
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
     needs: [detect-metadata, synth]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: dev
 
     steps:
@@ -129,6 +427,28 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
+          provider: ${{ needs.detect-metadata.outputs.provider }}
+
+      - name: Download build artifacts (dist/)
+        if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: build-dist
+          path: dist
+
+      - name: Validate Stack Naming Before Deploy
+        run: |
+          echo "🔍 Validating stack naming conventions before deployment..."
+          if [ -f "scripts/validate-stack-naming.sh" ]; then
+            ./scripts/validate-stack-naming.sh || echo "⚠️ Stack naming validation found issues (non-blocking)"
+          fi
+
+          # Source and print stack configuration
+          if [ -f "scripts/stack-config.sh" ]; then
+            source scripts/stack-config.sh
+            bash scripts/stack-config.sh --print
+          fi
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -143,7 +463,8 @@ jobs:
 
       # (Removed DynamoDB lock table step per PR review)
 
-      - name: Bootstrap
+      - name: Bootstrap (AWS only)
+        if: ${{ needs.detect-metadata.outputs.provider != 'localstack' }}
         run: ./scripts/bootstrap.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -152,18 +473,51 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+      - name: Skip Bootstrap (LocalStack)
+        if: ${{ needs.detect-metadata.outputs.provider == 'localstack' }}
+        run: |
+          echo "ℹ️ Skipping AWS bootstrap for LocalStack deployment"
+          echo "LocalStack bootstrap will be handled during deployment"
+
+      - name: Start LocalStack (if provider is localstack)
+        if: ${{ needs.detect-metadata.outputs.provider == 'localstack' }}
+        run: ./scripts/localstack-start-ci.sh
+        env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
+
       - name: Deploy
-        run: ./scripts/deploy.sh
+        run: |
+          if [ "${{ needs.detect-metadata.outputs.provider }}" == "localstack" ]; then
+            echo "Deploying to LocalStack..."
+            export AWS_ENDPOINT_URL=http://localhost:4566
+            # Use s3.localhost.localstack.cloud for S3 endpoint to ensure proper bucket name parsing
+            export AWS_ENDPOINT_URL_S3=http://s3.localhost.localstack.cloud:4566
+            export AWS_ACCESS_KEY_ID=test
+            export AWS_SECRET_ACCESS_KEY=test
+            export AWS_DEFAULT_REGION=us-east-1
+            export AWS_REGION=us-east-1
+            export LOCALSTACK_API_KEY="${{ secrets.LOCALSTACK_API_KEY }}"
+            # Force S3 path-style addressing for LocalStack
+            export AWS_S3_FORCE_PATH_STYLE=true
+            export AWS_S3_USE_PATH_STYLE=1
+            ./scripts/localstack-ci-deploy.sh
+          else
+            echo "Deploying to AWS..."
+            ./scripts/deploy.sh
+          fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
+          PR_NUMBER: ${{ github.event.number || 'unknown' }}
+          TEAM: ${{ needs.detect-metadata.outputs.team }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
+          CURRENT_ACCOUNT_ID: ${{ env.CURRENT_ACCOUNT_ID }}
 
       # Note: Deployment outputs are now collected by the deploy.sh script
 
@@ -174,11 +528,51 @@ jobs:
           path: |
             cfn-outputs/
             cdk-stacks.json
+
+  iac-optimization:
+    name: IaC Optimization
+    runs-on: ubuntu-24.04
+    needs: [detect-metadata, deploy]
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, 'IaC Optimization')}}
+    environment: dev
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
+          provider: ${{ needs.detect-metadata.outputs.provider }}
+
+      - name: Download Deployment Outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: cfn-outputs
+          path: .
+
+      - name: Configure AWS
+        uses: ./.github/actions/configure-aws
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
+
+      - name: Check and Run IaC Optimization
+        run: ./scripts/optimize.sh
+        env:
+          ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
+
   lint:
     name: Lint
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -194,6 +588,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       # Python setup is handled by the setup-environment action
 
@@ -204,7 +599,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
     environment: qa
 
     steps:
@@ -217,10 +612,50 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Run unit tests
         run: ./scripts/unit-tests.sh
 
+      - name: Prepare coverage reports for Java projects
+        if: ${{ needs.detect-metadata.outputs.language == 'java' }}
+        run: |
+          echo "Preparing Java coverage reports for upload..."
+          echo "Debug: Checking current directory structure:"
+          ls -la
+
+          echo "Debug: Checking build directory:"
+          if [ -d "build" ]; then
+            ls -la build/
+            if [ -d "build/reports" ]; then
+              echo "Reports directory contents:"
+              ls -la build/reports/
+              if [ -d "build/reports/jacoco" ]; then
+                echo "JaCoCo directory contents:"
+                find build/reports/jacoco -type f | head -10
+              fi
+            fi
+          else
+            echo "No build directory found"
+          fi
+
+          mkdir -p coverage
+
+          # Try different possible locations for JaCoCo reports
+          if [ -d "build/reports/jacoco/test/" ]; then
+            cp -r build/reports/jacoco/test/* coverage/
+            echo "✅ Copied JaCoCo reports from build/reports/jacoco/test/ to coverage/ directory"
+          elif [ -d "build/reports/jacoco/" ]; then
+            cp -r build/reports/jacoco/* coverage/
+            echo "✅ Copied JaCoCo reports from build/reports/jacoco/ to coverage/ directory"
+          else
+            echo "⚠️ JaCoCo reports not found in expected locations"
+            # Create a placeholder to avoid upload failure
+            echo "No coverage reports generated" > coverage/no-reports.txt
+          fi
+
+          echo "Final coverage directory contents:"
+          ls -la coverage/
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
@@ -257,7 +692,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
 
     steps:
       - name: Checkout code
@@ -269,6 +704,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
+          provider: ${{ needs.detect-metadata.outputs.provider }}
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
@@ -276,16 +713,44 @@ jobs:
           name: cfn-outputs
           path: .
 
-      - name: Configure AWS
+      - name: Configure AWS (if provider is aws)
+        if: ${{ needs.detect-metadata.outputs.provider == 'aws' || needs.detect-metadata.outputs.provider == '' }}
         uses: ./.github/actions/configure-aws
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
-      - name: Run integration tests against live environment
-        run: ./scripts/integration-tests.sh
+      - name: Start LocalStack (if provider is localstack)
+        if: ${{ needs.detect-metadata.outputs.provider == 'localstack' }}
+        run: ./scripts/localstack-start-ci.sh
         env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
+
+      - name: Run integration tests
+        run: |
+          if [ "${{ needs.detect-metadata.outputs.provider }}" == "localstack" ]; then
+            echo "Deploying to LocalStack and running integration tests..."
+            export AWS_ENDPOINT_URL=http://localhost:4566
+            # Use s3.localhost.localstack.cloud for S3 endpoint to ensure proper bucket name parsing
+            export AWS_ENDPOINT_URL_S3=http://s3.localhost.localstack.cloud:4566
+            export AWS_ACCESS_KEY_ID=test
+            export AWS_SECRET_ACCESS_KEY=test
+            export AWS_DEFAULT_REGION=us-east-1
+            export AWS_REGION=us-east-1
+            export LOCALSTACK_API_KEY="${{ secrets.LOCALSTACK_API_KEY }}"
+            # Force S3 path-style addressing for LocalStack
+            export AWS_S3_FORCE_PATH_STYLE=true
+            export AWS_S3_USE_PATH_STYLE=1
+            ./scripts/localstack-ci-deploy.sh && ./scripts/localstack-ci-test.sh
+          else
+            echo "Running integration tests against AWS..."
+            ./scripts/integration-tests.sh
+          fi
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           CI: '1' # Set CI for the entire step
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
@@ -295,7 +760,32 @@ jobs:
   claude-code-action:
     runs-on: ubuntu-24.04
     name: 'Claude Review'
-    needs: [integration-tests-live]
+    needs:
+      [
+        detect-metadata,
+        integration-tests-live,
+        analysis,
+        cicd-pipeline-optimization,
+      ]
+    # For Infrastructure Analysis/Monitoring OR CI/CD Pipeline: Allow int-tests to be skipped
+    # For all other subject labels: Require int-tests to succeed
+    if: |
+      always() && !cancelled() &&
+      github.event_name == 'pull_request' &&
+      (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') &&
+      (needs.cicd-pipeline-optimization.result == 'success' || needs.cicd-pipeline-optimization.result == 'skipped') &&
+      (
+        (
+          (contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) ||
+           contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)) &&
+          (needs.integration-tests-live.result == 'success' || needs.integration-tests-live.result == 'skipped')
+        ) ||
+        (
+          !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) &&
+          !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) &&
+          needs.integration-tests-live.result == 'success'
+        )
+      )
     permissions:
       contents: write
       pull-requests: write
@@ -332,46 +822,638 @@ jobs:
             exit 1
           fi
 
+      - name: Verify IaC Program Optimization script exists
+        if: ${{ contains(needs.detect-metadata.outputs.subject_labels, 'Infrastructure Analysis/Monitoring') }}
+        run: |
+          if [ ! -f "lib/analyse.py" ] && [ ! -f "lib/analyse.sh" ]; then
+            echo "❌ Expected lib/analyse.py or lib/analyse.sh for IaC Program Optimization task"
+            exit 1
+          fi
+
+      - name: Determine review type
+        id: review-type
+        run: |
+          SUBJECT_LABELS=$(jq -r '.subject_labels[]?' metadata.json 2>/dev/null || echo "")
+          if echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
+            echo "review_type=cicd-pipeline" >> $GITHUB_OUTPUT
+            echo "📋 Detected CI/CD Pipeline subject label - will use specialized review criteria"
+          else
+            echo "review_type=iac-standard" >> $GITHUB_OUTPUT
+            echo "📋 Using standard IaC review criteria"
+          fi
+
+      - name: Prepare Claude system prompt
+        id: prepare-prompt
+        run: |
+          # Read system prompt from file
+          SYSTEM_PROMPT=$(cat .claude/prompts/claude-review-system-prompt.md)
+
+          # Store in GITHUB_ENV using heredoc (no expression limit)
+          {
+            echo 'SYSTEM_PROMPT_CONTENT<<PROMPT_EOF'
+            echo "$SYSTEM_PROMPT"
+            echo 'PROMPT_EOF'
+          } >> $GITHUB_ENV
+
       - name: Run Claude PR Review Action
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          timeout_minutes: '60'
           allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
           trigger_phrase: ''
-          custom_instructions: |
-            CRITICAL: you MUST validate the latest PROMPT file format, and fail the check if it appears to be AI-generated rather than human-written:
-            1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
-            2. Read the PROMPT files
-            3. Assess whether the content looks human-generated or AI-generated
-            4. Look for signs of AI generation such as:
-               - Emojis or special symbols (icons) used for formatting
-               - Table structures
-               - Overly formal or template-like language
-               - Perfect formatting that suggests AI assistance
-               - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
-            5. If  any PROMPT file appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error and fail the pipeline.
-            6. Also validate that for each PROMPT file, there is a corresponding MODEL_RESPONSE file (e.g., PROMPT.md -> MODEL_RESPONSE.md, PROMPT2.md -> MODEL_RESPONSE2.md, etc.) and that it is well-formatted.
+          custom_instructions: '${{ env.SYSTEM_PROMPT_CONTENT }}'
 
-            CRITICAL: you MUST validate lib/IDEAL_RESPONSE.md, read .claude/agents/iac-infra-qa-trainer.md to understand how that file should have been created.
-            1. Read lib/IDEAL_RESPONSE.md if it exists
-            2. lib/IDEAL_RESPONSE.md should be well-formatted, markdown.
-            3. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
-            4. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
-            5. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
-            6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, immediately FAIL the check by exiting with an error and fail the pipeline.
+      - name: Verify metadata.json Updated
+        id: verify_metadata
+        run: |
+          echo "🔍 Verifying Claude updated metadata.json with training_quality..."
 
-            Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes, but allow the metadata.json file to be updated.
-            Important: The Metadata Enhancement phase in .claude/agents/iac-code-reviewer.md is very important for this project. Make sure that the 
-            metadata.json file is updated with the fields stated there. If the metadata.json file after the review does not contain the fields:
-            - subtask
-            - subject_labels
-            - training_quality
-            - aws_services
-            then immediately FAIL the check by exiting with an error and fail the pipeline.
+          if [ ! -f "metadata.json" ]; then
+            echo "::error::metadata.json not found after Claude review"
+            exit 1
+          fi
 
-            This validation is mandatory and must be completed before any other review activities.
+          # Check if training_quality field exists and is a valid number
+          TRAINING_QUALITY=$(jq -r '.training_quality // empty' metadata.json 2>/dev/null || echo "")
+
+          if [ -z "$TRAINING_QUALITY" ]; then
+            echo "⚠️ WARNING: Claude did not update metadata.json with training_quality"
+            echo "⚠️ Will attempt to extract score from PR comment instead"
+            echo "metadata_updated=false" >> $GITHUB_OUTPUT
+          elif [[ ! "$TRAINING_QUALITY" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+            echo "⚠️ WARNING: training_quality value '$TRAINING_QUALITY' is not a valid number"
+            echo "metadata_updated=false" >> $GITHUB_OUTPUT
+          else
+            echo "✅ metadata.json updated with training_quality: $TRAINING_QUALITY"
+            echo "metadata_updated=true" >> $GITHUB_OUTPUT
+            echo "training_quality=$TRAINING_QUALITY" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify Claude Posted Review Comment
+        id: verify_comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Verifying Claude posted a review comment..."
+
+          # Get the timestamp of when Claude action started (approximate)
+          CLAUDE_START_TIME=$(date -u -d '2 minutes ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-2M +%Y-%m-%dT%H:%M:%SZ)
+
+          # Fetch comments from the last few minutes
+          RECENT_COMMENTS=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --jq ".[].body" 2>/dev/null || echo "")
+
+          # Check if any comment contains Claude review markers
+          if echo "$RECENT_COMMENTS" | grep -q "metadata.json Validation\|Code Review Summary\|Training Quality"; then
+            echo "✅ Claude successfully posted a review comment"
+            echo "comment_posted=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ WARNING: Claude action completed but no review comment was found"
+            echo "⚠️ This may be due to known issues with anthropics/claude-code-action@beta"
+            echo "comment_posted=false" >> $GITHUB_OUTPUT
+            
+            # Post a fallback notification comment
+            COMMENT_BODY=$(cat << 'COMMENT_EOF'
+          ## ⚠️ Claude Review Job Completed With Issues
+
+          Status: The Claude review job ran but failed to post the review results.
+
+          Possible Causes:
+          - Known issue with anthropics/claude-code-action@beta (#548, #557, #567)
+          - GitHub API rate limiting
+          - Network connectivity issues
+
+          Action Required: Please check the GitHub Actions logs for the Claude review step.
+
+          Next Steps: The workflow will continue with quality gate validation using metadata.json as fallback.
+          COMMENT_EOF
+          )
+            COMMENT_BODY="${COMMENT_BODY}
+
+          Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          ---
+          Posted by CI/CD Pipeline | $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT_BODY" || echo "⚠️ Failed to post fallback comment (non-blocking)"
+          fi
+
+      - name: Check for Critical Issues in Claude Review
+        id: check_critical
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Checking for critical validation failures in Claude review..."
+
+          # Fetch all PR comments with timestamps, sorted by creation time
+          # Only check the MOST RECENT Claude review comment (identified by review markers)
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --jq 'sort_by(.created_at) | reverse | .[].body' > all_comments_sorted.txt
+
+          # Find the most recent Claude review comment (contains review markers)
+          # Claude reviews contain specific markers like "metadata.json Validation", "SCORE:", etc.
+          CLAUDE_COMMENT=""
+          while IFS= read -r -d '' comment || [[ -n "$comment" ]]; do
+            if echo "$comment" | grep -qE "(metadata\.json Validation|Code Review Summary|Training Quality|SCORE:[0-9]+|## 📋)"; then
+              CLAUDE_COMMENT="$comment"
+              break
+            fi
+          done < <(gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --jq 'sort_by(.created_at) | reverse | .[] | .body + "\u0000"')
+
+          if [ -z "$CLAUDE_COMMENT" ]; then
+            echo "⚠️ No Claude review comment found with expected markers"
+            echo "Checking all recent comments as fallback..."
+            # Fallback: use the most recent comment
+            CLAUDE_COMMENT=$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+              --jq 'sort_by(.created_at) | reverse | .[0].body // empty')
+          fi
+
+          if [ -z "$CLAUDE_COMMENT" ]; then
+            echo "⚠️ No comments found on PR"
+            echo "critical_issues_found=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Save the most recent Claude comment for checking
+          echo "$CLAUDE_COMMENT" > latest_claude_comment.txt
+          echo "📝 Checking Claude's review comment ($(echo "$CLAUDE_COMMENT" | wc -c) bytes)"
+
+          # ============================================================
+          # IMPROVED ERROR DETECTION WITH CLEAR, USER-FRIENDLY MESSAGES
+          # Each issue type has: detection, explanation, and fix steps
+          # ============================================================
+
+          CRITICAL_FOUND=false
+          ISSUE_TYPE=""
+          ISSUE_QUOTE=""
+
+          # Helper function to build clear error message
+          build_error_output() {
+            local issue_type="$1"
+            local quote="$2"
+            local what_happened="$3"
+            local why_matters="$4"
+            local how_to_fix="$5"
+            
+            echo ""
+            echo "════════════════════════════════════════════════════════════════"
+            echo "❌ CLAUDE REVIEW FAILED"
+            echo "════════════════════════════════════════════════════════════════"
+            echo ""
+            echo "WHAT HAPPENED:"
+            echo "  $what_happened"
+            echo ""
+            echo "FROM CLAUDE'S REVIEW:"
+            echo "  \"$quote\""
+            echo ""
+            echo "WHY THIS MATTERS:"
+            echo "  $why_matters"
+            echo ""
+            echo "HOW TO FIX:"
+            echo "$how_to_fix"
+            echo ""
+            echo "════════════════════════════════════════════════════════════════"
+          }
+
+          # -------------------------------------------------------------------
+          # CHECK 1: Metadata validation failed
+          # -------------------------------------------------------------------
+          if grep -qE "Metadata validation FAILED|❌.*[Mm]etadata|❌.*[Vv]alidation.*FAILED" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="metadata_validation"
+            ISSUE_QUOTE=$(grep -oE ".*[Mm]etadata validation FAILED.*|❌.*[Mm]etadata.*|❌.*[Vv]alidation.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "Metadata Validation Failed" \
+              "$ISSUE_QUOTE" \
+              "Your metadata.json file has errors that need to be fixed." \
+              "The metadata.json file tells the system how to process your PR. Invalid values will cause the pipeline to fail." \
+              "  1. Open metadata.json in your project root
+            2. Check for these common issues:
+               - platform: must be one of: cdk, cdktf, cfn, tf, pulumi, cicd, analysis
+               - language: must match your platform (e.g., ts for CDK, hcl for Terraform)
+               - subtask: must be an exact match from the allowed list
+               - subject_labels: must be an array, not a string
+            3. Run: bash .claude/scripts/validate-metadata.sh metadata.json
+            4. Fix any errors shown, then push your changes"
+
+          # -------------------------------------------------------------------
+          # CHECK 2: Security issue - credentials in code
+          # -------------------------------------------------------------------
+          elif grep -qiE "HARDCODED SECRETS FOUND|❌.*hardcoded.*secret|❌.*credential|❌.*password|❌.*api.?key" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="hardcoded_credentials"
+            ISSUE_QUOTE=$(grep -oiE ".*HARDCODED SECRETS FOUND.*|.*❌.*hardcoded.*|.*❌.*credential.*|.*❌.*password.*|.*❌.*api.?key.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "Security Issue - Credentials in Code" \
+              "$ISSUE_QUOTE" \
+              "Claude found passwords, API keys, or AWS credentials written directly in your code." \
+              "Credentials in code are a security risk. They can be exposed if code is shared or pushed to a repository." \
+              "  1. Find the file mentioned in Claude's review above
+            2. Remove the hardcoded credentials
+            3. Replace with environment variables:
+               BEFORE: const apiKey = \"sk-abc123...\"
+               AFTER:  const apiKey = process.env.API_KEY
+            4. Or use AWS Secrets Manager for sensitive values
+            5. Push your changes"
+
+          # -------------------------------------------------------------------
+          # CHECK 3: AI-generated content in PROMPT files
+          # -------------------------------------------------------------------
+          elif grep -qiE "❌.*emojis? found|❌.*ai-generated|CRITICAL.*emoji|CRITICAL.*ai-generated" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="ai_generated_content"
+            ISSUE_QUOTE=$(grep -oiE ".*❌.*emojis? found.*|.*❌.*ai-generated.*|.*CRITICAL.*emoji.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "AI-Generated Content Detected" \
+              "$ISSUE_QUOTE" \
+              "Your PROMPT.md file contains emojis or patterns that indicate it was written by AI." \
+              "PROMPT.md files must be human-written. AI-generated prompts reduce training data quality." \
+              "  1. Open lib/PROMPT.md
+            2. Remove ALL emojis (🚀, 💡, ✨, 📝, etc.)
+            3. Remove AI-style formatting like:
+               - Excessive bullet points
+               - \"Let's\" or \"I'll help you\" phrases
+               - Overly structured headings
+            4. Rewrite in natural, conversational language
+            5. Push your changes"
+
+          # -------------------------------------------------------------------
+          # CHECK 4: Platform/language mismatch
+          # -------------------------------------------------------------------
+          elif grep -qiE "❌.*platform.*mismatch|❌.*language.*mismatch|platform.*language.*invalid" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="platform_mismatch"
+            ISSUE_QUOTE=$(grep -oiE ".*❌.*platform.*|.*❌.*language.*|.*mismatch.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "Platform/Language Mismatch" \
+              "$ISSUE_QUOTE" \
+              "Your metadata.json says one thing, but your code is written differently." \
+              "The platform and language in metadata.json must match your actual code files." \
+              "  1. Check your metadata.json platform and language fields
+            2. Verify they match your code:
+               - CDK TypeScript: platform=cdk, language=ts
+               - Terraform: platform=tf, language=hcl
+               - CloudFormation: platform=cfn, language=yaml
+               - Pulumi Python: platform=pulumi, language=py
+            3. Update metadata.json to match your actual code
+            4. Push your changes"
+
+          # -------------------------------------------------------------------
+          # CHECK 5: BLOCKED status
+          # -------------------------------------------------------------------
+          elif grep -q "BLOCKED:" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="blocked"
+            ISSUE_QUOTE=$(grep -o "BLOCKED:.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "PR Blocked" \
+              "$ISSUE_QUOTE" \
+              "Claude has blocked this PR due to issues that must be resolved." \
+              "Blocked PRs cannot proceed until the specified issues are fixed." \
+              "  1. Read Claude's full review comment above
+            2. Address each issue mentioned after 'BLOCKED:'
+            3. Push your fixes"
+
+          # -------------------------------------------------------------------
+          # CHECK 6: Missing required files
+          # -------------------------------------------------------------------
+          elif grep -qiE "❌.*missing|❌.*not found|❌.*required.*file" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="missing_files"
+            ISSUE_QUOTE=$(grep -oiE ".*❌.*missing.*|.*❌.*not found.*|.*❌.*required.*file.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "Missing Required Files" \
+              "$ISSUE_QUOTE" \
+              "Your PR is missing one or more required files." \
+              "Certain files are required for the review process to complete." \
+              "  1. Check which files are missing from Claude's review
+            2. Required files typically include:
+               - lib/PROMPT.md (the task prompt)
+               - lib/MODEL_RESPONSE.md (AI model's response)
+               - lib/IDEAL_RESPONSE.md (expected correct response)
+               - lib/MODEL_FAILURES.md (analysis of model errors)
+            3. Create the missing files in the lib/ directory
+            4. Push your changes"
+
+          # -------------------------------------------------------------------
+          # CHECK 7: SCORE:0 (Claude's deliberate failure signal)
+          # -------------------------------------------------------------------
+          elif grep -qE "^SCORE:0$|SCORE:0[^0-9]" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="score_zero"
+            # Try to find the reason Claude gave score 0
+            ISSUE_QUOTE=$(grep -B5 "SCORE:0" latest_claude_comment.txt | grep -iE "issue|error|fail|problem|missing|invalid" | head -1 | cut -c1-150)
+            if [ -z "$ISSUE_QUOTE" ]; then
+              ISSUE_QUOTE="SCORE:0 - Claude found critical issues requiring fixes"
+            fi
+            
+            build_error_output \
+              "Review Score: 0/10" \
+              "$ISSUE_QUOTE" \
+              "Claude gave your PR a score of 0, indicating critical issues." \
+              "A score of 0 means the PR has fundamental problems that must be fixed." \
+              "  1. Read Claude's FULL review comment above carefully
+            2. Look for sections marked with ❌ or 'Issues'
+            3. Fix ALL identified problems
+            4. Push your changes for a new review"
+
+          # -------------------------------------------------------------------
+          # CHECK 8: Explicit CRITICAL marker
+          # -------------------------------------------------------------------
+          elif grep -qE "❌ CRITICAL:|❌.*CRITICAL|CRITICAL.*❌" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="critical_marker"
+            ISSUE_QUOTE=$(grep -oE ".*❌.*CRITICAL.*|.*CRITICAL.*❌.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "Critical Issue Found" \
+              "$ISSUE_QUOTE" \
+              "Claude marked a critical issue that blocks this PR." \
+              "Critical issues must be resolved before the PR can proceed." \
+              "  1. Read Claude's review comment above
+            2. Find the section marked CRITICAL
+            3. Follow Claude's instructions to fix the issue
+            4. Push your changes"
+
+          # -------------------------------------------------------------------
+          # CHECK 9: Claude explicitly requested failure
+          # -------------------------------------------------------------------
+          elif grep -q "Exit with code 1 to fail the job" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="explicit_failure"
+            ISSUE_QUOTE=$(grep -B3 "Exit with code 1" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "Review Failed" \
+              "$ISSUE_QUOTE" \
+              "Claude determined this PR should not proceed in its current state." \
+              "The review found issues that require your attention." \
+              "  1. Read Claude's full review comment above
+            2. Address all issues mentioned
+            3. Push your fixes"
+          fi
+
+          # -------------------------------------------------------------------
+          # POST RESULT
+          # -------------------------------------------------------------------
+          if [ "$CRITICAL_FOUND" = true ]; then
+            # Build user-friendly PR comment based on issue type
+            case "$ISSUE_TYPE" in
+              metadata_validation)
+                FIX_STEPS="1. Open \`metadata.json\` in your project root
+          2. Run the validation script: \`bash .claude/scripts/validate-metadata.sh metadata.json\`
+          3. Fix the errors shown by the script
+          4. Common fixes:
+             - Ensure \`platform\` is one of: cdk, cdktf, cfn, tf, pulumi, cicd, analysis
+             - Ensure \`language\` matches your platform
+             - Ensure \`subject_labels\` is an array: \`[\"Label Name\"]\`
+          5. Push your changes"
+                ;;
+              hardcoded_credentials)
+                FIX_STEPS="1. Find the file mentioned in Claude's review
+          2. Remove hardcoded credentials (passwords, API keys, AWS keys)
+          3. Replace with environment variables:
+             \`\`\`
+             // Before
+             const apiKey = \"sk-abc123...\";
+             
+             // After  
+             const apiKey = process.env.API_KEY;
+             \`\`\`
+          4. Or use AWS Secrets Manager for sensitive values
+          5. Push your changes"
+                ;;
+              ai_generated_content)
+                FIX_STEPS="1. Open \`lib/PROMPT.md\`
+          2. Remove ALL emojis (🚀, 💡, ✨, 📝, ✅, ❌, etc.)
+          3. Remove AI-style writing patterns
+          4. Rewrite in natural, human language
+          5. Push your changes"
+                ;;
+              platform_mismatch)
+                FIX_STEPS="1. Check your \`metadata.json\` platform and language
+          2. Verify they match your actual code:
+             - CDK + TypeScript → \`platform: cdk, language: ts\`
+             - Terraform → \`platform: tf, language: hcl\`
+             - CloudFormation → \`platform: cfn, language: yaml\`
+          3. Update metadata.json accordingly
+          4. Push your changes"
+                ;;
+              missing_files)
+                FIX_STEPS="1. Create missing files in the \`lib/\` directory:
+             - \`lib/PROMPT.md\` - The task prompt
+             - \`lib/MODEL_RESPONSE.md\` - AI model's response
+             - \`lib/IDEAL_RESPONSE.md\` - Expected correct response
+             - \`lib/MODEL_FAILURES.md\` - Analysis of model errors
+          2. Push your changes"
+                ;;
+              *)
+                FIX_STEPS="1. Read Claude's full review comment above
+          2. Address all issues marked with ❌
+          3. Push your fixes"
+                ;;
+            esac
+            
+            FAILURE_COMMENT="## ❌ Claude Review Failed
+
+          **What happened:** Claude's review found issues that need to be fixed before this PR can proceed.
+
+          **Issue found:**
+          > $ISSUE_QUOTE
+
+          ---
+
+          ### How to Fix
+
+          $FIX_STEPS
+
+          ---
+
+          📖 **Need more details?** Read Claude's full review comment above for specific information.
+
+          🔗 **CI Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            
+            gh pr comment ${{ github.event.pull_request.number }} --body "$FAILURE_COMMENT" || echo "⚠️ Failed to post failure comment"
+            
+            echo "critical_issues_found=true" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "✅ No critical issues found in Claude's review"
+            echo "critical_issues_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract Claude Quality Score from PR Comment
+        id: extract
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Fetching most recent Claude review comment..."
+
+          # Use the latest Claude comment file if it exists from previous step
+          # Otherwise, fetch and find the most recent Claude review comment
+          if [ -f "latest_claude_comment.txt" ] && [ -s "latest_claude_comment.txt" ]; then
+            echo "📝 Using cached latest Claude comment from previous step"
+            cp latest_claude_comment.txt claude_review.txt
+          else
+            echo "📝 Fetching Claude review comment from API..."
+            # Find the most recent Claude review comment (contains review markers)
+            CLAUDE_COMMENT=""
+            while IFS= read -r -d '' comment || [[ -n "$comment" ]]; do
+              if echo "$comment" | grep -qE "(metadata\.json Validation|Code Review Summary|Training Quality|SCORE:[0-9]+|## 📋)"; then
+                CLAUDE_COMMENT="$comment"
+                break
+              fi
+            done < <(gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+              --jq 'sort_by(.created_at) | reverse | .[] | .body + "\u0000"')
+            
+            if [ -z "$CLAUDE_COMMENT" ]; then
+              echo "⚠️ No Claude review comment found, using most recent comment"
+              CLAUDE_COMMENT=$(gh api \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+                --jq 'sort_by(.created_at) | reverse | .[0].body // empty')
+            fi
+            echo "$CLAUDE_COMMENT" > claude_review.txt
+          fi
+
+          echo "🍀 Searching for Claude quality score in review comment..."
+
+          # 1️⃣ STRICT: Look for exact SCORE:X format (required format)
+          # Must be SCORE: followed immediately by a number (no spaces)
+          SCORE=$(grep -Po 'SCORE:[0-9]+(\.[0-9]+)?' claude_review.txt | grep -Po '[0-9]+(\.[0-9]+)?' | tail -1)
+
+          if [ -n "$SCORE" ]; then
+            echo "✅ Found SCORE:$SCORE in strict format"
+          fi
+
+          # 2️⃣ FALLBACK: Check metadata.json training_quality (primary source)
+          if [ -z "$SCORE" ]; then
+            echo "⚠️ SCORE:X format not found in comment. Checking metadata.json..."
+            if [ -f "metadata.json" ]; then
+              SCORE=$(jq -r '.training_quality // empty' metadata.json 2>/dev/null || echo "")
+              if [ -n "$SCORE" ] && [[ "$SCORE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+                echo "✅ Found training_quality in metadata.json: $SCORE"
+              else
+                echo "❌ metadata.json missing valid numeric training_quality"
+                SCORE=""
+              fi
+            else
+              echo "❌ metadata.json not found"
+            fi
+          fi
+
+          # 3️⃣ FAIL if no score found from either source
+          if [ -z "$SCORE" ]; then
+            echo "::error::No valid SCORE:X found in review comment and metadata.json missing training_quality"
+            echo ""
+            echo "❌ ERROR: Could not find any quality score"
+            echo ""
+            echo "Claude MUST either:"
+            echo "  1. End the PR comment with SCORE:X (e.g., SCORE:8)"
+            echo "  2. Update metadata.json with training_quality field"
+            echo ""
+            echo "Please check the PR comments to verify Claude completed the review properly."
+            exit 1
+          fi
+
+          SCORE_INT=$(echo "$SCORE" | awk '{print int($1)}')
+
+          if (( $(echo "$SCORE_INT > 10" | bc -l) )); then
+            echo "⚠️ Invalid high score ($SCORE) → set to 0"
+            SCORE=0
+          elif (( $(echo "$SCORE_INT < 0" | bc -l) )); then
+            echo "⚠️ Invalid negative score ($SCORE) → set to 0"
+            SCORE=0
+          fi
+
+          echo "✅ Final Claude quality score: $SCORE"
+          echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
+
+      - name: Verify Claude Ran Validation Script
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Verifying Claude executed mandatory validation checks in most recent review..."
+
+          # Use the cached Claude review comment from previous steps
+          COMMENT_FILE=""
+          if [ -f "claude_review.txt" ] && [ -s "claude_review.txt" ]; then
+            COMMENT_FILE="claude_review.txt"
+          elif [ -f "latest_claude_comment.txt" ] && [ -s "latest_claude_comment.txt" ]; then
+            COMMENT_FILE="latest_claude_comment.txt"
+          fi
+
+          if [ -z "$COMMENT_FILE" ]; then
+            echo "⚠️ No cached Claude comment found, fetching from API..."
+            gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+              --jq 'sort_by(.created_at) | reverse | .[0].body // empty' > latest_comment.txt
+            COMMENT_FILE="latest_comment.txt"
+          fi
+
+          # Check for evidence of validation script execution in the most recent Claude comment
+          VALIDATION_EVIDENCE=false
+
+          if grep -q "validate-metadata.sh" "$COMMENT_FILE" || \
+             grep -q "Metadata validation PASSED" "$COMMENT_FILE" || \
+             grep -q "Metadata validation FAILED" "$COMMENT_FILE" || \
+             grep -q "Validating metadata.json" "$COMMENT_FILE"; then
+            echo "✅ Evidence found that Claude ran metadata validation"
+            VALIDATION_EVIDENCE=true
+          fi
+
+          if [ "$VALIDATION_EVIDENCE" = false ]; then
+            echo "⚠️ WARNING: No clear evidence Claude ran metadata validation script"
+            echo "⚠️ Review comment may be incomplete or validation was skipped"
+            echo ""
+            echo "Expected to find one of:"
+            echo "  - 'validate-metadata.sh' command execution"
+            echo "  - 'Metadata validation PASSED' or 'FAILED'"
+            echo "  - 'Validating metadata.json' output"
+            echo ""
+            echo "This is a warning only - review will continue based on score."
+            echo "However, please verify the review is complete by checking PR comments."
+          else
+            echo "✅ Validation script execution confirmed"
+          fi
+
+      - name: Enforce Quality Threshold
+        id: quality_gate
+        run: |
+          SCORE=${{ steps.extract.outputs.quality_score }}
+          echo "Evaluating Claude quality gate..."
+          if (( SCORE < 8 )); then
+            echo "❌ Quality score ($SCORE) below threshold (8)."
+            exit 1
+          else
+            echo "✅ Quality score ($SCORE) meets or exceeds threshold (8)."
+          fi
 
       - name: Upload updated metadata.json
         uses: actions/upload-artifact@v4
@@ -379,26 +1461,67 @@ jobs:
           name: updated-metadata
           path: metadata.json
           if-no-files-found: warn
+    outputs:
+      quality_score: ${{ steps.extract.outputs.quality_score }}
 
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, integration-tests-live, claude-code-action]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
-    environment: stage
-
+    needs:
+      [
+        detect-metadata,
+        integration-tests-live,
+        claude-code-action,
+        analysis,
+        cicd-pipeline-optimization,
+      ]
+    # Cleanup runs when:
+    # 1. Claude review succeeded
+    # 2. For Analysis/CI/CD tasks: int-tests can be success OR skipped
+    # 3. For normal infra tasks: int-tests MUST be success (not skipped)
+    if: |
+      always() && !cancelled() &&
+      needs.claude-code-action.result == 'success' &&
+      (
+        (needs.integration-tests-live.result == 'success') ||
+        (needs.integration-tests-live.result == 'skipped' && 
+         (contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) ||
+          contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)))
+      ) &&
+      ((github.event_name == 'pull_request' && github.event.action != 'closed') || 
+       (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) &&
+      !contains(github.event.head_commit.message, '[skip-jobs]')
+    environment: qa
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check if cleanup is needed
+        id: check-cleanup
+        run: |
+          SUBJECT_LABELS='${{ needs.detect-metadata.outputs.subject_labels }}'
+          ANALYSIS_LABEL='${{ needs.detect-metadata.outputs.analysis_subject_label }}'
+          CICD_LABEL='${{ needs.detect-metadata.outputs.cicd_pipeline_subject_label }}'
+
+          if echo "$SUBJECT_LABELS" | grep -q "$ANALYSIS_LABEL" || echo "$SUBJECT_LABELS" | grep -q "$CICD_LABEL"; then
+            echo "needs_cleanup=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Analysis or CI/CD Pipeline task - no infrastructure to cleanup"
+          else
+            echo "needs_cleanup=true" >> $GITHUB_OUTPUT
+            echo "✅ Infrastructure task - cleanup needed"
+          fi
+
       - name: Setup Environment
+        if: steps.check-cleanup.outputs.needs_cleanup == 'true'
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'false'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
+        if: steps.check-cleanup.outputs.needs_cleanup == 'true'
         uses: ./.github/actions/configure-aws
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -406,21 +1529,43 @@ jobs:
           aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Destroy Resources (cleanup any leftover resources)
+        if: steps.check-cleanup.outputs.needs_cleanup == 'true'
         run: ./scripts/destroy.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TF_VAR_environmentSuffix: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+      - name: Cleanup Complete
+        run: |
+          if [ "${{ steps.check-cleanup.outputs.needs_cleanup }}" == "true" ]; then
+            echo "✅ Infrastructure cleanup completed"
+          else
+            echo "✅ No cleanup needed - proceeding to archive"
+          fi
+  debug-claude-outputs:
+    name: Debug Claude outputs
+    runs-on: ubuntu-24.04
+    needs: [claude-code-action]
+    if: always()
+    steps:
+      - name: Dump needs info
+        run: |
+          echo "needs.claude-code-action.result=${{ needs.claude-code-action.result }}"
+          echo "needs.claude-code-action.outputs.quality_score='${{ needs.claude-code-action.outputs.quality_score }}'"
+          echo "---- full needs json ----"
+          echo '${{ toJson(needs) }}'
+
   archive-folders:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-24.04
     needs: [detect-metadata, cleanup, claude-code-action]
-    environment: release
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    environment: stage
+    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.claude-code-action.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
 
@@ -434,6 +1579,7 @@ jobs:
           ref: ${{ github.head_ref }}
 
       - name: Download coverage reports
+        if: ${{ !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
         uses: actions/download-artifact@v4
         with:
           name: coverage-reports
@@ -444,6 +1590,20 @@ jobs:
         with:
           name: updated-metadata
           path: .
+
+      - name: Download analysis results
+        if: ${{ contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) }}
+        uses: actions/download-artifact@v4
+        with:
+          name: analysis-results
+          path: lib/
+
+      - name: Download CI/CD Pipeline configuration
+        if: ${{ contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+        uses: actions/download-artifact@v4
+        with:
+          name: cicd-pipeline-config
+          path: lib/
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -469,7 +1629,11 @@ jobs:
           echo "Commit author: $COMMIT_AUTHOR"
 
           # Extract coverage percentages based on language
-          if [ "$LANGUAGE" = "py" ]; then
+          if [ "$LANGUAGE" = "yml" ]; then
+            echo "CI/CD Pipeline task - no unit test coverage required"
+            LINES_COVERAGE=100
+            BRANCHES_COVERAGE=100
+          elif [ "$LANGUAGE" = "py" ]; then
             echo "Extracting Python coverage from cov.json..."
             if [ -f "cov.json" ]; then
               LINES_COVERAGE=$(jq -r '.totals.percent_covered' cov.json)
@@ -485,6 +1649,16 @@ jobs:
               fi
             else
               echo "Warning: cov.json not found, setting default coverage values"
+              LINES_COVERAGE=100
+              BRANCHES_COVERAGE=100
+            fi
+          elif [ "$LANGUAGE" = "go" ]; then
+            echo "Extracting Go coverage from coverage-summary.json..."
+            if [ -f "coverage/coverage-summary.json" ]; then
+              LINES_COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+              BRANCHES_COVERAGE=$(jq -r '.total.branches.pct' coverage/coverage-summary.json)
+            else
+              echo "Warning: Go coverage-summary.json not found, setting default coverage values"
               LINES_COVERAGE=100
               BRANCHES_COVERAGE=100
             fi
@@ -544,6 +1718,7 @@ jobs:
             "cdk.json"
             "metadata.json"
             "tap.py"
+            "tap.go"
             "setup.js"
             "cdktf.json"
             "Pulumi.yaml"
@@ -563,8 +1738,25 @@ jobs:
           if git diff --quiet && git diff --cached --quiet; then
             echo "No changes to commit - no folders found to archive"
           else
+            # Extract metadata for commit message
+            METADATA_FILE="$ARCHIVE_DIR/metadata.json"
+            METADATA_PLATFORM=$(jq -r '.platform' "$METADATA_FILE")
+            METADATA_PO_ID=$(jq -r '.po_id' "$METADATA_FILE")
+            METADATA_SUBTASK=$(jq -r '.subtask | ascii_downcase' "$METADATA_FILE")
+            METADATA_SUBJECT_LABELS=$(jq -r '.subject_labels | join(", ")' "$METADATA_FILE")
+
+            METADATA_AUTHOR=$(jq -r '.author' "$METADATA_FILE")
+
+            # Truncate subject_labels to 100 characters if needed
+            if [ ${#METADATA_SUBJECT_LABELS} -gt 100 ]; then
+              METADATA_SUBJECT_LABELS="${METADATA_SUBJECT_LABELS:0:97}..." # 97 chars + "..." = 100
+            fi
+
+            COMMIT_SUBJECT="feat(${METADATA_PLATFORM}): ${METADATA_PO_ID} ${METADATA_SUBTASK}"
+            COMMIT_BODY="${METADATA_SUBJECT_LABELS}\nAuthor: ${METADATA_AUTHOR}"
+
             git add -A
-            git commit -m "Archive build artifacts for PR ${{ github.event.number }} [skip-jobs]"
+            git commit -m "${COMMIT_SUBJECT}" -m "${COMMIT_BODY}" -m "[skip-jobs]"
             git push origin HEAD
             echo "Archive committed to current branch"
           fi
@@ -660,7 +1852,7 @@ jobs:
     runs-on: ubuntu-24.04
     # This job should run regardless of the [skip-jobs] tag since it's for cleanup
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && !github.event.pull_request.merged
-    environment: qa
+    environment: release
 
     steps:
       - name: Checkout code
@@ -688,31 +1880,32 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
-  # TODO: For future use
-  # ? Need fine-grained Personal Access Token from repo owner
-  # semantic-release:
-  #   name: Semantic Release
-  #   runs-on: ubuntu-24.04
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   permissions:
-  #     contents: write
-  #     issues: write
-  #     pull-requests: write
+  semantic-release:
+    name: Semantic Release
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # permissions:
+    #   contents: write
+    #   issues: write
+    #   pull-requests: write
+    concurrency:
+      group: semantic_release_pipeline
+      cancel-in-progress: true
 
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #       with:
-  #         token: ${{ secrets.GITHUB_TOKEN }}
-  #         fetch-depth: 0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-  #     - name: Setup Environment
-  #       uses: ./.github/actions/setup-environment
-  #       with:
-  #         node-version: ${{ env.NODE_VERSION }}
-  #         download-artifacts: 'false'
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'false'
 
-  #     - name: Run semantic-release
-  #       run: npm run release
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
+      - name: Run semantic-release
+        run: npm run release
+        env:
+          GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_PAT }}

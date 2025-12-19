@@ -1,0 +1,10 @@
+{
+  "name": "payment-processor",
+  "version": "1.0.0",
+  "description": "Payment processor Lambda function",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.645.0",
+    "@aws-sdk/lib-dynamodb": "^3.645.0"
+  }
+}

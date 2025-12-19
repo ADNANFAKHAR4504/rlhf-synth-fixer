@@ -1,0 +1,29 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "410171",
+  "team": "4",
+  "startedAt": "2025-10-22T10:52:22.067Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "A legal firm needs to store 10,000 daily documents with versioning and audit compliance. The system must enforce retention policies and provide monitoring",
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudTrail",
+    "SNS",
+    "CloudWatch"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
+}

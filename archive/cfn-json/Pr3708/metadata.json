@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "35031627",
+  "team": "3",
+  "startedAt": "2025-10-07T05:11:28.583Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "S3",
+    "CloudFront",
+    "Lambda",
+    "API Gateway",
+    "EventBridge",
+    "CloudWatch Logs",
+    "IAM",
+    "Comprehend",
+    "Personalize"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

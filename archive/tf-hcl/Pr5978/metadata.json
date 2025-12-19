@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "5954",
+  "team": "5",
+  "startedAt": "2025-11-06T13:12:05.338Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AWS Transit Gateway",
+    "VPC",
+    "Route 53",
+    "S3",
+    "Systems Manager",
+    "EC2 (NAT instances)",
+    "CloudWatch (Flow Logs)",
+    "IAM",
+    "Lambda"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}

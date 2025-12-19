@@ -1,0 +1,33 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-17T05:09:16+05:30",
+  "subtask": "Application Deployment",
+  "background": "A European manufacturing company needs to modernize their factory monitoring system. They have hundreds of IoT sensors collecting temperature, pressure, and equipment status data. The data needs to be processed in real-time for anomaly detection and stored for compliance purposes.",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "3970964771",
+  "aws_services": [
+    "Kinesis Data Streams",
+    "ECS Fargate",
+    "ElastiCache Redis",
+    "RDS PostgreSQL",
+    "Secrets Manager",
+    "VPC",
+    "CloudWatch Logs"
+  ],
+  "region": "eu-west-2",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

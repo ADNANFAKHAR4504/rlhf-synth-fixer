@@ -1,0 +1,3565 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Real Estate Platform Infrastructure - Production Environment",
+    "Metadata": {
+        "Template": {
+            "Version": "1.0.0",
+            "Author": "Real Estate Platform Team",
+            "Purpose": "Complete infrastructure setup for production real estate platform",
+            "LastModified": "2025-10-08"
+        },
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VpcCIDR"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Database Configuration"
+                    },
+                    "Parameters": [
+                        "DBInstanceClass",
+                        "DBName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Application Configuration"
+                    },
+                    "Parameters": [
+                        "ECSServiceDesiredCount"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Search and Cache Configuration"
+                    },
+                    "Parameters": [
+                        "OpenSearchInstanceType",
+                        "ElastiCacheNodeType"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "DynamoDB Configuration"
+                    },
+                    "Parameters": [
+                        "DynamoDBReadCapacity",
+                        "DynamoDBWriteCapacity"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "EnvironmentName": {
+                    "default": "Environment Name"
+                },
+                "VpcCIDR": {
+                    "default": "VPC CIDR Block"
+                },
+                "OpenSearchInstanceType": {
+                    "default": "OpenSearch Instance Type"
+                },
+                "ElastiCacheNodeType": {
+                    "default": "ElastiCache Node Type"
+                },
+                "DBInstanceClass": {
+                    "default": "Database Instance Class"
+                },
+                "DBName": {
+                    "default": "Database Name"
+                },
+                "ECSServiceDesiredCount": {
+                    "default": "ECS Service Desired Count"
+                },
+                "DynamoDBReadCapacity": {
+                    "default": "DynamoDB Read Capacity Units"
+                },
+                "DynamoDBWriteCapacity": {
+                    "default": "DynamoDB Write Capacity Units"
+                }
+            }
+        },
+        "Resources": {
+            "Description": "This template creates a complete real estate platform infrastructure including:\n- VPC with public, private, and database subnets across 2 AZs\n- Application Load Balancer with SSL termination\n- ECS Fargate cluster for containerized applications\n- Aurora MySQL database cluster\n- ElastiCache Redis cluster for caching\n- OpenSearch domain for search functionality\n- DynamoDB tables for user profiles and appointments\n- S3 bucket for file storage\n- CloudWatch monitoring and alerting\n- WAF for application protection\n"
+        },
+        "Deployment": {
+            "Prerequisites": [
+                "SSL certificate must be available in AWS Certificate Manager",
+                "Docker image must be available in ECR repository",
+                "Proper IAM permissions for CloudFormation deployment"
+            ],
+            "EstimatedCost": "Approximately $200-400/month depending on usage",
+            "DeploymentTime": "15-20 minutes",
+            "PostDeployment": [
+                "Update DNS records to point to ALB endpoint",
+                "Configure application environment variables",
+                "Test all endpoints and functionality"
+            ]
+        },
+        "Security": {
+            "Compliance": "Follows AWS Well-Architected Framework security pillar",
+            "DataEncryption": "All data encrypted at rest and in transit",
+            "NetworkSecurity": "Multi-tier architecture with proper security groups",
+            "Monitoring": "CloudWatch alarms and SNS notifications configured"
+        }
+    },
+    "Parameters": {
+        "EnvironmentName": {
+            "Description": "Environment name (e.g., prod, dev, staging)",
+            "Type": "String",
+            "Default": "prod"
+        },
+        "VpcCIDR": {
+            "Description": "CIDR block for the VPC",
+            "Type": "String",
+            "Default": "10.45.0.0/16"
+        },
+        "OpenSearchInstanceType": {
+            "Type": "String",
+            "Default": "t3.small.search",
+            "Description": "OpenSearch instance type"
+        },
+        "ElastiCacheNodeType": {
+            "Type": "String",
+            "Default": "cache.t3.micro",
+            "Description": "ElastiCache node type"
+        },
+        "DBInstanceClass": {
+            "Description": "Database instance class",
+            "Type": "String",
+            "Default": "db.t3.medium"
+        },
+        "DBName": {
+            "Description": "Aurora database name",
+            "Type": "String",
+            "Default": "realestate"
+        },
+        "ECSServiceDesiredCount": {
+            "Type": "Number",
+            "Default": 2,
+            "Description": "Desired number of ECS tasks"
+        },
+        "DynamoDBReadCapacity": {
+            "Type": "Number",
+            "Default": 5,
+            "Description": "Read capacity units for DynamoDB tables"
+        },
+        "DynamoDBWriteCapacity": {
+            "Type": "Number",
+            "Default": 5,
+            "Description": "Write capacity units for DynamoDB tables"
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCIDR"
+                },
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-vpc"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-igw"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-public-subnet-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-public-subnet-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-private-subnet-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        3,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-private-subnet-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        4,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-db-subnet-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        5,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-db-subnet-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway1EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NatGateway2EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NatGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway1EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-nat-gw-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway2EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-nat-gw-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-public-rt"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                }
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-private-rt-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute1": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway1"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-private-rt-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute2": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway2"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                }
+            }
+        },
+        "DatabaseRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-db-rt-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "DatabaseRouteTable1"
+                },
+                "SubnetId": {
+                    "Ref": "DatabaseSubnet1"
+                }
+            }
+        },
+        "DatabaseRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-db-rt-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "DatabaseRouteTable2"
+                },
+                "SubnetId": {
+                    "Ref": "DatabaseSubnet2"
+                }
+            }
+        },
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "ALB Security Group",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-alb-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebAppSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "WebApp Security Group",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ALBSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-webapp-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Database Security Group",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebAppSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-db-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "ElastiCacheSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "ElastiCache Security Group",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 6379,
+                        "ToPort": 6379,
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebAppSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-elasticache-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "OpenSearchSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "OpenSearch Security Group",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebAppSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-opensearch-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Type": "application",
+                "Scheme": "internet-facing",
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-alb"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBHttpsListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "WebAppTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "WebAppTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "Port": 80,
+                "Protocol": "HTTP",
+                "TargetType": "ip",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "TargetGroupAttributes": [
+                    {
+                        "Key": "deregistration_delay.timeout_seconds",
+                        "Value": 60
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-webapp-tg"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebACL": {
+            "Type": "AWS::WAFv2::WebACL",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-web-acl"
+                },
+                "Scope": "REGIONAL",
+                "DefaultAction": {
+                    "Allow": {}
+                },
+                "VisibilityConfig": {
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": {
+                        "Fn::Sub": "${EnvironmentName}-web-acl"
+                    },
+                    "SampledRequestsEnabled": true
+                },
+                "Rules": [
+                    {
+                        "Name": "AWSManagedRulesCommonRuleSet",
+                        "Priority": 0,
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "VisibilityConfig": {
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "AWSManagedRulesCommonRuleSet",
+                            "SampledRequestsEnabled": true
+                        },
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesCommonRuleSet"
+                            }
+                        }
+                    },
+                    {
+                        "Name": "RateLimitRule",
+                        "Priority": 1,
+                        "Action": {
+                            "Block": {}
+                        },
+                        "VisibilityConfig": {
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "RateLimitRule",
+                            "SampledRequestsEnabled": true
+                        },
+                        "Statement": {
+                            "RateBasedStatement": {
+                                "Limit": 1000,
+                                "AggregateKeyType": "IP"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        "WebACLAssociation": {
+            "Type": "AWS::WAFv2::WebACLAssociation",
+            "Properties": {
+                "ResourceArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "WebACLArn": {
+                    "Fn::GetAtt": [
+                        "WebACL",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "ECSCluster": {
+            "Type": "AWS::ECS::Cluster",
+            "Properties": {
+                "ClusterName": {
+                    "Fn::Sub": "${EnvironmentName}-cluster"
+                },
+                "ClusterSettings": [
+                    {
+                        "Name": "containerInsights",
+                        "Value": "enabled"
+                    }
+                ]
+            }
+        },
+        "ECSTaskExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ]
+            }
+        },
+        "ECSTaskRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+                    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+                ]
+            }
+        },
+        "WebAppTaskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Properties": {
+                "Family": {
+                    "Fn::Sub": "${EnvironmentName}-webapp"
+                },
+                "Cpu": "1024",
+                "Memory": "2048",
+                "NetworkMode": "awsvpc",
+                "RequiresCompatibilities": [
+                    "FARGATE"
+                ],
+                "ExecutionRoleArn": {
+                    "Fn::GetAtt": [
+                        "ECSTaskExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "TaskRoleArn": {
+                    "Fn::GetAtt": [
+                        "ECSTaskRole",
+                        "Arn"
+                    ]
+                },
+                "ContainerDefinitions": [
+                    {
+                        "Name": "webapp",
+                        "Image": "nginx:latest",
+                        "Essential": true,
+                        "PortMappings": [
+                            {
+                                "ContainerPort": 80
+                            }
+                        ],
+                        "LogConfiguration": {
+                            "LogDriver": "awslogs",
+                            "Options": {
+                                "awslogs-group": {
+                                    "Ref": "WebAppLogGroup"
+                                },
+                                "awslogs-region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "awslogs-stream-prefix": "webapp"
+                            }
+                        },
+                        "Environment": [
+                            {
+                                "Name": "DB_SECRET_ARN",
+                                "Value": {
+                                    "Fn::GetAtt": [
+                                        "AuroraDBCluster",
+                                        "MasterUserSecret.SecretArn"
+                                    ]
+                                }
+                            },
+                            {
+                                "Name": "DB_HOST",
+                                "Value": {
+                                    "Fn::GetAtt": [
+                                        "AuroraDBCluster",
+                                        "Endpoint.Address"
+                                    ]
+                                }
+                            },
+                            {
+                                "Name": "DB_NAME",
+                                "Value": {
+                                    "Ref": "DBName"
+                                }
+                            },
+                            {
+                                "Name": "REDIS_HOST",
+                                "Value": {
+                                    "Fn::GetAtt": [
+                                        "ElastiCacheCluster",
+                                        "RedisEndpoint.Address"
+                                    ]
+                                }
+                            },
+                            {
+                                "Name": "OPENSEARCH_ENDPOINT",
+                                "Value": {
+                                    "Fn::GetAtt": [
+                                        "OpenSearchDomain",
+                                        "DomainEndpoint"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "WebAppService": {
+            "Type": "AWS::ECS::Service",
+            "DependsOn": [
+                "ALBHttpsListener"
+            ],
+            "Properties": {
+                "ServiceName": {
+                    "Fn::Sub": "${EnvironmentName}-webapp"
+                },
+                "Cluster": {
+                    "Ref": "ECSCluster"
+                },
+                "TaskDefinition": {
+                    "Ref": "WebAppTaskDefinition"
+                },
+                "DesiredCount": {
+                    "Ref": "ECSServiceDesiredCount"
+                },
+                "LaunchType": "FARGATE",
+                "DeploymentConfiguration": {
+                    "MaximumPercent": 200,
+                    "MinimumHealthyPercent": 75
+                },
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "AssignPublicIp": "DISABLED",
+                        "Subnets": [
+                            {
+                                "Ref": "PrivateSubnet1"
+                            },
+                            {
+                                "Ref": "PrivateSubnet2"
+                            }
+                        ],
+                        "SecurityGroups": [
+                            {
+                                "Ref": "WebAppSecurityGroup"
+                            }
+                        ]
+                    }
+                },
+                "LoadBalancers": [
+                    {
+                        "ContainerName": "webapp",
+                        "ContainerPort": 80,
+                        "TargetGroupArn": {
+                            "Ref": "WebAppTargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebAppAutoScalingTarget": {
+            "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+            "Properties": {
+                "MaxCapacity": 10,
+                "MinCapacity": 2,
+                "ResourceId": {
+                    "Fn::Sub": "service/${ECSCluster}/${WebAppService.Name}"
+                },
+                "ScalableDimension": "ecs:service:DesiredCount",
+                "ServiceNamespace": "ecs",
+                "RoleARN": {
+                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
+                }
+            }
+        },
+        "WebAppAutoScalingPolicy": {
+            "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "${EnvironmentName}-webapp-cpu-tracking"
+                },
+                "PolicyType": "TargetTrackingScaling",
+                "ScalingTargetId": {
+                    "Ref": "WebAppAutoScalingTarget"
+                },
+                "TargetTrackingScalingPolicyConfiguration": {
+                    "PredefinedMetricSpecification": {
+                        "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
+                    },
+                    "TargetValue": 70.0,
+                    "ScaleInCooldown": 300,
+                    "ScaleOutCooldown": 60
+                }
+            }
+        },
+        "WebAppLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ecs/${EnvironmentName}-webapp"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for Aurora DB",
+                "SubnetIds": [
+                    {
+                        "Ref": "DatabaseSubnet1"
+                    },
+                    {
+                        "Ref": "DatabaseSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-db-subnet-group"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseAccessPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "DatabaseSecretAccess",
+                "Roles": [
+                    {
+                        "Ref": "ECSTaskRole"
+                    },
+                    {
+                        "Ref": "LambdaExecutionRole"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "secretsmanager:GetSecretValue",
+                                "secretsmanager:DescribeSecret"
+                            ],
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "AuroraDBCluster",
+                                    "MasterUserSecret.SecretArn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "AuroraDBCluster": {
+            "Type": "AWS::RDS::DBCluster",
+            "Properties": {
+                "Engine": "aurora-mysql",
+                "EngineMode": "provisioned",
+                "EngineVersion": "8.0.mysql_aurora.3.04.0",
+                "DatabaseName": {
+                    "Ref": "DBName"
+                },
+                "MasterUsername": "dbAdmin",
+                "ManageMasterUserPassword": true,
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "VpcSecurityGroupIds": [
+                    {
+                        "Ref": "DatabaseSecurityGroup"
+                    }
+                ],
+                "BackupRetentionPeriod": 7,
+                "PreferredBackupWindow": "02:00-03:00",
+                "PreferredMaintenanceWindow": "mon:03:00-mon:04:00",
+                "StorageEncrypted": true,
+                "EnableIAMDatabaseAuthentication": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-aurora-cluster"
+                        }
+                    }
+                ]
+            }
+        },
+        "AuroraPrimaryInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "Engine": "aurora-mysql",
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraDBCluster"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceClass"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "PubliclyAccessible": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-aurora-primary"
+                        }
+                    }
+                ]
+            }
+        },
+        "AuroraReadReplica": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "Engine": "aurora-mysql",
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraDBCluster"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceClass"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "PubliclyAccessible": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-aurora-replica"
+                        }
+                    }
+                ]
+            }
+        },
+        "UserFavoritesTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${EnvironmentName}-user-favorites"
+                },
+                "BillingMode": "PROVISIONED",
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": {
+                        "Ref": "DynamoDBReadCapacity"
+                    },
+                    "WriteCapacityUnits": {
+                        "Ref": "DynamoDBWriteCapacity"
+                    }
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "userId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "propertyId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "createdAt",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "userId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "propertyId",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "CreatedAtIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "userId",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "createdAt",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": {
+                                "Ref": "DynamoDBReadCapacity"
+                            },
+                            "WriteCapacityUnits": {
+                                "Ref": "DynamoDBWriteCapacity"
+                            }
+                        }
+                    }
+                ],
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-user-favorites-table"
+                        }
+                    }
+                ]
+            }
+        },
+        "SearchHistoryTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${EnvironmentName}-search-history"
+                },
+                "BillingMode": "PROVISIONED",
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": {
+                        "Ref": "DynamoDBReadCapacity"
+                    },
+                    "WriteCapacityUnits": {
+                        "Ref": "DynamoDBWriteCapacity"
+                    }
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "userId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "searchTimestamp",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "userId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "searchTimestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-search-history-table"
+                        }
+                    }
+                ]
+            }
+        },
+        "ElastiCacheSubnetGroup": {
+            "Type": "AWS::ElastiCache::SubnetGroup",
+            "Properties": {
+                "Description": "Subnet Group for ElastiCache",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-elasticache-subnet-group"
+                        }
+                    }
+                ]
+            }
+        },
+        "ElastiCacheParameterGroup": {
+            "Type": "AWS::ElastiCache::ParameterGroup",
+            "Properties": {
+                "CacheParameterGroupFamily": "redis6.x",
+                "Description": "Parameter group for ElastiCache Redis",
+                "Properties": {
+                    "maxmemory-policy": "allkeys-lru"
+                }
+            }
+        },
+        "ElastiCacheCluster": {
+            "Type": "AWS::ElastiCache::CacheCluster",
+            "Properties": {
+                "AutoMinorVersionUpgrade": true,
+                "CacheNodeType": {
+                    "Ref": "ElastiCacheNodeType"
+                },
+                "CacheParameterGroupName": {
+                    "Ref": "ElastiCacheParameterGroup"
+                },
+                "CacheSubnetGroupName": {
+                    "Ref": "ElastiCacheSubnetGroup"
+                },
+                "Engine": "redis",
+                "EngineVersion": 6.2,
+                "NumCacheNodes": 1,
+                "Port": 6379,
+                "PreferredMaintenanceWindow": "sun:05:00-sun:06:00",
+                "VpcSecurityGroupIds": [
+                    {
+                        "Ref": "ElastiCacheSecurityGroup"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-elasticache"
+                        }
+                    }
+                ]
+            }
+        },
+        "OpenSearchSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-opensearch-credentials"
+                },
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"opensearch_admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\`"
+                }
+            }
+        },
+        "OpenSearchDomain": {
+            "Type": "AWS::OpenSearchService::Domain",
+            "Properties": {
+                "DomainName": {
+                    "Fn::Sub": "${EnvironmentName}-realestate"
+                },
+                "EngineVersion": "OpenSearch_1.3",
+                "ClusterConfig": {
+                    "InstanceType": {
+                        "Ref": "OpenSearchInstanceType"
+                    },
+                    "InstanceCount": 2,
+                    "ZoneAwarenessEnabled": true,
+                    "ZoneAwarenessConfig": {
+                        "AvailabilityZoneCount": 2
+                    }
+                },
+                "EBSOptions": {
+                    "EBSEnabled": true,
+                    "VolumeType": "gp3",
+                    "VolumeSize": 100,
+                    "Iops": 3000
+                },
+                "EncryptionAtRestOptions": {
+                    "Enabled": true
+                },
+                "NodeToNodeEncryptionOptions": {
+                    "Enabled": true
+                },
+                "DomainEndpointOptions": {
+                    "EnforceHTTPS": true,
+                    "TLSSecurityPolicy": "Policy-Min-TLS-1-2-2019-07"
+                },
+                "AdvancedSecurityOptions": {
+                    "Enabled": true,
+                    "InternalUserDatabaseEnabled": true,
+                    "MasterUserOptions": {
+                        "MasterUserName": {
+                            "Fn::Sub": "{{resolve:secretsmanager:${OpenSearchSecret}:SecretString:username}}"
+                        },
+                        "MasterUserPassword": {
+                            "Fn::Sub": "{{resolve:secretsmanager:${OpenSearchSecret}:SecretString:password}}"
+                        }
+                    }
+                },
+                "VPCOptions": {
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ],
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "OpenSearchSecurityGroup"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-opensearch"
+                        }
+                    }
+                ]
+            }
+        },
+        "PropertyImagesBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${EnvironmentName}-property-images-${AWS::AccountId}-${AWS::Region}"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "TransitionToStandardIA",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "CorsConfiguration": {
+                    "CorsRules": [
+                        {
+                            "AllowedHeaders": [
+                                "*"
+                            ],
+                            "AllowedMethods": [
+                                "GET"
+                            ],
+                            "AllowedOrigins": [
+                                "*"
+                            ],
+                            "MaxAge": 3000
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-property-images"
+                        }
+                    }
+                ]
+            }
+        },
+        "PropertyToursBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${EnvironmentName}-property-tours-${AWS::AccountId}-${AWS::Region}"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "TransitionToStandardIA",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-property-tours"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudFrontOriginAccessIdentity": {
+            "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+            "Properties": {
+                "CloudFrontOriginAccessIdentityConfig": {
+                    "Comment": {
+                        "Fn::Sub": "${EnvironmentName} OAI for property images and tours"
+                    }
+                }
+            }
+        },
+        "CloudFrontDistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+                "DistributionConfig": {
+                    "Origins": [
+                        {
+                            "DomainName": {
+                                "Fn::GetAtt": [
+                                    "PropertyImagesBucket",
+                                    "RegionalDomainName"
+                                ]
+                            },
+                            "Id": "PropertyImagesOrigin",
+                            "S3OriginConfig": {
+                                "OriginAccessIdentity": {
+                                    "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+                                }
+                            }
+                        },
+                        {
+                            "DomainName": {
+                                "Fn::GetAtt": [
+                                    "PropertyToursBucket",
+                                    "RegionalDomainName"
+                                ]
+                            },
+                            "Id": "PropertyToursOrigin",
+                            "S3OriginConfig": {
+                                "OriginAccessIdentity": {
+                                    "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+                                }
+                            }
+                        }
+                    ],
+                    "Enabled": true,
+                    "HttpVersion": "http2",
+                    "DefaultRootObject": "index.html",
+                    "PriceClass": "PriceClass_100",
+                    "ViewerCertificate": {
+                        "CloudFrontDefaultCertificate": true
+                    },
+                    "DefaultCacheBehavior": {
+                        "AllowedMethods": [
+                            "GET",
+                            "HEAD",
+                            "OPTIONS"
+                        ],
+                        "TargetOriginId": "PropertyImagesOrigin",
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+                        "OriginRequestPolicyId": "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf"
+                    },
+                    "CacheBehaviors": [
+                        {
+                            "PathPattern": "/tours/*",
+                            "AllowedMethods": [
+                                "GET",
+                                "HEAD",
+                                "OPTIONS"
+                            ],
+                            "TargetOriginId": "PropertyToursOrigin",
+                            "ViewerProtocolPolicy": "redirect-to-https",
+                            "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+                            "OriginRequestPolicyId": "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf",
+                            "TrustedKeyGroups": [
+                                {
+                                    "Ref": "CloudFrontKeyGroup"
+                                }
+                            ]
+                        }
+                    ],
+                    "Logging": {
+                        "Bucket": {
+                            "Fn::GetAtt": [
+                                "CloudFrontLogsBucket",
+                                "DomainName"
+                            ]
+                        },
+                        "Prefix": "cloudfront/"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-cloudfront"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudFrontLogsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudFrontLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudfront.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:PutObject",
+                                "s3:PutObjectAcl"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${CloudFrontLogsBucket}/CloudFront/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudfront.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${CloudFrontLogsBucket}"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudFrontLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${EnvironmentName}-cf-logs-${AWS::AccountId}-${AWS::Region}"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": false,
+                    "BlockPublicPolicy": false,
+                    "IgnorePublicAcls": false,
+                    "RestrictPublicBuckets": false
+                },
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerPreferred"
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "NotificationConfiguration": {},
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-cloudfront-logs"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "CloudFront Access Logs"
+                    }
+                ]
+            }
+        },
+        "CloudFrontPublicKey": {
+            "Type": "AWS::CloudFront::PublicKey",
+            "Properties": {
+                "PublicKeyConfig": {
+                    "CallerReference": {
+                        "Ref": "AWS::StackName"
+                    },
+                    "Name": {
+                        "Fn::Sub": "${EnvironmentName}-cf-public-key"
+                    },
+                    "EncodedKey": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0hGx0SsaZRN6JI4eDvVE\nvnzrNuWZzv9nXMkpN6cPJ9h7TspT22r32+2LtEcIUbDnheBvEuunZqCgTF6gZoGP\n/gSP7LI2XGC0qaIkRhjNBGlez+s95HrC0KkpgxDrou09b+J7poVRI6KAom/NjsgA\nXhOomD6FP2fPJZxY0fyg+nyy2jQYkd7TI5EheVpIE9p+peiFJ0yDGCkOi0vP730f\nb9egLm8q4NtZU0LiRa3UTSY4YmiOXQu3bP1j08w4/M66HdSyI+i98Wy/7YkFzd16\nDaVhynDn3zgzcQ+CJjQMz7YB+5BaKxPj2ZerlkCDwbnI0qV6TVTRXvJeNQxN8kgH\nBQIDAQAB\n-----END PUBLIC KEY-----"
+                }
+            }
+        },
+        "CloudFrontKeyGroup": {
+            "Type": "AWS::CloudFront::KeyGroup",
+            "Properties": {
+                "KeyGroupConfig": {
+                    "Items": [
+                        {
+                            "Ref": "CloudFrontPublicKey"
+                        }
+                    ],
+                    "Name": {
+                        "Fn::Sub": "${EnvironmentName}-cf-key-group"
+                    }
+                }
+            }
+        },
+        "PropertyImagesBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "PropertyImagesBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "CanonicalUser": {
+                                    "Fn::GetAtt": [
+                                        "CloudFrontOriginAccessIdentity",
+                                        "S3CanonicalUserId"
+                                    ]
+                                }
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "${PropertyImagesBucket.Arn}/*"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "PropertyToursBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "PropertyToursBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "CanonicalUser": {
+                                    "Fn::GetAtt": [
+                                        "CloudFrontOriginAccessIdentity",
+                                        "S3CanonicalUserId"
+                                    ]
+                                }
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "${PropertyToursBucket.Arn}/*"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+                    "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+                ]
+            }
+        },
+        "MortgageCalculatorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${EnvironmentName}-mortgage-calculator"
+                },
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "exports.handler = async (event) => {\n  // Simple mortgage calculator logic\n  const { principal, rate, years } = JSON.parse(event.body);\n  const monthlyRate = rate / 100 / 12;\n  const payments = years * 12;\n  const x = Math.pow(1 + monthlyRate, payments);\n  const monthly = (principal * x * monthlyRate) / (x - 1);\n  \n  return {\n    statusCode: 200,\n    headers: {\n      'Content-Type': 'application/json',\n      'Access-Control-Allow-Origin': '*'\n    },\n    body: JSON.stringify({\n      monthlyPayment: monthly.toFixed(2),\n      totalPayment: (monthly * payments).toFixed(2),\n      totalInterest: ((monthly * payments) - principal).toFixed(2)\n    })\n  };\n};\n"
+                },
+                "Runtime": "nodejs22.x",
+                "Timeout": 10,
+                "MemorySize": 128,
+                "Environment": {
+                    "Variables": {
+                        "STAGE": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-mortgage-calculator"
+                        }
+                    }
+                ]
+            }
+        },
+        "ImageProcessingFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${EnvironmentName}-image-processing"
+                },
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "const AWS = require('aws-sdk');\nconst s3 = new AWS.S3();\nconst rekognition = new AWS.Rekognition();\nconst dynamodb = new AWS.DynamoDB.DocumentClient();\n\nexports.handler = async (event) => {\n  for (const record of event.Records) {\n    const bucket = record.s3.bucket.name;\n    const key = decodeURIComponent(record.s3.object.key.replace(/\\+/g, ' '));\n    \n    // Call Rekognition to analyze image\n    const rekognitionParams = {\n      Image: {\n        S3Object: {\n          Bucket: bucket,\n          Name: key\n        }\n      },\n      MaxLabels: 10\n    };\n    \n    try {\n      const rekognitionResponse = await rekognition.detectLabels(rekognitionParams).promise();\n      \n      // Process and store metadata\n      const metadata = {\n        imageKey: key,\n        labels: rekognitionResponse.Labels.map(label => ({\n          name: label.Name,\n          confidence: label.Confidence\n        })),\n        processedAt: new Date().toISOString()\n      };\n      \n      // Store metadata in DynamoDB\n      await dynamodb.put({\n        TableName: process.env.METADATA_TABLE,\n        Item: metadata\n      }).promise();\n      \n      console.log(`Successfully processed ${key}`);\n    } catch (error) {\n      console.error(`Error processing ${key}: ${error.message}`);\n      throw error;\n    }\n  }\n};\n"
+                },
+                "Runtime": "nodejs22.x",
+                "Timeout": 30,
+                "MemorySize": 512,
+                "Environment": {
+                    "Variables": {
+                        "METADATA_TABLE": {
+                            "Fn::Sub": "${EnvironmentName}-image-metadata"
+                        },
+                        "STAGE": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-image-processing"
+                        }
+                    }
+                ]
+            }
+        },
+        "ImageMetadataTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${EnvironmentName}-image-metadata"
+                },
+                "BillingMode": "PROVISIONED",
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": {
+                        "Ref": "DynamoDBReadCapacity"
+                    },
+                    "WriteCapacityUnits": {
+                        "Ref": "DynamoDBWriteCapacity"
+                    }
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "imageKey",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "imageKey",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-image-metadata-table"
+                        }
+                    }
+                ]
+            }
+        },
+        "ImageProcessingPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "ImageProcessingFunction",
+                        "Arn"
+                    ]
+                },
+                "Principal": "s3.amazonaws.com",
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                },
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:s3:::${PropertyImagesBucket}"
+                }
+            }
+        },
+        "ApiGateway": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-realestate-api"
+                },
+                "Description": "API for Real Estate Platform",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-api-gateway"
+                        }
+                    }
+                ]
+            }
+        },
+        "MortgageCalculatorResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "ApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "mortgage-calculator"
+            }
+        },
+        "MortgageCalculatorMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ResourceId": {
+                    "Ref": "MortgageCalculatorResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MortgageCalculatorFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        },
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    }
+                ]
+            }
+        },
+        "MortgageCalculatorOptionsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ResourceId": {
+                    "Ref": "MortgageCalculatorResource"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "ResponseTemplates": {
+                                "application/json": "{}"
+                            }
+                        }
+                    ],
+                    "PassthroughBehavior": "WHEN_NO_MATCH",
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        },
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true,
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "MortgageCalculatorMethod",
+                "MortgageCalculatorOptionsMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentName"
+                }
+            }
+        },
+        "LambdaPermissionForApiGateway": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "MortgageCalculatorFunction",
+                        "Arn"
+                    ]
+                },
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*"
+                }
+            }
+        },
+        "UserPool": {
+            "Type": "AWS::Cognito::UserPool",
+            "Properties": {
+                "UserPoolName": {
+                    "Fn::Sub": "${EnvironmentName}-users"
+                },
+                "UsernameAttributes": [
+                    "email"
+                ],
+                "AutoVerifiedAttributes": [
+                    "email"
+                ],
+                "EmailVerificationMessage": "Your verification code is {####}",
+                "EmailVerificationSubject": "Your verification code",
+                "Policies": {
+                    "PasswordPolicy": {
+                        "MinimumLength": 8,
+                        "RequireLowercase": true,
+                        "RequireNumbers": true,
+                        "RequireSymbols": true,
+                        "RequireUppercase": true
+                    }
+                },
+                "Schema": [
+                    {
+                        "Name": "email",
+                        "AttributeDataType": "String",
+                        "Mutable": true,
+                        "Required": true
+                    },
+                    {
+                        "Name": "given_name",
+                        "AttributeDataType": "String",
+                        "Mutable": true,
+                        "Required": true
+                    },
+                    {
+                        "Name": "family_name",
+                        "AttributeDataType": "String",
+                        "Mutable": true,
+                        "Required": true
+                    }
+                ],
+                "MfaConfiguration": "OFF",
+                "AdminCreateUserConfig": {
+                    "AllowAdminCreateUserOnly": false
+                },
+                "UserPoolTags": {
+                    "Name": {
+                        "Fn::Sub": "${EnvironmentName}-user-pool"
+                    }
+                }
+            }
+        },
+        "UserPoolDomain": {
+            "Type": "AWS::Cognito::UserPoolDomain",
+            "Properties": {
+                "Domain": {
+                    "Fn::Sub": "${EnvironmentName}-realestate-${AWS::AccountId}"
+                },
+                "UserPoolId": {
+                    "Ref": "UserPool"
+                }
+            }
+        },
+        "UserPoolClient": {
+            "Type": "AWS::Cognito::UserPoolClient",
+            "Properties": {
+                "ClientName": {
+                    "Fn::Sub": "${EnvironmentName}-web-client"
+                },
+                "UserPoolId": {
+                    "Ref": "UserPool"
+                },
+                "ExplicitAuthFlows": [
+                    "ALLOW_USER_SRP_AUTH",
+                    "ALLOW_REFRESH_TOKEN_AUTH"
+                ],
+                "GenerateSecret": false,
+                "PreventUserExistenceErrors": "ENABLED",
+                "RefreshTokenValidity": 30,
+                "SupportedIdentityProviders": [
+                    "COGNITO"
+                ]
+            }
+        },
+        "IdentityPool": {
+            "Type": "AWS::Cognito::IdentityPool",
+            "Properties": {
+                "IdentityPoolName": {
+                    "Fn::Sub": "${EnvironmentName}IdentityPool"
+                },
+                "AllowUnauthenticatedIdentities": false,
+                "CognitoIdentityProviders": [
+                    {
+                        "ClientId": {
+                            "Ref": "UserPoolClient"
+                        },
+                        "ProviderName": {
+                            "Fn::GetAtt": [
+                                "UserPool",
+                                "ProviderName"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "IdentityPoolRoleAttachment": {
+            "Type": "AWS::Cognito::IdentityPoolRoleAttachment",
+            "Properties": {
+                "IdentityPoolId": {
+                    "Ref": "IdentityPool"
+                },
+                "Roles": {
+                    "authenticated": {
+                        "Fn::GetAtt": [
+                            "AuthenticatedRole",
+                            "Arn"
+                        ]
+                    },
+                    "unauthenticated": {
+                        "Fn::GetAtt": [
+                            "UnauthenticatedRole",
+                            "Arn"
+                        ]
+                    }
+                }
+            }
+        },
+        "AuthenticatedRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Federated": "cognito-identity.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRoleWithWebIdentity",
+                            "Condition": {
+                                "StringEquals": {
+                                    "cognito-identity.amazonaws.com:aud": {
+                                        "Ref": "IdentityPool"
+                                    }
+                                },
+                                "ForAnyValue:StringLike": {
+                                    "cognito-identity.amazonaws.com:amr": "authenticated"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "AuthenticatedPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "mobileanalytics:PutEvents",
+                                        "cognito-sync:*"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${PropertyImagesBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${PropertyToursBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "execute-api:Invoke"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "UnauthenticatedRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Federated": "cognito-identity.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRoleWithWebIdentity",
+                            "Condition": {
+                                "StringEquals": {
+                                    "cognito-identity.amazonaws.com:aud": {
+                                        "Ref": "IdentityPool"
+                                    }
+                                },
+                                "ForAnyValue:StringLike": {
+                                    "cognito-identity.amazonaws.com:amr": "unauthenticated"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "UnauthenticatedPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "mobileanalytics:PutEvents"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${PropertyImagesBucket.Arn}/public/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "SESEmailIdentity": {
+            "Type": "AWS::SES::EmailIdentity",
+            "Properties": {
+                "EmailIdentity": "noreply@example.com"
+            }
+        },
+        "Dashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "${EnvironmentName}-realestate-dashboard"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/ECS\", \"CPUUtilization\", \"ServiceName\", \"${WebAppService}\", \"ClusterName\", \"${ECSCluster}\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"ECS CPU Utilization\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/ECS\", \"MemoryUtilization\", \"ServiceName\", \"${WebAppService}\", \"ClusterName\", \"${ECSCluster}\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"ECS Memory Utilization\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/RDS\", \"CPUUtilization\", \"DBClusterIdentifier\", \"${AuroraDBCluster}\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Aurora CPU Utilization\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/ElastiCache\", \"CPUUtilization\", \"CacheClusterId\", \"${ElastiCacheCluster}\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"ElastiCache CPU Utilization\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 12,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/ApiGateway\", \"Count\", \"ApiName\", \"${ApiGateway}\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"API Requests\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 12,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"${MortgageCalculatorFunction}\" ],\n          [ \"AWS/Lambda\", \"Errors\", \"FunctionName\", \"${MortgageCalculatorFunction}\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Invocations and Errors\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "CPUUtilizationAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-high-cpu-alarm"
+                },
+                "AlarmDescription": "Alarm if CPU usage is high",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/ECS",
+                "Dimensions": [
+                    {
+                        "Name": "ServiceName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "WebAppService",
+                                "Name"
+                            ]
+                        }
+                    },
+                    {
+                        "Name": "ClusterName",
+                        "Value": {
+                            "Ref": "ECSCluster"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": 60,
+                "EvaluationPeriods": 3,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertNotificationTopic"
+                    }
+                ]
+            }
+        },
+        "DatabaseCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-db-cpu-alarm"
+                },
+                "AlarmDescription": "Alarm if database CPU usage is high",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/RDS",
+                "Dimensions": [
+                    {
+                        "Name": "DBClusterIdentifier",
+                        "Value": {
+                            "Ref": "AuroraDBCluster"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": 60,
+                "EvaluationPeriods": 3,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertNotificationTopic"
+                    }
+                ]
+            }
+        },
+        "APILatencyAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-api-latency-alarm"
+                },
+                "AlarmDescription": "Alarm if API latency is high",
+                "MetricName": "Latency",
+                "Namespace": "AWS/ApiGateway",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Ref": "ApiGateway"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": 60,
+                "EvaluationPeriods": 3,
+                "Threshold": 1000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertNotificationTopic"
+                    }
+                ]
+            }
+        },
+        "AlertNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "DisplayName": {
+                    "Fn::Sub": "${EnvironmentName}-alerts"
+                },
+                "TopicName": {
+                    "Fn::Sub": "${EnvironmentName}-alerts"
+                }
+            }
+        },
+        "DailyMaintenanceRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-daily-maintenance"
+                },
+                "ScheduleExpression": "cron(0 3 * * ? *)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "MaintenanceFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "MaintenanceFunction"
+                    }
+                ]
+            }
+        },
+        "MaintenanceFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${EnvironmentName}-maintenance"
+                },
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "exports.handler = async (event) => {\n  console.log('Executing daily maintenance tasks...');\n  // Placeholder for maintenance tasks\n  return {\n    statusCode: 200,\n    body: 'Maintenance completed successfully'\n  };\n};\n"
+                },
+                "Runtime": "nodejs22.x",
+                "Timeout": 60,
+                "MemorySize": 128,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-maintenance-function"
+                        }
+                    }
+                ]
+            }
+        },
+        "MaintenanceFunctionPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "MaintenanceFunction",
+                        "Arn"
+                    ]
+                },
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "DailyMaintenanceRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "ConfigRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3BucketDelivery",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "s3:PutObject",
+                                    "Resource": {
+                                        "Fn::Sub": "${ConfigBucket.Arn}/*"
+                                    },
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "s3:x-amz-acl": "bucket-owner-full-control"
+                                        }
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "s3:GetBucketAcl",
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ConfigBucket",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ConfigBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${EnvironmentName}-config-${AWS::AccountId}-${AWS::Region}"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldConfig",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-config-bucket"
+                        }
+                    }
+                ]
+            }
+        },
+        "SearchIndexingFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${EnvironmentName}-search-indexing"
+                },
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "SearchIndexingRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "const AWS = require('aws-sdk');\nconst opensearch = new AWS.OpenSearchService();\nconst dynamodb = new AWS.DynamoDB.DocumentClient();\n\nexports.handler = async (event) => {\n  console.log('Processing DynamoDB stream records:', JSON.stringify(event));\n  \n  for (const record of event.Records) {\n    if (record.eventName === 'INSERT' || record.eventName === 'MODIFY') {\n      const newImage = AWS.DynamoDB.Converter.unmarshall(record.dynamodb.NewImage);\n      \n      // Index to OpenSearch\n      const document = {\n        id: newImage.propertyId,\n        location: {\n          lat: newImage.latitude,\n          lon: newImage.longitude\n        },\n        price: newImage.price,\n        bedrooms: newImage.bedrooms,\n        bathrooms: newImage.bathrooms,\n        sqft: newImage.sqft,\n        description: newImage.description,\n        timestamp: new Date().toISOString()\n      };\n      \n      console.log('Indexed document:', document);\n    }\n  }\n  \n  return { statusCode: 200 };\n};\n"
+                },
+                "Runtime": "nodejs22.x",
+                "Timeout": 60,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "OPENSEARCH_ENDPOINT": {
+                            "Fn::GetAtt": [
+                                "OpenSearchDomain",
+                                "DomainEndpoint"
+                            ]
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-search-indexing"
+                        }
+                    }
+                ]
+            }
+        },
+        "SearchIndexingRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "OpenSearchAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "es:ESHttpPost",
+                                        "es:ESHttpPut"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${OpenSearchDomain.Arn}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "DynamoDBStreamAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:DescribeStream",
+                                        "dynamodb:GetRecords",
+                                        "dynamodb:GetShardIterator",
+                                        "dynamodb:ListStreams"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "PropertiesTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${EnvironmentName}-properties"
+                },
+                "BillingMode": "PROVISIONED",
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 10,
+                    "WriteCapacityUnits": 10
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "propertyId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "listingDate",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "priceRange",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "propertyId",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "ListingDateIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "listingDate",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "propertyId",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": 5,
+                            "WriteCapacityUnits": 5
+                        }
+                    },
+                    {
+                        "IndexName": "PriceRangeIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "priceRange",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "propertyId",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": 5,
+                            "WriteCapacityUnits": 5
+                        }
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-properties-table"
+                        }
+                    }
+                ]
+            }
+        },
+        "SearchIndexingEventSourceMapping": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "Properties": {
+                "EventSourceArn": {
+                    "Fn::GetAtt": [
+                        "PropertiesTable",
+                        "StreamArn"
+                    ]
+                },
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "SearchIndexingFunction",
+                        "Arn"
+                    ]
+                },
+                "StartingPosition": "TRIM_HORIZON",
+                "MaximumBatchingWindowInSeconds": 10
+            }
+        },
+        "AppointmentSchedulingFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${EnvironmentName}-appointment-scheduling"
+                },
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "const AWS = require('aws-sdk');\nconst dynamodb = new AWS.DynamoDB.DocumentClient();\nconst ses = new AWS.SES();\n\nexports.handler = async (event) => {\n  const { userId, propertyId, appointmentDate, appointmentTime } = JSON.parse(event.body);\n  \n  const appointmentId = `${userId}-${propertyId}-${Date.now()}`;\n  \n  // Store appointment in DynamoDB\n  await dynamodb.put({\n    TableName: process.env.APPOINTMENTS_TABLE,\n    Item: {\n      appointmentId,\n      userId,\n      propertyId,\n      appointmentDate,\n      appointmentTime,\n      status: 'scheduled',\n      createdAt: new Date().toISOString()\n    }\n  }).promise();\n  \n  // Send confirmation email\n  const emailParams = {\n    Source: 'noreply@example.com',\n    Destination: {\n      ToAddresses: [event.userEmail]\n    },\n    Message: {\n      Subject: {\n        Data: 'Appointment Confirmation'\n      },\n      Body: {\n        Text: {\n          Data: `Your appointment for property ${propertyId} is confirmed for ${appointmentDate} at ${appointmentTime}.`\n        }\n      }\n    }\n  };\n  \n  await ses.sendEmail(emailParams).promise();\n  \n  return {\n    statusCode: 200,\n    headers: {\n      'Content-Type': 'application/json',\n      'Access-Control-Allow-Origin': '*'\n    },\n    body: JSON.stringify({\n      appointmentId,\n      message: 'Appointment scheduled successfully'\n    })\n  };\n};\n"
+                },
+                "Runtime": "nodejs22.x",
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "APPOINTMENTS_TABLE": {
+                            "Ref": "AppointmentsTable"
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-appointment-scheduling"
+                        }
+                    }
+                ]
+            }
+        },
+        "AppointmentsTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${EnvironmentName}-appointments"
+                },
+                "BillingMode": "PROVISIONED",
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 5,
+                    "WriteCapacityUnits": 5
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "appointmentId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "userId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "appointmentDate",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "appointmentId",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "UserAppointmentsIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "userId",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "appointmentDate",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": 5,
+                            "WriteCapacityUnits": 5
+                        }
+                    }
+                ],
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-appointments-table"
+                        }
+                    }
+                ]
+            }
+        },
+        "AppointmentResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "ApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "appointments"
+            }
+        },
+        "AppointmentMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ResourceId": {
+                    "Ref": "AppointmentResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AppointmentSchedulingFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        },
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    }
+                ]
+            }
+        },
+        "AppointmentLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "AppointmentSchedulingFunction",
+                        "Arn"
+                    ]
+                },
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*"
+                }
+            }
+        },
+        "AppointmentReminderRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-appointment-reminders"
+                },
+                "ScheduleExpression": "rate(1 hour)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "AppointmentReminderFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "AppointmentReminderFunction"
+                    }
+                ]
+            }
+        },
+        "AppointmentReminderFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${EnvironmentName}-appointment-reminder"
+                },
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "const AWS = require('aws-sdk');\nconst dynamodb = new AWS.DynamoDB.DocumentClient();\nconst sns = new AWS.SNS();\n\nexports.handler = async (event) => {\n  const tomorrow = new Date();\n  tomorrow.setDate(tomorrow.getDate() + 1);\n  const tomorrowDate = tomorrow.toISOString().split('T')[0];\n  \n  // Query appointments for tomorrow\n  const params = {\n    TableName: process.env.APPOINTMENTS_TABLE,\n    IndexName: 'UserAppointmentsIndex',\n    KeyConditionExpression: 'appointmentDate = :date',\n    ExpressionAttributeValues: {\n      ':date': tomorrowDate\n    }\n  };\n  \n  const result = await dynamodb.query(params).promise();\n  \n  // Send reminders for each appointment\n  for (const appointment of result.Items) {\n    const message = `Reminder: You have an appointment scheduled for ${appointment.appointmentDate} at ${appointment.appointmentTime}`;\n    \n    await sns.publish({\n      TopicArn: process.env.NOTIFICATION_TOPIC_ARN,\n      Message: message,\n      Subject: 'Appointment Reminder'\n    }).promise();\n  }\n  \n  return {\n    statusCode: 200,\n    body: `Sent ${result.Items.length} reminders`\n  };\n};\n"
+                },
+                "Runtime": "nodejs22.x",
+                "Timeout": 60,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "APPOINTMENTS_TABLE": {
+                            "Ref": "AppointmentsTable"
+                        },
+                        "NOTIFICATION_TOPIC_ARN": {
+                            "Ref": "AlertNotificationTopic"
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-appointment-reminder"
+                        }
+                    }
+                ]
+            }
+        },
+        "AppointmentReminderPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "AppointmentReminderFunction",
+                        "Arn"
+                    ]
+                },
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "AppointmentReminderRule",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCId"
+                }
+            }
+        },
+        "ALBDNSName": {
+            "Description": "ALB DNS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ALBDNSName"
+                }
+            }
+        },
+        "CloudFrontURL": {
+            "Description": "CloudFront Distribution URL",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudFrontDistribution",
+                    "DomainName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudFrontURL"
+                }
+            }
+        },
+        "APIGatewayURL": {
+            "Description": "API Gateway URL",
+            "Value": {
+                "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-APIGatewayURL"
+                }
+            }
+        },
+        "UserPoolId": {
+            "Description": "Cognito User Pool ID",
+            "Value": {
+                "Ref": "UserPool"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-UserPoolId"
+                }
+            }
+        },
+        "UserPoolClientId": {
+            "Description": "Cognito User Pool Client ID",
+            "Value": {
+                "Ref": "UserPoolClient"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-UserPoolClientId"
+                }
+            }
+        },
+        "IdentityPoolId": {
+            "Description": "Cognito Identity Pool ID",
+            "Value": {
+                "Ref": "IdentityPool"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-IdentityPoolId"
+                }
+            }
+        },
+        "DatabaseEndpoint": {
+            "Description": "Aurora Database Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraDBCluster",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DatabaseEndpoint"
+                }
+            }
+        },
+        "DatabaseReadEndpoint": {
+            "Description": "Aurora Database Read Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraDBCluster",
+                    "ReadEndpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DatabaseReadEndpoint"
+                }
+            }
+        },
+        "ElastiCacheEndpoint": {
+            "Description": "ElastiCache Redis Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ElastiCacheCluster",
+                    "RedisEndpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ElastiCacheEndpoint"
+                }
+            }
+        },
+        "OpenSearchEndpoint": {
+            "Description": "OpenSearch Domain Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "OpenSearchDomain",
+                    "DomainEndpoint"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-OpenSearchEndpoint"
+                }
+            }
+        },
+        "PropertyImagesBucket": {
+            "Description": "S3 Bucket for Property Images",
+            "Value": {
+                "Ref": "PropertyImagesBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PropertyImagesBucket"
+                }
+            }
+        },
+        "PropertyToursBucket": {
+            "Description": "S3 Bucket for Property Tours",
+            "Value": {
+                "Ref": "PropertyToursBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PropertyToursBucket"
+                }
+            }
+        },
+        "PropertiesTableName": {
+            "Description": "DynamoDB Properties Table",
+            "Value": {
+                "Ref": "PropertiesTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PropertiesTableName"
+                }
+            }
+        },
+        "UserFavoritesTableName": {
+            "Description": "DynamoDB User Favorites Table",
+            "Value": {
+                "Ref": "UserFavoritesTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-UserFavoritesTableName"
+                }
+            }
+        },
+        "AppointmentsTableName": {
+            "Description": "DynamoDB Appointments Table",
+            "Value": {
+                "Ref": "AppointmentsTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppointmentsTableName"
+                }
+            }
+        },
+        "ECSClusterName": {
+            "Description": "ECS Cluster Name",
+            "Value": {
+                "Ref": "ECSCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ECSClusterName"
+                }
+            }
+        },
+        "WebAppServiceName": {
+            "Description": "ECS Web Application Service Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebAppService",
+                    "Name"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebAppServiceName"
+                }
+            }
+        },
+        "AlertTopicArn": {
+            "Description": "SNS Topic for Alerts",
+            "Value": {
+                "Ref": "AlertNotificationTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AlertTopicArn"
+                }
+            }
+        },
+        "DatabaseSecretArn": {
+            "Description": "ARN of the auto-generated database secret",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraDBCluster",
+                    "MasterUserSecret.SecretArn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DatabaseSecretArn"
+                }
+            }
+        }
+    }
+}

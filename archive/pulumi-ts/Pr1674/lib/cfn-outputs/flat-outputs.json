@@ -1,6 +1,0 @@
-{
-  "LoadBalancerDNS": "tap-alb-synthtrainr188-628949851.us-west-2.elb.amazonaws.com",
-  "VPCId": "vpc-04539b3ba0d0792ac",
-  "AutoScalingGroupName": "tap-asg-synthtrainr188",
-  "S3BucketName": "tap-application-logs-synthtrainr188-1755613977183"
-}

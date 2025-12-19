@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth-2",
+  "turn_type": "single",
+  "startedAt": "2025-11-13T09:10:40.390400",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "po_id": "1s1zk2",
+  "aws_services": [
+    "aurora",
+    "backup",
+    "cloudwatch",
+    "dynamodb",
+    "ecs",
+    "elb",
+    "fargate",
+    "logs",
+    "rds",
+    "s3",
+    "sns",
+    "vpc",
+    "kms"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

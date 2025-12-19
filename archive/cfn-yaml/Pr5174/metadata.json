@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350012",
+  "team": "6",
+  "startedAt": "2025-10-28T04:48:28.781Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "VPC, EC2, Auto Scaling, Elastic Load Balancing (ALB), RDS (MySQL), S3, CloudFront, Lambda, CloudWatch, CloudTrail, AWS Config, KMS, Secrets Manager, Systems Manager (SSM), SNS, AWS Backup, Certificate Manager (ACM), IAM",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
+}

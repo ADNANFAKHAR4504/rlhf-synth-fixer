@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-26T06:25:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "kubernetes",
+    "eks",
+    "containers",
+    "microservices"
+  ],
+  "aws_services": [
+    "EKS",
+    "Fargate",
+    "VPC",
+    "IAM",
+    "CloudWatch",
+    "Secrets Manager",
+    "ECR",
+    "KMS",
+    "SNS",
+    "ALB",
+    "Autoscaling"
+  ],
+  "po_id": "101912663",
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

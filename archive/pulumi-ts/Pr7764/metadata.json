@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-02T21:00:00+00:00",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "po_id": "w5k3n9c7",
+  "aws_services": [
+    "Config",
+    "S3",
+    "SNS",
+    "Lambda",
+    "IAM",
+    "KMS",
+    "Systems Manager"
+  ],
+  "region": "us-east-1",
+  "author": "mayanksethi-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

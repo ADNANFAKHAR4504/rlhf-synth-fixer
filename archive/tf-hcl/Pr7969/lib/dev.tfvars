@@ -1,0 +1,15 @@
+env                     = "dev"
+aws_region              = "us-east-1"
+diagnostics_shard_count = 2
+hos_shard_count         = 1
+gps_shard_count         = 2
+processor_memory        = 512
+anomaly_memory          = 1024
+predictive_memory       = 2048
+node_type               = "cache.t3.small"
+num_cache_clusters      = 1
+instance_class          = "db.t4g.medium"
+min_capacity            = 0.5
+max_capacity            = 1
+retention_hours         = 24
+log_retention_days      = 7

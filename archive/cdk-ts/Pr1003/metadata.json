@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291242",
+  "team": "4",
+  "startedAt": "2025-08-12T11:21:15.150Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "isaackumi-turing",
+  "dockerS3Location": ""
+}

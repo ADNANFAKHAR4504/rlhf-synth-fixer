@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: python
+description: Serverless fraud detection pipeline infrastructure
+main: tap.py

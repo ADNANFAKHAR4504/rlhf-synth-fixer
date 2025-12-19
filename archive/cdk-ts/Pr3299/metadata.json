@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349600",
+  "team": "3",
+  "startedAt": "2025-10-01T19:34:06.071Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "CloudWatch",
+    "SNS",
+    "S3",
+    "IAM",
+    "Route53",
+    "Certificate Manager"
+  ],
+  "training_quality": 8.5,
+  "training_quality_justification": "High-quality training data with real-world serverless patterns. MODEL_FAILURES.md documents 6 critical issues fixed: (1) API Gateway CloudWatch account configuration, (2) DynamoDB composite key query logic using GetCommand incorrectly, (3) Request body validation accepting null/empty data, (4) TypeScript monorepo configuration, (5) Integration test region mismatch, (6) Missing AWS SDK dependencies. The final solution demonstrates production-ready patterns including: proper IAM permissions, CloudWatch alarms with SNS, X-Ray tracing, Lambda Insights, comprehensive CRUD operations, CORS configuration, optional custom domain with ACM/Route53, and 100% test coverage (unit + integration). Strong learning value for: DynamoDB QueryCommand with KeyConditionExpression, API Gateway account-level settings, input validation patterns, and environment-flexible IaC design. Minor deductions for using deprecated CDK APIs (logRetention, pointInTimeRecovery) and hardcoded pagination limits.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

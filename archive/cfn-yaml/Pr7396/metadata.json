@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350140",
+  "team": "4",
+  "startedAt": "2025-11-26T18:38:22.669Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "EC2",
+    "Auto Scaling",
+    "Launch Template",
+    "RDS",
+    "S3 Bucket",
+    "IAM Roles",
+    "IAM Policies",
+    "KMS",
+    "Secrets Manager",
+    "CloudTrail",
+    "CloudWatch Logs",
+    "Security Groups",
+    "Elastic IP"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

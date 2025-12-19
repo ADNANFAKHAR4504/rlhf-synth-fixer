@@ -1,0 +1,37 @@
+{
+  "team": "synth",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "1652098325",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "Infrastructure task for Pulumi",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "startedAt": "2025-10-13T19:30:50.161940Z",
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS Aurora",
+    "DynamoDB",
+    "S3",
+    "Lambda",
+    "Application Load Balancer",
+    "Route53",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "Systems Manager Parameter Store"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

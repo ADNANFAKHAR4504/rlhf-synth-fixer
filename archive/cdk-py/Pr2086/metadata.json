@@ -1,0 +1,41 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr148cdkpy",
+  "team": "synth",
+  "startedAt": "2025-08-23T01:44:02+05:30",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Database Management",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Performance Optimization",
+    "Access Control"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ELB",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "Secrets Manager",
+    "Systems Manager",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,32 @@
+{
+  "po_id": "101912499",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "security-configuration-as-code"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "CloudTrail"
+  ],
+  "startedAt": "2025-11-13T04:27:15+00:00",
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

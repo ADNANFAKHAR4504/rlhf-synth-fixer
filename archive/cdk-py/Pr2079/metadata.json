@@ -1,0 +1,42 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr138cdkpy",
+  "team": "synth",
+  "startedAt": "2025-08-23T00:03:06+05:30",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Access Control",
+    "Network Configuration",
+    "Database Management",
+    "Monitoring Setup",
+    "Performance Optimization",
+    "Web Application Deployment"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "KMS",
+    "S3",
+    "VPC",
+    "EC2",
+    "Lambda",
+    "API Gateway",
+    "RDS",
+    "ELB/ALB",
+    "IAM",
+    "CloudTrail",
+    "CloudWatch",
+    "ACM",
+    "Security Groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

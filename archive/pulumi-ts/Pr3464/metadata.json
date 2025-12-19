@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "49271563",
+  "team": "synth",
+  "startedAt": "2025-10-03T17:08:45+05:30",
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Lambda@Edge",
+    "Route53",
+    "MediaConvert",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM",
+    "EventBridge Scheduler"
+  ],
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

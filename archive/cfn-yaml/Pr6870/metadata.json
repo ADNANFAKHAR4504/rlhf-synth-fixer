@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912363",
+  "team": "synth",
+  "startedAt": "2025-11-19T10:40:54+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "cloud-environment-setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Transit Gateway",
+    "NAT Gateway",
+    "Internet Gateway",
+    "VPC Endpoints",
+    "Security Groups",
+    "Flow Logs",
+    "S3",
+    "Elastic IP",
+    "Route Tables"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

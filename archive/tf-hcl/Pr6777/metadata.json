@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912462",
+  "team": "synth",
+  "startedAt": "2025-11-18T11:25:33+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "observability-&-monitoring"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "X-Ray",
+    "CloudTrail",
+    "EventBridge",
+    "SNS",
+    "Systems Manager",
+    "Config",
+    "Security Hub",
+    "KMS",
+    "S3",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

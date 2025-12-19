@@ -1,0 +1,14 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-10T15:53:24+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [],
+  "po_id": "ofm6x",
+  "aws_services": [],
+  "region": "ap-southeast-1",
+  "author": "aj-turing"
+}

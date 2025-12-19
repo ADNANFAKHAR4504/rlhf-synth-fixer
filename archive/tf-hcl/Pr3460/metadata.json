@@ -1,0 +1,49 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "26364950",
+  "team": "1",
+  "startedAt": "2025-10-03T12:23:27.076Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "WAF",
+    "Lambda",
+    "DynamoDB",
+    "DAX",
+    "DynamoDB Streams",
+    "ElastiCache Redis",
+    "Kinesis Data Streams",
+    "Kinesis Data Analytics",
+    "Kinesis Data Firehose",
+    "S3 Bucket",
+    "Redshift Serverless",
+    "Fraud Detector",
+    "Step Functions",
+    "CloudWatch",
+    "CloudWatch LogGroup",
+    "Lambda Insights",
+    "X-Ray",
+    "EventBridge",
+    "SNS",
+    "SQS",
+    "Athena",
+    "QuickSight",
+    "Secrets Manager",
+    "KMS",
+    "IAM",
+    "VPC"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

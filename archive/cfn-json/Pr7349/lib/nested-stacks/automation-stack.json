@@ -1,0 +1,176 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Lambda automation for traffic shifting",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String"
+    },
+    "BlueTargetGroup": {
+      "Type": "String"
+    },
+    "GreenTargetGroup": {
+      "Type": "String"
+    },
+    "ALBListenerArn": {
+      "Type": "String"
+    },
+    "BlueHealthAlarm": {
+      "Type": "String"
+    },
+    "GreenHealthAlarm": {
+      "Type": "String"
+    },
+    "Project": {
+      "Type": "String"
+    },
+    "CostCenter": {
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "TrafficShiftLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "traffic-shift-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "TrafficShiftPermissions",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "elasticloadbalancing:ModifyListener",
+                    "elasticloadbalancing:DescribeListeners",
+                    "elasticloadbalancing:DescribeTargetGroups",
+                    "elasticloadbalancing:DescribeTargetHealth"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:DescribeAlarms",
+                    "cloudwatch:GetMetricStatistics"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:PutParameter"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "TrafficShiftFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "traffic-shift-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "TrafficShiftLambdaRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 300,
+        "Code": {
+          "ZipFile": {
+            "Fn::Sub": "import json\nimport boto3\nimport os\n\nelbv2 = boto3.client('elbv2')\ncloudwatch = boto3.client('cloudwatch')\nssm = boto3.client('ssm')\n\ndef lambda_handler(event, context):\n    listener_arn = '${ALBListenerArn}'\n    blue_tg_arn = '${BlueTargetGroup}'\n    green_tg_arn = '${GreenTargetGroup}'\n    \n    blue_weight = event.get('blue_weight', 100)\n    green_weight = event.get('green_weight', 0)\n    \n    try:\n        response = elbv2.modify_listener(\n            ListenerArn=listener_arn,\n            DefaultActions=[{\n                'Type': 'forward',\n                'ForwardConfig': {\n                    'TargetGroups': [\n                        {'TargetGroupArn': blue_tg_arn, 'Weight': blue_weight},\n                        {'TargetGroupArn': green_tg_arn, 'Weight': green_weight}\n                    ],\n                    'TargetGroupStickinessConfig': {'Enabled': False}\n                }\n            }]\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Traffic shifted successfully',\n                'blue_weight': blue_weight,\n                'green_weight': green_weight\n            })\n        }\n    except Exception as e:\n        print(f'Error: {str(e)}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)})\n        }\n"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "LISTENER_ARN": {
+              "Ref": "ALBListenerArn"
+            },
+            "BLUE_TG_ARN": {
+              "Ref": "BlueTargetGroup"
+            },
+            "GREEN_TG_ARN": {
+              "Ref": "GreenTargetGroup"
+            },
+            "BLUE_ALARM_ARN": {
+              "Ref": "BlueHealthAlarm"
+            },
+            "GREEN_ALARM_ARN": {
+              "Ref": "GreenHealthAlarm"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "TrafficShiftFunctionArn": {
+      "Description": "Traffic Shift Lambda Function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "TrafficShiftFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TrafficShiftFunctionArn"
+        }
+      }
+    }
+  }
+}

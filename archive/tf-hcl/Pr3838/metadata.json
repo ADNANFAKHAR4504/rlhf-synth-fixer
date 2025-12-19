@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "59370182",
+  "team": "synth",
+  "startedAt": "2025-10-08T13:55:08+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS Aurora PostgreSQL",
+    "ElastiCache Redis",
+    "S3",
+    "CloudFront",
+    "ACM",
+    "IAM",
+    "CloudWatch",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

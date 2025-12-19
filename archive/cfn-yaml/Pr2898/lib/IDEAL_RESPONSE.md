@@ -1,0 +1,946 @@
+```yml
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production-ready serverless web application infrastructure",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "ApplicationName": {
+            "Type": "String",
+            "Default": "ServerlessWebApp-350203",
+            "Description": "Name of the application"
+        },
+        "Environment": {
+            "Type": "String",
+            "Default": "Production",
+            "AllowedValues": [
+                "Development",
+                "Staging",
+                "Production"
+            ],
+            "Description": "Environment name"
+        },
+        "DynamoDBReadCapacity": {
+            "Type": "Number",
+            "Default": 5,
+            "MinValue": 1,
+            "MaxValue": 10000,
+            "Description": "DynamoDB table read capacity units"
+        },
+        "DynamoDBWriteCapacity": {
+            "Type": "Number",
+            "Default": 5,
+            "MinValue": 1,
+            "MaxValue": 10000,
+            "Description": "DynamoDB table write capacity units"
+        },
+        "AllowedOrigins": {
+            "Type": "CommaDelimitedList",
+            "Default": "https://example.com,https://www.example.com",
+            "Description": "Comma-delimited list of allowed CORS origins"
+        }
+    },
+    "Resources": {
+        "WebsiteS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "WebsiteConfiguration": {
+                    "IndexDocument": "index.html",
+                    "ErrorDocument": "error.html"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "WebsiteS3BucketKMSKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": false,
+                    "BlockPublicPolicy": false,
+                    "IgnorePublicAcls": false,
+                    "RestrictPublicBuckets": false
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebsiteS3BucketKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS Key for S3 bucket encryption",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow use of the key for S3 via service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                                    },
+                                    "kms:CallerAccount": {
+                                        "Fn::Sub": "${AWS::AccountId}"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebsiteS3BucketKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${ApplicationName}-${Environment}-s3-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "WebsiteS3BucketKMSKey"
+                }
+            }
+        },
+        "WebsiteS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "WebsiteS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "PublicReadGetObject",
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${WebsiteS3Bucket}/*"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ApplicationDataTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-data"
+                },
+                "BillingMode": "PROVISIONED",
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": {
+                        "Ref": "DynamoDBReadCapacity"
+                    },
+                    "WriteCapacityUnits": {
+                        "Ref": "DynamoDBWriteCapacity"
+                    }
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-lambda-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaBasicLogs",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ApplicationDataTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            }
+        },
+        "StreamProcessorLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-stream-processor-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaBasicLogs",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "DynamoDBStreamAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:DescribeStream",
+                                        "dynamodb:GetRecords",
+                                        "dynamodb:GetShardIterator",
+                                        "dynamodb:ListStreams"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ApplicationDataTable",
+                                            "StreamArn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-apigateway-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "apigateway.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "ApiGatewayPushToCloudWatch",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            }
+        },
+        "MainLambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ApplicationName}-${Environment}-main"
+                },
+                "RetentionInDays": 14,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            }
+        },
+        "MainLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-main"
+                },
+                "Runtime": "nodejs22.x",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 512,
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        },
+                        "DYNAMODB_TABLE": {
+                            "Ref": "ApplicationDataTable"
+                        },
+                        "REGION": {
+                            "Ref": "AWS::Region"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "exports.handler = async (event) => {\n    console.log('Event:', JSON.stringify(event, null, 2));\n    \n    const response = {\n        statusCode: 200,\n        headers: {\n            'Content-Type': 'application/json',\n            'Access-Control-Allow-Origin': '*',\n            'Access-Control-Allow-Headers': 'Content-Type',\n            'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,PUT,DELETE'\n        },\n        body: JSON.stringify({\n            message: 'Hello from Lambda!',\n            environment: process.env.ENVIRONMENT,\n            timestamp: new Date().toISOString()\n        })\n    };\n    \n    return response;\n};\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            },
+            "DependsOn": "MainLambdaLogGroup"
+        },
+        "StreamProcessorLambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ApplicationName}-${Environment}-stream-processor"
+                },
+                "RetentionInDays": 14,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            }
+        },
+        "StreamProcessorLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-stream-processor"
+                },
+                "Runtime": "nodejs22.x",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "StreamProcessorLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        },
+                        "REGION": {
+                            "Ref": "AWS::Region"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "exports.handler = async (event) => {\n    console.log('DynamoDB Stream Event:', JSON.stringify(event, null, 2));\n    \n    for (const record of event.Records) {\n        console.log('Event Name:', record.eventName);\n        console.log('DynamoDB Record:', JSON.stringify(record.dynamodb, null, 2));\n        \n        // Process the stream record here\n        // Add your business logic for handling data changes\n    }\n    \n    return { message: 'Stream processed successfully' };\n};\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            },
+            "DependsOn": "StreamProcessorLambdaLogGroup"
+        },
+        "DynamoDBStreamEventSourceMapping": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "Properties": {
+                "EventSourceArn": {
+                    "Fn::GetAtt": [
+                        "ApplicationDataTable",
+                        "StreamArn"
+                    ]
+                },
+                "FunctionName": {
+                    "Ref": "StreamProcessorLambdaFunction"
+                },
+                "StartingPosition": "LATEST",
+                "BatchSize": 10,
+                "MaximumBatchingWindowInSeconds": 5
+            }
+        },
+        "ApiGatewayLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/apigateway/${ApplicationName}-${Environment}"
+                },
+                "RetentionInDays": 14,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayAccount": {
+            "Type": "AWS::ApiGateway::Account",
+            "Properties": {
+                "CloudWatchRoleArn": {
+                    "Fn::GetAtt": [
+                        "ApiGatewayRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "RestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-api"
+                },
+                "Description": "REST API for serverless web application",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "RestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "api"
+            }
+        },
+        "ApiOptionsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ApiResource"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": "200",
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": {
+                                    "Fn::Sub": [
+                                        "'${origins}'",
+                                        {
+                                            "origins": {
+                                                "Fn::Join": [
+                                                    "','",
+                                                    {
+                                                        "Ref": "AllowedOrigins"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": "200",
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        },
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": false,
+                            "method.response.header.Access-Control-Allow-Methods": false,
+                            "method.response.header.Access-Control-Allow-Origin": false
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiPostMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ApiResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambdaFunction.Arn}/invocations"
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": "200"
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaApiGatewayPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "MainLambdaFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/POST/api"
+                }
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "ApiPostMethod",
+                "ApiOptionsMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "Description": "Production deployment"
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                },
+                "Description": {
+                    "Fn::Sub": "${Environment} stage"
+                },
+                "Variables": {
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "LambdaFunction": {
+                        "Ref": "MainLambdaFunction"
+                    }
+                },
+                "AccessLogSetting": {
+                    "DestinationArn": {
+                        "Fn::GetAtt": [
+                            "ApiGatewayLogGroup",
+                            "Arn"
+                        ]
+                    },
+                    "Format": "$context.requestId $context.identity.sourceIp $context.identity.caller $context.identity.user [$context.requestTime] \"$context.httpMethod $context.resourcePath $context.protocol\" $context.status $context.error.message $context.error.messageString"
+                },
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "LoggingLevel": "INFO",
+                        "DataTraceEnabled": true,
+                        "MetricsEnabled": true
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            },
+            "DependsOn": "ApiGatewayAccount"
+        }
+    },
+    "Outputs": {
+        "WebsiteURL": {
+            "Description": "Website URL",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebsiteS3Bucket",
+                    "WebsiteURL"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-WebsiteURL"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "S3 Bucket Name for static website hosting",
+            "Value": {
+                "Ref": "WebsiteS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-S3Bucket"
+                }
+            }
+        },
+        "ApiGatewayURL": {
+            "Description": "API Gateway URL",
+            "Value": {
+                "Fn::Sub": "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/api"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-ApiURL"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "DynamoDB Table Name",
+            "Value": {
+                "Ref": "ApplicationDataTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-DynamoDBTable"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-EnvironmentSuffix"
+                }
+            }
+        },
+        "MainLambdaFunctionArn": {
+            "Description": "Main Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MainLambdaFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-MainLambdaArn"
+                }
+            }
+        },
+        "StreamProcessorLambdaFunctionArn": {
+            "Description": "Stream Processor Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "StreamProcessorLambdaFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-StreamProcessorArn"
+                }
+            }
+        },
+        "RestApiId": {
+            "Description": "REST API ID",
+            "Value": {
+                "Ref": "RestApi"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-RestApiId"
+                }
+            }
+        }
+    }
+}
+```

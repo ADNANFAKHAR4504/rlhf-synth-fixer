@@ -1,0 +1,94 @@
+name: TapStack
+runtime:
+  name: python
+main: lib/
+description: Multi-environment fraud detection infrastructure with drift detection
+
+config:
+  region:
+    description: Region name (used in resource naming)
+    default: us-east-1
+
+  environmentSuffix:
+    description: Unique suffix for resource names (REQUIRED)
+    default: dev
+
+  azCount:
+    description: Number of availability zones
+    default: 3
+  
+  owner:
+    description: Team or person responsible for the infrastructure
+    default: fraud-detection-team
+  
+  costCenter:
+    description: Cost center for billing
+    default: fraud-detection
+  
+  # ECS Configuration
+  ecsCpu:
+    description: CPU units for ECS tasks
+    default: 256
+  
+  ecsMemory:
+    description: Memory (MB) for ECS tasks
+    default: 512
+  
+  containerImage:
+    description: Docker container image for fraud detection service
+    default: nginx:latest
+  
+  desiredCount:
+    description: Desired number of ECS tasks
+    default: 2
+  
+  # Aurora Configuration
+  auroraInstanceClass:
+    description: RDS instance class for Aurora
+    default: db.t4g.medium
+  
+  auroraInstanceCount:
+    description: Number of Aurora instances
+    default: 1
+  
+  enableAuroraReplica:
+    description: Enable cross-region Aurora read replica
+    default: false
+  
+  # DynamoDB Configuration
+  enableGlobalTable:
+    description: Enable DynamoDB global table replication
+    default: false
+  
+  replicaRegions:
+    description: List of regions for DynamoDB replication
+    default: []
+  
+  # IAM Configuration
+  iamMode:
+    description: IAM permission mode (read-only, limited-write, full-access)
+    default: read-only
+  
+  # Alerting Configuration
+  alertEmail:
+    description: Email address for alerts
+    default: devops@example.com
+  
+  cpuThreshold:
+    description: CPU utilization threshold for alarms (percentage)
+    default: 80
+  
+  errorRateThreshold:
+    description: Error rate threshold for alarms
+    default: 5
+  
+  # Cross-stack reference
+  orgName:
+    description: Pulumi organization name for StackReference
+    default: turinggpt
+  
+  # Secrets
+  dbPassword:
+    description: Master password for Aurora database
+    secret: true
+    default: TempPassword123!

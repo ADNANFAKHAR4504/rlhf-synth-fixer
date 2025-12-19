@@ -1,0 +1,41 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "350005",
+  "team": "2",
+  "startedAt": "2025-09-03T22:11:21.148Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Resource Scaling",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::CloudFormation::Stack",
+    "AWS::Lambda::Function",
+    "AWS::ApiGateway::RestApi",
+    "AWS::ApiGateway::Resource",
+    "AWS::ApiGateway::Method",
+    "AWS::ApiGateway::Deployment",
+    "AWS::ApiGateway::Stage",
+    "AWS::IAM::Role",
+    "AWS::IAM::Policy",
+    "AWS::S3::Bucket",
+    "AWS::S3::BucketPolicy",
+    "AWS::SNS::Topic",
+    "AWS::SNS::Subscription",
+    "AWS::EC2::SecurityGroup",
+    "AWS::EC2::Subnet"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Mikiazerihun",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,34 @@
+{
+  "task_id": "101912422",
+  "po_id": "101912422",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T05:18:52Z",
+  "subtask": "Security, Compliance, and Governance",
+  "author": "iamarpit-turing",
+  "review": "adnan-turing",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "security",
+    "iam",
+    "kms"
+  ],
+  "aws_services": [
+    "IAM",
+    "KMS",
+    "CloudWatch Logs",
+    "STS",
+    "ECS",
+    "RDS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-01T00:33:56.290097",
+  "subtask": "Failure Recovery and High Availability",
+  "po_id": "101912899",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "Aurora",
+    "Route53",
+    "Lambda",
+    "VPC",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

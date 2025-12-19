@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "40819405",
+  "team": "1",
+  "startedAt": "2025-10-20T08:27:01.469Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "Deploy secure AWS infrastructure with private VPC, CloudHSM-backed encryption, Network Firewall, and comprehensive security monitoring",
+  "training_quality": 10,
+  "aws_services": "VPC, EC2, EBS, CloudHSM, KMS, Systems Manager (Session Manager), FSx for Lustre, S3, Aurora PostgreSQL (RDS), VPC Endpoints, Network Firewall, GuardDuty, Security Hub, Config, CloudTrail, CloudWatch, Macie, Lambda, SNS, IAM, Secrets Manager, Dedicated Hosts",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
+}

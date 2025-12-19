@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "350127",
+  "team": "3",
+  "startedAt": "2025-11-19T12:27:50.384Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "S3",
+    "EMR",
+    "Step Functions",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "KMS",
+    "SNS",
+    "Glue"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
+}

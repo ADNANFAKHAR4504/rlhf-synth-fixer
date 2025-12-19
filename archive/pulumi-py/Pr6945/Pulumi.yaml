@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: python
+description: Multi-environment trading analytics platform with Pulumi
+main: tap.py

@@ -1,0 +1,39 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350178",
+  "team": "4",
+  "startedAt": "2025-10-19T13:39:19.045Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "ALB",
+    "RDS",
+    "S3",
+    "KMS",
+    "IAM",
+    "Secrets Manager",
+    "Lambda",
+    "CloudWatch",
+    "CloudTrail",
+    "AWS Config",
+    "SNS",
+    "SSM",
+    "NAT Gateway"
+  ],
+  "training_quality": 9,
+  "background": "This task requires implementing a secure, production-grade AWS infrastructure using Terraform. The implementation must include multi-AZ high availability, encryption at rest and in transit, comprehensive monitoring and compliance features, and follow AWS security best practices. All infrastructure must be defined in a single Terraform file without external modules, with complete implementations including inline Lambda functions for secret rotation. The solution demonstrates enterprise-level infrastructure-as-code capabilities with comprehensive security, compliance, and governance features.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000185",
+  "team": "4",
+  "startedAt": "2025-10-31T10:38:07.432Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ECS",
+    "ALB",
+    "Route53",
+    "S3",
+    "IAM",
+    "SSM",
+    "CloudWatch",
+    "Auto Scaling",
+    "EIP",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups"
+  ],
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
+}

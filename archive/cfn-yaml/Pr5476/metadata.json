@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000296",
+  "team": "3",
+  "startedAt": "2025-10-30T10:24:15.664Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "KMS Key",
+    "IAM Role",
+    "IAM Policy",
+    "IAM Group",
+    "IAM Instance Profile",
+    "IAM User",
+    "IAM User To Group Addition",
+    "IAM Policy Attachment",
+    "SSM Parameter",
+    "CloudWatch Logs Group",
+    "SNS Topic",
+    "SNS Subscription",
+    "Service Linked Role"
+  ],
+  "training_quality": 9,
+  "background": "Provision identity and access management resources in a new AWS environment using CloudFormation. The stack includes KMS key creation, IAM roles, policies, groups, users, and instance profiles with appropriate attachments and associations. It also configures CloudWatch Logs, SSM parameters, and SNS topics with subscriptions. The goal is to establish secure, scalable, and auditable infrastructure components with consistent tagging and naming conventions.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

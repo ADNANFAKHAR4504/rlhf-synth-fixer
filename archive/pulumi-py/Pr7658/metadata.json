@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000945",
+  "team": "synth",
+  "startedAt": "2025-12-02T03:50:00-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "ECS",
+    "Fargate",
+    "ECR",
+    "CloudWatch",
+    "Secrets Manager",
+    "Application Auto Scaling",
+    "Elastic Load Balancing"
+  ],
+  "region": "eu-central-1",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

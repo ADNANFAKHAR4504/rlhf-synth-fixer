@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "5253",
+  "team": 5,
+  "startedAt": "2025-10-28T17:51:34.719Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "S3",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS",
+    "CloudTrail",
+    "KMS",
+    "Systems Manager",
+    "VPC"
+  ],
+  "training_quality": 10,
+  "background": "Comprehensive zero-trust IAM security framework for a regulated financial services company with multi-account AWS organization. Implements advanced conditional IAM policies using IP restrictions, time-based access, MFA requirements, VPC endpoint enforcement, and regional restrictions. Features granular role hierarchy with separation of duties (developers, operators, administrators), cross-account access controls with external ID validation, automated time-based access expiration, and comprehensive CloudWatch monitoring for all IAM activities. Enforces strict password policies, service-specific least privilege roles, and S3 bucket policies with VPC restrictions to meet financial industry compliance requirements.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}

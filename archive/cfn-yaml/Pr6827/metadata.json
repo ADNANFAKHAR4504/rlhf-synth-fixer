@@ -1,0 +1,40 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912273",
+  "team": "4",
+  "startedAt": "2025-11-19T00:06:29.954Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "EKS Cluster",
+    "EKS Node Groups",
+    "IAM Roles",
+    "OIDC Provider",
+    "EC2 Launch Templates",
+    "Auto Scaling",
+    "EC2 Instances",
+    "KMS Keys",
+    "CloudWatch Logs",
+    "Lambda",
+    "Elastic Load Balancing",
+    "Security Groups",
+    "CloudFormation",
+    "EIP (Elastic IP)"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

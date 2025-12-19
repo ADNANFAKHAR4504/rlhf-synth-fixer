@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-04T00:30:35.493524Z",
+  "po_id": "101000814",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "VPC CIDR must be 10.0.0.0/16 with specific subnet allocation",
+    "Private subnets must have no direct internet access",
+    "All traffic between subnets must pass through security groups",
+    "NAT Gateways must be deployed in at least 2 AZs for redundancy",
+    "VPC Flow Logs must be enabled and sent to CloudWatch",
+    "Network ACLs must explicitly deny all traffic by default"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "CloudWatch Logs",
+    "IAM",
+    "S3"
+  ],
+  "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

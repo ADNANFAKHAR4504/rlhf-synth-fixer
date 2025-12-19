@@ -1,0 +1,33 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "CY1V8Q000",
+  "team": "1",
+  "startedAt": "2025-10-22T14:12:42.928Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "ALB",
+    "Auto Scaling Group",
+    "CloudWatch",
+    "Lambda",
+    "DynamoDB",
+    "EventBridge",
+    "VPC",
+    "EC2",
+    "IAM",
+    "EIP",
+    "NAT Gateway"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "akshat-jain355",
+  "dockerS3Location": ""
+}

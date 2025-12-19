@@ -1,0 +1,783 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Optimized Payment Processing Infrastructure with Enhanced Monitoring and Resilience",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix",
+                        "Environment"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Notification Configuration"
+                    },
+                    "Parameters": [
+                        "AlertEmail"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "EnvironmentSuffix": {
+                    "default": "Environment Suffix for Resource Naming"
+                },
+                "Environment": {
+                    "default": "Deployment Environment"
+                },
+                "AlertEmail": {
+                    "default": "Email for Alerts"
+                }
+            }
+        },
+        "OptimizationRationale": {
+            "DynamoDB": "Using on-demand billing eliminates capacity planning and prevents throttling during traffic spikes. Point-in-time recovery protects against data loss.",
+            "Lambda": "arm64 architecture reduces cost by 20%. 3GB memory provides optimal performance for payment validation. 5-minute timeout handles complex validation scenarios.",
+            "DependencyChain": "DynamoDB created before Lambda prevents race conditions. SNS topic created before alarms ensures proper alarm actions. SQS DLQ created before Lambda ensures error handling.",
+            "Monitoring": "CloudWatch alarms provide proactive alerting. X-Ray tracing enables end-to-end transaction visibility. Dashboard consolidates all metrics for operational awareness.",
+            "Resilience": "Dead Letter Queue captures failed executions for retry. Reserved concurrency prevents account-level throttling. EventBridge enables scheduled batch processing."
+        },
+        "StackSetConfiguration": {
+            "PermissionModel": "SERVICE_MANAGED",
+            "DeploymentTargets": "Multi-account deployment across dev, staging, and production environments",
+            "OrganizationalUnits": "Deploys to specified AWS accounts within organization",
+            "AutoDeployment": "Enabled for new accounts added to target OUs"
+        },
+        "StackPolicyGuidance": {
+            "Recommendation": "Apply stack policy to prevent accidental deletion of DynamoDB table and production resources",
+            "ProtectedResources": [
+                "PaymentTransactionTable",
+                "PaymentValidationFunction"
+            ],
+            "SamplePolicy": "{\n  \"Statement\": [\n    {\n      \"Effect\": \"Deny\",\n      \"Principal\": \"*\",\n      \"Action\": \"Update:Delete\",\n      \"Resource\": \"LogicalResourceId/PaymentTransactionTable\"\n    }\n  ]\n}\n"
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "Description": "Deployment environment for conditional resource configuration"
+        },
+        "AlertEmail": {
+            "Type": "String",
+            "Description": "Email address for payment alerts and alarms",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+            "ConstraintDescription": "Must be a valid email address",
+            "Default": "alerts@example.com"
+        }
+    },
+    "Conditions": {
+        "IsProduction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "prod"
+            ]
+        }
+    },
+    "Resources": {
+        "PaymentTransactionTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "payment-transactions-${EnvironmentSuffix}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "transactionId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "transactionId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "payment-transactions-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "PaymentProcessing"
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": "FinTech"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PaymentAlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "payment-alerts-${EnvironmentSuffix}"
+                },
+                "DisplayName": "Payment Processing Alerts",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "payment-alerts-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "PaymentProcessing"
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": "FinTech"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Engineering"
+                    }
+                ]
+            }
+        },
+        "PaymentAlertSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Protocol": "email",
+                "TopicArn": {
+                    "Ref": "PaymentAlertTopic"
+                },
+                "Endpoint": {
+                    "Ref": "AlertEmail"
+                }
+            }
+        },
+        "PaymentValidationDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "payment-validation-dlq-${EnvironmentSuffix}"
+                },
+                "MessageRetentionPeriod": 1209600,
+                "VisibilityTimeout": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "payment-validation-dlq-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "PaymentProcessing"
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": "FinTech"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Engineering"
+                    }
+                ]
+            }
+        },
+        "PaymentValidationRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "payment-validation-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "PaymentTransactionTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SNSPublish",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "PaymentAlertTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "XRayAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "xray:PutTraceSegments",
+                                        "xray:PutTelemetryRecords"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SQSDLQAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "PaymentValidationDLQ",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "payment-validation-role-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "PaymentProcessing"
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": "FinTech"
+                    }
+                ]
+            }
+        },
+        "PaymentValidationFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "payment-validation-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "PaymentValidationRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 3072,
+                "Timeout": 300,
+                "Architectures": [
+                    "arm64"
+                ],
+                "ReservedConcurrentExecutions": {
+                    "Fn::If": [
+                        "IsProduction",
+                        100,
+                        10
+                    ]
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "PaymentValidationDLQ",
+                            "Arn"
+                        ]
+                    }
+                },
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE_NAME": {
+                            "Fn::Sub": "${PaymentTransactionTable}"
+                        },
+                        "SNS_TOPIC_ARN": {
+                            "Fn::Sub": "${PaymentAlertTopic}"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        },
+                        "REGION": {
+                            "Ref": "AWS::Region"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\nimport boto3\nfrom decimal import Decimal\nimport time\n\ndynamodb = boto3.resource('dynamodb')\nsns = boto3.client('sns')\n\ntable_name = os.environ['DYNAMODB_TABLE_NAME']\nsns_topic = os.environ['SNS_TOPIC_ARN']\n\ndef handler(event, context):\n    \"\"\"Payment validation Lambda function\"\"\"\n    try:\n        table = dynamodb.Table(table_name)\n\n        # Extract payment details\n        transaction_id = event.get('transactionId', 'unknown')\n        amount = Decimal(str(event.get('amount', 0)))\n        timestamp = int(time.time())\n\n        # Validate payment\n        if amount <= 0:\n            raise ValueError('Invalid payment amount')\n\n        # Store transaction\n        table.put_item(\n            Item={\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'amount': amount,\n                'status': 'validated'\n            }\n        )\n\n        # Send success notification for large transactions\n        if amount > 1000:\n            sns.publish(\n                TopicArn=sns_topic,\n                Subject='Large Payment Validated',\n                Message=f'Transaction {transaction_id} for ${amount} validated successfully'\n            )\n\n        return {\n            'statusCode': 200,\n            'body': json.dumps({'message': 'Payment validated', 'transactionId': transaction_id})\n        }\n\n    except Exception as e:\n        print(f'Error validating payment: {str(e)}')\n        # Send error notification\n        try:\n            sns.publish(\n                TopicArn=sns_topic,\n                Subject='Payment Validation Error',\n                Message=f'Error processing transaction: {str(e)}'\n            )\n        except:\n            pass\n        raise\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "payment-validation-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "PaymentProcessing"
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": "FinTech"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Engineering"
+                    }
+                ]
+            }
+        },
+        "PaymentBatchProcessingRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-batch-processing-${EnvironmentSuffix}"
+                },
+                "Description": "Triggers Lambda for scheduled payment batch processing",
+                "ScheduleExpression": "rate(1 hour)",
+                "State": {
+                    "Fn::If": [
+                        "IsProduction",
+                        "ENABLED",
+                        "DISABLED"
+                    ]
+                },
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "PaymentValidationFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "PaymentBatchTarget",
+                        "Input": "{\n  \"transactionId\": \"batch-scheduled\",\n  \"amount\": 0,\n  \"type\": \"batch-processing\"\n}\n"
+                    }
+                ]
+            }
+        },
+        "PaymentBatchProcessingPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "PaymentValidationFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "PaymentBatchProcessingRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "payment-validation-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when Lambda function errors exceed threshold",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": {
+                    "Fn::If": [
+                        "IsProduction",
+                        5,
+                        10
+                    ]
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "PaymentValidationFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "PaymentAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "payment-validation-throttles-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when Lambda function throttles occur",
+                "MetricName": "Throttles",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "PaymentValidationFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "PaymentAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DynamoDBUserErrorsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "payment-dynamodb-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when DynamoDB user errors occur",
+                "MetricName": "UserErrors",
+                "Namespace": "AWS/DynamoDB",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": {
+                    "Fn::If": [
+                        "IsProduction",
+                        5,
+                        20
+                    ]
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TableName",
+                        "Value": {
+                            "Ref": "PaymentTransactionTable"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "PaymentAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DLQMessageAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "payment-dlq-messages-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when messages appear in Dead Letter Queue",
+                "MetricName": "ApproximateNumberOfMessagesVisible",
+                "Namespace": "AWS/SQS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "QueueName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "PaymentValidationDLQ",
+                                "QueueName"
+                            ]
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "PaymentAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "PaymentProcessingDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "payment-processing-${EnvironmentSuffix}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\", \"label\": \"Invocations\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\", \"label\": \"Errors\"}],\n          [\".\", \"Throttles\", {\"stat\": \"Sum\", \"label\": \"Throttles\"}],\n          [\".\", \"Duration\", {\"stat\": \"Average\", \"label\": \"Avg Duration\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Metrics - Payment Validation\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"FunctionName\": [\"${PaymentValidationFunction}\"]\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\"}],\n          [\".\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\"}],\n          [\".\", \"UserErrors\", {\"stat\": \"Sum\"}],\n          [\".\", \"SystemErrors\", {\"stat\": \"Sum\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Metrics - Payment Transactions\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": [\"${PaymentTransactionTable}\"]\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/SNS\", \"NumberOfMessagesPublished\", {\"stat\": \"Sum\"}],\n          [\".\", \"NumberOfNotificationsFailed\", {\"stat\": \"Sum\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"SNS Metrics - Payment Alerts\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TopicName\": [\"${PaymentAlertTopic.TopicName}\"]\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\", {\"stat\": \"Average\"}],\n          [\".\", \"NumberOfMessagesSent\", {\"stat\": \"Sum\"}],\n          [\".\", \"NumberOfMessagesDeleted\", {\"stat\": \"Sum\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"SQS DLQ Metrics\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"QueueName\": [\"${PaymentValidationDLQ.QueueName}\"]\n        }\n      }\n    },\n    {\n      \"type\": \"log\",\n      \"properties\": {\n        \"query\": \"SOURCE '/aws/lambda/${PaymentValidationFunction}'\\n| fields @timestamp, @message\\n| filter @message like /ERROR/\\n| sort @timestamp desc\\n| limit 20\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Recent Lambda Errors\",\n        \"stacked\": false\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "PaymentTransactionTableName": {
+            "Description": "Name of the DynamoDB payment transactions table",
+            "Value": {
+                "Ref": "PaymentTransactionTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentTransactionTable"
+                }
+            }
+        },
+        "PaymentTransactionTableArn": {
+            "Description": "ARN of the DynamoDB payment transactions table",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PaymentTransactionTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentTransactionTableArn"
+                }
+            }
+        },
+        "PaymentValidationFunctionArn": {
+            "Description": "ARN of the Lambda payment validation function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PaymentValidationFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentValidationFunctionArn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PaymentValidationFunctionName": {
+            "Description": "Name of the Lambda payment validation function",
+            "Value": {
+                "Ref": "PaymentValidationFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentValidationFunctionName"
+                }
+            }
+        },
+        "PaymentAlertTopicArn": {
+            "Description": "ARN of the SNS payment alerts topic",
+            "Value": {
+                "Ref": "PaymentAlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentAlertTopicArn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PaymentAlertTopicName": {
+            "Description": "Name of the SNS payment alerts topic",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PaymentAlertTopic",
+                    "TopicName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentAlertTopicName"
+                }
+            }
+        },
+        "PaymentValidationDLQArn": {
+            "Description": "ARN of the SQS Dead Letter Queue",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PaymentValidationDLQ",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentValidationDLQArn"
+                }
+            }
+        },
+        "PaymentValidationDLQUrl": {
+            "Description": "URL of the SQS Dead Letter Queue",
+            "Value": {
+                "Ref": "PaymentValidationDLQ"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentValidationDLQUrl"
+                }
+            }
+        },
+        "PaymentProcessingDashboardName": {
+            "Description": "Name of the CloudWatch Dashboard",
+            "Value": {
+                "Ref": "PaymentProcessingDashboard"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DashboardName"
+                }
+            }
+        },
+        "StackEnvironment": {
+            "Description": "Deployment environment",
+            "Value": {
+                "Ref": "Environment"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Environment"
+                }
+            }
+        },
+        "StackRegion": {
+            "Description": "Deployment region",
+            "Value": {
+                "Ref": "AWS::Region"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Region"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,19 @@
+name: TapStack
+runtime: nodejs
+description: Multi-region disaster recovery infrastructure for payment processing
+main: bin/tap.ts
+
+config:
+  environmentSuffix:
+    type: string
+    default: dev
+    description: Unique suffix for resource naming to prevent conflicts
+  dbPassword:
+    type: string
+    secret: true
+    default: DefaultPassword123!
+    description: Master password for Aurora database
+  environment:
+    type: string
+    default: production
+    description: Environment name (e.g., production, staging)

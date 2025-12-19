@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350030",
+  "team": "2",
+  "startedAt": "2025-09-30T18:48:15.046Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "KMS",
+    "S3",
+    "RDS",
+    "ELB",
+    "Auto Scaling",
+    "CloudWatch",
+    "SNS",
+    "AWS Config",
+    "Secrets Manager"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

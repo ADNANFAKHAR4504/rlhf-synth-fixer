@@ -1,0 +1,43 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912287",
+  "team": "3",
+  "startedAt": "2025-11-17T09:47:17.917Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "LogGroup",
+    "MetricFilter",
+    "Dashboard",
+    "Alarm",
+    "CompositeAlarm",
+    "Topic",
+    "Subscription",
+    "Rule",
+    "Function",
+    "Permission",
+    "Role",
+    "Policy",
+    "QueryDefinition",
+    "MetricStream",
+    "Bucket",
+    "BucketPolicy",
+    "DeliveryStream",
+    "Canary",
+    "InsightRule",
+    "FlowLog"
+  ],
+  "training_quality": 9,
+  "background": "Provision a production-grade monitoring and observability stack for a distributed payment processing platform in us-east-1 using a single TapStack.yml. The stack creates CloudWatch log groups and metric filters over JSON application, VPC, and function logs; emits custom metrics; and renders live dashboards with 60-second views. Alarms and composite alarms use metric math for health scoring, with SNS email/SMS alerting. EventBridge routes alarm state changes to a remediation Lambda. Saved Logs Insights queries, metric streams to durable storage via Firehose/S3, Synthetics canaries for API checks, and flow/contributor insights provide deep troubleshooting and compliance-grade visibility. All resources are newly created, environment-suffixed, and parameterized for safe, repeatable deployments.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

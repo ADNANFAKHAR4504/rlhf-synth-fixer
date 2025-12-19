@@ -1,0 +1,126 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Service Catalog product template for self-service test instance provisioning",
+  "Parameters": {
+    "PortfolioId": {
+      "Type": "String",
+      "Description": "Service Catalog Portfolio ID"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Suffix for resource names"
+    }
+  },
+  "Resources": {
+    "TestInstanceProduct": {
+      "Type": "AWS::ServiceCatalog::CloudFormationProduct",
+      "Properties": {
+        "Name": "Analytics Test Instance",
+        "Description": "Self-service test instance for data analytics platform",
+        "Owner": "Platform Engineering Team",
+        "ProvisioningArtifactParameters": [
+          {
+            "Name": "v1.0",
+            "Description": "Initial version with S3 bucket and DynamoDB table",
+            "Info": {
+              "LoadTemplateFromURL": "https://s3.amazonaws.com/your-bucket/test-instance-template.json"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "ServiceCatalog",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "PortfolioProductAssociation": {
+      "Type": "AWS::ServiceCatalog::PortfolioProductAssociation",
+      "Properties": {
+        "PortfolioId": {"Ref": "PortfolioId"},
+        "ProductId": {"Ref": "TestInstanceProduct"}
+      }
+    },
+    "LaunchRoleConstraint": {
+      "Type": "AWS::ServiceCatalog::LaunchRoleConstraint",
+      "Properties": {
+        "PortfolioId": {"Ref": "PortfolioId"},
+        "ProductId": {"Ref": "TestInstanceProduct"},
+        "RoleArn": {"Fn::GetAtt": ["ServiceCatalogLaunchRole", "Arn"]},
+        "Description": "Launch role for Service Catalog products"
+      }
+    },
+    "ServiceCatalogLaunchRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "service-catalog-launch-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "servicecatalog.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ServiceCatalogLaunchPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudformation:CreateStack",
+                    "cloudformation:DeleteStack",
+                    "cloudformation:DescribeStackEvents",
+                    "cloudformation:DescribeStacks",
+                    "cloudformation:GetTemplateSummary",
+                    "cloudformation:SetStackPolicy",
+                    "cloudformation:ValidateTemplate",
+                    "cloudformation:UpdateStack"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:CreateBucket",
+                    "s3:DeleteBucket",
+                    "s3:PutBucketVersioning",
+                    "s3:PutEncryptionConfiguration"
+                  ],
+                  "Resource": "arn:aws:s3:::test-*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:CreateTable",
+                    "dynamodb:DeleteTable",
+                    "dynamodb:DescribeTable"
+                  ],
+                  "Resource": "arn:aws:dynamodb:*:*:table/test-*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ProductId": {
+      "Description": "Service Catalog Product ID",
+      "Value": {"Ref": "TestInstanceProduct"}
+    },
+    "LaunchRoleArn": {
+      "Description": "ARN of the Service Catalog launch role",
+      "Value": {"Fn::GetAtt": ["ServiceCatalogLaunchRole", "Arn"]}
+    }
+  }
+}

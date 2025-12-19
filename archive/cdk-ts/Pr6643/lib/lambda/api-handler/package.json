@@ -1,0 +1,11 @@
+{
+  "name": "api-handler",
+  "version": "1.0.0",
+  "description": "API handler for ETL pipeline",
+  "main": "index.ts",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.400.0",
+    "@aws-sdk/client-sfn": "^3.400.0",
+    "@types/aws-lambda": "^8.10.119"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "410113",
+  "team": "4",
+  "startedAt": "2025-10-07T15:25:57.082Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 8.5,
+  "aws_services": [
+    "apiGateway",
+    "Lambda",
+    "Redis",
+    "DynamoDB",
+    "EventBridge",
+    "Cloudwatch",
+    "X-ray",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
+}

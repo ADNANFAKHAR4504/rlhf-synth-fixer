@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348896",
+  "team": "6",
+  "startedAt": "2025-09-30T19:40:40.187Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS",
+    "IAM",
+    "CloudTrail",
+    "Config",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "KMS",
+    "Secrets Manager"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
+}

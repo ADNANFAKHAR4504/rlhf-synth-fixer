@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350015",
+  "team": "3",
+  "startedAt": "2025-09-05T10:17:18.760Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "Database Management",
+    "Network Configuration",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "CloudTrail",
+    "CloudWatch",
+    "Secrets Manager",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sadafh-turing",
+  "dockerS3Location": ""
+}

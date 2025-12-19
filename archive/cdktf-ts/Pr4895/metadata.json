@@ -1,0 +1,37 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "5231078732",
+  "team": "synth",
+  "startedAt": "2025-10-21T06:06:08Z",
+  "subtask": "Application Deployment",
+  "background": "HealthTech Solutions is launching a new patient management system that requires secure handling of PHI (Protected Health Information). The application needs a robust CI/CD pipeline with proper segregation of environments and secure database handling.",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "Security Groups",
+    "KMS",
+    "RDS Aurora Serverless v2",
+    "Secrets Manager",
+    "ECS Fargate",
+    "IAM Roles",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

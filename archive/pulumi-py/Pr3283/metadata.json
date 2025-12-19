@@ -1,0 +1,27 @@
+{
+  "platform": "pulumi",
+  "language": "python",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "30598714",
+  "team": "synth",
+  "startedAt": "2025-10-02T02:58:32+05:30",
+  "training_quality": 9,
+  "aws_services": [
+    "CloudWatch Logs",
+    "KMS",
+    "S3",
+    "Lambda",
+    "EventBridge Scheduler",
+    "IAM",
+    "CloudWatch Metrics",
+    "CloudWatch Alarms"
+  ],
+  "subcategory": "secure-logging-infrastructure",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

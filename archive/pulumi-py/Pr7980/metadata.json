@@ -1,0 +1,23 @@
+{
+  "po_id": "d9d2o4n0",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "background": "A fintech company's payment processing system uses RDS MySQL instances that are experiencing performance bottlenecks during peak hours. The current Pulumi infrastructure code creates database instances without proper optimization, leading to high costs and slow query response times.",
+  "aws_region": "us-east-1",
+  "training_quality": 9,
+  "author": "mayanksethi-turing",
+  "reviewer": "balasl342",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2024-06-12T10:00:00+00:00",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

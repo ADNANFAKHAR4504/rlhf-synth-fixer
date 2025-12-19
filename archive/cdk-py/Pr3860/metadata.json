@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "iac-web-app-py-3856",
+  "team": "5",
+  "startedAt": "2025-10-08T11:26:25.179Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "SQS",
+    "Lambda",
+    "DynamoDB",
+    "IAM",
+    "CloudWatch",
+    "EventBridge",
+    "KMS",
+    "SNS"
+  ],
+  "training_quality": 3,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}

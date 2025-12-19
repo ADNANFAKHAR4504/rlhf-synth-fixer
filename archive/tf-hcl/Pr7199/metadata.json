@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912204",
+  "team": "4",
+  "startedAt": "2025-11-24T15:29:44.366Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "training_quality": 9,
+  "background": "Comprehensive serverless payment webhook processing system using Terraform. Implementation includes multi-tenant architecture with Lambda functions, API Gateway, DynamoDB, SQS, Step Functions, S3, ECR, VPC networking, and EventBridge for event-driven architecture. Features include fraud detection, intelligent data archiving, point-in-time recovery, VPC endpoints for private access, comprehensive logging, monitoring, and cost optimization with ARM64 architecture. Complete test suite with 159 unit tests and 49 integration tests.",
+  "aws_services": [
+    "IAM",
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "SQS",
+    "Step Functions",
+    "EventBridge",
+    "S3",
+    "ECR",
+    "CloudWatch",
+    "VPC",
+    "EC2",
+    "Fraud Detector"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

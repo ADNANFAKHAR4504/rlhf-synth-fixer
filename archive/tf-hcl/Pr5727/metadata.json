@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350231",
+  "team": "4",
+  "startedAt": "2025-11-04T04:47:44.291Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch",
+    "SNS",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 9,
+  "background": "Production-ready AWS infrastructure implementation using Terraform with comprehensive security best practices including VPC networking across multiple AZs, encrypted RDS Multi-AZ MySQL database, bastion host EC2 instance, IAM roles with least privilege, AWS Secrets Manager integration, VPC Flow Logs, CloudWatch monitoring and alarms, S3 bucket with lifecycle policies, and complete test coverage (208 tests: 171 unit + 37 integration). Implements principle of least privilege, encryption at rest, network flow logging, and security group hardening. All resources deployed in us-west-1 region with no deletion protection as per requirements.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

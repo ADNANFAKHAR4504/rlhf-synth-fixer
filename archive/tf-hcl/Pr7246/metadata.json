@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "w9v1c6r1",
+  "team": "synth",
+  "startedAt": "2025-11-25T11:30:00+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "ECS",
+    "Lambda",
+    "Aurora",
+    "RDS",
+    "S3",
+    "DynamoDB",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

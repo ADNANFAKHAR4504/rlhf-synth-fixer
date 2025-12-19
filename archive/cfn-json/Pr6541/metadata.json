@@ -1,0 +1,35 @@
+{
+  "task_id": "101912438",
+  "po_id": "101912438",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-14T07:18:56Z",
+  "subtask": "Security, Compliance, and Governance",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "cloudformation",
+    "validation",
+    "compliance"
+  ],
+  "aws_services": [
+    "Systems Manager",
+    "EventBridge",
+    "Lambda",
+    "S3",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

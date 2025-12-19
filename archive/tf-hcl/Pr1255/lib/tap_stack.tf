@@ -1091,8 +1091,8 @@ locals {
   # Set these based on your environment:
   # - true: Create new Config resources (safe for fresh environments)
   # - false: Skip creation (use when Config already exists)
-  deploy_config_us_west     = false  # Set to false if Config already exists in us-west-1
-  deploy_config_eu_central  = false # Set to false if Config already exists in eu-central-1
+  deploy_config_us_west    = false # Set to false if Config already exists in us-west-1
+  deploy_config_eu_central = false # Set to false if Config already exists in eu-central-1
 }
 
 # Create Config resources only when explicitly enabled
@@ -1230,8 +1230,8 @@ resource "aws_cloudwatch_event_rule" "guardduty_finding_us_west" {
   description = "Capture GuardDuty findings"
 
   event_pattern = jsonencode({
-    source        = ["aws.guardduty"]
-    detail-type   = ["GuardDuty Finding"]
+    source      = ["aws.guardduty"]
+    detail-type = ["GuardDuty Finding"]
     detail = {
       severity = [4.0, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 5.0, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 6.0, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 9.0, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10.0]
     }
@@ -1257,8 +1257,8 @@ resource "aws_cloudwatch_event_rule" "guardduty_finding_eu_central" {
   description = "Capture GuardDuty findings"
 
   event_pattern = jsonencode({
-    source        = ["aws.guardduty"]
-    detail-type   = ["GuardDuty Finding"]
+    source      = ["aws.guardduty"]
+    detail-type = ["GuardDuty Finding"]
     detail = {
       severity = [4.0, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 5.0, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 6.0, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 9.0, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10.0]
     }
@@ -1328,13 +1328,13 @@ resource "aws_iam_role_policy" "api_gateway_cloudwatch_policy" {
 
 # API Gateway Account Settings for CloudWatch Logs (us-west-1)
 resource "aws_api_gateway_account" "api_gateway_account_us_west" {
-  provider           = aws.us_west
+  provider            = aws.us_west
   cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch_role.arn
 }
 
 # API Gateway Account Settings for CloudWatch Logs (eu-central-1)
 resource "aws_api_gateway_account" "api_gateway_account_eu_central" {
-  provider           = aws.eu_central
+  provider            = aws.eu_central
   cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch_role.arn
 }
 
@@ -1370,8 +1370,8 @@ resource "aws_wafv2_web_acl" "api_protection_us_west" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "RateLimitRule"
-      sampled_requests_enabled    = true
+      metric_name                = "RateLimitRule"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -1393,8 +1393,8 @@ resource "aws_wafv2_web_acl" "api_protection_us_west" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "CommonRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "CommonRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -1416,8 +1416,8 @@ resource "aws_wafv2_web_acl" "api_protection_us_west" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "KnownBadInputsRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "KnownBadInputsRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -1432,21 +1432,21 @@ resource "aws_wafv2_web_acl" "api_protection_us_west" {
 
     statement {
       geo_match_statement {
-        country_codes = ["CN", "RU", "KP"]  # Block China, Russia, North Korea as example
+        country_codes = ["CN", "RU", "KP"] # Block China, Russia, North Korea as example
       }
     }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "GeoBlockRule"
-      sampled_requests_enabled    = true
+      metric_name                = "GeoBlockRule"
+      sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                 = "APIProtectionWebACL"
-    sampled_requests_enabled    = true
+    metric_name                = "APIProtectionWebACL"
+    sampled_requests_enabled   = true
   }
 
   tags = merge(local.common_tags, {
@@ -1482,8 +1482,8 @@ resource "aws_wafv2_web_acl" "api_protection_eu_central" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "RateLimitRule"
-      sampled_requests_enabled    = true
+      metric_name                = "RateLimitRule"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -1505,8 +1505,8 @@ resource "aws_wafv2_web_acl" "api_protection_eu_central" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "CommonRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "CommonRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -1528,8 +1528,8 @@ resource "aws_wafv2_web_acl" "api_protection_eu_central" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "KnownBadInputsRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "KnownBadInputsRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -1544,21 +1544,21 @@ resource "aws_wafv2_web_acl" "api_protection_eu_central" {
 
     statement {
       geo_match_statement {
-        country_codes = ["CN", "RU", "KP"]  # Block China, Russia, North Korea as example
+        country_codes = ["CN", "RU", "KP"] # Block China, Russia, North Korea as example
       }
     }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "GeoBlockRule"
-      sampled_requests_enabled    = true
+      metric_name                = "GeoBlockRule"
+      sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                 = "APIProtectionWebACL"
-    sampled_requests_enabled    = true
+    metric_name                = "APIProtectionWebACL"
+    sampled_requests_enabled   = true
   }
 
   tags = merge(local.common_tags, {
@@ -1579,10 +1579,10 @@ resource "aws_api_gateway_rest_api" "secure_api_us_west" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Effect    = "Allow"
         Principal = "*"
-        Action = "execute-api:Invoke"
-        Resource = "*"
+        Action    = "execute-api:Invoke"
+        Resource  = "*"
         Condition = {
           IpAddress = {
             "aws:SourceIp" = local.allowed_ip_ranges
@@ -1610,10 +1610,10 @@ resource "aws_api_gateway_rest_api" "secure_api_eu_central" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Effect    = "Allow"
         Principal = "*"
-        Action = "execute-api:Invoke"
-        Resource = "*"
+        Action    = "execute-api:Invoke"
+        Resource  = "*"
         Condition = {
           IpAddress = {
             "aws:SourceIp" = local.allowed_ip_ranges
@@ -1630,7 +1630,7 @@ resource "aws_api_gateway_rest_api" "secure_api_eu_central" {
 
 # API Gateway Stage - us-west-1
 resource "aws_api_gateway_stage" "secure_api_stage_us_west" {
-  provider  = aws.us_west
+  provider      = aws.us_west
   deployment_id = aws_api_gateway_deployment.secure_api_deployment_us_west.id
   rest_api_id   = aws_api_gateway_rest_api.secure_api_us_west.id
   stage_name    = local.environment
@@ -1641,7 +1641,7 @@ resource "aws_api_gateway_stage" "secure_api_stage_us_west" {
 
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.application_logs_us_west.arn
-    format         = jsonencode({
+    format = jsonencode({
       requestId      = "$context.requestId"
       ip             = "$context.identity.sourceIp"
       caller         = "$context.identity.caller"
@@ -1662,7 +1662,7 @@ resource "aws_api_gateway_stage" "secure_api_stage_us_west" {
 
 # API Gateway Stage - eu-central-1
 resource "aws_api_gateway_stage" "secure_api_stage_eu_central" {
-  provider  = aws.eu_central
+  provider      = aws.eu_central
   deployment_id = aws_api_gateway_deployment.secure_api_deployment_eu_central.id
   rest_api_id   = aws_api_gateway_rest_api.secure_api_eu_central.id
   stage_name    = local.environment
@@ -1673,7 +1673,7 @@ resource "aws_api_gateway_stage" "secure_api_stage_eu_central" {
 
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.application_logs_eu_central.arn
-    format         = jsonencode({
+    format = jsonencode({
       requestId      = "$context.requestId"
       ip             = "$context.identity.sourceIp"
       caller         = "$context.identity.caller"
@@ -1792,9 +1792,9 @@ resource "aws_api_gateway_integration_response" "health_integration_response_us_
 
   response_templates = {
     "application/json" = jsonencode({
-      message = "API is healthy"
+      message   = "API is healthy"
       timestamp = "$context.requestTime"
-      stage = "$context.stage"
+      stage     = "$context.stage"
     })
   }
 
@@ -1811,9 +1811,9 @@ resource "aws_api_gateway_integration_response" "health_integration_response_eu_
 
   response_templates = {
     "application/json" = jsonencode({
-      message = "API is healthy"
+      message   = "API is healthy"
       timestamp = "$context.requestTime"
-      stage = "$context.stage"
+      stage     = "$context.stage"
     })
   }
 
@@ -2225,21 +2225,21 @@ output "guardduty" {
   description = "GuardDuty detector information"
   value = {
     us_west = {
-      detector_id = aws_guardduty_detector.main_us_west.id
+      detector_id  = aws_guardduty_detector.main_us_west.id
       detector_arn = aws_guardduty_detector.main_us_west.arn
-      enabled = aws_guardduty_detector.main_us_west.enable
+      enabled      = aws_guardduty_detector.main_us_west.enable
       event_rule = {
         name = aws_cloudwatch_event_rule.guardduty_finding_us_west.name
-        arn = aws_cloudwatch_event_rule.guardduty_finding_us_west.arn
+        arn  = aws_cloudwatch_event_rule.guardduty_finding_us_west.arn
       }
     }
     eu_central = {
-      detector_id = aws_guardduty_detector.main_eu_central.id
+      detector_id  = aws_guardduty_detector.main_eu_central.id
       detector_arn = aws_guardduty_detector.main_eu_central.arn
-      enabled = aws_guardduty_detector.main_eu_central.enable
+      enabled      = aws_guardduty_detector.main_eu_central.enable
       event_rule = {
         name = aws_cloudwatch_event_rule.guardduty_finding_eu_central.name
-        arn = aws_cloudwatch_event_rule.guardduty_finding_eu_central.arn
+        arn  = aws_cloudwatch_event_rule.guardduty_finding_eu_central.arn
       }
     }
   }
@@ -2250,21 +2250,21 @@ output "waf" {
   description = "WAF Web ACL information"
   value = {
     us_west = {
-      web_acl_id = aws_wafv2_web_acl.api_protection_us_west.id
-      web_acl_arn = aws_wafv2_web_acl.api_protection_us_west.arn
+      web_acl_id   = aws_wafv2_web_acl.api_protection_us_west.id
+      web_acl_arn  = aws_wafv2_web_acl.api_protection_us_west.arn
       web_acl_name = aws_wafv2_web_acl.api_protection_us_west.name
       api_association = {
         resource_arn = aws_wafv2_web_acl_association.api_waf_association_us_west.resource_arn
-        web_acl_arn = aws_wafv2_web_acl_association.api_waf_association_us_west.web_acl_arn
+        web_acl_arn  = aws_wafv2_web_acl_association.api_waf_association_us_west.web_acl_arn
       }
     }
     eu_central = {
-      web_acl_id = aws_wafv2_web_acl.api_protection_eu_central.id
-      web_acl_arn = aws_wafv2_web_acl.api_protection_eu_central.arn
+      web_acl_id   = aws_wafv2_web_acl.api_protection_eu_central.id
+      web_acl_arn  = aws_wafv2_web_acl.api_protection_eu_central.arn
       web_acl_name = aws_wafv2_web_acl.api_protection_eu_central.name
       api_association = {
         resource_arn = aws_wafv2_web_acl_association.api_waf_association_eu_central.resource_arn
-        web_acl_arn = aws_wafv2_web_acl_association.api_waf_association_eu_central.web_acl_arn
+        web_acl_arn  = aws_wafv2_web_acl_association.api_waf_association_eu_central.web_acl_arn
       }
     }
   }
@@ -2275,19 +2275,19 @@ output "api_gateway" {
   description = "API Gateway information"
   value = {
     cloudwatch_role = {
-      arn = aws_iam_role.api_gateway_cloudwatch_role.arn
+      arn  = aws_iam_role.api_gateway_cloudwatch_role.arn
       name = aws_iam_role.api_gateway_cloudwatch_role.name
     }
     us_west = {
       rest_api = {
-        id = aws_api_gateway_rest_api.secure_api_us_west.id
-        name = aws_api_gateway_rest_api.secure_api_us_west.name
-        arn = aws_api_gateway_rest_api.secure_api_us_west.arn
+        id            = aws_api_gateway_rest_api.secure_api_us_west.id
+        name          = aws_api_gateway_rest_api.secure_api_us_west.name
+        arn           = aws_api_gateway_rest_api.secure_api_us_west.arn
         execution_arn = aws_api_gateway_rest_api.secure_api_us_west.execution_arn
       }
       stage = {
-        name = aws_api_gateway_stage.secure_api_stage_us_west.stage_name
-        arn = aws_api_gateway_stage.secure_api_stage_us_west.arn
+        name       = aws_api_gateway_stage.secure_api_stage_us_west.stage_name
+        arn        = aws_api_gateway_stage.secure_api_stage_us_west.arn
         invoke_url = aws_api_gateway_stage.secure_api_stage_us_west.invoke_url
       }
       deployment = {
@@ -2295,19 +2295,19 @@ output "api_gateway" {
       }
       health_endpoint = {
         resource_id = aws_api_gateway_resource.health_us_west.id
-        path = aws_api_gateway_resource.health_us_west.path_part
+        path        = aws_api_gateway_resource.health_us_west.path_part
       }
     }
     eu_central = {
       rest_api = {
-        id = aws_api_gateway_rest_api.secure_api_eu_central.id
-        name = aws_api_gateway_rest_api.secure_api_eu_central.name
-        arn = aws_api_gateway_rest_api.secure_api_eu_central.arn
+        id            = aws_api_gateway_rest_api.secure_api_eu_central.id
+        name          = aws_api_gateway_rest_api.secure_api_eu_central.name
+        arn           = aws_api_gateway_rest_api.secure_api_eu_central.arn
         execution_arn = aws_api_gateway_rest_api.secure_api_eu_central.execution_arn
       }
       stage = {
-        name = aws_api_gateway_stage.secure_api_stage_eu_central.stage_name
-        arn = aws_api_gateway_stage.secure_api_stage_eu_central.arn
+        name       = aws_api_gateway_stage.secure_api_stage_eu_central.stage_name
+        arn        = aws_api_gateway_stage.secure_api_stage_eu_central.arn
         invoke_url = aws_api_gateway_stage.secure_api_stage_eu_central.invoke_url
       }
       deployment = {
@@ -2315,7 +2315,7 @@ output "api_gateway" {
       }
       health_endpoint = {
         resource_id = aws_api_gateway_resource.health_eu_central.id
-        path = aws_api_gateway_resource.health_eu_central.path_part
+        path        = aws_api_gateway_resource.health_eu_central.path_part
       }
     }
   }

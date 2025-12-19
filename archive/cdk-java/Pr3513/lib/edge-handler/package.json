@@ -1,0 +1,9 @@
+{
+  "name": "url-shortener-edge-handler",
+  "version": "1.0.0",
+  "description": "Lambda@Edge function for URL shortener click tracking",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "^2.1490.0"
+  }
+}

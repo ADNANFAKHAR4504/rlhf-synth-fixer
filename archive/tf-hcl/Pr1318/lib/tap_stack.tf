@@ -67,13 +67,13 @@ variable "enable_mfa" {
 # Local values for resource naming and tagging
 locals {
   common_tags = {
-    Environment   = var.environment
+    Environment  = var.environment
     Project      = var.project_name
     ManagedBy    = "Terraform"
     CreatedDate  = timestamp()
     DeploymentId = random_string.deployment_id.result
   }
-  
+
   name_prefix = "${var.project_name}-${random_string.deployment_id.result}-v2"
 }
 
@@ -103,9 +103,9 @@ resource "random_string" "deployment_id" {
   upper   = false
   special = false
   keepers = {
-    deployment = "reset816"
+    deployment       = "reset816"
     force_recreation = "20250816-032000"
-    complete_reset = "final"
+    complete_reset   = "final"
   }
 }
 
@@ -131,7 +131,7 @@ resource "aws_kms_key" "main" {
   tags = local.common_tags
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [random_string.deployment_id]
+    replace_triggered_by  = [random_string.deployment_id]
   }
 }
 
@@ -159,7 +159,7 @@ resource "aws_vpc" "main" {
   })
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [random_string.deployment_id]
+    replace_triggered_by  = [random_string.deployment_id]
   }
 }
 
@@ -210,7 +210,7 @@ resource "aws_subnet" "private" {
 resource "aws_eip" "nat" {
   count = 3
 
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(local.common_tags, {
@@ -282,7 +282,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   retention_in_days = 30
   # Temporarily removing KMS encryption to avoid dependency issues
   # kms_key_id        = aws_kms_key.main.arn
-  
+
   tags = local.common_tags
 
   lifecycle {
@@ -311,7 +311,7 @@ resource "aws_iam_role" "vpc_flow_logs" {
 
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [random_string.deployment_id]
+    replace_triggered_by  = [random_string.deployment_id]
   }
 }
 
@@ -431,7 +431,7 @@ resource "aws_s3_bucket" "main" {
 
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [random_string.deployment_id]
+    replace_triggered_by  = [random_string.deployment_id]
   }
 }
 
@@ -447,7 +447,7 @@ resource "aws_s3_bucket" "cloudtrail" {
 
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [random_string.deployment_id]
+    replace_triggered_by  = [random_string.deployment_id]
   }
 }
 
@@ -458,7 +458,7 @@ resource "null_resource" "empty_old_cloudtrail_bucket" {
   }
   # Final robust cleanup: delete all objects, versions, and delete markers
   provisioner "local-exec" {
-    command = <<EOT
+    command     = <<EOT
       BUCKET="secure-multi-account-development-cloudtrail-4185c46d"
       # Remove all objects
       aws s3 rm s3://$BUCKET --recursive || echo 'Bucket not found or already empty'
@@ -521,7 +521,7 @@ resource "aws_s3_bucket_versioning" "cloudtrail" {
 
 # S3 Bucket Lifecycle Configuration to auto-delete objects
 resource "aws_s3_bucket_lifecycle_configuration" "main" {
-  bucket = aws_s3_bucket.main.id
+  bucket     = aws_s3_bucket.main.id
   depends_on = [aws_s3_bucket_versioning.main]
 
   rule {
@@ -547,7 +547,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  bucket     = aws_s3_bucket.cloudtrail.id
   depends_on = [aws_s3_bucket_versioning.cloudtrail]
 
   rule {
@@ -622,7 +622,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
             "AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-cloudtrail"
           }
         }
@@ -638,8 +638,8 @@ resource "aws_cloudtrail" "main" {
   s3_key_prefix  = "cloudtrail-logs"
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type                  = "All"
+    include_management_events        = true
     exclude_management_event_sources = []
 
     data_resource {
@@ -675,7 +675,7 @@ resource "aws_db_instance" "main" {
   max_allocated_storage = var.db_allocated_storage * 2
   storage_type          = "gp2"
   storage_encrypted     = true
-  kms_key_id           = aws_kms_key.main.arn
+  kms_key_id            = aws_kms_key.main.arn
 
   db_name  = "maindb"
   username = "admin"
@@ -685,8 +685,8 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
   deletion_protection = var.environment == "production" ? true : false
@@ -705,7 +705,7 @@ resource "aws_iam_user" "app_user" {
 
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [random_string.deployment_id]
+    replace_triggered_by  = [random_string.deployment_id]
   }
 }
 
@@ -757,7 +757,7 @@ resource "aws_iam_role" "ec2_role" {
 
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [random_string.deployment_id]
+    replace_triggered_by  = [random_string.deployment_id]
   }
 }
 
@@ -818,7 +818,7 @@ output "s3_bucket_main" {
     bucket_arn        = aws_s3_bucket.main.arn
     encryption_status = "enabled"
     encryption_type   = "aws:kms"
-    kms_key_id       = aws_kms_key.main.arn
+    kms_key_id        = aws_kms_key.main.arn
   }
 }
 
@@ -829,7 +829,7 @@ output "s3_bucket_cloudtrail" {
     bucket_arn        = aws_s3_bucket.cloudtrail.arn
     encryption_status = "enabled"
     encryption_type   = "aws:kms"
-    kms_key_id       = aws_kms_key.main.arn
+    kms_key_id        = aws_kms_key.main.arn
   }
 }
 
@@ -843,8 +843,8 @@ output "rds_security_status" {
   description = "RDS security configuration"
   value = {
     publicly_accessible = aws_db_instance.main.publicly_accessible
-    encrypted          = aws_db_instance.main.storage_encrypted
-    kms_key_id        = aws_db_instance.main.kms_key_id
+    encrypted           = aws_db_instance.main.storage_encrypted
+    kms_key_id          = aws_db_instance.main.kms_key_id
     vpc_security_groups = aws_db_instance.main.vpc_security_group_ids
   }
 }
@@ -902,31 +902,31 @@ output "security_groups" {
 output "kms_key" {
   description = "KMS key details"
   value = {
-    key_id    = aws_kms_key.main.key_id
-    key_arn   = aws_kms_key.main.arn
-    alias     = aws_kms_alias.main.name
-    rotation  = "enabled"
+    key_id   = aws_kms_key.main.key_id
+    key_arn  = aws_kms_key.main.arn
+    alias    = aws_kms_alias.main.name
+    rotation = "enabled"
   }
 }
 
 output "environment_summary" {
   description = "Complete environment summary"
   value = {
-    environment     = var.environment
-    region         = var.aws_region
-    project_name   = var.project_name
-    vpc_id         = aws_vpc.main.id
+    environment  = var.environment
+    region       = var.aws_region
+    project_name = var.project_name
+    vpc_id       = aws_vpc.main.id
     subnets = {
       public_subnets  = aws_subnet.public[*].id
       private_subnets = aws_subnet.private[*].id
     }
     security_status = {
-      encryption_enabled    = true
-      vpc_flow_logs        = true
-      cloudtrail_enabled   = true
-      mfa_configured       = var.enable_mfa
-      least_privilege_iam  = true
-      private_rds          = true
+      encryption_enabled  = true
+      vpc_flow_logs       = true
+      cloudtrail_enabled  = true
+      mfa_configured      = var.enable_mfa
+      least_privilege_iam = true
+      private_rds         = true
     }
   }
 }

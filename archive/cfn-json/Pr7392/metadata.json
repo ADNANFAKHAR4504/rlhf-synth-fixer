@@ -1,0 +1,39 @@
+{
+  "task_id": "101912722",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "po_id": "PO-101912722",
+  "turn_type": "single",
+  "startedAt": "2025-11-26T12:00:00+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "security",
+    "compliance",
+    "encryption",
+    "data-processing",
+    "financial-services"
+  ],
+  "aws_services": [
+    "KMS",
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "Secrets Manager",
+    "IAM",
+    "VPC",
+    "CloudWatch",
+    "EC2"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

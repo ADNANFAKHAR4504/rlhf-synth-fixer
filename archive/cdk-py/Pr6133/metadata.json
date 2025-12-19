@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101911993",
+  "team": "4",
+  "startedAt": "2025-11-09T14:30:00.3NZ",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "X-Ray",
+    "EventBridge",
+    "SNS",
+    "Synthetics",
+    "Contributor Insights",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}

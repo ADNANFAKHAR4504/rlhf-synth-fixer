@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "python",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-17T00:56:51+05:30",
+  "subtask": "Application Deployment",
+  "background": "MedTech Solutions needs to deploy a containerized application that processes patient healthcare records. The system must maintain HIPAA compliance while providing efficient data processing capabilities. The application will receive patient data, process it, and store it in an encrypted database.",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "4276735046",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "Aurora",
+    "KMS",
+    "CloudWatch Logs",
+    "IAM",
+    "Application Load Balancer",
+    "Secrets Manager",
+    "ECR"
+  ],
+  "region": "sa-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

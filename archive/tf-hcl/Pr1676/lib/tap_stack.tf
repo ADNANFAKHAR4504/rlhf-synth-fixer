@@ -293,7 +293,7 @@ resource "aws_lb_listener" "prod_http_listener" {
 
   default_action {
     type = var.certificate_arn != "" ? "redirect" : "forward"
-    
+
     dynamic "redirect" {
       for_each = var.certificate_arn != "" ? [1] : []
       content {

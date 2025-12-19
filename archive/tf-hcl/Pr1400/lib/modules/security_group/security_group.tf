@@ -1,7 +1,7 @@
 resource "aws_security_group" "bastion" {
-  name   = "${var.project}-bastion-sg"
+  name        = "${var.project}-bastion-sg"
   description = "Security group for bastion host"
-  vpc_id = var.vpc_id
+  vpc_id      = var.vpc_id
 
   ingress {
     description = "SSH from anywhere"
@@ -23,9 +23,9 @@ resource "aws_security_group" "bastion" {
 }
 
 resource "aws_security_group" "private_instance" {
-  name   = "${var.project}-private-sg"
+  name        = "${var.project}-private-sg"
   description = "Security group for private instances"
-  vpc_id = var.vpc_id
+  vpc_id      = var.vpc_id
 
   ingress {
     description     = "SSH from bastion"

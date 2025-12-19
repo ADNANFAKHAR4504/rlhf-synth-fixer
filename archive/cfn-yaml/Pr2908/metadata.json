@@ -1,0 +1,50 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348932",
+  "team": "5",
+  "startedAt": "2025-09-09T05:34:02.370Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Web Application Deployment",
+    "Monitoring Setup",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::NatGateway",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::SecurityGroup",
+    "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    "AWS::ElasticLoadBalancingV2::TargetGroup",
+    "AWS::ElasticLoadBalancingV2::Listener",
+    "AWS::WAFv2::WebACL",
+    "AWS::WAFv2::WebACLAssociation",
+    "AWS::WAFv2::LoggingConfiguration",
+    "AWS::KMS::Key",
+    "AWS::KMS::Alias",
+    "AWS::S3::Bucket",
+    "AWS::S3::BucketPolicy",
+    "AWS::KinesisFirehose::DeliveryStream",
+    "AWS::SNS::Topic",
+    "AWS::SNS::Subscription",
+    "AWS::Lambda::Function",
+    "AWS::Lambda::Permission",
+    "AWS::IAM::Role",
+    "AWS::Events::Rule",
+    "AWS::Logs::LogGroup"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "waqara-turing",
+  "dockerS3Location": ""
+}

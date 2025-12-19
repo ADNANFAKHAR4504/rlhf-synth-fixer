@@ -1,0 +1,16 @@
+Checking for users without MFA...
+Checking for stale access keys...
+Checking for overly permissive roles...
+Checking for permissive policies...
+Error validating policy AdministratorAccess: An error occurred (500) when calling the ValidatePolicy operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+Checking for cross-account role trusts...
+Scan complete. Found 5 issues.
+HIGH severity issues: 4
+MEDIUM severity issues: 1
+LOW severity issues: 0
+Reports generated: iam_compliance_report.json and iam_compliance_report.csv

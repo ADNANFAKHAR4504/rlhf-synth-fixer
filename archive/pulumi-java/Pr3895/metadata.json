@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "java",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "92658140",
+  "team": "synth",
+  "startedAt": "2025-10-08T18:23:01+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "Lambda",
+    "CloudWatch",
+    "DynamoDB",
+    "CloudTrail",
+    "S3 Access Points"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,730 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Appointment Booking Notification System with EventBridge, Step Functions, Lambda, DynamoDB, SNS, and SES",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "SenderEmail": {
+      "Type": "String",
+      "Description": "Verified SES email address for sending notifications",
+      "Default": "notifications@example.com"
+    }
+  },
+  "Resources": {
+    "AppointmentsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "Appointments-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "appointmentId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "appointmentTime",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "appointmentId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "AppointmentTimeIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "appointmentTime",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            },
+            "ProvisionedThroughput": {
+              "ReadCapacityUnits": 5,
+              "WriteCapacityUnits": 5
+            }
+          }
+        ],
+        "BillingMode": "PROVISIONED",
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 5
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "DeletionProtectionEnabled": false
+      }
+    },
+    "NotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "AppointmentNotifications-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Appointment SMS Notifications"
+      }
+    },
+    "ProcessorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/AppointmentProcessor-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "EmailLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/EmailSender-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "SmsLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/SmsSender-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "StepFunctionsLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/stepfunctions/NotificationWorkflow-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "AppointmentLambdaRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "AppointmentsTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${AppointmentsTable.Arn}/index/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "SNSPublish",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "NotificationTopic"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "SESAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ses:SendEmail",
+                    "ses:SendRawEmail"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AppointmentProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "AppointmentProcessor-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "APPOINTMENTS_TABLE": {
+              "Ref": "AppointmentsTable"
+            },
+            "APPOINTMENT_TIME_INDEX": "AppointmentTimeIndex"
+          }
+        },
+        "Code": {
+          "ZipFile": "const { DynamoDBClient, ScanCommand } = require('@aws-sdk/client-dynamodb');\nconst { unmarshall } = require('@aws-sdk/util-dynamodb');\n\nconst dynamodb = new DynamoDBClient({});\n\nexports.handler = async (event) => {\n  console.log('Processing appointments for notification');\n\n  try {\n    const now = Math.floor(Date.now() / 1000);\n    const futureTime = now + (24 * 60 * 60);\n\n    const params = {\n      TableName: process.env.APPOINTMENTS_TABLE,\n      FilterExpression: 'appointmentTime BETWEEN :now AND :future AND attribute_not_exists(notificationSent)',\n      ExpressionAttributeValues: {\n        ':now': { N: now.toString() },\n        ':future': { N: futureTime.toString() }\n      }\n    };\n\n    const command = new ScanCommand(params);\n    const result = await dynamodb.send(command);\n\n    const appointments = result.Items ? result.Items.map(item => unmarshall(item)) : [];\n\n    return {\n      statusCode: 200,\n      appointments: appointments\n    };\n  } catch (error) {\n    console.error('Error processing appointments:', error);\n    throw error;\n  }\n};\n"
+        }
+      }
+    },
+    "EmailSenderFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "EmailSender-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "SENDER_EMAIL": {
+              "Ref": "SenderEmail"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');\n\nconst ses = new SESClient({});\n\nexports.handler = async (event) => {\n  console.log('Sending email notification:', JSON.stringify(event));\n\n  const { customerEmail, appointmentTime, appointmentId } = event;\n\n  if (!customerEmail) {\n    throw new Error('Customer email is required');\n  }\n\n  const appointmentDate = new Date(appointmentTime * 1000).toLocaleString();\n\n  const params = {\n    Source: process.env.SENDER_EMAIL,\n    Destination: {\n      ToAddresses: [customerEmail]\n    },\n    Message: {\n      Subject: {\n        Data: 'Appointment Reminder',\n        Charset: 'UTF-8'\n      },\n      Body: {\n        Text: {\n          Data: `This is a reminder for your appointment on ${appointmentDate}. Appointment ID: ${appointmentId}`,\n          Charset: 'UTF-8'\n        },\n        Html: {\n          Data: `<html><body><h2>Appointment Reminder</h2><p>This is a reminder for your appointment on <strong>${appointmentDate}</strong>.</p><p>Appointment ID: ${appointmentId}</p></body></html>`,\n          Charset: 'UTF-8'\n        }\n      }\n    }\n  };\n\n  try {\n    const command = new SendEmailCommand(params);\n    const result = await ses.send(command);\n    console.log('Email sent successfully:', result.MessageId);\n\n    return {\n      statusCode: 200,\n      messageId: result.MessageId,\n      channel: 'email'\n    };\n  } catch (error) {\n    console.error('Error sending email:', error);\n    throw error;\n  }\n};\n"
+        }
+      }
+    },
+    "SmsSenderFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "SmsSender-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "SNS_TOPIC_ARN": {
+              "Ref": "NotificationTopic"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');\n\nconst sns = new SNSClient({});\n\nexports.handler = async (event) => {\n  console.log('Sending SMS notification:', JSON.stringify(event));\n\n  const { customerPhone, appointmentTime, appointmentId } = event;\n\n  if (!customerPhone) {\n    throw new Error('Customer phone number is required');\n  }\n\n  const appointmentDate = new Date(appointmentTime * 1000).toLocaleString();\n\n  const message = `Appointment Reminder: Your appointment is scheduled for ${appointmentDate}. ID: ${appointmentId}`;\n\n  const params = {\n    Message: message,\n    PhoneNumber: customerPhone,\n    MessageAttributes: {\n      'AWS.SNS.SMS.SMSType': {\n        DataType: 'String',\n        StringValue: 'Transactional'\n      }\n    }\n  };\n\n  try {\n    const command = new PublishCommand(params);\n    const result = await sns.send(command);\n    console.log('SMS sent successfully:', result.MessageId);\n\n    return {\n      statusCode: 200,\n      messageId: result.MessageId,\n      channel: 'sms'\n    };\n  } catch (error) {\n    console.error('Error sending SMS:', error);\n    throw error;\n  }\n};\n"
+        }
+      }
+    },
+    "StatusUpdaterFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "StatusUpdater-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "APPOINTMENTS_TABLE": {
+              "Ref": "AppointmentsTable"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const { DynamoDBClient, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');\n\nconst dynamodb = new DynamoDBClient({});\n\nexports.handler = async (event) => {\n  console.log('Updating appointment status:', JSON.stringify(event));\n\n  const { appointmentId } = event;\n\n  if (!appointmentId) {\n    throw new Error('Appointment ID is required');\n  }\n\n  const params = {\n    TableName: process.env.APPOINTMENTS_TABLE,\n    Key: {\n      appointmentId: { S: appointmentId }\n    },\n    UpdateExpression: 'SET notificationSent = :true, #status = :sent',\n    ExpressionAttributeNames: {\n      '#status': 'status'\n    },\n    ExpressionAttributeValues: {\n      ':true': { BOOL: true },\n      ':sent': { S: 'notification_sent' }\n    }\n  };\n\n  try {\n    const command = new UpdateItemCommand(params);\n    await dynamodb.send(command);\n    console.log('Status updated successfully');\n\n    return {\n      statusCode: 200,\n      message: 'Status updated successfully'\n    };\n  } catch (error) {\n    console.error('Error updating status:', error);\n    throw error;\n  }\n};\n"
+        }
+      }
+    },
+    "StepFunctionsExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "NotificationWorkflowRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "states.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "LambdaInvoke",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "AppointmentProcessorFunction",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "EmailSenderFunction",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "SmsSenderFunction",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "StatusUpdaterFunction",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchLogs",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogDelivery",
+                    "logs:GetLogDelivery",
+                    "logs:UpdateLogDelivery",
+                    "logs:DeleteLogDelivery",
+                    "logs:ListLogDeliveries",
+                    "logs:PutResourcePolicy",
+                    "logs:DescribeResourcePolicies",
+                    "logs:DescribeLogGroups"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "NotificationWorkflow": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": {
+          "Fn::Sub": "NotificationWorkflow-${EnvironmentSuffix}"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "StepFunctionsExecutionRole",
+            "Arn"
+          ]
+        },
+        "LoggingConfiguration": {
+          "Level": "ALL",
+          "IncludeExecutionData": true,
+          "Destinations": [
+            {
+              "CloudWatchLogsLogGroup": {
+                "LogGroupArn": {
+                  "Fn::GetAtt": [
+                    "StepFunctionsLogGroup",
+                    "Arn"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "DefinitionString": {
+          "Fn::Sub": "{\n  \"Comment\": \"Appointment notification workflow with parallel SMS and email delivery\",\n  \"StartAt\": \"ProcessAppointments\",\n  \"States\": {\n    \"ProcessAppointments\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"${AppointmentProcessorFunction.Arn}\",\n        \"Payload.$\": \"$\"\n      },\n      \"ResultPath\": \"$.processorResult\",\n      \"ResultSelector\": {\n        \"appointments.$\": \"$.Payload.appointments\"\n      },\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"States.TaskFailed\", \"States.Timeout\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2.0\n        }\n      ],\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"ResultPath\": \"$.error\",\n          \"Next\": \"ProcessingFailed\"\n        }\n      ],\n      \"Next\": \"CheckAppointments\"\n    },\n    \"CheckAppointments\": {\n      \"Type\": \"Choice\",\n      \"Choices\": [\n        {\n          \"Variable\": \"$.processorResult.appointments[0]\",\n          \"IsPresent\": true,\n          \"Next\": \"MapAppointments\"\n        }\n      ],\n      \"Default\": \"NoAppointments\"\n    },\n    \"MapAppointments\": {\n      \"Type\": \"Map\",\n      \"ItemsPath\": \"$.processorResult.appointments\",\n      \"MaxConcurrency\": 10,\n      \"Iterator\": {\n        \"StartAt\": \"SendNotifications\",\n        \"States\": {\n          \"SendNotifications\": {\n            \"Type\": \"Parallel\",\n            \"Branches\": [\n              {\n                \"StartAt\": \"SendEmail\",\n                \"States\": {\n                  \"SendEmail\": {\n                    \"Type\": \"Task\",\n                    \"Resource\": \"arn:aws:states:::lambda:invoke\",\n                    \"Parameters\": {\n                      \"FunctionName\": \"${EmailSenderFunction.Arn}\",\n                      \"Payload.$\": \"$\"\n                    },\n                    \"ResultPath\": \"$.emailResult\",\n                    \"Retry\": [\n                      {\n                        \"ErrorEquals\": [\"States.TaskFailed\", \"States.Timeout\"],\n                        \"IntervalSeconds\": 2,\n                        \"MaxAttempts\": 3,\n                        \"BackoffRate\": 2.0\n                      }\n                    ],\n                    \"Catch\": [\n                      {\n                        \"ErrorEquals\": [\"States.ALL\"],\n                        \"ResultPath\": \"$.emailError\",\n                        \"Next\": \"EmailFailed\"\n                      }\n                    ],\n                    \"End\": true\n                  },\n                  \"EmailFailed\": {\n                    \"Type\": \"Pass\",\n                    \"Result\": {\n                      \"status\": \"failed\",\n                      \"channel\": \"email\"\n                    },\n                    \"End\": true\n                  }\n                }\n              },\n              {\n                \"StartAt\": \"SendSMS\",\n                \"States\": {\n                  \"SendSMS\": {\n                    \"Type\": \"Task\",\n                    \"Resource\": \"arn:aws:states:::lambda:invoke\",\n                    \"Parameters\": {\n                      \"FunctionName\": \"${SmsSenderFunction.Arn}\",\n                      \"Payload.$\": \"$\"\n                    },\n                    \"ResultPath\": \"$.smsResult\",\n                    \"Retry\": [\n                      {\n                        \"ErrorEquals\": [\"States.TaskFailed\", \"States.Timeout\"],\n                        \"IntervalSeconds\": 2,\n                        \"MaxAttempts\": 3,\n                        \"BackoffRate\": 2.0\n                      }\n                    ],\n                    \"Catch\": [\n                      {\n                        \"ErrorEquals\": [\"States.ALL\"],\n                        \"ResultPath\": \"$.smsError\",\n                        \"Next\": \"SMSFailed\"\n                      }\n                    ],\n                    \"End\": true\n                  },\n                  \"SMSFailed\": {\n                    \"Type\": \"Pass\",\n                    \"Result\": {\n                      \"status\": \"failed\",\n                      \"channel\": \"sms\"\n                    },\n                    \"End\": true\n                  }\n                }\n              }\n            ],\n            \"ResultPath\": \"$.notificationResults\",\n            \"Next\": \"UpdateStatus\"\n          },\n          \"UpdateStatus\": {\n            \"Type\": \"Task\",\n            \"Resource\": \"arn:aws:states:::lambda:invoke\",\n            \"Parameters\": {\n              \"FunctionName\": \"${StatusUpdaterFunction.Arn}\",\n              \"Payload.$\": \"$\"\n            },\n            \"ResultPath\": \"$.updateResult\",\n            \"Retry\": [\n              {\n                \"ErrorEquals\": [\"States.TaskFailed\", \"States.Timeout\"],\n                \"IntervalSeconds\": 2,\n                \"MaxAttempts\": 3,\n                \"BackoffRate\": 2.0\n              }\n            ],\n            \"End\": true\n          }\n        }\n      },\n      \"ResultPath\": \"$.mapResults\",\n      \"Next\": \"WorkflowComplete\"\n    },\n    \"NoAppointments\": {\n      \"Type\": \"Pass\",\n      \"Result\": {\n        \"message\": \"No appointments requiring notifications\"\n      },\n      \"End\": true\n    },\n    \"ProcessingFailed\": {\n      \"Type\": \"Fail\",\n      \"Error\": \"ProcessingError\",\n      \"Cause\": \"Failed to process appointments\"\n    },\n    \"WorkflowComplete\": {\n      \"Type\": \"Succeed\"\n    }\n  }\n}\n"
+        }
+      }
+    },
+    "EventBridgeExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "EventBridgeStepFunctionsRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "StartStepFunctions",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "states:StartExecution"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "NotificationWorkflow",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ScheduledNotificationRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "AppointmentNotificationSchedule-${EnvironmentSuffix}"
+        },
+        "Description": "Triggers notification workflow every hour to check for upcoming appointments",
+        "ScheduleExpression": "rate(1 hour)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "NotificationWorkflow",
+                "Arn"
+              ]
+            },
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "EventBridgeExecutionRole",
+                "Arn"
+              ]
+            },
+            "Id": "NotificationWorkflowTarget"
+          }
+        ]
+      }
+    },
+    "PipeRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "EventBridgePipeRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "pipes.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBStreamAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:DescribeStream",
+                    "dynamodb:GetRecords",
+                    "dynamodb:GetShardIterator",
+                    "dynamodb:ListStreams"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "AppointmentsTable",
+                      "StreamArn"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "StepFunctionsAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "states:StartExecution"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "NotificationWorkflow",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AppointmentStreamPipe": {
+      "Type": "AWS::Pipes::Pipe",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "AppointmentStreamPipe-${EnvironmentSuffix}"
+        },
+        "Description": "Connects DynamoDB Streams to Step Functions for real-time notifications",
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "PipeRole",
+            "Arn"
+          ]
+        },
+        "Source": {
+          "Fn::GetAtt": [
+            "AppointmentsTable",
+            "StreamArn"
+          ]
+        },
+        "SourceParameters": {
+          "DynamoDBStreamParameters": {
+            "StartingPosition": "LATEST",
+            "BatchSize": 10,
+            "MaximumBatchingWindowInSeconds": 5
+          },
+          "FilterCriteria": {
+            "Filters": [
+              {
+                "Pattern": "{\"eventName\": [\"INSERT\", \"MODIFY\"]}"
+              }
+            ]
+          }
+        },
+        "Target": {
+          "Fn::GetAtt": [
+            "NotificationWorkflow",
+            "Arn"
+          ]
+        },
+        "TargetParameters": {
+          "StepFunctionStateMachineParameters": {
+            "InvocationType": "FIRE_AND_FORGET"
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "AppointmentsTableName": {
+      "Description": "Name of the DynamoDB appointments table",
+      "Value": {
+        "Ref": "AppointmentsTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AppointmentsTableName"
+        }
+      }
+    },
+    "AppointmentsTableArn": {
+      "Description": "ARN of the DynamoDB appointments table",
+      "Value": {
+        "Fn::GetAtt": [
+          "AppointmentsTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AppointmentsTableArn"
+        }
+      }
+    },
+    "NotificationTopicArn": {
+      "Description": "ARN of the SNS notification topic",
+      "Value": {
+        "Ref": "NotificationTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-NotificationTopicArn"
+        }
+      }
+    },
+    "NotificationWorkflowArn": {
+      "Description": "ARN of the Step Functions notification workflow",
+      "Value": {
+        "Fn::GetAtt": [
+          "NotificationWorkflow",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-NotificationWorkflowArn"
+        }
+      }
+    },
+    "AppointmentProcessorFunctionArn": {
+      "Description": "ARN of the appointment processor Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "AppointmentProcessorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AppointmentProcessorFunctionArn"
+        }
+      }
+    },
+    "EmailSenderFunctionArn": {
+      "Description": "ARN of the email sender Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "EmailSenderFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EmailSenderFunctionArn"
+        }
+      }
+    },
+    "SmsSenderFunctionArn": {
+      "Description": "ARN of the SMS sender Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "SmsSenderFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SmsSenderFunctionArn"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}

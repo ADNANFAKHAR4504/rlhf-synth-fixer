@@ -1,0 +1,23 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-18T01:07:20+05:30",
+  "po_id": "5344690492",
+  "subtask": "Application Deployment",
+  "background": "A manufacturing company needs to collect and process sensor data from industrial equipment across multiple facilities. The data includes sensitive operational metrics and needs to be stored securely while allowing real-time analytics.",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "aws_services": "VPC,EC2,Kinesis,RDS,ElastiCache,SecretsManager,KMS,CloudWatch",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

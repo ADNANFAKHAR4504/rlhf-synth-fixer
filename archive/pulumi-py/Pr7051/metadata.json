@@ -1,0 +1,39 @@
+{
+  "task_id": "101912529",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "po_id": "101912529",
+  "subtask": "Multi-Tenant SaaS Infrastructure",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "subject_labels": [
+    "VPC",
+    "DynamoDB",
+    "KMS",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "IAM"
+  ],
+  "startedAt": "2025-11-21T09:30:00Z",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "DynamoDB",
+    "KMS",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

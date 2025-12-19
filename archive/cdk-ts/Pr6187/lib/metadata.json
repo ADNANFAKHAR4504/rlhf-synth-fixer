@@ -1,0 +1,11 @@
+{
+  "task_id": "16frc",
+  "platform": "CDK",
+  "language": "TypeScript",
+  "difficulty": "hard",
+  "category": "Application Deployment",
+  "subcategory": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ]
+}

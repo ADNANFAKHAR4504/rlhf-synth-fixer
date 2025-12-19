@@ -1,0 +1,20 @@
+# terraform.tfvars - Production Environment Configuration
+
+# Project Configuration
+project_name = "fintech-startup"
+aws_region   = "us-east-1"
+managed_by   = "terraform"
+
+# Domain Configuration
+domain_name = "fintech-startup.local"
+
+# Container Configuration
+container_image = "nginx:latest"  # Replace with your actual container image
+container_port  = 80
+
+# Database Configuration
+db_name     = "appdb"
+db_username = "dbadmin"
+
+# Optional: Parent hosted zone ID (uncomment and set if you have an existing hosted zone)
+# parent_hosted_zone_id = "Z1D633PJN98FT9"

@@ -1,0 +1,31 @@
+{
+  "task_id": "z4f1p6",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "multi",
+  "po_id": "z4f1p6",
+  "startedAt": "2025-11-24T19:17:00Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "RDS",
+    "Route53",
+    "S3",
+    "CloudWatch",
+    "Lambda",
+    "IAM",
+    "VPC",
+    "EC2"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

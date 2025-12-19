@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-12T15:05:00+00:00",
+  "subtask": "AWS CloudFormation",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "iac-program-optimization-&-fixes"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "po_id": "101912504",
+  "aws_services": [
+    "DynamoDB",
+    "IAM",
+    "Lambda",
+    "Logs",
+    "S3"
+  ],
+  "region": "us-east-1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

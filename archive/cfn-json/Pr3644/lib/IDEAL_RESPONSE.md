@@ -1,0 +1,928 @@
+# Overview
+
+Please find solution files below.
+
+## ./lib/TapStack.json
+
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "TAP Stack with Parking Management System - CloudFormation Template",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Parking System Configuration"
+          },
+          "Parameters": [
+            "NotificationEmail",
+            "MaxParkingDuration"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Description": "Email address for parking system notifications",
+      "Default": "parking-admin@example.com",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
+    },
+    "MaxParkingDuration": {
+      "Type": "Number",
+      "Default": 24,
+      "MinValue": 1,
+      "MaxValue": 168,
+      "Description": "Maximum parking duration in hours"
+    }
+  },
+  "Resources": {
+    "TurnAroundPromptTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false,
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "ParkingBookingsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "ParkingBookings-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "bookingId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "facilityId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "spotId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "startTime",
+            "AttributeType": "N"
+          },
+          {
+            "AttributeName": "endTime",
+            "AttributeType": "N"
+          },
+          {
+            "AttributeName": "userId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "bookingId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "FacilityTimeIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "facilityId",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "startTime",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          },
+          {
+            "IndexName": "SpotTimeIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "spotId",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "startTime",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          },
+          {
+            "IndexName": "UserBookingsIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "userId",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "endTime",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "ParkingFacilityImagesBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "parking-facility-images-${AWS::AccountId}-${EnvironmentSuffix}"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "ParkingReservationLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ParkingReservationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "ParkingBookingsTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${ParkingBookingsTable.Arn}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "BookingConfirmationTopic"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ses:SendEmail",
+                    "ses:SendRawEmail"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "iot:Publish"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/parking/gate/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${ParkingFacilityImagesBucket.Arn}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "ParkingReservationLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "ParkingReservation-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "ParkingReservationLambdaRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "BOOKINGS_TABLE": {
+              "Ref": "ParkingBookingsTable"
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "BookingConfirmationTopic"
+            },
+            "REGION": {
+              "Ref": "AWS::Region"
+            },
+            "MAX_DURATION_HOURS": {
+              "Ref": "MaxParkingDuration"
+            },
+            "IOT_ENDPOINT": {
+              "Fn::Sub": "https://iot.${AWS::Region}.amazonaws.com"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const AWS = require('aws-sdk');\nconst crypto = require('crypto');\n\nconst dynamodb = new AWS.DynamoDB.DocumentClient();\nconst sns = new AWS.SNS();\nconst ses = new AWS.SES();\nconst iotdata = new AWS.IotData();\nconst cloudwatch = new AWS.CloudWatch();\n\nconst BOOKINGS_TABLE = process.env.BOOKINGS_TABLE;\nconst SNS_TOPIC_ARN = process.env.SNS_TOPIC_ARN;\nconst MAX_DURATION_HOURS = parseInt(process.env.MAX_DURATION_HOURS);\nconst AWS_REGION = process.env.REGION;\n\nexports.handler = async (event) => {\n  console.log('Event:', JSON.stringify(event));\n\n  const { httpMethod, path, body, queryStringParameters } = event;\n  const parsedBody = body ? JSON.parse(body) : {};\n\n  try {\n    let response;\n\n    switch (httpMethod) {\n      case 'POST':\n        if (path.includes('/book')) {\n          response = await createBooking(parsedBody);\n        } else if (path.includes('/cancel')) {\n          response = await cancelBooking(parsedBody);\n        }\n        break;\n      case 'GET':\n        if (path.includes('/availability')) {\n          response = await checkAvailability(queryStringParameters);\n        } else if (path.includes('/booking')) {\n          response = await getBooking(queryStringParameters);\n        }\n        break;\n      case 'PUT':\n        if (path.includes('/checkin')) {\n          response = await checkIn(parsedBody);\n        } else if (path.includes('/checkout')) {\n          response = await checkOut(parsedBody);\n        }\n        break;\n      default:\n        response = { statusCode: 400, body: JSON.stringify({ error: 'Invalid request' }) };\n    }\n\n    return response;\n  } catch (error) {\n    console.error('Error:', error);\n    return {\n      statusCode: 500,\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({ error: error.message })\n    };\n  }\n};\n\nasync function createBooking(data) {\n  const { userId, facilityId, spotId, startTime, endTime, vehicleNumber, email, phone } = data;\n\n  const duration = (endTime - startTime) / 3600000;\n  if (duration > MAX_DURATION_HOURS) {\n    throw new Error(`Booking duration cannot exceed ${MAX_DURATION_HOURS} hours`);\n  }\n\n  const hasConflict = await checkBookingConflict(spotId, startTime, endTime);\n  if (hasConflict) {\n    throw new Error('This spot is already booked for the requested time');\n  }\n\n  const bookingId = crypto.randomBytes(16).toString('hex');\n  const booking = {\n    bookingId,\n    userId,\n    facilityId,\n    spotId,\n    startTime,\n    endTime,\n    vehicleNumber,\n    email,\n    phone,\n    status: 'CONFIRMED',\n    createdAt: Date.now(),\n    checkInTime: null,\n    checkOutTime: null\n  };\n\n  await dynamodb.put({\n    TableName: BOOKINGS_TABLE,\n    Item: booking,\n    ConditionExpression: 'attribute_not_exists(bookingId)'\n  }).promise();\n\n  await sns.publish({\n    TopicArn: SNS_TOPIC_ARN,\n    Subject: 'Parking Booking Confirmation',\n    Message: JSON.stringify({\n      bookingId,\n      userId,\n      facilityId,\n      spotId,\n      startTime: new Date(startTime).toISOString(),\n      endTime: new Date(endTime).toISOString(),\n      vehicleNumber\n    })\n  }).promise();\n\n  if (email) {\n    await sendEmailReceipt(email, booking);\n  }\n\n  await updateOccupancyMetrics(facilityId, 'BookingCreated');\n\n  return {\n    statusCode: 200,\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ bookingId, status: 'CONFIRMED', message: 'Booking created successfully' })\n  };\n}\n\nasync function checkBookingConflict(spotId, startTime, endTime) {\n  const params = {\n    TableName: BOOKINGS_TABLE,\n    IndexName: 'SpotTimeIndex',\n    KeyConditionExpression: 'spotId = :spotId',\n    FilterExpression: '(startTime < :endTime AND endTime > :startTime) AND #status <> :cancelled',\n    ExpressionAttributeNames: {\n      '#status': 'status'\n    },\n    ExpressionAttributeValues: {\n      ':spotId': spotId,\n      ':startTime': startTime,\n      ':endTime': endTime,\n      ':cancelled': 'CANCELLED'\n    }\n  };\n\n  const result = await dynamodb.query(params).promise();\n  return result.Items && result.Items.length > 0;\n}\n\nasync function cancelBooking(data) {\n  const { bookingId, userId } = data;\n\n  const params = {\n    TableName: BOOKINGS_TABLE,\n    Key: { bookingId },\n    UpdateExpression: 'SET #status = :cancelled, cancelledAt = :now',\n    ConditionExpression: 'userId = :userId AND #status = :confirmed',\n    ExpressionAttributeNames: {\n      '#status': 'status'\n    },\n    ExpressionAttributeValues: {\n      ':cancelled': 'CANCELLED',\n      ':confirmed': 'CONFIRMED',\n      ':userId': userId,\n      ':now': Date.now()\n    },\n    ReturnValues: 'ALL_NEW'\n  };\n\n  const result = await dynamodb.update(params).promise();\n  await updateOccupancyMetrics(result.Attributes.facilityId, 'BookingCancelled');\n\n  return {\n    statusCode: 200,\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ message: 'Booking cancelled successfully', booking: result.Attributes })\n  };\n}\n\nasync function checkAvailability(params) {\n  const { facilityId, startTime, endTime } = params;\n\n  const queryParams = {\n    TableName: BOOKINGS_TABLE,\n    IndexName: 'FacilityTimeIndex',\n    KeyConditionExpression: 'facilityId = :facilityId AND startTime BETWEEN :start AND :end',\n    ExpressionAttributeValues: {\n      ':facilityId': facilityId,\n      ':start': parseInt(startTime),\n      ':end': parseInt(endTime)\n    }\n  };\n\n  const result = await dynamodb.query(queryParams).promise();\n  const bookedSpots = result.Items.map(item => item.spotId);\n\n  const totalSpots = 100;\n  const availableCount = totalSpots - bookedSpots.length;\n\n  return {\n    statusCode: 200,\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      facilityId,\n      availableSpots: availableCount,\n      bookedSpots: bookedSpots.length,\n      totalSpots\n    })\n  };\n}\n\nasync function getBooking(params) {\n  const { bookingId } = params;\n\n  const result = await dynamodb.get({\n    TableName: BOOKINGS_TABLE,\n    Key: { bookingId }\n  }).promise();\n\n  if (!result.Item) {\n    return {\n      statusCode: 404,\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({ error: 'Booking not found' })\n    };\n  }\n\n  return {\n    statusCode: 200,\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify(result.Item)\n  };\n}\n\nasync function checkIn(data) {\n  const { bookingId, vehicleNumber } = data;\n  const now = Date.now();\n\n  const params = {\n    TableName: BOOKINGS_TABLE,\n    Key: { bookingId },\n    UpdateExpression: 'SET checkInTime = :now, #status = :active',\n    ConditionExpression: 'vehicleNumber = :vehicle AND #status = :confirmed AND startTime <= :now AND endTime >= :now',\n    ExpressionAttributeNames: {\n      '#status': 'status'\n    },\n    ExpressionAttributeValues: {\n      ':now': now,\n      ':active': 'ACTIVE',\n      ':confirmed': 'CONFIRMED',\n      ':vehicle': vehicleNumber\n    },\n    ReturnValues: 'ALL_NEW'\n  };\n\n  const result = await dynamodb.update(params).promise();\n\n  await publishToIoT(`parking/gate/${result.Attributes.facilityId}/open`, {\n    bookingId,\n    spotId: result.Attributes.spotId,\n    action: 'OPEN',\n    timestamp: now\n  });\n\n  return {\n    statusCode: 200,\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ message: 'Check-in successful', checkInTime: now })\n  };\n}\n\nasync function checkOut(data) {\n  const { bookingId } = data;\n  const now = Date.now();\n\n  const params = {\n    TableName: BOOKINGS_TABLE,\n    Key: { bookingId },\n    UpdateExpression: 'SET checkOutTime = :now, #status = :completed',\n    ConditionExpression: '#status = :active',\n    ExpressionAttributeNames: {\n      '#status': 'status'\n    },\n    ExpressionAttributeValues: {\n      ':now': now,\n      ':completed': 'COMPLETED',\n      ':active': 'ACTIVE'\n    },\n    ReturnValues: 'ALL_NEW'\n  };\n\n  const result = await dynamodb.update(params).promise();\n\n  await publishToIoT(`parking/gate/${result.Attributes.facilityId}/exit`, {\n    bookingId,\n    spotId: result.Attributes.spotId,\n    action: 'OPEN',\n    timestamp: now\n  });\n\n  const duration = (now - result.Attributes.checkInTime) / 3600000;\n  const fee = calculateParkingFee(duration);\n\n  return {\n    statusCode: 200,\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      message: 'Check-out successful',\n      checkOutTime: now,\n      duration,\n      fee\n    })\n  };\n}\n\nasync function sendEmailReceipt(email, booking) {\n  const params = {\n    Source: `parking@example.com`,\n    Destination: {\n      ToAddresses: [email]\n    },\n    Message: {\n      Subject: {\n        Data: `Parking Receipt - Booking ${booking.bookingId}`\n      },\n      Body: {\n        Html: {\n          Data: `\n            <h2>Parking Booking Receipt</h2>\n            <p>Booking ID: ${booking.bookingId}</p>\n            <p>Facility: ${booking.facilityId}</p>\n            <p>Spot: ${booking.spotId}</p>\n            <p>Start: ${new Date(booking.startTime).toLocaleString()}</p>\n            <p>End: ${new Date(booking.endTime).toLocaleString()}</p>\n            <p>Vehicle: ${booking.vehicleNumber}</p>\n          `\n        }\n      }\n    }\n  };\n\n  try {\n    await ses.sendEmail(params).promise();\n  } catch (error) {\n    console.error('Failed to send email:', error);\n  }\n}\n\nasync function publishToIoT(topic, payload) {\n  const params = {\n    topic,\n    payload: JSON.stringify(payload),\n    qos: 1\n  };\n\n  try {\n    await iotdata.publish(params).promise();\n  } catch (error) {\n    console.error('Failed to publish to IoT:', error);\n  }\n}\n\nasync function updateOccupancyMetrics(facilityId, metricName) {\n  const params = {\n    Namespace: 'ParkingSystem',\n    MetricData: [\n      {\n        MetricName: metricName,\n        Dimensions: [\n          {\n            Name: 'FacilityId',\n            Value: facilityId\n          }\n        ],\n        Value: 1,\n        Unit: 'Count',\n        Timestamp: new Date()\n      }\n    ]\n  };\n\n  try {\n    await cloudwatch.putMetricData(params).promise();\n  } catch (error) {\n    console.error('Failed to update metrics:', error);\n  }\n}\n\nfunction calculateParkingFee(hours) {\n  const ratePerHour = 5;\n  return Math.ceil(hours) * ratePerHour;\n}\n"
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "ParkingAPI": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "ParkingAPI-${EnvironmentSuffix}"
+        },
+        "Description": "Parking Management System API",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "ParkingAPIResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ParkingAPI"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "ParkingAPI",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "parking"
+      }
+    },
+    "BookResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ParkingAPI"
+        },
+        "ParentId": {
+          "Ref": "ParkingAPIResource"
+        },
+        "PathPart": "book"
+      }
+    },
+    "BookMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ParkingAPI"
+        },
+        "ResourceId": {
+          "Ref": "BookResource"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ParkingReservationLambda.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "AvailabilityResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ParkingAPI"
+        },
+        "ParentId": {
+          "Ref": "ParkingAPIResource"
+        },
+        "PathPart": "availability"
+      }
+    },
+    "AvailabilityMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ParkingAPI"
+        },
+        "ResourceId": {
+          "Ref": "AvailabilityResource"
+        },
+        "HttpMethod": "GET",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ParkingReservationLambda.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "CheckInResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ParkingAPI"
+        },
+        "ParentId": {
+          "Ref": "ParkingAPIResource"
+        },
+        "PathPart": "checkin"
+      }
+    },
+    "CheckInMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ParkingAPI"
+        },
+        "ResourceId": {
+          "Ref": "CheckInResource"
+        },
+        "HttpMethod": "PUT",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ParkingReservationLambda.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "APIDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": [
+        "BookMethod",
+        "AvailabilityMethod",
+        "CheckInMethod"
+      ],
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ParkingAPI"
+        },
+        "StageName": {
+          "Ref": "EnvironmentSuffix"
+        }
+      }
+    },
+    "LambdaAPIPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ParkingReservationLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${ParkingAPI}/*/*/*"
+        }
+      }
+    },
+    "BookingConfirmationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "ParkingBookingConfirmations-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Parking Booking Confirmations",
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "EmailSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Protocol": "email",
+        "TopicArn": {
+          "Ref": "BookingConfirmationTopic"
+        },
+        "Endpoint": {
+          "Ref": "NotificationEmail"
+        }
+      }
+    },
+    "BookingReminderEventBus": {
+      "Type": "AWS::Events::EventBus",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "ParkingReminderBus-${EnvironmentSuffix}"
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "BookingReminderRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "ParkingBookingReminder-${EnvironmentSuffix}"
+        },
+        "Description": "Trigger parking booking reminders",
+        "ScheduleExpression": "rate(15 minutes)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "ParkingReservationLambda",
+                "Arn"
+              ]
+            },
+            "Id": "1",
+            "Input": {
+              "Fn::Sub": "{\"action\": \"send-reminders\", \"environment\": \"${EnvironmentSuffix}\"}"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaEventBridgePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ParkingReservationLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "BookingReminderRule",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "ParkingIoTPolicy": {
+      "Type": "AWS::IoT::Policy",
+      "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "ParkingGatePolicy-${EnvironmentSuffix}"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "iot:Connect",
+                "iot:Subscribe",
+                "iot:Publish",
+                "iot:Receive"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:*"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "ParkingGateThing": {
+      "Type": "AWS::IoT::Thing",
+      "Properties": {
+        "ThingName": {
+          "Fn::Sub": "ParkingGate-${EnvironmentSuffix}"
+        },
+        "AttributePayload": {
+          "Attributes": {
+            "environment": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "type": "gate-controller"
+          }
+        }
+      }
+    },
+    "ParkingIoTTopicRule": {
+      "Type": "AWS::IoT::TopicRule",
+      "Properties": {
+        "RuleName": {
+          "Fn::Sub": "ParkingGateEvents${EnvironmentSuffix}"
+        },
+        "TopicRulePayload": {
+          "Sql": "SELECT * FROM 'parking/gate/+/status'",
+          "Description": "Process parking gate status updates",
+          "Actions": [
+            {
+              "DynamoDBv2": {
+                "RoleArn": {
+                  "Fn::GetAtt": [
+                    "IoTDynamoDBRole",
+                    "Arn"
+                  ]
+                },
+                "PutItem": {
+                  "TableName": {
+                    "Ref": "ParkingBookingsTable"
+                  }
+                }
+              }
+            }
+          ],
+          "RuleDisabled": false
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "IoTDynamoDBRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "iot.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "IoTDynamoDBPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ParkingBookingsTable",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "ParkingOccupancyDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "ParkingOccupancy-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"ParkingSystem\",\"BookingCreated\"],[\"ParkingSystem\",\"BookingCancelled\"]],\"period\":300,\"stat\":\"Sum\",\"region\":\"${AWS::Region}\",\"title\":\"Parking Activity\"}}]}"
+        }
+      }
+    },
+    "ParkingOccupancyAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "ParkingHighOccupancy-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when parking occupancy is high",
+        "MetricName": "BookingCreated",
+        "Namespace": "ParkingSystem",
+        "Statistic": "Sum",
+        "Period": 900,
+        "EvaluationPeriods": 1,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "AlarmActions": [
+          {
+            "Ref": "BookingConfirmationTopic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "SESConfigurationSet": {
+      "Type": "AWS::SES::ConfigurationSet",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "ParkingReceipts-${EnvironmentSuffix}"
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "SESEmailIdentity": {
+      "Type": "AWS::SES::EmailIdentity",
+      "Properties": {
+        "EmailIdentity": {
+          "Ref": "NotificationEmail"
+        },
+        "ConfigurationSetAttributes": {
+          "ConfigurationSetName": {
+            "Ref": "SESConfigurationSet"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "TurnAroundPromptTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "TurnAroundPromptTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+        }
+      }
+    },
+    "TurnAroundPromptTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TurnAroundPromptTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+        }
+      }
+    },
+    "ParkingAPIEndpoint": {
+      "Description": "API Gateway endpoint URL for parking management",
+      "Value": {
+        "Fn::Sub": "https://${ParkingAPI}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ParkingAPIEndpoint"
+        }
+      }
+    },
+    "ParkingBookingsTableName": {
+      "Description": "Name of the parking bookings DynamoDB table",
+      "Value": {
+        "Ref": "ParkingBookingsTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ParkingBookingsTableName"
+        }
+      }
+    },
+    "ParkingLambdaFunctionArn": {
+      "Description": "ARN of the parking reservation Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "ParkingReservationLambda",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ParkingLambdaFunctionArn"
+        }
+      }
+    },
+    "BookingConfirmationTopicArn": {
+      "Description": "ARN of the SNS topic for booking confirmations",
+      "Value": {
+        "Ref": "BookingConfirmationTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BookingConfirmationTopicArn"
+        }
+      }
+    },
+    "ParkingFacilityImagesBucketName": {
+      "Description": "Name of S3 bucket for parking facility images",
+      "Value": {
+        "Ref": "ParkingFacilityImagesBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ParkingFacilityImagesBucketName"
+        }
+      }
+    },
+    "ParkingDashboardURL": {
+      "Description": "URL to CloudWatch Dashboard for parking occupancy",
+      "Value": {
+        "Fn::Sub": "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=ParkingOccupancy-${EnvironmentSuffix}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ParkingDashboardURL"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}
+```
+

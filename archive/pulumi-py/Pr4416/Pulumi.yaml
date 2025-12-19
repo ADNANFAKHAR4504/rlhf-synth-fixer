@@ -1,0 +1,7 @@
+name: TapStack
+runtime:
+  name: python
+  options:
+    virtualenv: .venv
+main: lib/
+description: Educational platform CI/CD infrastructure with secure student data handling

@@ -1,0 +1,47 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "350012",
+  "team": "3",
+  "startedAt": "2025-09-05T10:05:39.831Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::SecretsManager::Secret",
+    "AWS::EC2::VPC",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::EIP",
+    "AWS::EC2::NatGateway",
+    "AWS::EC2::SecurityGroup",
+    "AWS::IAM::Role",
+    "AWS::IAM::InstanceProfile",
+    "AWS::EC2::Instance",
+    "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    "AWS::ElasticLoadBalancingV2::Listener",
+    "AWS::ElasticLoadBalancingV2::TargetGroup",
+    "AWS::EC2::LaunchTemplate",
+    "AWS::AutoScaling::AutoScalingGroup",
+    "AWS::RDS::DBInstance",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::S3::Bucket",
+    "AWS::S3::BucketPolicy",
+    "AWS::CloudTrail::Trail"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

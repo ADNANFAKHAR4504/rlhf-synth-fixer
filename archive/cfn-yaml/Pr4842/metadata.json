@@ -1,0 +1,40 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "291194",
+  "team": "3",
+  "startedAt": "2025-10-20T09:16:52.004Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "Route Table",
+    "Route",
+    "Security Group",
+    "EC2 Instance",
+    "IAM Role",
+    "IAM Instance Profile",
+    "IAM Policy",
+    "S3 Bucket",
+    "S3 Bucket Policy",
+    "KMS Key",
+    "CloudTrail Trail",
+    "CloudWatch Alarm",
+    "SNS Topic",
+    "SNS Subscription"
+  ],
+  "training_quality": 9,
+  "background": "Design a secure and modular AWS infrastructure in YAML-based CloudFormation, deploying resources in us-west-2. The stack provisions a VPC with subnets, Internet Gateway, and routing; an EC2 instance secured with IAM roles and security groups; a KMS-encrypted S3 bucket that stores CloudTrail logs; and integrates CloudWatch Alarms and SNS notifications for monitoring and alerting. The environment must follow least-privilege IAM, encryption best practices, and consistent tagging for auditing and scalability.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

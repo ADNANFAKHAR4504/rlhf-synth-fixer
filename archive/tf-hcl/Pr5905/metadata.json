@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-06T11:29:31+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "vs00a",
+  "aws_services": [
+    "ALB",
+    "ASG",
+    "RDS Aurora",
+    "RDS Proxy",
+    "Route 53",
+    "CloudWatch",
+    "S3",
+    "IAM",
+    "Security Groups",
+    "Secrets Manager",
+    "SNS"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

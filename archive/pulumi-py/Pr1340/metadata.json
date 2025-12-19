@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291385",
+  "team": "6",
+  "startedAt": "2025-08-15T08:42:29.238Z",
+  "subtask": "CI/CD Pipeline Infrastructure",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Performance Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "API Gateway",
+    "CodeCommit",
+    "CodeBuild",
+    "CodePipeline",
+    "CodeDeploy",
+    "CloudWatch",
+    "KMS",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

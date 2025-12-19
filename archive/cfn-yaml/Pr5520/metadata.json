@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350081",
+  "team": "2",
+  "startedAt": "2025-10-29T15:14:30.372Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudFormation",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch",
+    "VPC",
+    "EC2",
+    "RDS",
+    "ALB",
+    "Auto Scaling",
+    "KMS",
+    "SNS",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "training_quality": 10,
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350048",
+  "team": "3",
+  "startedAt": "2025-10-12T22:20:03.210Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "RDS",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "misra-s-turing",
+  "dockerS3Location": ""
+}

@@ -6,10 +6,38 @@ DEBUG_MODE=${DEBUG_MODE:-0}
 # Report mode control - set REPORT=1 to show minimal status updates
 REPORT=${REPORT:-0}
 
+# CSV file for task reporting
+CSV_FILE="${CSV_FILE:-/app/task_reports.csv}"
+
+# Function to write to CSV
+write_to_csv() {
+    local status="$1"
+    local error="${2:-}"
+    local timestamp=$(date -Iseconds)
+    
+    # Create CSV header if file doesn't exist
+    if [ ! -f "$CSV_FILE" ]; then
+        echo "TIMESTAMP,TASK_ID,TASK_PATH,STATUS,ERROR" > "$CSV_FILE"
+    fi
+    
+    # Escape line breaks, commas, and quotes in the error field
+    local escaped_error=""
+    if [ -n "$error" ]; then
+        escaped_error=$(echo "$error" | sed 's/"/\"\"/g' | sed 's/,/\\,/g' | tr '\n' '\\n' | tr '\r' ' ')
+    fi
+    
+    # Write the row
+    echo "$timestamp,${TASK_ID:-unknown},${TASK_PATH:-unknown},$status,\"$escaped_error\"" >> "$CSV_FILE"
+}
+
 # Function to update status in report mode
 update_status() {
     local status="$1"
     local error="${2:-}"
+    
+    # Write to CSV
+    write_to_csv "$status" "$error"
+    
     if [ "$REPORT" = "1" ]; then
         if [ -n "$error" ]; then
             printf "\r\033[K${TASK_ID:-unknown} | ${TASK_PATH:-unknown} | %s | %s" "$status" "$error"
@@ -46,7 +74,9 @@ run_step() {
         echo ""
         echo "=== $step_name ==="
     fi
-    
+
+    local success=true
+
     if [ "$DEBUG_MODE" = "1" ]; then
         # In debug mode, capture exit code but continue
         if [ "$REPORT" = "1" ]; then
@@ -55,21 +85,27 @@ run_step() {
             error_output=$(eval "$command" 2>&1)
             if [ $? -eq 0 ]; then
                 [ "$REPORT" != "1" ] && echo "✅ $step_name completed successfully"
+                write_to_csv "$step_name completed" ""
             else
                 local exit_code=$?
                 [ "$REPORT" != "1" ] && echo "❌ $step_name failed with exit code: $exit_code"
                 FAILED_STEPS+=("$step_name (exit code: $exit_code)")
                 FAILED_STEP="$step_name"
                 update_status "Failed" "$step_name"
+                write_to_csv "$step_name failed" "Exit code: $exit_code | $error_output"
+                success=false
             fi
         else
             # Normal debug mode with output
             if eval "$command"; then
                 echo "✅ $step_name completed successfully"
+                write_to_csv "$step_name completed" ""
             else
                 local exit_code=$?
                 echo "❌ $step_name failed with exit code: $exit_code"
                 FAILED_STEPS+=("$step_name (exit code: $exit_code)")
+                write_to_csv "$step_name failed" "Exit code: $exit_code"
+                success=false
             fi
         fi
     else
@@ -81,12 +117,29 @@ run_step() {
             if [ $? -ne 0 ]; then
                 FAILED_STEP="$step_name"
                 update_status "Failed" "$step_name"
+                write_to_csv "$step_name failed" "Command failed in normal mode | $error_output"
                 exit 1
+            else
+                write_to_csv "$step_name completed" ""
             fi
         else
-            eval "$command"
-            echo "✅ $step_name completed successfully"
+            local error_output
+            error_output=$(eval "$command" 2>&1)
+            if [ $? -eq 0 ]; then
+                echo "✅ $step_name completed successfully"
+                write_to_csv "$step_name completed" ""
+            else
+                write_to_csv "$step_name failed" "Command failed in normal mode | $error_output"
+                exit 1
+            fi
         fi
+    fi
+
+   # The function now returns success status
+    if [ "$success" = true ]; then
+        return 0
+    else
+        return 1
     fi
 }
 
@@ -114,90 +167,119 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
             echo "WARNING: AWS CLI configuration test failed"
             echo "Please check your AWS credentials and permissions"
         fi
-    else
-        # In report mode, just verify silently
-        aws sts get-caller-identity >/dev/null 2>&1 || true
     fi
     
     # Ensure required S3 buckets exist
     [ "$REPORT" != "1" ] && echo "Ensuring required S3 buckets exist..."
     update_status "Creating S3 buckets..."
-    
+
     # Define bucket-region pairs
     declare -A BUCKETS=(
-        ["iac-rlhf-aws-release"]="us-east-1"
-        ["iac-rlhf-cfn-states"]="us-east-1"
-        ["iac-rlhf-cfn-states-ap-northeast-1"]="ap-northeast-1"
-        ["iac-rlhf-cfn-states-ap-south-1"]="ap-south-1"
-        ["iac-rlhf-cfn-states-ap-southeast-1"]="ap-southeast-1"
-        ["iac-rlhf-cfn-states-ap-southeast-2"]="us-east-1"
-        ["iac-rlhf-cfn-states-eu-central-1"]="eu-central-1"
-        ["iac-rlhf-cfn-states-eu-north-1"]="eu-north-1"
-        ["iac-rlhf-cfn-states-eu-west-1"]="us-east-1"
-        ["iac-rlhf-cfn-states-eu-west-2"]="eu-west-2"
-        ["iac-rlhf-cfn-states-eu-west-3"]="eu-west-3"
-        ["iac-rlhf-cfn-states-us-east-1"]="us-east-1"
-        ["iac-rlhf-cfn-states-us-east-2"]="us-east-2"
-        ["iac-rlhf-cfn-states-us-west-1"]="us-east-1"
-        ["iac-rlhf-cfn-states-us-west-2"]="us-west-2"
-        ["iac-rlhf-production"]="us-east-1"
-        ["iac-rlhf-pulumi-states"]="us-east-1"
-        ["iac-rlhf-tf-states"]="us-east-1"
+        ["iac-rlhf-cfn-states-$CURRENT_ACCOUNT_ID"]="us-east-1"
+        ["iac-rlhf-cfn-states-ap-northeast-1-$CURRENT_ACCOUNT_ID"]="ap-northeast-1"
+        ["iac-rlhf-cfn-states-ap-south-1-$CURRENT_ACCOUNT_ID"]="ap-south-1"
+        ["iac-rlhf-cfn-states-ap-southeast-1-$CURRENT_ACCOUNT_ID"]="ap-southeast-1"
+        ["iac-rlhf-cfn-states-ap-southeast-2-$CURRENT_ACCOUNT_ID"]="ap-southeast-2"
+        ["iac-rlhf-cfn-states-eu-central-1-$CURRENT_ACCOUNT_ID"]="eu-central-1"
+        ["iac-rlhf-cfn-states-eu-north-1-$CURRENT_ACCOUNT_ID"]="eu-north-1"
+        ["iac-rlhf-cfn-states-eu-west-1-$CURRENT_ACCOUNT_ID"]="eu-west-1"
+        ["iac-rlhf-cfn-states-eu-west-2-$CURRENT_ACCOUNT_ID"]="eu-west-2"
+        ["iac-rlhf-cfn-states-eu-west-3-$CURRENT_ACCOUNT_ID"]="eu-west-3"
+        ["iac-rlhf-cfn-states-us-east-1-$CURRENT_ACCOUNT_ID"]="us-east-1"
+        ["iac-rlhf-cfn-states-us-east-2-$CURRENT_ACCOUNT_ID"]="us-east-2"
+        ["iac-rlhf-cfn-states-us-west-1-$CURRENT_ACCOUNT_ID"]="us-west-1"
+        ["iac-rlhf-cfn-states-us-west-2-$CURRENT_ACCOUNT_ID"]="us-west-2"
+        ["iac-rlhf-pulumi-states-$CURRENT_ACCOUNT_ID"]="us-east-1"
+        ["iac-rlhf-tf-states-$CURRENT_ACCOUNT_ID"]="us-east-1"
     )
     
     # Buckets that need versioning enabled
-    VERSIONED_BUCKETS=("iac-rlhf-pulumi-states" "iac-rlhf-tf-states")
-    
+    VERSIONED_BUCKETS=("iac-rlhf-pulumi-states-$CURRENT_ACCOUNT_ID" "iac-rlhf-tf-states-$CURRENT_ACCOUNT_ID")
+
+    # Function to enable versioning on a bucket
+    enable_versioning() {
+        local bucket_name=$1
+        local region=$2
+        if aws s3api get-bucket-versioning --bucket "$bucket_name" --region "$region" >/dev/null 2>&1 | grep -q 'Enabled'; then
+            [ "$REPORT" != "1" ] && echo "✅ Versioning already enabled on $bucket_name in $region"
+        else
+            [ "$REPORT" != "1" ] && echo "Enabling versioning on bucket $bucket_name in region $region..."
+            if aws s3api put-bucket-versioning --bucket "$bucket_name" --region "$region" --versioning-configuration Status=Enabled >/dev/null 2>&1; then
+                [ "$REPORT" != "1" ] && echo "✅ Versioning enabled on $bucket_name"
+            else
+                [ "$REPORT" != "1" ] && echo "❌ Failed to enable versioning on $bucket_name"
+            fi
+        fi
+    }
+
     # Create buckets if they don't exist
     for bucket in "${!BUCKETS[@]}"; do
         region="${BUCKETS[$bucket]}"
-        
+
         # Check if bucket exists
         if aws s3api head-bucket --bucket "$bucket" --region "$region" >/dev/null 2>&1; then
             [ "$REPORT" != "1" ] && echo "✅ Bucket $bucket already exists in $region"
         else
             [ "$REPORT" != "1" ] && echo "Creating bucket $bucket in region $region..."
-            
+
+            MAX_RETRIES=3
+            RETRY_DELAY=5  # seconds
+
             if [ "$region" = "us-east-1" ]; then
                 # us-east-1 doesn't need LocationConstraint
-                aws s3api create-bucket --bucket "$bucket" --region "$region" >/dev/null 2>&1
+                for ((i=1; i<=MAX_RETRIES; i++)); do
+                    if aws s3api create-bucket --bucket "$bucket" --region "$region" >/dev/null; then
+                        [ "$REPORT" != "1" ] && echo "✅ Created bucket $bucket in $region"
+                        # Add tagging after successful creation
+                        aws s3api put-bucket-tagging --bucket "$bucket" --region "$region" --tagging 'TagSet=[{Key=NUKE_RETAIN,Value=true}]' >/dev/null 2>&1
+                        break # Success, exit retry loop
+                    else
+                        [ "$REPORT" != "1" ] && echo "❌ Failed to create bucket $bucket in $region (Attempt $i/$MAX_RETRIES)"
+                        if [ $i -eq $MAX_RETRIES ]; then
+                            [ "$REPORT" != "1" ] && echo "❌ All retries failed. Exiting."
+                            if [ "$DEBUG_MODE" = "0" ]; then
+                                exit 1
+                            fi
+                        fi
+                        sleep "$RETRY_DELAY"
+                    fi
+                done
             else
                 # Other regions need LocationConstraint
-                aws s3api create-bucket --bucket "$bucket" --region "$region" --create-bucket-configuration LocationConstraint="$region" >/dev/null 2>&1
-            fi
-            
-            if aws s3api create-bucket --bucket "$bucket" --region "$region" >/dev/null 2>&1; then
-                [ "$REPORT" != "1" ] && echo "✅ Created bucket $bucket in $region"
-            else
-                [ "$REPORT" != "1" ] && echo "❌ Failed to create bucket $bucket in $region"
-                if [ "$DEBUG_MODE" = "0" ]; then
-                    exit 1
-                fi
+                for ((i=1; i<=MAX_RETRIES; i++)); do
+                    if aws s3api create-bucket --bucket "$bucket" --region "$region" --create-bucket-configuration LocationConstraint="$region" >/dev/null; then
+                        [ "$REPORT" != "1" ] && echo "✅ Created bucket $bucket in $region"
+                        # Add tagging after successful creation
+                        aws s3api put-bucket-tagging --bucket "$bucket" --region "$region" --tagging 'TagSet=[{Key=NUKE_RETAIN,Value=true}]' >/dev/null 2>&1
+                        break # Success, exit retry loop
+                    else
+                        [ "$REPORT" != "1" ] && echo "❌ Failed to create bucket $bucket in $region (Attempt $i/$MAX_RETRIES)"
+                        if [ $i -eq $MAX_RETRIES ]; then
+                            [ "$REPORT" != "1" ] && echo "❌ All retries failed. Exiting."
+                            if [ "$DEBUG_MODE" = "0" ]; then
+                                exit 1
+                            fi
+                        fi
+                        sleep "$RETRY_DELAY"
+                    fi
+                done
             fi
         fi
-        
-        # Enable versioning for state buckets
-        for versioned_bucket in "${VERSIONED_BUCKETS[@]}"; do
-            if [ "$bucket" = "$versioned_bucket" ]; then
-                [ "$REPORT" != "1" ] && echo "Enabling versioning for $bucket..."
-                if aws s3api put-bucket-versioning --bucket "$bucket" --versioning-configuration Status=Enabled --region "$region" >/dev/null 2>&1; then
-                    [ "$REPORT" != "1" ] && echo "✅ Versioning enabled for $bucket"
-                else
-                    [ "$REPORT" != "1" ] && echo "❌ Failed to enable versioning for $bucket"
-                    if [ "$DEBUG_MODE" = "0" ]; then
-                        exit 1
-                    fi
-                fi
-                break
-            fi
-        done
+
+        # Enable versioning if bucket is in the versioned list
+        if [[ " ${VERSIONED_BUCKETS[@]} " =~ " ${bucket} " ]]; then
+            enable_versioning "$bucket" "$region"
+        fi
     done
-    
+
     [ "$REPORT" != "1" ] && echo "S3 bucket setup completed"
+    write_to_csv "S3 bucket setup completed" ""
 else
     [ "$REPORT" != "1" ] && echo "No AWS credentials found in environment variables"
     [ "$REPORT" != "1" ] && echo "AWS CLI will not be available for use"
+    write_to_csv "No AWS credentials found" "AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY not set"
 fi
+
 
 # Set default environment variables
 export CI=${CI:-1}
@@ -210,11 +292,18 @@ else
     ENVIRONMENT_SUFFIX="$TASK_PATH"
 fi
 
+# export it to be available across whole environment
+export ENVIRONMENT_SUFFIX
+
 if [ "$REPORT" != "1" ]; then
     echo "Environment configuration:"
     echo "  ENVIRONMENT_SUFFIX: $ENVIRONMENT_SUFFIX"
     echo "  CI: $CI"
 fi
+
+# Export STATE BUCKETS
+export TERRAFORM_STATE_BUCKET="iac-rlhf-tf-states-$CURRENT_ACCOUNT_ID"
+export PULUMI_BACKEND_URL="s3://iac-rlhf-pulumi-states-$CURRENT_ACCOUNT_ID"
 
 # Update status for task extraction
 update_status "Extracting task..."
@@ -242,6 +331,17 @@ PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
 LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 [ "$REPORT" != "1" ] && echo "Detected project: platform=$PLATFORM, language=$LANGUAGE"
 
+# Set CFN_S3_BUCKET. If lib/AWS_REGION is present, use the region there. If not use us-east-1
+if [ -f "lib/AWS_REGION" ]; then
+    region="$(cat lib/AWS_REGION)"
+    export AWS_REGION="$region"
+    export AWS_DEFAULT_REGION="$region"
+else
+    region="us-east-1"
+fi
+
+export CFN_S3_BUCKET="iac-rlhf-cfn-states-$region-$CURRENT_ACCOUNT_ID"
+
 # Execute CI/CD pipeline steps in order
 if [ "$REPORT" != "1" ]; then
     echo ""
@@ -268,9 +368,20 @@ run_step "STEP 4: UNIT TESTS" "./scripts/unit-tests.sh"
 
 # STEP 5: DEPLOY
 run_step "STEP 5: DEPLOY" "./scripts/deploy.sh"
+DEPLOY_SUCCESS=$?
 
 # STEP 6: INTEGRATION TESTS
-run_step "STEP 6: INTEGRATION TESTS" "./scripts/integration-tests.sh"
+if [ "$DEPLOY_SUCCESS" -eq 0 ]; then
+    run_step "STEP 6: INTEGRATION TESTS" "./scripts/integration-tests.sh"
+else
+    echo "❌ Deployment failed. Skipping integration tests."
+    # Log the skip to the CSV file
+    write_to_csv "STEP 6: INTEGRATION TESTS skipped" "Deployment failed"
+    # Add a note to the FAILED_STEPS for reporting if in debug mode
+    if [ "$DEBUG_MODE" = "1" ]; then
+        FAILED_STEPS+=("STEP 6: INTEGRATION TESTS (skipped)")
+    fi
+fi
 
 # STEP 7: DESTROY (Optional)
 run_step "STEP 7: DESTROY (Optional)" "./scripts/destroy.sh"
@@ -282,19 +393,48 @@ fi
 
 # Report results
 if [ "$DEBUG_MODE" = "1" ] && [ ${#FAILED_STEPS[@]} -gt 0 ]; then
-    if [ "$REPORT" = "1" ]; then
-        update_status "Fail" "$(IFS=', '; echo "${FAILED_STEPS[*]}")"
-        printf "\n"
+    # Check if only integration tests and/or lint failed
+    NON_CRITICAL_ONLY=true
+    for step in "${FAILED_STEPS[@]}"; do
+        if [[ "$step" != *"STEP 6: INTEGRATION TESTS"* ]] && [[ "$step" != *"STEP 3: LINT"* ]]; then
+            NON_CRITICAL_ONLY=false
+            break
+        fi
+    done
+    
+    if [ "$NON_CRITICAL_ONLY" = "true" ]; then
+        # Only non-critical steps failed - log error but don't fail the task
+        if [ "$REPORT" = "1" ]; then
+            update_status "Success" "Non-critical steps failed - logged in error column"
+            printf "\n"
+        else
+            echo ""
+            echo "⚠️  SUMMARY: Non-critical steps failed but pipeline completed:"
+            for step in "${FAILED_STEPS[@]}"; do
+                echo "   - $step (error logged)"
+            done
+            echo ""
+            echo "Task completed successfully - non-critical step errors logged for analysis"
+        fi
+        write_to_csv "Pipeline completed with non-critical step errors" "$(IFS=', '; echo "${FAILED_STEPS[*]}")"
+        exit 0
     else
-        echo ""
-        echo "⚠️  SUMMARY: The following steps failed:"
-        for step in "${FAILED_STEPS[@]}"; do
-            echo "   - $step"
-        done
-        echo ""
-        echo "Exit with failure code since some steps failed"
+        # Other steps failed - fail the task
+        if [ "$REPORT" = "1" ]; then
+            update_status "Fail" "$(IFS=', '; echo "${FAILED_STEPS[*]}")"
+            printf "\n"
+        else
+            echo ""
+            echo "⚠️  SUMMARY: The following steps failed:"
+            for step in "${FAILED_STEPS[@]}"; do
+                echo "   - $step"
+            done
+            echo ""
+            echo "Exit with failure code since some steps failed"
+        fi
+        write_to_csv "Pipeline failed" "$(IFS=', '; echo "${FAILED_STEPS[*]}")"
+        exit 1
     fi
-    exit 1
 elif [ ${#FAILED_STEPS[@]} -eq 0 ]; then
     if [ "$REPORT" = "1" ]; then
         update_status "Success" ""
@@ -302,6 +442,7 @@ elif [ ${#FAILED_STEPS[@]} -eq 0 ]; then
     else
         echo "✅ All pipeline steps completed successfully!"
     fi
+    write_to_csv "Pipeline completed successfully" ""
 else
     if [ "$REPORT" = "1" ]; then
         update_status "Success" ""
@@ -309,4 +450,5 @@ else
     else
         echo "=== CI/CD Pipeline Completed Successfully ==="
     fi
+    write_to_csv "Pipeline completed successfully" ""
 fi

@@ -1,0 +1,37 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348883",
+  "team": "2",
+  "startedAt": "2025-09-03T15:43:39.793Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization",
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Performance Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS",
+    "Lambda",
+    "DynamoDB",
+    "CloudFront",
+    "Application Load Balancer",
+    "KMS",
+    "Secrets Manager",
+    "IAM",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ashish-a-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,39 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349553",
+  "team": "6",
+  "startedAt": "2025-10-13T08:09:55.955Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Tables",
+    "Security Groups",
+    "Network ACLs",
+    "S3",
+    "RDS",
+    "EC2",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "Budgets"
+  ],
+  "training_quality": 9,
+  "training_quality_justification": "Excellent training value (9/10). Fixed 10 critical deployment failures involving complex multi-service integration. Identified significant model knowledge gaps in AWS resource naming conventions, Terraform property naming (snake_case vs camelCase), IAM/KMS policy completeness for CloudTrail, tag management, and CDKTF v0.20+ import structure. All PROMPT requirements correctly implemented. High-value training data demonstrating real-world deployment blockers and their resolutions.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

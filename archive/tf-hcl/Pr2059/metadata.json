@@ -1,0 +1,39 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "274789",
+  "team": "4",
+  "startedAt": "2025-08-22T16:50:12.156Z",
+  "author": "jpoola-turing",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Security Configuration",
+    "Network Configuration",
+    "Database Management",
+    "Resource Scaling",
+    "Monitoring Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "CloudWatch",
+    "Parameter Store",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "IAM",
+    "ACM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

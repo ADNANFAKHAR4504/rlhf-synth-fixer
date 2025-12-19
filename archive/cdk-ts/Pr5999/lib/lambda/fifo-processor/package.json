@@ -1,0 +1,14 @@
+}
+
+/**
+ * Masks credit card number for PCI DSS compliance
+ * Only stores last 4 digits
+ */
+function maskCardNumber(cardNumber: string): string {
+  const lastFour = cardNumber.slice(-4);
+  return `****-****-****-${lastFour}`;
+}
+```
+
+## File: lib/lambda/fifo-processor/package.json
+

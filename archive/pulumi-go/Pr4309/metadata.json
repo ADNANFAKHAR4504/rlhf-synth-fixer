@@ -1,0 +1,53 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-14T03:18:09+05:30",
+  "subtask": "Application Deployment",
+  "background": "A federal agency must ingest citizenship application data that contains sensitive PII, process it securely in containerized workloads, and persist the results in an encrypted relational database with auditable access patterns. The solution has to satisfy FedRAMP Moderate controls, enforce least-privilege access, and guarantee encryption in transit and at rest across every component of the pipeline.",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "2237444138",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "API Gateway",
+    "ECS",
+    "RDS",
+    "Secrets Manager",
+    "Kinesis",
+    "KMS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 8,
+  "qa_status": "not_run",
+  "qa_completed_phases": [
+    "validation",
+    "synthesis"
+  ],
+  "qa_blocked_phases": [
+    "deployment",
+    "integration_tests"
+  ],
+  "qa_notes": "Awaiting first full deployment. Automated validators confirmed metadata and structural checks; live environment tests pending.",
+  "deployment_attempts": 4,
+  "deployment_success": true,
+  "test_coverage": "95%",
+  "integration_tests_passed": 9,
+  "integration_tests_total": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

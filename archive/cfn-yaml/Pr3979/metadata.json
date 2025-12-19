@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349989",
+  "team": "2",
+  "startedAt": "2025-10-09T06:17:45.830Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "S3",
+    "RDS",
+    "Elastic Load Balancing",
+    "API Gateway",
+    "Lambda",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "Secrets Manager",
+    "GuardDuty",
+    "NAT Gateway",
+    "Certificate Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
+}

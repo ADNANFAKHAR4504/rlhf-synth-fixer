@@ -1,0 +1,503 @@
+The error indicates that the destination buckets (EU West 1 and AP Southeast 1) don't have versioning enabled when the replication configuration is being created. This is a timing issue - the replication configuration is trying to be created before the destination bucket versioning is properly configured.
+
+Here's the updated code with proper dependencies:
+
+```hcl
+# tap_stack.tf - Multi-region S3 buckets with cross-region replication and Lambda access
+
+# Input Variables
+variable "environment" {
+  description = "Environment name for resource tagging"
+  type        = string
+  default     = "Production"
+}
+
+variable "project_name" {
+  description = "Project name for resource naming"
+  type        = string
+  default     = "tap"
+}
+
+variable "bucket_versioning_enabled" {
+  description = "Enable versioning on S3 buckets"
+  type        = bool
+  default     = true
+}
+
+variable "bucket_encryption_enabled" {
+  description = "Enable encryption on S3 buckets"
+  type        = bool
+  default     = true
+}
+
+# Local Values for consistent naming and configuration
+locals {
+  # Common tags applied to all resources
+  common_tags = {
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "Terraform"
+  }
+
+  # Region configurations
+  regions = {
+    us_east_1      = "us-east-1"
+    eu_west_1      = "eu-west-1"
+    ap_southeast_1 = "ap-southeast-1"
+  }
+
+  # Bucket naming convention - S3 bucket names must be lowercase
+  bucket_names = {
+    us_east_1      = "${lower(var.project_name)}-${lower(var.environment)}-bucket-us-east-1"
+    eu_west_1      = "${lower(var.project_name)}-${lower(var.environment)}-bucket-eu-west-1"
+    ap_southeast_1 = "${lower(var.project_name)}-${lower(var.environment)}-bucket-ap-southeast-1"
+  }
+
+  # IAM role name
+  lambda_role_name = "${var.project_name}-${var.environment}-lambda-s3-access-role"
+}
+
+# S3 Bucket - US East 1 (Primary)
+resource "aws_s3_bucket" "us_east_1" {
+  provider = aws.us_east_1
+  bucket   = local.bucket_names.us_east_1
+
+  tags = merge(local.common_tags, {
+    Name   = local.bucket_names.us_east_1
+    Region = local.regions.us_east_1
+    Type   = "Primary"
+  })
+}
+
+# S3 Bucket Versioning - US East 1
+resource "aws_s3_bucket_versioning" "us_east_1" {
+  provider = aws.us_east_1
+  bucket   = aws_s3_bucket.us_east_1.id
+  
+  versioning_configuration {
+    status = var.bucket_versioning_enabled ? "Enabled" : "Suspended"
+  }
+}
+
+# S3 Bucket Server Side Encryption - US East 1
+resource "aws_s3_bucket_server_side_encryption_configuration" "us_east_1" {
+  provider = aws.us_east_1
+  bucket   = aws_s3_bucket.us_east_1.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# S3 Bucket Public Access Block - US East 1
+resource "aws_s3_bucket_public_access_block" "us_east_1" {
+  provider = aws.us_east_1
+  bucket   = aws_s3_bucket.us_east_1.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 Bucket - EU West 1
+resource "aws_s3_bucket" "eu_west_1" {
+  provider = aws.eu_west_1
+  bucket   = local.bucket_names.eu_west_1
+
+  tags = merge(local.common_tags, {
+    Name   = local.bucket_names.eu_west_1
+    Region = local.regions.eu_west_1
+    Type   = "Replica"
+  })
+}
+
+# S3 Bucket Versioning - EU West 1
+resource "aws_s3_bucket_versioning" "eu_west_1" {
+  provider = aws.eu_west_1
+  bucket   = aws_s3_bucket.eu_west_1.id
+  
+  versioning_configuration {
+    status = var.bucket_versioning_enabled ? "Enabled" : "Suspended"
+  }
+}
+
+# S3 Bucket Server Side Encryption - EU West 1
+resource "aws_s3_bucket_server_side_encryption_configuration" "eu_west_1" {
+  provider = aws.eu_west_1
+  bucket   = aws_s3_bucket.eu_west_1.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# S3 Bucket Public Access Block - EU West 1
+resource "aws_s3_bucket_public_access_block" "eu_west_1" {
+  provider = aws.eu_west_1
+  bucket   = aws_s3_bucket.eu_west_1.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 Bucket - AP Southeast 1
+resource "aws_s3_bucket" "ap_southeast_1" {
+  provider = aws.ap_southeast_1
+  bucket   = local.bucket_names.ap_southeast_1
+
+  tags = merge(local.common_tags, {
+    Name   = local.bucket_names.ap_southeast_1
+    Region = local.regions.ap_southeast_1
+    Type   = "Replica"
+  })
+}
+
+# S3 Bucket Versioning - AP Southeast 1
+resource "aws_s3_bucket_versioning" "ap_southeast_1" {
+  provider = aws.ap_southeast_1
+  bucket   = aws_s3_bucket.ap_southeast_1.id
+  
+  versioning_configuration {
+    status = var.bucket_versioning_enabled ? "Enabled" : "Suspended"
+  }
+}
+
+# S3 Bucket Server Side Encryption - AP Southeast 1
+resource "aws_s3_bucket_server_side_encryption_configuration" "ap_southeast_1" {
+  provider = aws.ap_southeast_1
+  bucket   = aws_s3_bucket.ap_southeast_1.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# S3 Bucket Public Access Block - AP Southeast 1
+resource "aws_s3_bucket_public_access_block" "ap_southeast_1" {
+  provider = aws.ap_southeast_1
+  bucket   = aws_s3_bucket.ap_southeast_1.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# IAM Role for S3 Replication
+resource "aws_iam_role" "replication" {
+  provider = aws.us_east_1
+  name     = "${var.project_name}-${var.environment}-s3-replication-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-${var.environment}-s3-replication-role"
+    Type = "S3ReplicationRole"
+  })
+}
+
+# IAM Policy for S3 Replication
+resource "aws_iam_role_policy" "replication" {
+  provider = aws.us_east_1
+  name     = "${var.project_name}-${var.environment}-s3-replication-policy"
+  role     = aws_iam_role.replication.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "s3:GetObjectVersionForReplication",
+          "s3:GetObjectVersionAcl",
+          "s3:GetObjectVersionTagging"
+        ]
+        Effect = "Allow"
+        Resource = [
+          "${aws_s3_bucket.us_east_1.arn}/*"
+        ]
+      },
+      {
+        Action = [
+          "s3:ListBucket"
+        ]
+        Effect = "Allow"
+        Resource = [
+          aws_s3_bucket.us_east_1.arn
+        ]
+      },
+      {
+        Action = [
+          "s3:ReplicateObject",
+          "s3:ReplicateDelete",
+          "s3:ReplicateTags"
+        ]
+        Effect = "Allow"
+        Resource = [
+          "${aws_s3_bucket.eu_west_1.arn}/*",
+          "${aws_s3_bucket.ap_southeast_1.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# S3 Bucket Replication Configuration - US East 1 to EU West 1
+resource "aws_s3_bucket_replication_configuration" "us_to_eu" {
+  provider = aws.us_east_1
+  depends_on = [
+    aws_s3_bucket_versioning.us_east_1,
+    aws_s3_bucket_versioning.eu_west_1
+  ]
+
+  role   = aws_iam_role.replication.arn
+  bucket = aws_s3_bucket.us_east_1.id
+
+  rule {
+    id     = "replicate-to-eu-west-1"
+    status = "Enabled"
+
+    destination {
+      bucket        = aws_s3_bucket.eu_west_1.arn
+      storage_class = "STANDARD_IA"
+    }
+  }
+}
+
+# S3 Bucket Replication Configuration - US East 1 to AP Southeast 1
+resource "aws_s3_bucket_replication_configuration" "us_to_ap" {
+  provider = aws.us_east_1
+  depends_on = [
+    aws_s3_bucket_versioning.us_east_1,
+    aws_s3_bucket_versioning.ap_southeast_1
+  ]
+
+  role   = aws_iam_role.replication.arn
+  bucket = aws_s3_bucket.us_east_1.id
+
+  rule {
+    id     = "replicate-to-ap-southeast-1"
+    status = "Enabled"
+
+    destination {
+      bucket        = aws_s3_bucket.ap_southeast_1.arn
+      storage_class = "STANDARD_IA"
+    }
+  }
+}
+
+# IAM Role for Lambda Functions
+resource "aws_iam_role" "lambda_s3_access" {
+  provider = aws.us_east_1
+  name     = local.lambda_role_name
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = local.lambda_role_name
+    Type = "LambdaExecutionRole"
+  })
+}
+
+# IAM Policy for Lambda S3 Access
+resource "aws_iam_role_policy" "lambda_s3_access" {
+  provider = aws.us_east_1
+  name     = "${var.project_name}-${var.environment}-lambda-s3-access-policy"
+  role     = aws_iam_role.lambda_s3_access.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket",
+          "s3:GetObjectVersion",
+          "s3:PutObjectAcl",
+          "s3:GetObjectAcl"
+        ]
+        Resource = [
+          aws_s3_bucket.us_east_1.arn,
+          "${aws_s3_bucket.us_east_1.arn}/*",
+          aws_s3_bucket.eu_west_1.arn,
+          "${aws_s3_bucket.eu_west_1.arn}/*",
+          aws_s3_bucket.ap_southeast_1.arn,
+          "${aws_s3_bucket.ap_southeast_1.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Attach AWS Lambda Basic Execution Role
+resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
+  provider   = aws.us_east_1
+  role       = aws_iam_role.lambda_s3_access.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Outputs
+output "s3_bucket_ids" {
+  description = "IDs of all S3 buckets created"
+  value = {
+    us_east_1      = aws_s3_bucket.us_east_1.id
+    eu_west_1      = aws_s3_bucket.eu_west_1.id
+    ap_southeast_1 = aws_s3_bucket.ap_southeast_1.id
+  }
+}
+
+output "s3_bucket_arns" {
+  description = "ARNs of all S3 buckets created"
+  value = {
+    us_east_1      = aws_s3_bucket.us_east_1.arn
+    eu_west_1      = aws_s3_bucket.eu_west_1.arn
+    ap_southeast_1 = aws_s3_bucket.ap_southeast_1.arn
+  }
+}
+
+output "s3_bucket_domain_names" {
+  description = "Domain names of all S3 buckets"
+  value = {
+    us_east_1      = aws_s3_bucket.us_east_1.bucket_domain_name
+    eu_west_1      = aws_s3_bucket.eu_west_1.bucket_domain_name
+    ap_southeast_1 = aws_s3_bucket.ap_southeast_1.bucket_domain_name
+  }
+}
+
+output "s3_bucket_regional_domain_names" {
+  description = "Regional domain names of all S3 buckets"
+  value = {
+    us_east_1      = aws_s3_bucket.us_east_1.bucket_regional_domain_name
+    eu_west_1      = aws_s3_bucket.eu_west_1.bucket_regional_domain_name
+    ap_southeast_1 = aws_s3_bucket.ap_southeast_1.bucket_regional_domain_name
+  }
+}
+
+output "lambda_iam_role_arn" {
+  description = "ARN of the IAM role for Lambda functions to access S3 buckets"
+  value       = aws_iam_role.lambda_s3_access.arn
+}
+
+output "lambda_iam_role_name" {
+  description = "Name of the IAM role for Lambda functions"
+  value       = aws_iam_role.lambda_s3_access.name
+}
+
+output "s3_replication_role_arn" {
+  description = "ARN of the S3 replication IAM role"
+  value       = aws_iam_role.replication.arn
+}
+
+output "s3_replication_role_name" {
+  description = "Name of the S3 replication IAM role"
+  value       = aws_iam_role.replication.name
+}
+
+output "bucket_regions" {
+  description = "Regions where S3 buckets are deployed"
+  value       = local.regions
+}
+
+output "environment" {
+  description = "Environment tag applied to all resources"
+  value       = var.environment
+}
+
+output "project_name" {
+  description = "Project name used for resource naming"
+  value       = var.project_name
+}
+```
+
+## Key Changes Made:
+
+### 1. **Fixed Dependencies for Replication Configuration**
+
+**Before (causing the error):**
+```hcl
+resource "aws_s3_bucket_replication_configuration" "us_to_eu" {
+  depends_on = [aws_s3_bucket_versioning.us_east_1]  # Only source bucket versioning
+  # ...
+}
+```
+
+**After (fixed):**
+```hcl
+resource "aws_s3_bucket_replication_configuration" "us_to_eu" {
+  depends_on = [
+    aws_s3_bucket_versioning.us_east_1,     # Source bucket versioning
+    aws_s3_bucket_versioning.eu_west_1      # Destination bucket versioning
+  ]
+  # ...
+}
+
+resource "aws_s3_bucket_replication_configuration" "us_to_ap" {
+  depends_on = [
+    aws_s3_bucket_versioning.us_east_1,     # Source bucket versioning
+    aws_s3_bucket_versioning.ap_southeast_1 # Destination bucket versioning
+  ]
+  # ...
+}
+```
+
+### 2. **Why This Fixes the Issue**
+
+The error occurred because:
+- **S3 Cross-Region Replication Requirement**: Both source AND destination buckets must have versioning enabled before replication can be configured
+- **Timing Issue**: Terraform was trying to create the replication configuration before the destination bucket versioning was fully enabled
+- **Missing Dependencies**: The replication configurations only depended on the source bucket versioning, not the destination bucket versioning
+
+### 3. **What the Fix Ensures**
+
+✅ **Proper Creation Order**:
+1. All S3 buckets are created first
+2. All bucket versioning configurations are applied
+3. IAM roles and policies are created
+4. Only then are replication configurations created
+
+✅ **Cross-Region Replication Requirements Met**:
+- Source bucket (us-east-1) has versioning enabled
+- Destination buckets (eu-west-1, ap-southeast-1) have versioning enabled
+- Replication configurations wait for all versioning to be ready
+
+✅ **No Race Conditions**:
+- Explicit dependencies prevent timing issues
+- Terraform will wait for all prerequisites before creating replication
+
+This should resolve the replication configuration errors and allow the infrastructure to deploy successfully.

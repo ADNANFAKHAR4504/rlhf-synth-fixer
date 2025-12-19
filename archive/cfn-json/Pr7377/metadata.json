@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912709",
+  "team": "synth",
+  "startedAt": "2025-11-26T11:55:00-06:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Event-driven Architecture",
+    "Serverless Applications"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "Step Functions",
+    "S3",
+    "EventBridge",
+    "SNS",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

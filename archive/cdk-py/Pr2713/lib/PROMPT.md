@@ -1,0 +1,11 @@
+Hey there! I need your help setting up a production-ready cloud environment in AWS using AWS CDK with Python(main.py- single stack). The goal is to create a highly available and scalable infrastructure that includes a VPC, EC2 instances, an RDS database, and an Application Load Balancer. Let me explain the requirements.
+
+First, we’ll need to define a VPC with the CIDR block `10.0.0.0/16`. Inside this VPC, we’ll create three subnets: one public subnet with the CIDR block `10.0.1.0/24` and two private subnets with CIDR blocks `10.0.2.0/24` and `10.0.3.0/24`. The public subnet will have an Internet Gateway attached for internet access, while the private subnets will route traffic through a NAT Gateway deployed in the public subnet. The NAT Gateway will also need an Elastic IP.
+
+For compute resources, we’ll deploy two EC2 instances in each private subnet, and these instances will belong to an Auto Scaling Group. The Auto Scaling Group should be configured to scale based on CPU utilization. To distribute traffic across the EC2 instances, we’ll use an Application Load Balancer, which will be accessible via HTTP and HTTPS. The load balancer will sit in the public subnet, and we’ll use Security Groups to restrict access. For example, SSH access should only be allowed from a specific IP range, while HTTP and HTTPS traffic should be open to all.
+
+We’ll also deploy an RDS instance in one of the private subnets. This database should only be accessible from the EC2 instances, ensuring it’s secure. To monitor the environment, we’ll set up a CloudWatch Alarm to track CPU utilization across all EC2 instances.
+
+Finally, we’ll create an S3 bucket to store application logs. The bucket should have a lifecycle policy to transition logs to Glacier after 30 days. All resources should be tagged with `Environment: EnvirontmentSuffix` to make management easier.
+
+The entire stack should be deployed in the `us-west-2` region, and it should be easy to replicate in other AWS accounts without requiring configuration changes. Let’s make this happen!

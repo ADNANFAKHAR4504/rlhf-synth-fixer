@@ -1,0 +1,24 @@
+resource,address,old_id,new_id,notes
+VPC,aws_vpc.main,vpc-abc123def456,vpc-def456abc123,Main application VPC
+Internet Gateway,aws_internet_gateway.main,igw-abc123def456,igw-def456abc123,Main internet gateway
+Public Subnet 1,aws_subnet.public[0],subnet-abc123def456,subnet-def456abc123,Public subnet AZ-a
+Public Subnet 2,aws_subnet.public[1],subnet-bcd234efa567,subnet-efa567bcd234,Public subnet AZ-b
+Private Subnet 1,aws_subnet.private[0],subnet-cde345fgb678,subnet-fgb678cde345,Private subnet AZ-a
+Private Subnet 2,aws_subnet.private[1],subnet-def456ghc789,subnet-ghc789def456,Private subnet AZ-b
+Public Route Table,aws_route_table.public,rtb-abc123def456,rtb-def456abc123,Public route table
+Private Route Table 1,aws_route_table.private[0],rtb-bcd234efa567,rtb-efa567bcd234,Private route table AZ-a
+Private Route Table 2,aws_route_table.private[1],rtb-cde345fgb678,rtb-fgb678cde345,Private route table AZ-b
+Web Security Group,aws_security_group.web,sg-abc123def456,sg-def456abc123,Web tier security group
+App Security Group,aws_security_group.app,sg-bcd234efa567,sg-efa567bcd234,Application tier security group
+DB Security Group,aws_security_group.database,sg-cde345fgb678,sg-fgb678cde345,Database tier security group
+Application Load Balancer,aws_lb.main,arn:aws:elasticloadbalancing:us-west-1:123456789012:loadbalancer/app/myapp-alb/50dc6c495c0c9188,arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/myapp-alb/60ec7d596d1d9299,Main application load balancer
+Target Group,aws_lb_target_group.app,arn:aws:elasticloadbalancing:us-west-1:123456789012:targetgroup/myapp-app-tg/73e2d6ba618ba529,arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/myapp-app-tg/84f3e7cb729cb63a,Application target group
+ALB Listener,aws_lb_listener.app,arn:aws:elasticloadbalancing:us-west-1:123456789012:listener/app/myapp-alb/50dc6c495c0c9188/f2f7dc8efc522ab2,arn:aws:elasticloadbalancing:us-west-2:123456789012:listener/app/myapp-alb/60ec7d596d1d9299/g3g8ed9fgd633bc3,HTTP listener port 80
+Launch Template,aws_launch_template.app,lt-abc123def456,lt-def456abc123,Application launch template
+Auto Scaling Group,aws_autoscaling_group.app,myapp-app-asg,myapp-app-asg,Application auto scaling group
+DB Subnet Group,aws_db_subnet_group.main,myapp-db-subnet-group,myapp-db-subnet-group,Database subnet group
+RDS Instance,aws_db_instance.main,myapp-database,myapp-database,Main database instance
+Route Table Association 1,aws_route_table_association.public[0],subnet-abc123def456/rtb-abc123def456,subnet-def456abc123/rtb-def456abc123,Public subnet 1 association
+Route Table Association 2,aws_route_table_association.public[1],subnet-bcd234efa567/rtb-abc123def456,subnet-efa567bcd234/rtb-def456abc123,Public subnet 2 association
+Route Table Association 3,aws_route_table_association.private[0],subnet-cde345fgb678/rtb-bcd234efa567,subnet-fgb678cde345/rtb-efa567bcd234,Private subnet 1 association
+Route Table Association 4,aws_route_table_association.private[1],subnet-def456ghc789/rtb-cde345fgb678,subnet-ghc789def456/rtb-fgb678cde345,Private subnet 2 association

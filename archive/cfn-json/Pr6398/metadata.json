@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth-1",
+  "startedAt": "2025-11-12T00:00:00+00:00",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "infrastructure-analysis-/-qa"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "po_id": "101912507",
+  "aws_services": [
+    "AWS Config",
+    "S3",
+    "SNS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

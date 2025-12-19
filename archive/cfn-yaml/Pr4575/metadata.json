@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349071",
+  "team": "3",
+  "startedAt": "2025-10-16T05:46:33.518Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "S3 Bucket, CloudFormation, Lambda, API Gateway, VPC, EC2, RDS, KMS, IAM, CloudTrail, CloudWatch LogGroup, NAT Gateway, Internet Gateway, Security Group, SSM Parameter, CloudWatch Alarm",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,9 @@
+Provide the prompt that made the model failI’m putting together a simple loyalty system and I want you to generate Pulumi (Python) code to stand it up in us-east-1. The public entry point should be API Gateway with a couple of clean REST-style endpoints for transactions and lookups. Those endpoints will invoke Lambda functions (Python 3.10) that do the points math and write/read data.
+
+For storage, use DynamoDB: one table to track member accounts (current points balance, status, basic profile) and another for transactions (earn/redeem history). Keep the schema straightforward and wire the Lambdas with the right IAM to read/write the exact items they need. Please add dead-letter queues or reasonable failure handling where it makes sense.
+
+For outbound messaging, I want SNS to push time-sensitive offers, SES to send email campaigns, and Pinpoint available for multi-channel marketing (email/SMS/push) so we can expand later. Drop static campaign assets in S3. Use EventBridge to schedule recurring campaigns or end-of-day jobs (e.g., rollover, monthly statements). CloudWatch should have useful metrics, logs, and a few alarms around Lambda errors/throttles and API Gateway 5xx rates.
+
+Make sure IAM is least-privilege and scoped tightly to each component. Include the region setup, any required providers, and the Pulumi program structure in Python. Expose stack outputs I’ll care about (API base URL, table names/ARNs, topic ARNs, Pinpoint app ID, the S3 bucket name for assets). If any service needs bootstrap bits (like verified identities for SES), stub it out in a way that’s easy to plug in.
+
+Please generate the Pulumi Python code with sensible defaults, wiring and permissions already connected (API → Lambda → DynamoDB, events → Lambda, SNS/SES/Pinpoint integrations), plus a short note in comments on where to add environment variables or tweak capacity settings.

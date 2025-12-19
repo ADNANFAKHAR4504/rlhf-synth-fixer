@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-25T00:00:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "EC2",
+    "ECS",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "CloudWatch",
+    "Secrets Manager",
+    "SNS",
+    "Cloud Map",
+    "IAM",
+    "VPC"
+  ],
+  "po_id": "o8b8r8m6",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

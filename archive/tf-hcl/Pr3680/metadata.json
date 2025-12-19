@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "3663",
+  "team": "5",
+  "startedAt": "2025-10-06T17:03:33.575Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "DynamoDB",
+    "SQS",
+    "Lambda",
+    "IAM",
+    "EventBridge",
+    "CloudWatch",
+    "MediaConvert"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "High complexity media processing pipeline with multiple AWS services and event-driven architecture. Model made significant architectural mistakes (unnecessary VPC, missing IAM roles, incomplete Lambda implementation) but corrections provide substantial learning value about AWS service integration, IAM permission management, and infrastructure best practices. Real-world production scenario with clear improvement path from MODEL_RESPONSE to IDEAL_RESPONSE.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}

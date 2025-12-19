@@ -1,0 +1,852 @@
+# TapStack CloudFormation Template - Production Grade CI/CD Pipeline
+
+```yml
+# cicd_pipeline.yaml - Production Grade CI/CD Pipeline for Elastic Beanstalk
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production CI/CD Pipeline for Web Application deployment to Elastic Beanstalk with full compliance to requirements'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'development'
+    AllowedValues:
+      - development
+      - staging
+      - production
+    Description: 'Environment name for resource tagging and configuration'
+
+  GitHubOwner:
+    Type: String
+    Description: 'GitHub repository owner/organization name'
+    Default: 'your-github-username'
+    ConstraintDescription: 'Must be a valid GitHub username or organization'
+
+  GitHubRepo:
+    Type: String
+    Description: 'GitHub repository name'
+    Default: 'your-web-app-repo'
+    ConstraintDescription: 'Must be a valid GitHub repository name'
+
+  GitHubBranch:
+    Type: String
+    Description: 'GitHub branch to track for production deployments'
+    Default: 'main'
+    ConstraintDescription: 'Must be a valid branch name'
+
+  GitHubToken:
+    Type: String
+    NoEcho: true
+    Description: 'GitHub personal access token for repository access (requires repo and admin:repo_hook permissions)'
+    Default: 'your-github-token-here-replace-with-actual-token-40-chars'
+    MinLength: 40
+    MaxLength: 255
+
+  NotificationEmail:
+    Type: String
+    Description: 'Email address for pipeline notifications'
+    Default: 'admin@yourcompany.com'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ConstraintDescription: 'Must be a valid email address'
+
+  SolutionStackName:
+    Type: String
+    Description: 'Elastic Beanstalk solution stack name'
+    Default: '64bit Amazon Linux 2023 v4.7.3 running Python 3.11'
+    ConstraintDescription: 'Must be a valid Elastic Beanstalk solution stack'
+
+  DeploymentTimestamp:
+    Type: String
+    Default: '20241201-143022-xyz789'
+    Description: 'Timestamp for unique resource naming (format: YYYYMMDD-HHMMSS-suffix)'
+
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: GitHub Configuration
+        Parameters:
+          - GitHubOwner
+          - GitHubRepo
+          - GitHubBranch
+          - GitHubToken
+      - Label:
+          default: Application Configuration
+        Parameters:
+          - Environment
+          - SolutionStackName
+      - Label:
+          default: Notifications
+        Parameters:
+          - NotificationEmail
+
+Resources:
+  # Networking: VPC with two public subnets and internet gateway for LoadBalanced EB
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc'
+        - Key: Environment
+          Value: !Ref Environment
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-igw'
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-a'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-b'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-rt'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+    DependsOn: VPCGatewayAttachment
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+  # KMS Key for S3 Encryption with proper policies
+  ArtifactEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS Key for encrypting CI/CD pipeline artifacts in ${Environment} environment'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableRootAccountPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCodePipelineService
+            Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:SourceArn: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:*'
+          - Sid: AllowCodeBuildService
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:SourceArn: !Sub 'arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:project/*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'CI/CD Pipeline Encryption'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+
+  ArtifactEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/cicd-pipeline-${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-${DeploymentTimestamp}'
+      TargetKeyId: !Ref ArtifactEncryptionKey
+
+  # S3 Bucket for Pipeline Artifacts with proper naming
+  ArtifactStoreBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref ArtifactEncryptionKey
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Status: Enabled
+            ExpirationInDays: 30
+            Id: DeleteOldArtifacts
+            Prefix: ''
+            ExpiredObjectDeleteMarker: false
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'CI/CD Pipeline Artifacts'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+
+  # SNS Topic for Notifications
+  PipelineNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub 'CI/CD Pipeline Notifications - ${Environment}'
+      KmsMasterKeyId: !Ref ArtifactEncryptionKey
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'CI/CD Pipeline Notifications'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+
+  PipelineNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref PipelineNotificationTopic
+      Endpoint: !Ref NotificationEmail
+
+  # IAM Role for CodePipeline with least privilege
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AWSCodePipeline_FullAccess'
+      Policies:
+        - PolicyName: CodePipelineServicePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:GetBucketVersioning'
+                  - 's3:PutObject'
+                  - 's3:PutObjectAcl'
+                Resource:
+                  - !GetAtt ArtifactStoreBucket.Arn
+                  - !Sub '${ArtifactStoreBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - 'codebuild:BatchGetBuilds'
+                  - 'codebuild:StartBuild'
+                  - 'codebuild:StopBuild'
+                Resource: !GetAtt CodeBuildProject.Arn
+              - Effect: Allow
+                Action:
+                  - 'elasticbeanstalk:CreateApplicationVersion'
+                  - 'elasticbeanstalk:DescribeApplicationVersions'
+                  - 'elasticbeanstalk:DescribeApplications'
+                  - 'elasticbeanstalk:DescribeEnvironments'
+                  - 'elasticbeanstalk:UpdateEnvironment'
+                  - 'elasticbeanstalk:CreateEnvironment'
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'elasticbeanstalk:InApplication': !Ref ElasticBeanstalkApplication
+              - Effect: Allow
+                Action:
+                  - 'kms:Encrypt'
+                  - 'kms:Decrypt'
+                  - 'kms:ReEncrypt*'
+                  - 'kms:GenerateDataKey*'
+                  - 'kms:DescribeKey'
+                Resource: !GetAtt ArtifactEncryptionKey.Arn
+              - Effect: Allow
+                Action:
+                  - 'sns:Publish'
+                Resource: !Ref PipelineNotificationTopic
+              - Effect: Allow
+                Action:
+                  - 'iam:PassRole'
+                Resource: !GetAtt CodeBuildServiceRole.Arn
+                Condition:
+                  StringLike:
+                    'iam:PassedToService': 'codebuild.amazonaws.com'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'CodePipeline Service Role'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+
+  # IAM Role for CodeBuild with least privilege
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: CodeBuildServicePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:PutObject'
+                  - 's3:PutObjectAcl'
+                Resource:
+                  - !GetAtt ArtifactStoreBucket.Arn
+                  - !Sub '${ArtifactStoreBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - 'kms:Encrypt'
+                  - 'kms:Decrypt'
+                  - 'kms:ReEncrypt*'
+                  - 'kms:GenerateDataKey*'
+                  - 'kms:DescribeKey'
+                Resource: !GetAtt ArtifactEncryptionKey.Arn
+              - Effect: Allow
+                Action:
+                  - 'sns:Publish'
+                Resource: !Ref PipelineNotificationTopic
+              - Effect: Allow
+                Action:
+                  - 'codebuild:CreateReportGroup'
+                  - 'codebuild:CreateReport'
+                  - 'codebuild:UpdateReport'
+                  - 'codebuild:BatchPutTestCases'
+                Resource: !Sub 'arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'CodeBuild Service Role'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+
+  # IAM Role for Elastic Beanstalk
+  ElasticBeanstalkServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: elasticbeanstalk.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth'
+        - 'arn:aws:iam::aws:policy/AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Elastic Beanstalk Service Role'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+
+  # IAM Instance Profile for EC2 instances
+  ElasticBeanstalkInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier'
+        - 'arn:aws:iam::aws:policy/AWSElasticBeanstalkWorkerTier'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Elastic Beanstalk Instance Role'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+
+  ElasticBeanstalkInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref ElasticBeanstalkInstanceRole
+
+  # Elastic Beanstalk Application
+  ElasticBeanstalkApplication:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      ApplicationName: 'MyWebApp'
+      Description: !Sub 'Web application deployed via CI/CD pipeline in ${Environment} environment'
+      ResourceLifecycleConfig:
+        ServiceRole: !GetAtt ElasticBeanstalkServiceRole.Arn
+        VersionLifecycleConfig:
+          MaxCountRule:
+            Enabled: true
+            MaxCount: 10
+            DeleteSourceFromS3: true
+
+  # Elastic Beanstalk Environment
+  ElasticBeanstalkEnvironment:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties:
+      ApplicationName: !Ref ElasticBeanstalkApplication
+      Description: !Sub 'Web application environment for ${Environment}'
+      SolutionStackName: !Ref SolutionStackName
+      Tier:
+        Name: WebServer
+        Type: Standard
+      OptionSettings:
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: IamInstanceProfile
+          Value: !Ref ElasticBeanstalkInstanceProfile
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: InstanceType
+          Value: t3.medium
+        - Namespace: aws:ec2:vpc
+          OptionName: AssociatePublicIpAddress
+          Value: 'true'
+        - Namespace: aws:ec2:vpc
+          OptionName: VPCId
+          Value: !Ref VPC
+        - Namespace: aws:ec2:vpc
+          OptionName: Subnets
+          Value: !Join [",", [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+        - Namespace: aws:ec2:vpc
+          OptionName: ELBSubnets
+          Value: !Join [",", [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: ServiceRole
+          Value: !Ref ElasticBeanstalkServiceRole
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: EnvironmentType
+          Value: LoadBalanced
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: LoadBalancerType
+          Value: application
+        - Namespace: aws:elasticbeanstalk:healthreporting:system
+          OptionName: SystemType
+          Value: enhanced
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Web Application Environment'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+
+  # CodeBuild Project with branch-aware buildspec
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Description: !Sub 'Build project for MyWebApp in ${Environment} environment'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_MEDIUM
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: ENVIRONMENT
+            Value: !Ref Environment
+          - Name: S3_BUCKET
+            Value: !Ref ArtifactStoreBucket
+          - Name: GITHUB_BRANCH
+            Value: !Ref GitHubBranch
+          - Name: APP_NAME
+            Value: 'MyWebApp'
+          - Name: BUILD_ENV
+            Value: !Ref Environment
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                python: 3.12
+                nodejs: 18
+              commands:
+                - echo "Installing dependencies for ${ENVIRONMENT} environment..."
+                - pip install --upgrade pip
+                - if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+                - if [ -f package.json ]; then npm ci --only=production; fi
+            pre_build:
+              commands:
+                - echo "Pre-build phase started on $(date)"
+                - echo "Running validation checks..."
+                - echo "GitHub Branch: ${GITHUB_BRANCH}"
+                - echo "Environment: ${ENVIRONMENT}"
+                - echo "Application: ${APP_NAME}"
+                - |
+                  # Validate branch naming convention
+                  if [[ "${GITHUB_BRANCH}" != "main" && "${GITHUB_BRANCH}" != "master" ]] && \
+                     [[ ! "${GITHUB_BRANCH}" =~ ^(feature/|bugfix/|hotfix/|release/).* ]]; then
+                    echo "ERROR: Branch '${GITHUB_BRANCH}' does not follow naming convention (feature/*, bugfix/*, hotfix/*, release/*)"
+                    exit 1
+                  fi
+                - echo "Running tests..."
+                - if [ -f pytest.ini ] || [ -f setup.cfg ] || [ -d tests ]; then python -m pytest tests/ -v --junitxml=test-results.xml || exit 1; fi
+                - echo "Linting code..."
+                - if command -v flake8 &> /dev/null; then flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics; fi
+            build:
+              commands:
+                - echo "Build phase started on $(date)"
+                - echo "Building application for ${ENVIRONMENT}..."
+                - if [ -f webpack.config.js ]; then npm run build:${ENVIRONMENT} || npm run build; fi
+                - echo "Creating deployment package..."
+                - zip -r deployment-package.zip . -x "*.git*" "node_modules/*" "__pycache__/*" "*.pyc" "tests/*" "*.md" ".github/*"
+            post_build:
+              commands:
+                - echo "Post-build phase completed on $(date)"
+                - echo "Build completed successfully for ${ENVIRONMENT}"
+                - echo "Application: ${APP_NAME}"
+                - echo "Branch: ${GITHUB_BRANCH}"
+          artifacts:
+            files:
+              - '**/*'
+            exclude-paths:
+              - 'node_modules/**/*'
+              - '.git/**/*'
+              - '__pycache__/**/*'
+              - 'tests/**/*'
+              - '.github/**/*'
+          reports:
+            test-reports:
+              files:
+                - 'test-results.xml'
+              file-format: 'JUNITXML'
+      TimeoutInMinutes: 20
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub '/aws/codebuild/${Environment}-mywebapp-build'
+          StreamName: !Sub '${Environment}-build-logs'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Build Project'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+
+  # CodePipeline with proper Elastic Beanstalk deployment
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactStoreBucket
+        EncryptionKey:
+          Id: !Ref ArtifactEncryptionKey
+          Type: KMS
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHub_Source
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Provider: GitHub
+                Version: '1'
+              Configuration:
+                Owner: !Ref GitHubOwner
+                Repo: !Ref GitHubRepo
+                Branch: !Ref GitHubBranch
+                OAuthToken: !Ref GitHubToken
+                PollForSourceChanges: false
+              OutputArtifacts:
+                - Name: SourceArtifact
+              RunOrder: 1
+
+        - Name: Build
+          Actions:
+            - Name: CodeBuild_Action
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              InputArtifacts:
+                - Name: SourceArtifact
+              OutputArtifacts:
+                - Name: BuildArtifact
+              RunOrder: 1
+
+        - Name: Manual_Approval
+          Actions:
+            - Name: Production_Approval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: '1'
+              Configuration:
+                CustomData: !Sub |
+                  Please review the build artifacts and approve deployment to ${Environment} environment.
+
+                  Environment: ${Environment}
+                  Application: MyWebApp
+                  Branch: ${GitHubBranch}
+
+                  Build Logs: https://console.aws.amazon.com/codesuite/codebuild/projects/${CodeBuildProject}/build/${CodeBuildProject}-${Environment}-latest/log
+
+                  Only approve if:
+                  1. All tests passed
+                  2. Code quality checks completed
+                  3. Branch follows naming conventions
+                NotificationArn: !Ref PipelineNotificationTopic
+                ExternalEntityLink: !Sub 'https://github.com/${GitHubOwner}/${GitHubRepo}/actions'
+              RunOrder: 1
+
+        - Name: Deploy
+          Actions:
+            - Name: ElasticBeanstalk_Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: ElasticBeanstalk
+                Version: '1'
+              Configuration:
+                ApplicationName: !Ref ElasticBeanstalkApplication
+                EnvironmentName: !Ref ElasticBeanstalkEnvironment
+              InputArtifacts:
+                - Name: BuildArtifact
+              RunOrder: 1
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'CI/CD Pipeline'
+        - Key: ManagedBy
+          Value: 'CloudFormation'
+
+  # CloudWatch Event Rules for comprehensive error handling
+  PipelineFailureEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: 'Trigger on pipeline failures'
+      EventPattern:
+        source:
+          - aws.codepipeline
+        detail-type:
+          - CodePipeline Pipeline Execution State Change
+        detail:
+          state:
+            - FAILED
+            - STOPPED
+          pipeline:
+            - !Ref CodePipeline
+      State: ENABLED
+      Targets:
+        - Arn: !Ref PipelineNotificationTopic
+          Id: PipelineFailureTarget
+          InputTransformer:
+            InputPathsMap:
+              pipeline: '$.detail.pipeline'
+              state: '$.detail.state'
+              execution: '$.detail.execution-id'
+              cause: '$.detail.cause'
+            InputTemplate: |
+              "Pipeline FAILED: <pipeline> (Execution: <execution>, State: <state>). Cause: <cause>. Please check AWS Console for details."
+
+  PipelineSuccessEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: 'Trigger on pipeline success'
+      EventPattern:
+        source:
+          - aws.codepipeline
+        detail-type:
+          - CodePipeline Pipeline Execution State Change
+        detail:
+          state:
+            - SUCCEEDED
+          pipeline:
+            - !Ref CodePipeline
+      State: ENABLED
+      Targets:
+        - Arn: !Ref PipelineNotificationTopic
+          Id: PipelineSuccessTarget
+          InputTransformer:
+            InputPathsMap:
+              pipeline: '$.detail.pipeline'
+              state: '$.detail.state'
+              execution: '$.detail.execution-id'
+            InputTemplate: !Sub |
+              "Pipeline SUCCEEDED: <pipeline> (Execution: <execution>). Deployment completed successfully to ${Environment}!"
+
+  CodeBuildFailureEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: 'Trigger on CodeBuild failures'
+      EventPattern:
+        source:
+          - aws.codebuild
+        detail-type:
+          - CodeBuild Build State Change
+        detail:
+          'build-status':
+            - FAILED
+            - FAULT
+            - TIMED_OUT
+          'project-name':
+            - !Ref CodeBuildProject
+      State: ENABLED
+      Targets:
+        - Arn: !Ref PipelineNotificationTopic
+          Id: CodeBuildFailureTarget
+          InputTransformer:
+            InputPathsMap:
+              project: '$.detail.project-name'
+              status: '$.detail.build-status'
+              id: '$.detail.build-id'
+            InputTemplate: |
+              "CodeBuild FAILED: Project <project> (Build ID: <id>, Status: <status>). Check build logs for details."
+
+  # EventBridge permissions for SNS
+  EventBridgeToSNSPermission:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref PipelineNotificationTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Topics:
+        - !Ref PipelineNotificationTopic
+
+Outputs:
+  PipelineUrl:
+    Description: 'URL of the CodePipeline console'
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/codesuite/codepipeline/pipelines/${CodePipeline}/view'
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineUrl'
+
+  ElasticBeanstalkApplicationUrl:
+    Description: 'URL of the Elastic Beanstalk application'
+    Value: !Sub 'http://${ElasticBeanstalkEnvironment}.${AWS::Region}.elasticbeanstalk.com'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApplicationUrl'
+
+  SNSTopicArn:
+    Description: 'ARN of the SNS topic for notifications'
+    Value: !Ref PipelineNotificationTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SNSTopicArn'
+
+  ArtifactsBucket:
+    Description: 'S3 bucket for storing pipeline artifacts'
+    Value: !Ref ArtifactStoreBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ArtifactsBucket'
+
+  CodeBuildProjectName:
+    Description: 'Name of the CodeBuild project'
+    Value: !Ref CodeBuildProject
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeBuildProject'
+
+  ElasticBeanstalkEnvironmentName:
+    Description: 'Name of the Elastic Beanstalk environment'
+    Value: !Ref ElasticBeanstalkEnvironment
+    Export:
+      Name: !Sub '${AWS::StackName}-EBEnvironment'
+
+  KMSKeyArn:
+    Description: 'ARN of the KMS key used for encryption'
+    Value: !GetAtt ArtifactEncryptionKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyArn'
+```

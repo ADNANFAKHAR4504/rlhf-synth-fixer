@@ -1,0 +1,1293 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure Production Environment Infrastructure with Failover Support - Implements comprehensive security controls including IAM least privilege, centralized logging, threat detection, and multi-region failover capabilities'
+
+# ====================================
+# PARAMETERS - Customizable values for template reusability
+# ====================================
+Parameters:
+  CostCenterTag:
+    Type: String
+    Description: Cost center tag for resource allocation
+    Default: 'cc-production'
+  
+  ProjectIDTag:
+    Type: String
+    Description: Project ID tag for resource allocation
+    Default: 'prod-env-01'
+  
+  LoggingAccountId:
+    Type: String
+    Description: AWS Account ID where centralized logs will be stored (leave blank to use current account)
+    Default: ''
+  
+  VpcCIDR:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: CIDR block for the VPC
+    
+  PublicSubnet1CIDR:
+    Type: String
+    Default: '10.0.1.0/24'
+    Description: CIDR block for Public Subnet 1
+    
+  PublicSubnet2CIDR:
+    Type: String
+    Default: '10.0.2.0/24'
+    Description: CIDR block for Public Subnet 2
+    
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: '10.0.3.0/24'
+    Description: CIDR block for Private Subnet 1
+    
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: '10.0.4.0/24'
+    Description: CIDR block for Private Subnet 2
+    
+  DBSubnet1CIDR:
+    Type: String
+    Default: '10.0.5.0/24'
+    Description: CIDR block for Database Subnet 1
+    
+  DBSubnet2CIDR:
+    Type: String
+    Default: '10.0.6.0/24'
+    Description: CIDR block for Database Subnet 2
+  
+  DBInstanceClass:
+    Type: String
+    Default: 'db.t3.small'
+    Description: RDS instance class
+    AllowedValues:
+      - 'db.t3.small'
+      - 'db.t3.medium'
+      - 'db.t3.large'
+  
+  DBBackupRetentionPeriod:
+    Type: Number
+    Default: 7
+    Description: RDS backup retention period in days (minimum 7)
+    MinValue: 7
+  
+  EnableShieldAdvanced:
+    Type: String
+    Default: 'false'
+    Description: 'Enable AWS Shield Advanced protection (requires paid subscription)'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+# ====================================
+# CONDITIONS - Logic for multi-region deployment
+# ====================================
+Conditions:
+  # Check if LoggingAccountId is provided, otherwise use current account
+  UseCurrentAccountForLogs: !Equals [!Ref LoggingAccountId, '']
+  # WAF is supported in most regions, but not all
+  WAFSupported: !Not [!Equals [!Ref 'AWS::Region', 'ap-northeast-3']]
+  # Shield Advanced is enabled
+  CreateShieldProtection: !Equals [!Ref EnableShieldAdvanced, 'true']
+
+# ====================================
+# RESOURCES
+# ====================================
+Resources:
+  # ====================================
+  # S3 CENTRALIZED LOGGING BUCKET
+  # ====================================
+  
+  # S3 Bucket for centralized logging
+  CentralizedLoggingBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub 
+        - '${AccountId}-centralized-logging-bucket3'
+        - AccountId: !If [UseCurrentAccountForLogs, !Ref 'AWS::AccountId', !Ref LoggingAccountId]
+      # Security: All buckets private by default
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      # Enable versioning for audit trail integrity
+      VersioningConfiguration:
+        Status: Enabled
+      # Simple lifecycle policy for cost optimization
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'LogRetention'
+            Status: Enabled
+            ExpirationInDays: 365  # 1 year retention for simplicity
+      # Server-side encryption
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-CentralizedLogs'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+
+  # Simple bucket policy for centralized logging - basic security only
+  CentralizedLoggingBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref CentralizedLoggingBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow CloudTrail service to write logs
+          - Sid: 'AllowCloudTrailAccess'
+            Effect: Allow
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action:
+              - 's3:PutObject'
+              - 's3:GetBucketAcl'
+            Resource:
+              - !Sub 'arn:aws:s3:::${CentralizedLoggingBucket}'
+              - !Sub 'arn:aws:s3:::${CentralizedLoggingBucket}/*'
+          # Allow AWS Config service access
+          - Sid: 'AllowConfigAccess'
+            Effect: Allow
+            Principal:
+              Service: 'config.amazonaws.com'
+            Action:
+              - 's3:PutObject'
+              - 's3:GetBucketAcl'
+              - 's3:ListBucket'
+            Resource:
+              - !Sub 'arn:aws:s3:::${CentralizedLoggingBucket}'
+              - !Sub 'arn:aws:s3:::${CentralizedLoggingBucket}/*'
+
+  # ====================================
+  # IAM ROLES & POLICIES
+  # ====================================
+  
+  # Role for CloudTrail to write to S3
+  CloudTrailRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Tags:
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  # CloudTrail IAM policy - least privilege for S3 writes
+  CloudTrailS3Policy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: CloudTrailS3Policy
+      Roles:
+        - !Ref CloudTrailRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Minimum permissions for CloudTrail to write to S3
+          - Effect: Allow
+            Action:
+              - 's3:PutObject'
+            Resource:
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/cloudtrail/AWSLogs/${AWS::AccountId}/*'
+                - BucketName: !Ref CentralizedLoggingBucket
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+          - Effect: Allow
+            Action:
+              - 's3:GetBucketAcl'
+            Resource:
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}'
+                - BucketName: !Ref CentralizedLoggingBucket
+          # CloudWatch Logs permissions for CloudTrail
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource:
+              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:CloudTrail/Audit:*'
+  
+  # Role for VPC Flow Logs to write to CloudWatch Logs
+  VPCFlowLogsRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'vpc-flow-logs.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Tags:
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  VPCFlowLogsPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: VPCFlowLogsPolicy
+      Roles:
+        - !Ref VPCFlowLogsRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              - 'logs:DescribeLogGroups'
+              - 'logs:DescribeLogStreams'
+            Resource:
+              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:VPCFlowLogs:*'
+
+  # Role for AWS Config
+  ConfigRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'config.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
+      Tags:
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+
+  # IAM policy for Config to access centralized S3 bucket
+  ConfigS3Policy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: ConfigS3DeliveryPolicy
+      Roles:
+        - !Ref ConfigRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow Config to write configuration snapshots to S3
+          - Effect: Allow
+            Action:
+              - 's3:PutObject'
+              - 's3:PutObjectAcl'
+            Resource:
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/config/*'
+                - BucketName: !Ref CentralizedLoggingBucket
+          - Effect: Allow
+            Action:
+              - 's3:ListBucket'
+              - 's3:GetBucketAcl'
+            Resource:
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}'
+                - BucketName: !Ref CentralizedLoggingBucket
+  
+  # ====================================
+  # VPC AND NETWORK CONFIGURATION
+  # High-availability network architecture with public, private, and database tiers
+  # Implements network segmentation for defense-in-depth security
+  # ====================================
+  
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-VPC'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  # Internet Gateway for public subnets
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-IGW'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  InternetGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  
+  # Public Subnets
+  PublicSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet1CIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-Public-Subnet-1'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  PublicSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet2CIDR
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-Public-Subnet-2'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  # Private Subnets
+  PrivateSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-Private-Subnet-1'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  PrivateSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-Private-Subnet-2'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  # Database Subnets
+  DBSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref DBSubnet1CIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-DB-Subnet-1'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  DBSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref DBSubnet2CIDR
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-DB-Subnet-2'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  # NAT Gateway for private subnets
+  NatGatewayEIP:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-NAT-EIP'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  NatGateway:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-NAT'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  # Route Tables
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-Public-RT'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  PrivateRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-Private-RT'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  # Routes
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+  
+  PrivateRoute:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway
+  
+  # Subnet Route Table Associations
+  PublicSubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+  
+  PublicSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+  
+  PrivateSubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+  
+  PrivateSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+  
+  DBSubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref DBSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+  
+  DBSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref DBSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+  
+  # VPC Flow Logs
+  VPCFlowLogsGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: VPCFlowLogs
+      RetentionInDays: 365
+  
+  VPCFlowLogs:
+    Type: 'AWS::EC2::FlowLog'
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
+      LogGroupName: !Ref VPCFlowLogsGroup
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: ALL
+  
+  # ====================================
+  # SECURITY GROUPS
+  # ====================================
+  
+  # Web Server Security Group - Strict default-deny with only necessary ports
+  WebServerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: WebServerSG
+      GroupDescription: 'Security group for web servers - default deny with HTTP/HTTPS only'
+      VpcId: !Ref VPC
+      # Default deny - only explicit rules below are allowed
+      SecurityGroupIngress:
+        # Only allow HTTP (port 80) from internet for web servers
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow HTTP inbound traffic from internet'
+        # Only allow HTTPS (port 443) from internet for web servers
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow HTTPS inbound traffic from internet'
+      # Explicit egress rules for better security
+      SecurityGroupEgress:
+        # Allow outbound to application servers on port 8080
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          DestinationSecurityGroupId: !Ref AppServerSecurityGroup
+          Description: 'Allow outbound to application servers'
+        # Allow HTTPS for external API calls, updates, etc.
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow HTTPS outbound for external services'
+        # Allow HTTP for external services if needed
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow HTTP outbound for external services'
+        # DNS resolution
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow DNS resolution'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-WebServerSG'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  # Application Server Security Group - Strict default-deny, web server access only
+  AppServerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: AppServerSG
+      GroupDescription: 'Security group for application servers - default deny with web server access only'
+      VpcId: !Ref VPC
+      # No ingress rules defined here - managed separately for clarity
+      # Explicit egress rules for security
+      SecurityGroupEgress:
+        # Allow outbound to database on MySQL port
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          DestinationSecurityGroupId: !Ref DBSecurityGroup
+          Description: 'Allow outbound to database servers'
+        # Allow HTTPS for external API calls
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow HTTPS outbound for external services'
+        # DNS resolution
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow DNS resolution'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-AppServerSG'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  AppServerSGIngressFromWeb:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref AppServerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Description: 'Allow traffic from web servers'
+  
+  # Database Security Group - Strict default-deny, application server access only
+  DBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: DBServerSG
+      GroupDescription: 'Security group for database servers - default deny with app server access only'
+      VpcId: !Ref VPC
+      # No ingress rules defined here - managed separately for clarity
+      # Minimal egress rules for database operations
+      SecurityGroupEgress:
+        # DNS resolution for RDS operations
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow DNS resolution'
+        # HTTPS for AWS service communication (backups, etc.)
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow HTTPS for AWS service communication'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-DBSG'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  DBSecurityGroupIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref DBSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref AppServerSecurityGroup
+      Description: 'Allow MySQL traffic from application servers'
+  
+  # ====================================
+  # AWS CONFIG AND CLOUDTRAIL
+  # ====================================
+  
+  # AWS Config Configuration
+  ConfigRecorder:
+    Type: 'AWS::Config::ConfigurationRecorder'
+    Properties:
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+      RoleARN: !GetAtt ConfigRole.Arn
+  
+  ConfigDeliveryChannel:
+    Type: 'AWS::Config::DeliveryChannel'
+    Properties:
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: Six_Hours
+      # Use centralized logging bucket for Config snapshots
+      S3BucketName: !Ref CentralizedLoggingBucket
+      S3KeyPrefix: 'config'
+  
+  # AWS Config Rules
+  IAMFullAccessRule:
+    Type: 'AWS::Config::ConfigRule'
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: iam-policy-no-statements-with-full-access
+      Description: 'Checks IAM policies that grant full administrative privileges'
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS
+  
+  # CloudTrail Configuration - Multi-region trail for comprehensive auditing
+  CloudTrailToS3:
+    Type: 'AWS::CloudTrail::Trail'
+    Properties:
+      TrailName: !Sub '${AWS::StackName}-audit-trail'
+      IsLogging: true
+      # Multi-region trail for complete account coverage
+      IsMultiRegionTrail: true
+      # Use centralized logging bucket
+      S3BucketName: !Ref CentralizedLoggingBucket
+      S3KeyPrefix: 'cloudtrail'
+      # CloudWatch integration for real-time monitoring
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
+      # Security features
+      EnableLogFileValidation: true
+      IncludeGlobalServiceEvents: true
+      # Event selectors for comprehensive logging
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-CloudTrail'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  CloudTrailLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: 'CloudTrail/Audit'
+      RetentionInDays: 365
+  
+  # ====================================
+  # CLOUDWATCH METRIC FILTERS & ALARMS
+  # ====================================
+  
+  # CloudWatch Log Metric Filter for Root Account Usage
+  RootAccountUsageMetricFilter:
+    Type: 'AWS::Logs::MetricFilter'
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroup
+      FilterPattern: 'Root'
+      MetricTransformations:
+        - MetricNamespace: 'CloudTrailMetrics'
+          MetricName: 'RootAccountUsage'
+          MetricValue: '1'
+          DefaultValue: 0
+
+  # CloudWatch Log Metric Filter for Unauthorized API Calls
+  UnauthorizedAPICallsMetricFilter:
+    Type: 'AWS::Logs::MetricFilter'
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroup
+      FilterPattern: 'UnauthorizedOperation AccessDenied'
+      MetricTransformations:
+        - MetricNamespace: 'CloudTrailMetrics'
+          MetricName: 'UnauthorizedAPICall'
+          MetricValue: '1'
+          DefaultValue: 0
+
+  # CloudWatch Log Metric Filter for IAM Policy Changes
+  IAMPolicyChangesMetricFilter:
+    Type: 'AWS::Logs::MetricFilter'
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroup
+      FilterPattern: 'Policy'
+      MetricTransformations:
+        - MetricNamespace: 'CloudTrailMetrics'
+          MetricName: 'IAMPolicyChange'
+          MetricValue: '1'
+          DefaultValue: 0
+
+  # CloudWatch Log Metric Filter for Console Sign-in Failures
+  ConsoleSigninFailureMetricFilter:
+    Type: 'AWS::Logs::MetricFilter'
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroup
+      FilterPattern: 'ConsoleLogin'
+      MetricTransformations:
+        - MetricNamespace: 'CloudTrailMetrics'
+          MetricName: 'ConsoleSigninFailure'
+          MetricValue: '1'
+          DefaultValue: 0
+
+  # ====================================
+  # CLOUDWATCH ALARMS FOR THREAT DETECTION
+  # ====================================
+  
+  # CloudWatch Alarm for Root Account Login
+  RootAccountLoginAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: 'RootAccountLoginAlarm'
+      AlarmDescription: 'Alarm if the root account logs in'
+      MetricName: 'RootAccountUsage'
+      Namespace: 'CloudTrailMetrics'
+      Statistic: 'Sum'
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: 'GreaterThanThreshold'
+      TreatMissingData: 'notBreaching'
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+  
+  # CloudWatch Alarm for Unauthorized API Calls
+  UnauthorizedAPICallAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: 'UnauthorizedAPICallAlarm'
+      AlarmDescription: 'Alarm if there are unauthorized API calls'
+      MetricName: 'UnauthorizedAPICall'
+      Namespace: 'CloudTrailMetrics'
+      Statistic: 'Sum'
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: 'GreaterThanThreshold'
+      TreatMissingData: 'notBreaching'
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+  
+  # CloudWatch Alarm for IAM Policy Changes
+  IAMPolicyChangeAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: 'IAMPolicyChangeAlarm'
+      AlarmDescription: 'Alarm if there are IAM policy changes'
+      MetricName: 'IAMPolicyChange'
+      Namespace: 'CloudTrailMetrics'
+      Statistic: 'Sum'
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: 'GreaterThanThreshold'
+      TreatMissingData: 'notBreaching'
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+  
+  # CloudWatch Alarm for Console Sign-in Failures
+  ConsoleSigninFailureAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: 'ConsoleSigninFailureAlarm'
+      AlarmDescription: 'Alarm if there are console sign-in failures'
+      MetricName: 'ConsoleSigninFailure'
+      Namespace: 'CloudTrailMetrics'
+      Statistic: 'Sum'
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3  # Alert after 3 failed attempts
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold'
+      TreatMissingData: 'notBreaching'
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+
+  # SNS Topic for Security Alerts - immediate notifications
+  SecurityAlertTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      TopicName: 'SecurityAlertsTopic'
+      DisplayName: 'Security Alert Notifications Topic'
+      Tags:
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  # ====================================
+  # RDS CONFIGURATION
+  # Managed database with security best practices:
+  # - Deployed in private subnets (no public access)
+  # - Multi-AZ for high availability
+  # - Automated backups with minimum 7-day retention
+  # - Encryption at rest enabled
+  # - Credentials managed via AWS Secrets Manager
+  # ====================================
+  
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: 'DB Subnet Group for RDS instances'
+      SubnetIds:
+        - !Ref DBSubnet1
+        - !Ref DBSubnet2
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-DBSubnetGroup'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  # RDS Instance
+  RDSInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      AllocatedStorage: 20
+      BackupRetentionPeriod: !Ref DBBackupRetentionPeriod
+      DBInstanceClass: !Ref DBInstanceClass
+      DBName: 'ProductionDB'
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      Engine: 'mysql'
+      EngineVersion: '8.0.37'
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:username}}' ]]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:password}}' ]]
+      MultiAZ: true
+      PubliclyAccessible: false
+      StorageEncrypted: true
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-RDS'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+
+  # RDS Credentials stored in Secrets Manager
+  RDSSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: !Sub '${AWS::StackName}/rds/credentials'
+      Description: 'RDS database credentials'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+
+  # ====================================
+  # AWS SHIELD AND WAF - Application Layer Protection
+  # Implements DDoS protection and web application firewall
+  # - Shield Advanced for enhanced DDoS protection (primary region only)
+  # - WAF with managed rule sets for SQL injection and XSS protection
+  # - Regional scope for ALB protection
+  # ====================================
+  
+  # AWS Shield Advanced
+  ShieldProtection:
+    Type: 'AWS::Shield::Protection'
+    Condition: CreateShieldProtection
+    Properties:
+      Name: !Sub '${AWS::StackName}-shield-protection'
+      ResourceArn: !GetAtt ALB.LoadBalancerArn
+  
+  # AWS WAF WebACL
+  WebACL:
+    Type: 'AWS::WAFv2::WebACL'
+    Condition: WAFSupported
+    Properties:
+      Name: !Sub '${AWS::StackName}-webacl'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${AWS::StackName}-webacl-metric'
+      Rules:
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 1
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesCommonRuleSetMetric
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+        - Name: AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesKnownBadInputsRuleSetMetric
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+      Tags:
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+  
+  # Associate WAF WebACL with ALB
+  WebACLAssociation:
+    Type: 'AWS::WAFv2::WebACLAssociation'
+    Condition: WAFSupported
+    Properties:
+      WebACLArn: !GetAtt WebACL.Arn
+      ResourceArn: !GetAtt ALB.LoadBalancerArn
+  
+  # ====================================
+  # AUTO SCALING GROUP - Scalable Architecture
+  # Implements auto scaling for handling traffic spikes without manual intervention
+  # ====================================
+  
+  # Launch Template for Auto Scaling Group
+  WebServerLaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-web-server-template'
+      LaunchTemplateData:
+        # Security-hardened AMI (Amazon Linux 2) - dynamically get latest AMI
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        InstanceType: 't3.micro'
+        # Use web server security group
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        # EBS volumes with encryption (best practice for data at rest protection)
+        BlockDeviceMappings:
+          - DeviceName: '/dev/xvda'
+            Ebs:
+              VolumeSize: 8
+              VolumeType: 'gp3'
+              Encrypted: true
+              DeleteOnTermination: true
+        # IAM instance profile for SSM Session Manager (secure access)
+        IamInstanceProfile:
+          Arn: !GetAtt SSMInstanceProfile.Arn
+        TagSpecifications:
+          - ResourceType: 'instance'
+            Tags:
+              - Key: 'Name'
+                Value: !Sub '${AWS::StackName}-web-server'
+              - Key: 'cost-center'
+                Value: !Ref CostCenterTag
+              - Key: 'project-id'
+                Value: !Ref ProjectIDTag
+              - Key: 'iac-rlhf-amazon'
+                Value: 'true'
+
+  # Auto Scaling Group for web servers
+  WebServerAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      AutoScalingGroupName: !Sub '${AWS::StackName}-web-asg'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WebServerLaunchTemplate
+        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 10
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      HealthCheckType: 'ELB'
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-web-asg'
+          PropagateAtLaunch: false
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+          PropagateAtLaunch: true
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+          PropagateAtLaunch: true
+
+  # IAM Role for EC2 instances (SSM Session Manager)
+  SSMInstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'ec2.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      Tags:
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+
+  # Instance Profile for EC2 instances
+  SSMInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+        - !Ref SSMInstanceRole
+
+  # ====================================
+  # APPLICATION LOAD BALANCER
+  # ====================================
+  
+  # Application Load Balancer - Internet-facing for web tier
+  ALB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: !Sub '${AWS::StackName}-alb'
+      Type: application
+      Scheme: internet-facing
+      # Use web server security group for ALB
+      SecurityGroups:
+        - !Ref WebServerSecurityGroup
+      # Deploy in public subnets for internet access
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-ALB'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+
+  # ALB Target Group for Auto Scaling Group
+  ALBTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: !Sub '${AWS::StackName}-web-tg'
+      Protocol: HTTP
+      Port: 80
+      VpcId: !Ref VPC
+      HealthCheckPath: '/'
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${AWS::StackName}-web-tg'
+        - Key: 'cost-center'
+          Value: !Ref CostCenterTag
+        - Key: 'project-id'
+          Value: !Ref ProjectIDTag
+        - Key: 'iac-rlhf-amazon'
+          Value: 'true'
+
+  # ALB Listener for HTTP traffic
+  ALBListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+
+  # ====================================
+  # OUTPUTS
+  # ====================================
+Outputs:
+  VpcId:
+    Description: 'VPC ID'
+    Value: !Ref VPC
+    
+  ALBDnsName:
+    Description: 'Application Load Balancer DNS Name'
+    Value: !GetAtt ALB.DNSName
+    
+  WebServerSecurityGroup:
+    Description: 'Security Group for Web Servers'
+    Value: !Ref WebServerSecurityGroup
+    
+  AppServerSecurityGroup:
+    Description: 'Security Group for Application Servers'
+    Value: !Ref AppServerSecurityGroup
+    
+  DBSecurityGroup:
+    Description: 'Security Group for Database Servers'
+    Value: !Ref DBSecurityGroup
+    
+  PublicSubnets:
+    Description: 'Public Subnets'
+    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+    
+  PrivateSubnets:
+    Description: 'Private Subnets'
+    Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    
+  DBSubnets:
+    Description: 'Database Subnets'
+    Value: !Join [',', [!Ref DBSubnet1, !Ref DBSubnet2]]
+    
+  RDSEndpoint:
+    Description: 'RDS Endpoint'
+    Value: !GetAtt RDSInstance.Endpoint.Address

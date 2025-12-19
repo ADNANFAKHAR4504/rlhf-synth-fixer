@@ -1,0 +1,67 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "MediaConvert Job Template for video transcoding",
+  "Resources": {
+    "MediaConvertJobTemplate": {
+      "Type": "AWS::MediaConvert::JobTemplate",
+      "Properties": {
+        "Name": "media-streaming-transcode-template",
+        "Description": "Standard video transcoding template for media streaming platform",
+        "Category": "MediaStreaming",
+        "Queue": "${queue_arn}",
+        "SettingsJson": {
+          "OutputGroups": [
+            {
+              "Name": "File Group",
+              "OutputGroupSettings": {
+                "Type": "FILE_GROUP_SETTINGS",
+                "FileGroupSettings": {
+                  "Destination": "s3://destination-bucket/transcoded/"
+                }
+              },
+              "Outputs": [
+                {
+                  "ContainerSettings": {
+                    "Container": "MP4"
+                  },
+                  "VideoDescription": {
+                    "CodecSettings": {
+                      "Codec": "H_264",
+                      "H264Settings": {
+                        "RateControlMode": "QVBR",
+                        "MaxBitrate": 5000000,
+                        "QualityTuningLevel": "SINGLE_PASS_HQ"
+                      }
+                    },
+                    "Width": 1920,
+                    "Height": 1080
+                  },
+                  "AudioDescriptions": [
+                    {
+                      "CodecSettings": {
+                        "Codec": "AAC",
+                        "AacSettings": {
+                          "Bitrate": 128000,
+                          "CodingMode": "CODING_MODE_2_0",
+                          "SampleRate": 48000
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "JobTemplateName": {
+      "Description": "Name of the MediaConvert job template",
+      "Value": {
+        "Ref": "MediaConvertJobTemplate"
+      }
+    }
+  }
+}

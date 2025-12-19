@@ -315,6 +315,25 @@ NEW_PR_NUMBER=$(echo "$NEW_PR_URL" | grep -oE '[0-9]+$' || echo "")
 log_success "Pull Request created!"
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ASSIGN CURRENT GITHUB USER TO PR
+# ═══════════════════════════════════════════════════════════════════════════
+
+log_section "Assigning PR to Current User"
+
+# Get current GitHub user
+CURRENT_USER=$(gh api user --jq '.login' 2>/dev/null || echo "")
+
+if [ -n "$CURRENT_USER" ] && [ -n "$NEW_PR_NUMBER" ]; then
+  if gh pr edit "$NEW_PR_NUMBER" --repo "$GITHUB_REPO" --add-assignee "$CURRENT_USER" 2>/dev/null; then
+    log_success "Assigned PR to @$CURRENT_USER"
+  else
+    log_warn "Could not assign PR to @$CURRENT_USER (non-fatal)"
+  fi
+else
+  log_warn "Could not determine current GitHub user for assignment"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
 # RETURN TO PROJECT ROOT
 # ═══════════════════════════════════════════════════════════════════════════
 

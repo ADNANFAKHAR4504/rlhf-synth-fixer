@@ -1,0 +1,9 @@
+I want to build a serverless architecture in AWS using the AWS CDK with Python (main.py - single stack). The core compute should be AWS Lambda, and it needs to run inside a VPC for security. API Gateway should trigger the Lambda and support both GET and POST methods. The data layer will be DynamoDB with fixed read and write capacity of 5 units each, and everything should be wired together with the proper IAM roles so permissions are tight and least-privileged.
+
+I’d like CloudWatch logging and monitoring for the whole setup, with alarms configured to alert if a Lambda fails. Lambda itself should also have a dead letter queue via SQS for error handling. On top of that, API Gateway should be fronted by CloudFront for caching to improve performance, and I also want WAF configured to protect the API Gateway from common threats.
+
+The stack should support environment variables in Lambda for sensitive values like API keys, and I’d like versioning enabled across resources so deployments can be tracked and rolled back. DynamoDB must be encrypted at rest and in transit, and Lambda should have X-Ray enabled so requests can be traced end to end across API Gateway and DynamoDB. Lambda should also have a 30-second timeout and provisioned concurrency to avoid cold starts.
+
+I need the CDK code to be parameterized so I can pass in values for VPC ID and subnet IDs, because this should work in both us-east-1 and us-west-2. For API Gateway, it should also support a custom domain that I’ll manage through Route 53.
+
+Can you put this all together in a single Python CDK stack that ties these pieces together and meets all of these requirements?

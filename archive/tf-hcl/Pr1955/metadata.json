@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291205",
+  "team": "5",
+  "startedAt": "2025-08-21T16:45:26.151Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "aws-infrastructure",
+    "terraform-modules",
+    "security-best-practices",
+    "multi-tier-architecture",
+    "iam-least-privilege",
+    "cloudtrail-logging",
+    "encryption-at-rest",
+    "vpc-networking",
+    "test-automation"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "CloudTrail",
+    "SecurityGroups",
+    "Subnets",
+    "InternetGateway",
+    "RouteTables"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Akorede28",
+  "dockerS3Location": ""
+}

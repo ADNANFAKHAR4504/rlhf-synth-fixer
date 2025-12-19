@@ -1,0 +1,681 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Fully automated CI/CD pipeline with CodePipeline, CodeBuild, Lambda, and S3 integration",
+    "Parameters": {
+        "ProjectName": {
+            "Type": "String",
+            "Default": "my-cicd-project",
+            "Description": "Name of the project - used for naming resources",
+            "AllowedPattern": "^[a-z0-9-]+$",
+            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+        },
+        "SourceBucketName": {
+            "Type": "String",
+            "Default": "source-code-bucket",
+            "Description": "S3 bucket name for source code storage",
+            "AllowedPattern": "^[a-z0-9-]+$"
+        },
+        "ArtifactsBucketName": {
+            "Type": "String",
+            "Default": "build-artifacts-bucket",
+            "Description": "S3 bucket name for build artifacts",
+            "AllowedPattern": "^[a-z0-9-]+$"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Default": "xyz@abc.com",
+            "Description": "Email address for pipeline notifications",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        }
+    },
+    "Resources": {
+        "SourceCodeBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${SourceBucketName}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ArtifactsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ArtifactsBucketName}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldArtifacts",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 30
+                        }
+                    ]
+                }
+            }
+        },
+        "CodeBuildLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/codebuild/${ProjectName}"
+                },
+                "RetentionInDays": 14
+            }
+        },
+        "LambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ProjectName}-validation"
+                },
+                "RetentionInDays": 14
+            }
+        },
+        "S3LogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/s3/${ProjectName}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "PipelineLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/codepipeline/${ProjectName}"
+                },
+                "RetentionInDays": 14
+            }
+        },
+        "CodePipelineServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-codepipeline-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codepipeline.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CodePipelinePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketVersioning",
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${SourceCodeBucket}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${ArtifactsBucket}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "SourceCodeBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ArtifactsBucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codebuild:BatchGetBuilds",
+                                        "codebuild:StartBuild"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "CodeBuildProject",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "lambda:InvokeFunction"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ValidationLambda",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codepipeline/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CodeBuildServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-codebuild-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codebuild.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CodeBuildPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${SourceCodeBucket}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${ArtifactsBucket}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-lambda-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaValidationPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codepipeline:PutJobSuccessResult",
+                                        "codepipeline:PutJobFailureResult"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${ArtifactsBucket}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ValidationLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ProjectName}-validation-function"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "Environment": {
+                    "Variables": {
+                        "PROJECT_NAME": {
+                            "Ref": "ProjectName"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport logging\nimport os\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Lambda function to validate deployment\n    This function acts as a quality gate in the CI/CD pipeline\n    \"\"\"\n    \n    # Initialize CodePipeline client\n    codepipeline = boto3.client('codepipeline')\n    \n    try:\n        # Extract job details from the event\n        job_id = event['CodePipeline.job']['id']\n        input_artifacts = event['CodePipeline.job']['data']['inputArtifacts']\n        \n        logger.info(f\"Starting validation for job: {job_id}\")\n        logger.info(f\"Input artifacts: {input_artifacts}\")\n        \n        # Perform validation checks\n        validation_result = perform_validation_checks(input_artifacts)\n        \n        if validation_result['success']:\n            logger.info(\"Validation successful\")\n            codepipeline.put_job_success_result(jobId=job_id)\n            return {\n                'statusCode': 200,\n                'body': json.dumps('Validation successful')\n            }\n        else:\n            logger.error(f\"Validation failed: {validation_result['message']}\")\n            codepipeline.put_job_failure_result(\n                jobId=job_id,\n                failureDetails={'message': validation_result['message']}\n            )\n            return {\n                'statusCode': 400,\n                'body': json.dumps(f\"Validation failed: {validation_result['message']}\")\n            }\n            \n    except Exception as e:\n        logger.error(f\"Error in validation function: {str(e)}\")\n        codepipeline.put_job_failure_result(\n            jobId=job_id,\n            failureDetails={'message': f'Validation error: {str(e)}'}\n        )\n        return {\n            'statusCode': 500,\n            'body': json.dumps(f'Error: {str(e)}')\n        }\n\ndef perform_validation_checks(input_artifacts):\n    \"\"\"\n    Perform actual validation checks\n    This is where you would implement your specific validation logic\n    \"\"\"\n    try:\n        # Example validation checks\n        project_name = os.environ.get('PROJECT_NAME', 'unknown')\n        \n        # Check 1: Verify artifacts exist\n        if not input_artifacts:\n            return {\n                'success': False,\n                'message': 'No input artifacts found'\n            }\n        \n        # Check 2: Basic environment validation\n        logger.info(f\"Validating deployment for project: {project_name}\")\n        \n        # Check 3: Add your custom validation logic here\n        # For example:\n        # - Verify configuration files\n        # - Check environment variables\n        # - Validate deployment targets\n        # - Run smoke tests\n        \n        logger.info(\"All validation checks passed\")\n        return {\n            'success': True,\n            'message': 'All validation checks passed'\n        }\n        \n    except Exception as e:\n        return {\n            'success': False,\n            'message': f'Validation check failed: {str(e)}'\n        }\n"
+                }
+            }
+        },
+        "CodeBuildProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-build"
+                },
+                "Description": "Build project for CI/CD pipeline",
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "CodeBuildServiceRole",
+                        "Arn"
+                    ]
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "ComputeType": "BUILD_GENERAL1_SMALL",
+                    "Image": "aws/codebuild/amazonlinux2-x86_64-standard:3.0",
+                    "EnvironmentVariables": [
+                        {
+                            "Name": "PROJECT_NAME",
+                            "Value": {
+                                "Ref": "ProjectName"
+                            }
+                        },
+                        {
+                            "Name": "AWS_DEFAULT_REGION",
+                            "Value": {
+                                "Ref": "AWS::Region"
+                            }
+                        },
+                        {
+                            "Name": "AWS_ACCOUNT_ID",
+                            "Value": {
+                                "Ref": "AWS::AccountId"
+                            }
+                        }
+                    ]
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE",
+                    "BuildSpec": {
+                        "Fn::Sub": "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo \"Pre-build phase started on `date`\"\n      - echo \"Project Name: $PROJECT_NAME\"\n      - echo \"AWS Region: $AWS_DEFAULT_REGION\"\n      - echo \"AWS Account ID: $AWS_ACCOUNT_ID\"\n  build:\n    commands:\n      - echo \"Build phase started on `date`\"\n      - echo \"Compiling the source code...\"\n      # Add your build commands here\n      # For example:\n      # - npm install (for Node.js projects)\n      # - mvn compile (for Java projects)\n      # - pip install -r requirements.txt (for Python projects)\n      - echo \"Running tests...\"\n      # Add your test commands here\n      # For example:\n      # - npm test\n      # - mvn test\n      # - python -m pytest\n      - echo \"Packaging application...\"\n      # Add your packaging commands here\n  post_build:\n    commands:\n      - echo \"Post-build phase started on `date`\"\n      - echo \"Build completed successfully\"\nartifacts:\n  files:\n    - '**/*'\n  name: '${ProjectName}-$(date +%Y-%m-%d)'\n"
+                    }
+                },
+                "LogsConfig": {
+                    "CloudWatchLogs": {
+                        "Status": "ENABLED",
+                        "GroupName": {
+                            "Ref": "CodeBuildLogGroup"
+                        }
+                    }
+                }
+            }
+        },
+        "PipelineNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${ProjectName}-pipeline-notifications"
+                },
+                "DisplayName": "CI/CD Pipeline Notifications"
+            }
+        },
+        "PipelineNotificationSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Protocol": "email",
+                "TopicArn": {
+                    "Ref": "PipelineNotificationTopic"
+                },
+                "Endpoint": {
+                    "Ref": "NotificationEmail"
+                }
+            }
+        },
+        "CodePipeline": {
+            "Type": "AWS::CodePipeline::Pipeline",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-pipeline"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "CodePipelineServiceRole",
+                        "Arn"
+                    ]
+                },
+                "ArtifactStore": {
+                    "Type": "S3",
+                    "Location": {
+                        "Ref": "ArtifactsBucket"
+                    }
+                },
+                "Stages": [
+                    {
+                        "Name": "Source",
+                        "Actions": [
+                            {
+                                "Name": "SourceAction",
+                                "ActionTypeId": {
+                                    "Category": "Source",
+                                    "Owner": "AWS",
+                                    "Provider": "S3",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "S3Bucket": {
+                                        "Ref": "SourceCodeBucket"
+                                    },
+                                    "S3ObjectKey": "source.zip",
+                                    "PollForSourceChanges": true
+                                },
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Build",
+                        "Actions": [
+                            {
+                                "Name": "BuildAction",
+                                "ActionTypeId": {
+                                    "Category": "Build",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeBuild",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "CodeBuildProject"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ],
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Validation",
+                        "Actions": [
+                            {
+                                "Name": "ValidationAction",
+                                "ActionTypeId": {
+                                    "Category": "Invoke",
+                                    "Owner": "AWS",
+                                    "Provider": "Lambda",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "FunctionName": {
+                                        "Ref": "ValidationLambda"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ],
+                                "RunOrder": 1
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "PipelineEventRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-pipeline-events"
+                },
+                "Description": "Capture pipeline state changes",
+                "EventPattern": {
+                    "source": [
+                        "aws.codepipeline"
+                    ],
+                    "detail-type": [
+                        "CodePipeline Pipeline Execution State Change",
+                        "CodePipeline Stage Execution State Change"
+                    ],
+                    "detail": {
+                        "pipeline": [
+                            {
+                                "Ref": "CodePipeline"
+                            }
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Ref": "PipelineNotificationTopic"
+                        },
+                        "Id": "PipelineNotificationTarget"
+                    }
+                ]
+            }
+        },
+        "PipelineEventRulePermission": {
+            "Type": "AWS::SNS::TopicPolicy",
+            "Properties": {
+                "Topics": [
+                    {
+                        "Ref": "PipelineNotificationTopic"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "events.amazonaws.com"
+                            },
+                            "Action": "sns:Publish",
+                            "Resource": {
+                                "Ref": "PipelineNotificationTopic"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "PipelineName": {
+            "Description": "Name of the created CodePipeline",
+            "Value": {
+                "Ref": "CodePipeline"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineName"
+                }
+            }
+        },
+        "SourceBucketName": {
+            "Description": "Name of the S3 bucket for source code",
+            "Value": {
+                "Ref": "SourceCodeBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SourceBucket"
+                }
+            }
+        },
+        "ArtifactsBucketName": {
+            "Description": "Name of the S3 bucket for build artifacts",
+            "Value": {
+                "Ref": "ArtifactsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ArtifactsBucket"
+                }
+            }
+        },
+        "CodeBuildProjectName": {
+            "Description": "Name of the CodeBuild project",
+            "Value": {
+                "Ref": "CodeBuildProject"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CodeBuildProject"
+                }
+            }
+        },
+        "ValidationLambdaName": {
+            "Description": "Name of the validation Lambda function",
+            "Value": {
+                "Ref": "ValidationLambda"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ValidationLambda"
+                }
+            }
+        },
+        "PipelineConsoleURL": {
+            "Description": "URL to view the pipeline in AWS Console",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${CodePipeline}/view"
+            }
+        },
+        "SourceBucketConsoleURL": {
+            "Description": "URL to view the source bucket in AWS Console",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/s3/buckets/${SourceCodeBucket}"
+            }
+        }
+    }
+}

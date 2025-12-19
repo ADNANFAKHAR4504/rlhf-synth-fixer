@@ -1,0 +1,5 @@
+I want you to help me set up a simple but secure serverless stack using AWS CDK in Python (main.py - single stack). Everything needs to be deployed into the `us-east-1` region and all resources should carry a `Prod` prefix in their names. The core flow is pretty straightforward: an API Gateway HTTP API should accept a GET request and trigger a Lambda function. That Lambda should be lightweight — configured with 128 MB memory and a 15-second timeout — and it needs to include some environment variables.
+
+Since security is key, make sure the Lambda execution role and the API Gateway permissions follow the principle of least privilege. I also want the Lambda and API Gateway logs enabled, with logs landing inside an S3 bucket that has encryption at rest. For observability, hook up CloudWatch so I get alarms if the Lambda throws errors.
+
+The final output I’m expecting is an AWS CDK Python stack that builds this end-to-end: API Gateway, Lambda, the S3 log bucket, IAM roles and policies, and the CloudWatch alarm. Everything tied together neatly with the `Prod` prefix across resource names.

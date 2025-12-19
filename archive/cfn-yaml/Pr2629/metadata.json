@@ -1,0 +1,47 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348831",
+  "team": "5",
+  "startedAt": "2025-09-02T05:22:37.107Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::SecurityGroup",
+    "AWS::EC2::VPNGateway",
+    "AWS::EC2::CustomerGateway",
+    "AWS::EC2::VPNConnection",
+    "AWS::EC2::VPNConnectionRoute",
+    "AWS::KMS::Key",
+    "AWS::KMS::Alias",
+    "AWS::S3::Bucket",
+    "AWS::S3::BucketPolicy",
+    "AWS::Logs::LogGroup",
+    "AWS::IAM::Role",
+    "AWS::CloudTrail::Trail",
+    "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    "AWS::ElasticLoadBalancingV2::Listener",
+    "AWS::WAFv2::WebACL",
+    "AWS::WAFv2::WebACLAssociation",
+    "AWS::Shield::Protection"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "waqara-turing",
+  "dockerS3Location": ""
+}

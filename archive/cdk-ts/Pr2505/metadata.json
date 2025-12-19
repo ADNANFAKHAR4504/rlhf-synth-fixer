@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "2j8s9ha8w1jz",
+  "team": "6",
+  "startedAt": "2025-08-29T16:20:59.226Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Database Management",
+    "Network Configuration",
+    "Security Configuration",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "Lambda",
+    "API Gateway",
+    "RDS",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tanvi-turing",
+  "dockerS3Location": ""
+}

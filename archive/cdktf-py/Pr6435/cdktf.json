@@ -1,0 +1,11 @@
+{
+  "language": "python",
+  "app": "pipenv run python tap.py",
+  "projectId": "q74j8p-payment-processing",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 6.0"
+  ],
+  "terraformModules": [],
+  "context": {}
+}

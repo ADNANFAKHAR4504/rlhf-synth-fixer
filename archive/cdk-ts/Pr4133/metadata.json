@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349952",
+  "team": "2",
+  "startedAt": "2025-10-08T12:26:13.037Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AWS Organizations",
+    "IAM",
+    "IAM Access Analyzer",
+    "KMS",
+    "S3",
+    "CloudTrail",
+    "AWS Config",
+    "GuardDuty",
+    "Security Hub",
+    "SNS",
+    "CloudWatch",
+    "EventBridge",
+    "Lambda"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
+}

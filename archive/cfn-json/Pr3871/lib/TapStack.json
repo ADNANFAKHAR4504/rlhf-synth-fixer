@@ -1,0 +1,560 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless infrastructure with Lambda, API Gateway, DynamoDB, and S3 for handling HTTP requests",
+
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming"
+    }
+  },
+
+  "Resources": {
+    "RequestProcessorLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBAccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Scan",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["RequestDataTable", "Arn"]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:SendMessage"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["DeadLetterQueue", "Arn"]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "EnvironmentSuffix",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+
+    "LambdaLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/${AWS::StackName}-request-processor"
+        },
+        "RetentionInDays": 7
+      }
+    },
+
+    "RequestProcessorLambda": {
+      "Type": "AWS::Lambda::Function",
+      "DependsOn": "LambdaLogGroup",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-request-processor"
+        },
+        "Runtime": "python3.13",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": ["RequestProcessorLambdaRole", "Arn"]
+        },
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "import json",
+                "import boto3",
+                "import os",
+                "from datetime import datetime",
+                "import uuid",
+                "",
+                "dynamodb = boto3.resource('dynamodb')",
+                "table_name = os.environ.get('DYNAMODB_TABLE_NAME')",
+                "",
+                "def lambda_handler(event, context):",
+                "    try:",
+                "        table = dynamodb.Table(table_name)",
+                "        request_id = str(uuid.uuid4())",
+                "        timestamp = datetime.utcnow().isoformat()",
+                "        ",
+                "        if 'requestContext' in event:",
+                "            source = 'API Gateway'",
+                "            method = event.get('requestContext', {}).get('http', {}).get('method', 'UNKNOWN')",
+                "            path = event.get('requestContext', {}).get('http', {}).get('path', '/')",
+                "            body = json.loads(event.get('body', '{}')) if event.get('body') else {}",
+                "        else:",
+                "            source = 'CloudWatch Scheduled Event'",
+                "            method = 'SCHEDULED'",
+                "            path = '/scheduled'",
+                "            body = event",
+                "        ",
+                "        item = {",
+                "            'RequestId': request_id,",
+                "            'Timestamp': timestamp,",
+                "            'Source': source,",
+                "            'Method': method,",
+                "            'Path': path,",
+                "            'Body': json.dumps(body)",
+                "        }",
+                "        ",
+                "        table.put_item(Item=item)",
+                "        ",
+                "        return {",
+                "            'statusCode': 200,",
+                "            'headers': {",
+                "                'Content-Type': 'application/json',",
+                "                'Access-Control-Allow-Origin': '*',",
+                "                'Access-Control-Allow-Headers': 'Content-Type',",
+                "                'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'",
+                "            },",
+                "            'body': json.dumps({",
+                "                'message': 'Request processed successfully',",
+                "                'requestId': request_id,",
+                "                'timestamp': timestamp",
+                "            })",
+                "        }",
+                "    except Exception as e:",
+                "        print(f'Error: {str(e)}')",
+                "        return {",
+                "            'statusCode': 500,",
+                "            'headers': {",
+                "                'Content-Type': 'application/json',",
+                "                'Access-Control-Allow-Origin': '*'",
+                "            },",
+                "            'body': json.dumps({",
+                "                'error': 'Internal server error',",
+                "                'message': str(e)",
+                "            })",
+                "        }"
+              ]
+            ]
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE_NAME": {
+              "Ref": "RequestDataTable"
+            }
+          }
+        },
+        "DeadLetterConfig": {
+          "TargetArn": {
+            "Fn::GetAtt": ["DeadLetterQueue", "Arn"]
+          }
+        },
+        "Timeout": 30,
+        "MemorySize": 256,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "EnvironmentSuffix",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+
+    "DeadLetterQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "${AWS::StackName}-dlq"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "EnvironmentSuffix",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+
+    "LambdaApiGatewayPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "RequestProcessorLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*"
+        }
+      }
+    },
+
+    "LambdaSchedulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "RequestProcessorLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": ["ScheduledEventRule", "Arn"]
+        }
+      }
+    },
+
+    "HttpApi": {
+      "Type": "AWS::ApiGatewayV2::Api",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-http-api"
+        },
+        "ProtocolType": "HTTP",
+        "CorsConfiguration": {
+          "AllowOrigins": ["*"],
+          "AllowMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+          "AllowHeaders": ["Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key", "X-Amz-Security-Token"],
+          "MaxAge": 86400
+        },
+        "Tags": {
+          "Environment": "Production"
+        }
+      }
+    },
+
+    "HttpApiIntegration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApi"
+        },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationUri": {
+          "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RequestProcessorLambda.Arn}/invocations"
+        },
+        "PayloadFormatVersion": "2.0"
+      }
+    },
+
+    "HttpApiRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApi"
+        },
+        "RouteKey": "$default",
+        "Target": {
+          "Fn::Sub": "integrations/${HttpApiIntegration}"
+        }
+      }
+    },
+
+    "HttpApiStage": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApi"
+        },
+        "StageName": "$default",
+        "AutoDeploy": true,
+        "Tags": {
+          "Environment": "Production"
+        }
+      }
+    },
+
+    "ApiLoggingBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldLogs",
+              "Status": "Enabled",
+              "ExpirationInDays": 90
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "EnvironmentSuffix",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+
+    "ApiLoggingBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ApiLoggingBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSLogDeliveryWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "logging.s3.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${ApiLoggingBucket.Arn}/*"
+              }
+            },
+            {
+              "Sid": "AWSLogDeliveryAclCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "logging.s3.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": ["ApiLoggingBucket", "Arn"]
+              }
+            }
+          ]
+        }
+      }
+    },
+
+    "RequestDataTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${AWS::StackName}-requests"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "RequestId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "Timestamp",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "RequestId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "Timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 5
+        },
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS",
+          "KMSMasterKeyId": "alias/aws/dynamodb"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "EnvironmentSuffix",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+
+    "ApiGateway5XXAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-api-5xx-errors"
+        },
+        "AlarmDescription": "Alert when API Gateway 5XX errors exceed threshold",
+        "MetricName": "5XXError",
+        "Namespace": "AWS/ApiGateway",
+        "Dimensions": [
+          {
+            "Name": "ApiId",
+            "Value": {
+              "Ref": "HttpApi"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+
+    "ScheduledEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-daily-schedule"
+        },
+        "Description": "Trigger Lambda function every 24 hours",
+        "ScheduleExpression": "rate(24 hours)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": ["RequestProcessorLambda", "Arn"]
+            },
+            "Id": "1"
+          }
+        ]
+      }
+    }
+  },
+
+  "Outputs": {
+    "ApiEndpoint": {
+      "Description": "HTTP API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
+        }
+      }
+    },
+    "LambdaFunctionName": {
+      "Description": "Name of the Lambda function",
+      "Value": {
+        "Ref": "RequestProcessorLambda"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaFunctionName"
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "ARN of the Lambda function",
+      "Value": {
+        "Fn::GetAtt": ["RequestProcessorLambda", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+        }
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "RequestDataTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DynamoDBTableName"
+        }
+      }
+    },
+    "S3BucketName": {
+      "Description": "Name of the S3 bucket for API logs",
+      "Value": {
+        "Ref": "ApiLoggingBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3BucketName"
+        }
+      }
+    },
+    "DeadLetterQueueUrl": {
+      "Description": "URL of the Dead Letter Queue",
+      "Value": {
+        "Ref": "DeadLetterQueue"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DeadLetterQueueUrl"
+        }
+      }
+    }
+  }
+}

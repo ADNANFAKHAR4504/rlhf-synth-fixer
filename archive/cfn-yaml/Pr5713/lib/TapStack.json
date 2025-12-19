@@ -1,0 +1,655 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack.yml — Automated compliance monitoring stack using GuardDuty, EventBridge, Lambda, SNS, and S3. Builds everything new in us-east-1 with least-privilege IAM, encrypted storage, and automated alerting. All names include EnvironmentSuffix.\n",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Environment suffix to avoid cross-deployment name collisions.",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "Default": "dev"
+        },
+        "SecurityAlertEmail": {
+            "Type": "String",
+            "Description": "Email address for SNS subscription (security team).",
+            "AllowedPattern": "^[^@]+@[^@]+\\.[^@]+$",
+            "Default": "security-alerts@example.com"
+        },
+        "AuditBucketPrefix": {
+            "Type": "String",
+            "Description": "Prefix for the audit S3 bucket name (final name adds account id and env suffix).",
+            "Default": "guardduty-audit",
+            "AllowedPattern": "^[a-z0-9-]+$"
+        },
+        "LambdaMemoryMB": {
+            "Type": "Number",
+            "Description": "Lambda memory size in MB.",
+            "Default": 256,
+            "MinValue": 128,
+            "MaxValue": 10240
+        },
+        "LambdaTimeoutSeconds": {
+            "Type": "Number",
+            "Description": "Lambda timeout in seconds.",
+            "Default": 30,
+            "MinValue": 10,
+            "MaxValue": 900
+        },
+        "EventArchiveRetentionDays": {
+            "Type": "Number",
+            "Description": "EventBridge archive retention in days.",
+            "Default": 90,
+            "MinValue": 1,
+            "MaxValue": 365
+        },
+        "LogRetentionDays": {
+            "Type": "Number",
+            "Description": "CloudWatch Logs retention in days for Lambda logs.",
+            "Default": 30,
+            "AllowedValues": [
+                1,
+                3,
+                5,
+                7,
+                14,
+                30,
+                60,
+                90,
+                120,
+                150,
+                180,
+                365,
+                400,
+                545,
+                731,
+                1827,
+                3653
+            ]
+        }
+    },
+    "Resources": {
+        "AuditBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${AuditBucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Classification",
+                        "Value": "Confidential"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "Security"
+                    }
+                ]
+            }
+        },
+        "AuditBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "AuditBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureTransport",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${AuditBucket}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${AuditBucket}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "DenyPublicAcls",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": [
+                                "s3:PutBucketAcl",
+                                "s3:PutObjectAcl"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${AuditBucket}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${AuditBucket}/*"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "GuardDutyDetector": {
+            "Type": "AWS::GuardDuty::Detector",
+            "Properties": {
+                "Enable": true,
+                "DataSources": {
+                    "S3Logs": {
+                        "Enable": true
+                    },
+                    "Kubernetes": {
+                        "AuditLogs": {
+                            "Enable": true
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "Security"
+                    },
+                    {
+                        "Key": "Classification",
+                        "Value": "Confidential"
+                    }
+                ]
+            }
+        },
+        "AlertsTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "guardduty-alerts-${EnvironmentSuffix}"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "Security"
+                    },
+                    {
+                        "Key": "Classification",
+                        "Value": "Confidential"
+                    }
+                ]
+            }
+        },
+        "AlertsSubscriptionEmail": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "TopicArn": {
+                    "Ref": "AlertsTopic"
+                },
+                "Protocol": "email",
+                "Endpoint": {
+                    "Ref": "SecurityAlertEmail"
+                }
+            }
+        },
+        "EnricherLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/guardduty-enricher-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "Security"
+                    },
+                    {
+                        "Key": "Classification",
+                        "Value": "Confidential"
+                    }
+                ]
+            }
+        },
+        "EnricherRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "guardduty-enricher-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowLambdaAssume",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "logs-write-specific",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "LogsWrite",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/guardduty-enricher-${EnvironmentSuffix}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "sns-publish-alerts",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "SnsPublishAlerts",
+                                    "Effect": "Allow",
+                                    "Action": "sns:Publish",
+                                    "Resource": {
+                                        "Ref": "AlertsTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "s3-write-audit",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "ListBucketPrefix",
+                                    "Effect": "Allow",
+                                    "Action": "s3:ListBucket",
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${AuditBucket}"
+                                    },
+                                    "Condition": {
+                                        "StringLike": {
+                                            "s3:prefix": [
+                                                "findings/*"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "Sid": "PutObjectsOnly",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${AuditBucket}/findings/*"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "readonly-discovery",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "EC2Describe",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:DescribeInstances",
+                                        "ec2:DescribeTags"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "EKSDescribe",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "eks:DescribeCluster",
+                                        "eks:ListTagsForResource"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "S3GetTags",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketTagging"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "IAMListTags",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "iam:ListRoleTags",
+                                        "iam:GetRole"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "TaggingAPI",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "tag:GetResources"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "Security"
+                    },
+                    {
+                        "Key": "Classification",
+                        "Value": "Confidential"
+                    }
+                ]
+            }
+        },
+        "EnricherFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DependsOn": "EnricherLogGroup",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "guardduty-enricher-${EnvironmentSuffix}"
+                },
+                "Description": "Enrich GuardDuty findings with tags/compliance metadata, publish to SNS, and write to S3.",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "EnricherRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "MemorySize": {
+                    "Ref": "LambdaMemoryMB"
+                },
+                "Timeout": {
+                    "Ref": "LambdaTimeoutSeconds"
+                },
+                "Environment": {
+                    "Variables": {
+                        "ALERTS_TOPIC_ARN": {
+                            "Ref": "AlertsTopic"
+                        },
+                        "AUDIT_BUCKET_NAME": {
+                            "Ref": "AuditBucket"
+                        },
+                        "ENVIRONMENT_SUFFIX": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "Security"
+                    },
+                    {
+                        "Key": "Classification",
+                        "Value": "Confidential"
+                    }
+                ],
+                "Code": {
+                    "ZipFile": "import os, json, time, datetime, boto3, uuid, urllib.parse\n\nSNS_ARN = os.environ['ALERTS_TOPIC_ARN']\nBUCKET  = os.environ['AUDIT_BUCKET_NAME']\nENV     = os.environ.get('ENVIRONMENT_SUFFIX','env')\n\ns3  = boto3.client('s3')\nsns = boto3.client('sns')\nec2 = boto3.client('ec2')\neks = boto3.client('eks')\niam = boto3.client('iam')\n\ndef _now_parts(ts=None):\n  t = datetime.datetime.utcnow() if ts is None else datetime.datetime.fromtimestamp(ts, datetime.timezone.utc)\n  return t.strftime('%Y'), t.strftime('%m'), t.strftime('%d'), t.strftime('%H%M%S')\n\ndef _safe_get(d, path, default=None):\n  cur = d\n  for p in path:\n    if isinstance(cur, dict) and p in cur:\n      cur = cur[p]\n    elif isinstance(cur, list) and isinstance(p, int) and p < len(cur):\n      cur = cur[p]\n    else:\n      return default\n  return cur\n\ndef _enrich(detail):\n  enrichment = {\n    \"environment\": ENV,\n    \"controlFamily\": \"ThreatDetection-GuardDuty\",\n    \"classification\": \"Confidential\",\n    \"resourceTags\": {}\n  }\n  res = detail.get('resource', {})\n\n  # EC2 Instance tags\n  inst = _safe_get(res, ['instanceDetails','instanceId'])\n  if inst:\n    try:\n      di = ec2.describe_instances(InstanceIds=[inst])\n      for rsv in di.get('Reservations',[]):\n        for i in rsv.get('Instances',[]):\n          arn = f'arn:aws:ec2:{os.environ.get(\"AWS_REGION\",\"us-east-1\")}:{detail.get(\"accountId\",\"\")}:instance/{i.get(\"InstanceId\")}'\n          tags = { t['Key']: t['Value'] for t in i.get('Tags',[]) } if i.get('Tags') else {}\n          enrichment['resourceTags'][arn] = tags\n    except Exception:\n      pass\n\n  # S3 bucket tags\n  bname = _safe_get(res, ['s3BucketDetails', 0, 'name'])\n  if bname:\n    try:\n      tg = s3.get_bucket_tagging(Bucket=bname)\n      arn = f'arn:aws:s3:::{bname}'\n      tags = { t['Key']: t['Value'] for t in tg.get('TagSet',[]) }\n      enrichment['resourceTags'][arn] = tags\n    except Exception:\n      pass\n\n  # EKS cluster tags\n  cluster = _safe_get(res, ['kubernetesDetails','kubernetesWorkloadDetails','clusterName'])\n  if cluster:\n    try:\n      d = eks.describe_cluster(name=cluster)\n      arn = d.get('cluster',{}).get('arn')\n      if arn:\n        try:\n          lt = eks.list_tags_for_resource(resourceArn=arn)\n          enrichment['resourceTags'][arn] = lt.get('tags',{})\n        except Exception:\n          pass\n    except Exception:\n      pass\n\n  return enrichment\n\ndef handler(event, context):\n  detail = event.get('detail', {})\n  finding_id = detail.get('id') or str(uuid.uuid4())\n  sev = detail.get('severity', 0)\n  title = detail.get('title', 'GuardDuty Finding')\n  ftype = detail.get('type', 'Unknown')\n  region = detail.get('region', os.environ.get('AWS_REGION','us-east-1'))\n  account = detail.get('accountId', '')\n  y,m,d,hhmmss = _now_parts()\n  key = f'findings/{y}/{m}/{d}/{finding_id}-{hhmmss}.json'\n\n  enrichment = _enrich(detail)\n  record = {\n    \"id\": finding_id,\n    \"receivedAt\": int(time.time()),\n    \"severity\": sev,\n    \"title\": title,\n    \"type\": ftype,\n    \"region\": region,\n    \"accountId\": account,\n    \"detail\": detail,\n    \"enrichment\": enrichment\n  }\n\n  # Write to S3\n  body = json.dumps(record, separators=(',',':'))\n  try:\n    s3.put_object(\n      Bucket=BUCKET,\n      Key=key,\n      Body=(body + \"\\n\").encode('utf-8'),\n      ContentType='application/json'\n    )\n  except Exception:\n    pass\n\n  # Publish concise alert to SNS\n  console_url = f'https://{region}.console.aws.amazon.com/guardduty/home?region={region}#/findings?macros=current&fId={urllib.parse.quote(finding_id)}'\n  subject = f'[GuardDuty][{ENV}] {title} (sev {sev})'\n  message = json.dumps({\n    \"id\": finding_id,\n    \"title\": title,\n    \"severity\": sev,\n    \"type\": ftype,\n    \"region\": region,\n    \"accountId\": account,\n    \"consoleLink\": console_url,\n    \"s3Object\": f's3://{BUCKET}/{key}'\n  }, separators=(',',':'))\n  try:\n    sns.publish(TopicArn=SNS_ARN, Subject=subject[:100], Message=message)\n  except Exception:\n    pass\n\n  return {\"status\": \"ok\", \"findingId\": finding_id, \"s3Key\": key}\n"
+                }
+            }
+        },
+        "FindingsRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "guardduty-findings-${EnvironmentSuffix}"
+                },
+                "Description": "Triggers on GuardDuty findings with severity MEDIUM (>=4,<7) and HIGH (>=7).",
+                "EventBusName": "default",
+                "State": "ENABLED",
+                "EventPattern": {
+                    "source": [
+                        "aws.guardduty"
+                    ],
+                    "detail-type": [
+                        "GuardDuty Finding"
+                    ],
+                    "detail": {
+                        "severity": [
+                            {
+                                "numeric": [
+                                    ">=",
+                                    7
+                                ]
+                            },
+                            {
+                                "numeric": [
+                                    ">=",
+                                    4,
+                                    "<",
+                                    7
+                                ]
+                            }
+                        ]
+                    }
+                },
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EnricherFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "LambdaTarget"
+                    }
+                ]
+            }
+        },
+        "FindingsRuleInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Ref": "EnricherFunction"
+                },
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "FindingsRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "FindingsArchive": {
+            "Type": "AWS::Events::Archive",
+            "Properties": {
+                "ArchiveName": {
+                    "Fn::Sub": "guardduty-findings-archive-${EnvironmentSuffix}"
+                },
+                "Description": "Archive of GuardDuty finding events for retention and replay.",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:events:${AWS::Region}:${AWS::AccountId}:event-bus/default"
+                },
+                "RetentionDays": {
+                    "Ref": "EventArchiveRetentionDays"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "GuardDutyDetectorId": {
+            "Description": "GuardDuty Detector ID",
+            "Value": {
+                "Ref": "GuardDutyDetector"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "guardduty-detector-id-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "GuardDutyS3ProtectionStatus": {
+            "Description": "GuardDuty S3 Protection enabled status",
+            "Value": "ENABLED",
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "guardduty-s3-protection-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "GuardDutyEKSAuditLogsStatus": {
+            "Description": "GuardDuty EKS Audit Logs enabled status",
+            "Value": "ENABLED",
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "guardduty-eks-auditlogs-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "FindingRuleArn": {
+            "Description": "EventBridge rule ARN for MEDIUM/HIGH GuardDuty findings",
+            "Value": {
+                "Fn::GetAtt": [
+                    "FindingsRule",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "guardduty-finding-rule-arn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "EventArchiveArn": {
+            "Description": "EventBridge archive ARN",
+            "Value": {
+                "Ref": "FindingsArchive"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "guardduty-archive-arn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "AuditBucketName": {
+            "Description": "Name of the S3 audit bucket",
+            "Value": {
+                "Ref": "AuditBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "audit-bucket-name-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "SnsTopicArn": {
+            "Description": "ARN of the SNS topic for alerts",
+            "Value": {
+                "Ref": "AlertsTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "alerts-topic-arn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "GuardDuty enricher Lambda function name",
+            "Value": {
+                "Ref": "EnricherFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "enricher-function-name-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "LambdaLogGroupName": {
+            "Description": "CloudWatch Logs log group for the enricher Lambda",
+            "Value": {
+                "Ref": "EnricherLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "enricher-log-group-${EnvironmentSuffix}"
+                }
+            }
+        }
+    }
+}

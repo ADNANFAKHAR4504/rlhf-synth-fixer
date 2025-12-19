@@ -1,0 +1,42 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912521",
+  "team": "synth",
+  "startedAt": "2025-11-20T10:31:01+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "migration",
+    "monolithic-to-cloud",
+    "phased-migration",
+    "traffic-cutover",
+    "data-consistency",
+    "java-api",
+    "postgresql",
+    "aws"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "DMS",
+    "ECS",
+    "ALB",
+    "Route53",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "SSM",
+    "MGN"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

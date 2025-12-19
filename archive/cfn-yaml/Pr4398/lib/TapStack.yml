@@ -1,0 +1,532 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Automated Daily Backup System with S3, Lambda, and EventBridge"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - Environment
+          - BackupBucketName
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    Default: prod
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  BackupBucketName:
+    Type: String
+    Description: Name for the S3 backup bucket (must be globally unique)
+    Default: "backup-system-prod-12345"
+    AllowedPattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+    ConstraintDescription: Must be a valid S3 bucket name
+    MinLength: 3
+    MaxLength: 63
+
+Mappings:
+  EnvironmentConfig:
+    dev:
+      RetentionDays: 7
+    staging:
+      RetentionDays: 14
+    prod:
+      RetentionDays: 30
+
+Resources:
+  # KMS Key for S3 Encryption
+  BackupKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "KMS key for ${Environment} backup encryption"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Id: backup-key-policy
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: Allow Lambda to use the key
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - "kms:Decrypt"
+              - "kms:GenerateDataKey"
+              - "kms:CreateGrant"
+              - "kms:DescribeKey"
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "kms:ViaService": !Sub "s3.${AWS::Region}.amazonaws.com"
+          - Sid: Allow CloudWatch Logs to use the key
+            Effect: Allow
+            Principal:
+              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
+            Action:
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+            Condition:
+              ArnLike:
+                "kms:EncryptionContext:aws:logs:arn": !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-backup-function"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: BackupEncryption
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  BackupKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/${Environment}-backup-key"
+      TargetKeyId: !Ref BackupKMSKey
+
+  # S3 Backup Bucket
+  BackupS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${BackupBucketName}-${AWS::AccountId}-${Environment}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: "aws:kms"
+              KMSMasterKeyID: !Ref BackupKMSKey
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldBackups
+            Status: Enabled
+            ExpirationInDays:
+              !FindInMap [EnvironmentConfig, !Ref Environment, RetentionDays]
+            NoncurrentVersionExpirationInDays: 1
+          - Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      MetricsConfigurations:
+        - Id: BackupMetrics
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: backup-access-logs/
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: DailyBackups
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # S3 Bucket for Access Logs
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${BackupBucketName}-${AWS::AccountId}-${Environment}-logs"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: BackupLogs
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # IAM Role for Lambda
+  BackupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Environment}-backup-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: BackupS3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:PutObjectAcl"
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                Resource:
+                  - !Sub "${BackupS3Bucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - "s3:ListBucket"
+                Resource:
+                  - !GetAtt BackupS3Bucket.Arn
+              - Effect: Allow
+                Action:
+                  - "kms:Decrypt"
+                  - "kms:GenerateDataKey"
+                  - "kms:CreateGrant"
+                  - "kms:DescribeKey"
+                Resource:
+                  - !GetAtt BackupKMSKey.Arn
+              - Effect: Allow
+                Action:
+                  - "cloudwatch:PutMetricData"
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    "cloudwatch:namespace": "BackupSystem"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: BackupLambdaExecution
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # CloudWatch Log Group for Lambda
+  BackupLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-backup-function"
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt BackupKMSKey.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: BackupLogs
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # Lambda Function for Backups
+  BackupLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-backup-function"
+      Description: "Daily backup function to upload documents to S3"
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt BackupLambdaRole.Arn
+      Timeout: 900 # 15 minutes
+      MemorySize: 512
+      Environment:
+        Variables:
+          BACKUP_BUCKET: !Ref BackupS3Bucket
+          ENVIRONMENT: !Ref Environment
+          KMS_KEY_ID: !Ref BackupKMSKey
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          import logging
+          from botocore.exceptions import ClientError
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          s3_client = boto3.client('s3')
+          cloudwatch = boto3.client('cloudwatch')
+
+          def send_metric(metric_name, value, unit='Count'):
+              """Send custom metric to CloudWatch"""
+              try:
+                  cloudwatch.put_metric_data(
+                      Namespace='BackupSystem',
+                      MetricData=[
+                          {
+                              'MetricName': metric_name,
+                              'Value': value,
+                              'Unit': unit,
+                              'Dimensions': [
+                                  {
+                                      'Name': 'Environment',
+                                      'Value': os.environ['ENVIRONMENT']
+                                  }
+                              ]
+                          }
+                      ]
+                  )
+              except Exception as e:
+                  logger.error(f"Failed to send metric: {e}")
+
+          def generate_sample_documents(count=500):
+              """Generate sample business documents for backup"""
+              documents = []
+              document_types = ['invoice', 'receipt', 'contract', 'report', 'memo']
+              
+              for i in range(count):
+                  doc_type = document_types[i % len(document_types)]
+                  document = {
+                      'document_id': f'{doc_type}_{i:04d}',
+                      'type': doc_type,
+                      'content': f'Sample {doc_type} content for document {i}',
+                      'created_date': datetime.utcnow().isoformat(),
+                      'file_size': len(f'Sample {doc_type} content for document {i}'),
+                      'checksum': f'md5_{i:04d}',
+                      'metadata': {
+                          'department': ['finance', 'hr', 'operations', 'sales'][i % 4],
+                          'priority': ['low', 'medium', 'high'][i % 3],
+                          'confidential': i % 5 == 0
+                      }
+                  }
+                  documents.append(document)
+              
+              return documents
+
+          def lambda_handler(event, context):
+              """Main handler for backup processing"""
+              bucket_name = os.environ['BACKUP_BUCKET']
+              kms_key_id = os.environ['KMS_KEY_ID']
+              
+              backup_date = datetime.utcnow().strftime('%Y-%m-%d')
+              documents_uploaded = 0
+              
+              try:
+                  logger.info(f"Starting backup process for {backup_date}")
+                  
+                  # Generate sample documents for backup (in real scenario, fetch from business systems)
+                  sample_documents = generate_sample_documents(500)
+                  
+                  # Create daily backup manifest with business context
+                  manifest = {
+                      'backup_date': backup_date,
+                      'backup_timestamp': datetime.utcnow().isoformat(),
+                      'total_documents': len(sample_documents),
+                      'backup_summary': {
+                          'document_types': {},
+                          'departments': {},
+                          'total_size_bytes': 0
+                      },
+                      'documents': sample_documents
+                  }
+                  
+                  # Calculate summary statistics
+                  for doc in sample_documents:
+                      doc_type = doc['type']
+                      department = doc['metadata']['department']
+                      
+                      manifest['backup_summary']['document_types'][doc_type] = \
+                          manifest['backup_summary']['document_types'].get(doc_type, 0) + 1
+                      manifest['backup_summary']['departments'][department] = \
+                          manifest['backup_summary']['departments'].get(department, 0) + 1
+                      manifest['backup_summary']['total_size_bytes'] += doc['file_size']
+                  
+                  # Upload manifest to S3 with encryption
+                  manifest_key = f'backups/{backup_date}/manifest.json'
+                  
+                  s3_client.put_object(
+                      Bucket=bucket_name,
+                      Key=manifest_key,
+                      Body=json.dumps(manifest, indent=2),
+                      ServerSideEncryption='aws:kms',
+                      SSEKMSKeyId=kms_key_id,
+                      ContentType='application/json',
+                      Tagging='Type=BackupManifest&Environment=' + os.environ['ENVIRONMENT'],
+                      Metadata={
+                          'backup-date': backup_date,
+                          'document-count': str(len(sample_documents)),
+                          'backup-type': 'daily-business-documents'
+                      }
+                  )
+                  
+                  # Upload individual document samples (simulate business document backup)
+                  for i, doc in enumerate(sample_documents[:10]):  # Upload first 10 as samples
+                      doc_key = f'backups/{backup_date}/documents/{doc["document_id"]}.json'
+                      
+                      s3_client.put_object(
+                          Bucket=bucket_name,
+                          Key=doc_key,
+                          Body=json.dumps(doc, indent=2),
+                          ServerSideEncryption='aws:kms',
+                          SSEKMSKeyId=kms_key_id,
+                          ContentType='application/json',
+                          Tagging=f'Type=BusinessDocument&Department={doc["metadata"]["department"]}',
+                          Metadata={
+                              'document-type': doc['type'],
+                              'department': doc['metadata']['department'],
+                              'backup-date': backup_date
+                          }
+                      )
+                  
+                  documents_uploaded = len(sample_documents)
+                  logger.info(f"Successfully uploaded backup for {backup_date} with {documents_uploaded} documents")
+                  
+                  # Send success metrics to CloudWatch
+                  send_metric('BackupSuccess', 1)
+                  send_metric('DocumentsBackedUp', documents_uploaded)
+                  send_metric('BackupSizeBytes', manifest['backup_summary']['total_size_bytes'], 'Bytes')
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'Backup completed successfully',
+                          'backup_date': backup_date,
+                          'documents_uploaded': documents_uploaded,
+                          'total_size_bytes': manifest['backup_summary']['total_size_bytes'],
+                          'manifest_key': manifest_key
+                      })
+                  }
+                  
+              except ClientError as e:
+                  logger.error(f"AWS Client Error during backup: {e}")
+                  send_metric('BackupFailure', 1)
+                  raise e
+              except Exception as e:
+                  logger.error(f"Unexpected error during backup: {e}")
+                  send_metric('BackupFailure', 1)
+                  raise e
+
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: DailyBackupProcessor
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # EventBridge Rule for Daily Trigger
+  DailyBackupRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${Environment}-daily-backup-trigger"
+      Description: "Triggers daily backup at 2 AM UTC"
+      ScheduleExpression: "cron(0 2 * * ? *)" # Daily at 2 AM UTC
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt BackupLambdaFunction.Arn
+          Id: "1"
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: BackupScheduler
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # Permission for EventBridge to invoke Lambda
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BackupLambdaFunction
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DailyBackupRule.Arn
+
+  # CloudWatch Alarms
+  BackupFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-backup-failures"
+      AlarmDescription: "Alert when backup fails"
+      MetricName: BackupFailure
+      Namespace: BackupSystem
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: BackupMonitoring
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-backup-duration-high"
+      AlarmDescription: "Alert when backup takes too long"
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 600000 # 10 minutes in milliseconds
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BackupLambdaFunction
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: BackupMonitoring
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+Outputs:
+  BackupBucketName:
+    Description: "Name of the S3 backup bucket"
+    Value: !Ref BackupS3Bucket
+    Export:
+      Name: !Sub "${AWS::StackName}-backup-bucket"
+
+  BackupLambdaArn:
+    Description: "ARN of the backup Lambda function"
+    Value: !GetAtt BackupLambdaFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-backup-lambda-arn"
+
+  EventBridgeRuleName:
+    Description: "Name of the EventBridge rule for daily backups"
+    Value: !Ref DailyBackupRule
+    Export:
+      Name: !Sub "${AWS::StackName}-daily-backup-rule"
+
+  KMSKeyId:
+    Description: "ID of the KMS key used for encryption"
+    Value: !Ref BackupKMSKey
+    Export:
+      Name: !Sub "${AWS::StackName}-kms-key-id"
+
+  LoggingBucketName:
+    Description: "Name of the S3 logging bucket"
+    Value: !Ref LoggingBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-logging-bucket"

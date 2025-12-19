@@ -1,0 +1,40 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "author": "iamarpit-turing",
+  "review": "adnan-turing",
+  "po_id": "101912471",
+  "team": "synth-1",
+  "startedAt": "2025-11-13T09:41:31+00:00",
+  "subtask": "AWS CloudFormation",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "web-application-deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "Fargate",
+    "RDS",
+    "Aurora Serverless v2",
+    "Application Load Balancer",
+    "Elastic Load Balancing",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "Secrets Manager",
+    "IAM",
+    "CloudWatch Logs",
+    "Application Auto Scaling"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

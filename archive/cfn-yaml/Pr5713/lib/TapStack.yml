@@ -1,0 +1,524 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  TapStack.yml — Automated compliance monitoring stack using GuardDuty, EventBridge,
+  Lambda, SNS, and S3. Builds everything new in us-east-1 with least-privilege IAM,
+  encrypted storage, and automated alerting. All names include EnvironmentSuffix.
+
+# ================================
+# Parameters
+# ================================
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix to avoid cross-deployment name collisions (e.g., dev, prod, pr5713).
+    AllowedPattern: '^[a-z0-9-]+$'
+    MinLength: 1
+    MaxLength: 30
+    Default: dev
+  SecurityAlertEmail:
+    Type: String
+    Description: Email address for SNS subscription (security team).
+    AllowedPattern: '^[^@]+@[^@]+\.[^@]+$'
+    Default: security-alerts@example.com
+  AuditBucketPrefix:
+    Type: String
+    Description: Prefix for the audit S3 bucket name (final name adds account id and env suffix).
+    Default: guardduty-audit
+    AllowedPattern: '^[a-z0-9-]+$'
+  LambdaMemoryMB:
+    Type: Number
+    Description: Lambda memory size in MB.
+    Default: 256
+    MinValue: 128
+    MaxValue: 10240
+  LambdaTimeoutSeconds:
+    Type: Number
+    Description: Lambda timeout in seconds.
+    Default: 30
+    MinValue: 10
+    MaxValue: 900
+  EventArchiveRetentionDays:
+    Type: Number
+    Description: EventBridge archive retention in days.
+    Default: 90
+    MinValue: 1
+    MaxValue: 365
+  LogRetentionDays:
+    Type: Number
+    Description: CloudWatch Logs retention in days for Lambda logs.
+    Default: 30
+    AllowedValues: [1,3,5,7,14,30,60,90,120,150,180,365,400,545,731,1827,3653]
+
+# ================================
+# Resources
+# ================================
+Resources:
+
+  # ------------------------------
+  # S3 — Encrypted audit bucket (AES256), versioned, block public access
+  # ------------------------------
+  AuditBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AuditBucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Classification
+          Value: Confidential
+        - Key: Owner
+          Value: Security
+
+  AuditBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AuditBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Deny any non-TLS requests
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${AuditBucket}'
+              - !Sub 'arn:aws:s3:::${AuditBucket}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+          # Explicitly block public ACLs
+          - Sid: DenyPublicAcls
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - s3:PutBucketAcl
+              - s3:PutObjectAcl
+            Resource:
+              - !Sub 'arn:aws:s3:::${AuditBucket}'
+              - !Sub 'arn:aws:s3:::${AuditBucket}/*'
+
+  # ------------------------------
+  # GuardDuty — Detector with S3 protection and EKS audit logs
+  # ------------------------------
+  GuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+      DataSources:
+        S3Logs:
+          Enable: true           # S3 Protection
+        Kubernetes:
+          AuditLogs:
+            Enable: true         # EKS Audit Logs
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: Security
+        - Key: Classification
+          Value: Confidential
+
+  # ------------------------------
+  # SNS — Topic + Email subscription for security alerts
+  # ------------------------------
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'guardduty-alerts-${EnvironmentSuffix}'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: Security
+        - Key: Classification
+          Value: Confidential
+
+  AlertsSubscriptionEmail:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref SecurityAlertEmail
+
+  # ------------------------------
+  # CloudWatch Logs — Explicit log group for Lambda
+  # ------------------------------
+  EnricherLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/guardduty-enricher-${EnvironmentSuffix}'
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: Security
+        - Key: Classification
+          Value: Confidential
+
+  # ------------------------------
+  # IAM — Lambda execution role (least privilege with explicit ARNs)
+  # ------------------------------
+  EnricherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'guardduty-enricher-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowLambdaAssume
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        # CloudWatch Logs write to this log group only
+        - PolicyName: logs-write-specific
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: LogsWrite
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/guardduty-enricher-${EnvironmentSuffix}:*'
+        # Publish to the specific SNS topic only
+        - PolicyName: sns-publish-alerts
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: SnsPublishAlerts
+                Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref AlertsTopic
+        # Put objects into the specific S3 bucket/prefix only and list for that prefix
+        - PolicyName: s3-write-audit
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ListBucketPrefix
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub 'arn:aws:s3:::${AuditBucket}'
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - findings/*
+              - Sid: PutObjectsOnly
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${AuditBucket}/findings/*'
+        # Read-only describe/tag lookups — certain APIs do not support resource-level ARNs.
+        - PolicyName: readonly-discovery
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: EC2Describe
+                Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeTags
+                Resource: '*'
+              - Sid: EKSDescribe
+                Effect: Allow
+                Action:
+                  - eks:DescribeCluster
+                  - eks:ListTagsForResource
+                Resource: '*'
+              - Sid: S3GetTags
+                Effect: Allow
+                Action:
+                  - s3:GetBucketTagging
+                Resource: '*'
+              - Sid: IAMListTags
+                Effect: Allow
+                Action:
+                  - iam:ListRoleTags
+                  - iam:GetRole
+                Resource: '*'
+              - Sid: TaggingAPI
+                Effect: Allow
+                Action:
+                  - tag:GetResources
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: Security
+        - Key: Classification
+          Value: Confidential
+
+  # ------------------------------
+  # Lambda — Inline function to enrich GuardDuty findings and write/publish
+  # ------------------------------
+  EnricherFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: EnricherLogGroup
+    Properties:
+      FunctionName: !Sub 'guardduty-enricher-${EnvironmentSuffix}'
+      Description: Enrich GuardDuty findings with tags/compliance metadata, publish to SNS, and write to S3.
+      Role: !GetAtt EnricherRole.Arn
+      Runtime: python3.12
+      Handler: index.handler
+      MemorySize: !Ref LambdaMemoryMB
+      Timeout: !Ref LambdaTimeoutSeconds
+      Environment:
+        Variables:
+          ALERTS_TOPIC_ARN: !Ref AlertsTopic
+          AUDIT_BUCKET_NAME: !Ref AuditBucket
+          ENVIRONMENT_SUFFIX: !Ref EnvironmentSuffix
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: Security
+        - Key: Classification
+          Value: Confidential
+      Code:
+        ZipFile: |
+          import os, json, time, datetime, boto3, uuid, urllib.parse
+
+          SNS_ARN = os.environ['ALERTS_TOPIC_ARN']
+          BUCKET  = os.environ['AUDIT_BUCKET_NAME']
+          ENV     = os.environ.get('ENVIRONMENT_SUFFIX','env')
+
+          s3  = boto3.client('s3')
+          sns = boto3.client('sns')
+          ec2 = boto3.client('ec2')
+          eks = boto3.client('eks')
+          iam = boto3.client('iam')
+
+          def _now_parts(ts=None):
+            t = datetime.datetime.utcnow() if ts is None else datetime.datetime.fromtimestamp(ts, datetime.timezone.utc)
+            return t.strftime('%Y'), t.strftime('%m'), t.strftime('%d'), t.strftime('%H%M%S')
+
+          def _safe_get(d, path, default=None):
+            cur = d
+            for p in path:
+              if isinstance(cur, dict) and p in cur:
+                cur = cur[p]
+              elif isinstance(cur, list) and isinstance(p, int) and p < len(cur):
+                cur = cur[p]
+              else:
+                return default
+            return cur
+
+          def _enrich(detail):
+            enrichment = {
+              "environment": ENV,
+              "controlFamily": "ThreatDetection-GuardDuty",
+              "classification": "Confidential",
+              "resourceTags": {}
+            }
+            res = detail.get('resource', {})
+
+            # EC2 Instance tags
+            inst = _safe_get(res, ['instanceDetails','instanceId'])
+            if inst:
+              try:
+                di = ec2.describe_instances(InstanceIds=[inst])
+                for rsv in di.get('Reservations',[]):
+                  for i in rsv.get('Instances',[]):
+                    arn = f'arn:aws:ec2:{os.environ.get("AWS_REGION","us-east-1")}:{detail.get("accountId","")}:instance/{i.get("InstanceId")}'
+                    tags = { t['Key']: t['Value'] for t in i.get('Tags',[]) } if i.get('Tags') else {}
+                    enrichment['resourceTags'][arn] = tags
+              except Exception:
+                pass
+
+            # S3 bucket tags
+            bname = _safe_get(res, ['s3BucketDetails', 0, 'name'])
+            if bname:
+              try:
+                tg = s3.get_bucket_tagging(Bucket=bname)
+                arn = f'arn:aws:s3:::{bname}'
+                tags = { t['Key']: t['Value'] for t in tg.get('TagSet',[]) }
+                enrichment['resourceTags'][arn] = tags
+              except Exception:
+                pass
+
+            # EKS cluster tags
+            cluster = _safe_get(res, ['kubernetesDetails','kubernetesWorkloadDetails','clusterName'])
+            if cluster:
+              try:
+                d = eks.describe_cluster(name=cluster)
+                arn = d.get('cluster',{}).get('arn')
+                if arn:
+                  try:
+                    lt = eks.list_tags_for_resource(resourceArn=arn)
+                    enrichment['resourceTags'][arn] = lt.get('tags',{})
+                  except Exception:
+                    pass
+              except Exception:
+                pass
+
+            return enrichment
+
+          def handler(event, context):
+            detail = event.get('detail', {})
+            finding_id = detail.get('id') or str(uuid.uuid4())
+            sev = detail.get('severity', 0)
+            title = detail.get('title', 'GuardDuty Finding')
+            ftype = detail.get('type', 'Unknown')
+            region = detail.get('region', os.environ.get('AWS_REGION','us-east-1'))
+            account = detail.get('accountId', '')
+            y,m,d,hhmmss = _now_parts()
+            key = f'findings/{y}/{m}/{d}/{finding_id}-{hhmmss}.json'
+
+            enrichment = _enrich(detail)
+            record = {
+              "id": finding_id,
+              "receivedAt": int(time.time()),
+              "severity": sev,
+              "title": title,
+              "type": ftype,
+              "region": region,
+              "accountId": account,
+              "detail": detail,
+              "enrichment": enrichment
+            }
+
+            # Write to S3
+            body = json.dumps(record, separators=(',',':'))
+            try:
+              s3.put_object(
+                Bucket=BUCKET,
+                Key=key,
+                Body=(body + "\n").encode('utf-8'),
+                ContentType='application/json'
+              )
+            except Exception:
+              pass
+
+            # Publish concise alert to SNS
+            console_url = f'https://{region}.console.aws.amazon.com/guardduty/home?region={region}#/findings?macros=current&fId={urllib.parse.quote(finding_id)}'
+            subject = f'[GuardDuty][{ENV}] {title} (sev {sev})'
+            message = json.dumps({
+              "id": finding_id,
+              "title": title,
+              "severity": sev,
+              "type": ftype,
+              "region": region,
+              "accountId": account,
+              "consoleLink": console_url,
+              "s3Object": f's3://{BUCKET}/{key}'
+            }, separators=(',',':'))
+            try:
+              sns.publish(TopicArn=SNS_ARN, Subject=subject[:100], Message=message)
+            except Exception:
+              pass
+
+            return {"status": "ok", "findingId": finding_id, "s3Key": key}
+
+  # ------------------------------
+  # EventBridge — Rule for MEDIUM/HIGH findings only & permission to invoke Lambda
+  # ------------------------------
+  FindingsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'guardduty-findings-${EnvironmentSuffix}'
+      Description: Triggers on GuardDuty findings with severity MEDIUM (>=4,<7) and HIGH (>=7).
+      EventBusName: default
+      State: ENABLED
+      EventPattern:
+        source: ["aws.guardduty"]
+        detail-type: ["GuardDuty Finding"]
+        detail:
+          severity:
+            - numeric: [">=", 7]
+            - numeric: [">=", 4, "<", 7]
+      Targets:
+        - Arn: !GetAtt EnricherFunction.Arn
+          Id: LambdaTarget
+
+  FindingsRuleInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref EnricherFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt FindingsRule.Arn
+
+  # ------------------------------
+  # EventBridge — Archive with retention
+  # ------------------------------
+  FindingsArchive:
+    Type: AWS::Events::Archive
+    Properties:
+      ArchiveName: !Sub 'guardduty-findings-archive-${EnvironmentSuffix}'
+      Description: Archive of GuardDuty finding events for retention and replay.
+      SourceArn: !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:event-bus/default'
+      RetentionDays: !Ref EventArchiveRetentionDays
+
+# ================================
+# Outputs (with exports including env suffix)
+# ================================
+Outputs:
+  GuardDutyDetectorId:
+    Description: GuardDuty Detector ID
+    Value: !Ref GuardDutyDetector
+    Export:
+      Name: !Sub 'guardduty-detector-id-${EnvironmentSuffix}'
+
+  GuardDutyS3ProtectionStatus:
+    Description: GuardDuty S3 Protection enabled status
+    Value: 'ENABLED'
+    Export:
+      Name: !Sub 'guardduty-s3-protection-${EnvironmentSuffix}'
+
+  GuardDutyEKSAuditLogsStatus:
+    Description: GuardDuty EKS Audit Logs enabled status
+    Value: 'ENABLED'
+    Export:
+      Name: !Sub 'guardduty-eks-auditlogs-${EnvironmentSuffix}'
+
+  FindingRuleArn:
+    Description: EventBridge rule ARN for MEDIUM/HIGH GuardDuty findings
+    Value: !GetAtt FindingsRule.Arn
+    Export:
+      Name: !Sub 'guardduty-finding-rule-arn-${EnvironmentSuffix}'
+
+  EventArchiveArn:
+    Description: EventBridge archive ARN
+    Value: !Ref FindingsArchive
+    Export:
+      Name: !Sub 'guardduty-archive-arn-${EnvironmentSuffix}'
+
+  AuditBucketName:
+    Description: Name of the S3 audit bucket
+    Value: !Ref AuditBucket
+    Export:
+      Name: !Sub 'audit-bucket-name-${EnvironmentSuffix}'
+
+  SnsTopicArn:
+    Description: ARN of the SNS topic for alerts
+    Value: !Ref AlertsTopic
+    Export:
+      Name: !Sub 'alerts-topic-arn-${EnvironmentSuffix}'
+
+  LambdaFunctionName:
+    Description: GuardDuty enricher Lambda function name
+    Value: !Ref EnricherFunction
+    Export:
+      Name: !Sub 'enricher-function-name-${EnvironmentSuffix}'
+
+  LambdaLogGroupName:
+    Description: CloudWatch Logs log group for the enricher Lambda
+    Value: !Ref EnricherLogGroup
+    Export:
+      Name: !Sub 'enricher-log-group-${EnvironmentSuffix}'

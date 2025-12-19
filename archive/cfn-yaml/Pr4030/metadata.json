@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350013",
+  "team": "2",
+  "startedAt": "2025-10-06T09:06:32.029Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "S3",
+    "EC2",
+    "VPC",
+    "RDS",
+    "Lambda",
+    "API Gateway",
+    "Route 53",
+    "CloudTrail",
+    "CloudWatch",
+    "AWS Config",
+    "WAF",
+    "KMS",
+    "Secrets Manager",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "ACM",
+    "IAM"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
+}

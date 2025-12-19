@@ -1,0 +1,45 @@
+{
+  "platform": "cdktf",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "DEA2FD",
+  "team": "6",
+  "startedAt": "2025-10-11T15:04:26.899Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "Security Group",
+    "ECS",
+    "ECS Fargate",
+    "Application Load Balancer",
+    "ALB Target Group",
+    "ALB Listener",
+    "ALB Listener Rule",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Dashboard",
+    "Container Insights",
+    "Application Auto Scaling",
+    "AWS Cloud Map",
+    "SNS",
+    "IAM",
+    "ACM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "antny-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,1 @@
+returned message: "Cannot find version 8.0.35 for mysql (Service: Rds, Status Code: 400, Request ID: ec7d2cb6-19b0-4ff2-aa91-051a7b60c187) (SDK Attempt Count: 1)" (RequestToken: 83e62f2f-463e-84b8-f079-f3839f110a96, HandlerErrorCode: InvalidRequest)

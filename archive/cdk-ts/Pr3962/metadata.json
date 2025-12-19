@@ -1,0 +1,44 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349024",
+  "team": "1",
+  "startedAt": "2025-10-08T08:51:05.069Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "IAM",
+    "VPC",
+    "S3",
+    "CloudTrail",
+    "KMS",
+    "CloudFront",
+    "API Gateway",
+    "Lambda",
+    "RDS",
+    "EC2",
+    "CloudWatch Logs",
+    "WAFv2",
+    "Security Hub",
+    "EIP",
+    "NAT Gateway",
+    "Network ACL",
+    "Security Groups",
+    "VPC Endpoints",
+    "Route Tables",
+    "Subnets",
+    "Parameter Groups",
+    "Secrets Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

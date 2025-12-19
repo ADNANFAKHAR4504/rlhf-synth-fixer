@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350066",
+  "team": "2",
+  "startedAt": "2025-10-14T07:08:29.769Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "CloudFormation, VPC, Subnets, EC2, IAM, S3, KMS, EBS, CloudTrail, CloudWatch, Config, VPC Flow Logs",
+  "training_quality": "9",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

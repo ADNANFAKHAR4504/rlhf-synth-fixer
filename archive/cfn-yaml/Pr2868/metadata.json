@@ -1,0 +1,52 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350059",
+  "team": "4",
+  "author": "balasl342",
+  "startedAt": "2025-09-08T10:04:12.080Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Access Control",
+    "IaC Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::KMS::Key",
+    "AWS::KMS::Alias",
+    "AWS::SecretsManager::Secret",
+    "AWS::EC2::VPC",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::VPCGatewayAttachment",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::SubnetRouteTableAssociation",
+    "AWS::EC2::FlowLog",
+    "AWS::EC2::SecurityGroup",
+    "AWS::EC2::Instance",
+    "AWS::EC2::KeyPair",
+    "AWS::S3::Bucket",
+    "AWS::S3::BucketPolicy",
+    "AWS::IAM::Role",
+    "AWS::IAM::InstanceProfile",
+    "AWS::IAM::User",
+    "AWS::RDS::DBInstance",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::Lambda::Function",
+    "AWS::CloudTrail::Trail",
+    "AWS::Logs::LogGroup",
+    "AWS::CloudWatch::Alarm"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

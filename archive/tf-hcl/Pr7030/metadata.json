@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912544",
+  "team": "turing",
+  "startedAt": "2025-11-21T01:46:28+00:00",
+  "subtask": "Multi-Environment Infrastructure",
+  "subject_labels": [
+    "Infrastructure as Code",
+    "Multi-Environment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ECS",
+    "ALB",
+    "Secrets Manager",
+    "CloudWatch",
+    "Route53",
+    "IAM",
+    "SNS",
+    "NAT Gateway",
+    "WAF",
+    "KMS",
+    "Lambda"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

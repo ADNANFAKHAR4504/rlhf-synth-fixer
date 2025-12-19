@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000535",
+  "team": "1",
+  "startedAt": "2025-10-17T12:14:58.692Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "Route53",
+    "CloudWatch Logs",
+    "CloudWatch",
+    "AWS Config",
+    "Lambda",
+    "EventBridge",
+    "Systems Manager",
+    "S3",
+    "CloudFormation"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

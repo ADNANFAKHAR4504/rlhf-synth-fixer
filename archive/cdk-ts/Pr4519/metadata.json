@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349413",
+  "team": "1",
+  "startedAt": "2025-10-15T09:08:19.698Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "S3",
+    "IAM",
+    "KMS",
+    "SNS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SSM",
+    "EventBridge",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

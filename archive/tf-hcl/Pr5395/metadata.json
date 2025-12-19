@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350225",
+  "team": "4",
+  "startedAt": "2025-10-30T06:25:53.574Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "RouteTable",
+    "SecurityGroup",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "background": "This task implements a production-ready AWS network infrastructure using Terraform in us-west-1. The solution creates a secure VPC with public subnets across multiple availability zones, internet gateway, route tables, security groups, and IAM roles with proper permissions for EC2 instances. The infrastructure follows AWS Well-Architected Framework principles with comprehensive tagging, variable-driven configuration, and proper resource dependencies. All resources are tested with 126 comprehensive unit and integration tests ensuring production readiness and compliance with security best practices.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}
