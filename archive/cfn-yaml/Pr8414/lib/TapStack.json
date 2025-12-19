@@ -1,0 +1,977 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Payment Workflow Orchestration System using Step Functions",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "AllowedValues": [
+                "dev",
+                "test",
+                "prod"
+            ],
+            "Description": "Environment name for resource naming"
+        },
+        "AlertEmail": {
+            "Type": "String",
+            "Default": "test@example.com",
+            "Description": "Email address for workflow failure alerts",
+            "AllowedPattern": "[^@]+@[^@]+\\.[^@]+"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        }
+    },
+    "Resources": {
+        "DynamoDBTablePaymentTransactions": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${Environment}-payment-transactions-${EnvironmentSuffix}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "paymentId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "paymentId",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "TimestampIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "timestamp",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "paymentId",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "SNSTopicPaymentWorkflowAlerts": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${Environment}-payment-workflow-alerts-${EnvironmentSuffix}"
+                },
+                "DisplayName": "Payment Workflow Alerts",
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "AlertEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "StepFunctionsRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${Environment}-payment-workflow-sfn-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "states.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "StepFunctionsExecutionPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "lambda:InvokeFunction"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ValidatePaymentLambda",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ProcessPaymentLambda",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "StoreTransactionLambda",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "NotifyCustomerLambda",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "SNSTopicPaymentWorkflowAlerts"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${Environment}-payment-lambda-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaExecutionPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:Query"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "DynamoDBTablePaymentTransactions",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${DynamoDBTablePaymentTransactions.Arn}/index/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "SNSTopicPaymentWorkflowAlerts"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ValidatePaymentLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Environment}-validate-payment-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "DynamoDBTablePaymentTransactions"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\nimport re\nfrom decimal import Decimal\n\ndef handler(event, context):\n    \"\"\"\n    Validates payment input data.\n    Expected input: {\n        \"paymentId\": \"string\",\n        \"customerId\": \"string\", \n        \"amount\": number,\n        \"currency\": \"string\",\n        \"customerEmail\": \"string\"\n    }\n    \"\"\"\n    try:\n        # Extract payment data\n        payment_id = event.get('paymentId')\n        customer_id = event.get('customerId')\n        amount = event.get('amount')\n        currency = event.get('currency')\n        email = event.get('customerEmail')\n        \n        # Validation rules\n        errors = []\n        \n        if not payment_id or not isinstance(payment_id, str):\n            errors.append('Invalid paymentId')\n        \n        if not customer_id or not isinstance(customer_id, str):\n            errors.append('Invalid customerId')\n        \n        if not amount or amount <= 0:\n            errors.append('Amount must be greater than 0')\n        \n        if currency not in ['USD', 'EUR', 'GBP']:\n            errors.append('Currency must be USD, EUR, or GBP')\n        \n        if not email or not re.match(r\"[^@]+@[^@]+\\.[^@]+\", email):\n            errors.append('Invalid email format')\n        \n        if errors:\n            return {\n                'statusCode': 400,\n                'isValid': False,\n                'errors': errors,\n                'paymentId': payment_id\n            }\n        \n        # Return validated data\n        return {\n            'statusCode': 200,\n            'isValid': True,\n            'paymentId': payment_id,\n            'customerId': customer_id,\n            'amount': float(amount),\n            'currency': currency,\n            'customerEmail': email\n        }\n        \n    except Exception as e:\n        print(f\"Validation error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'isValid': False,\n            'error': str(e),\n            'paymentId': event.get('paymentId')\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProcessPaymentLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Environment}-process-payment-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "MemorySize": 512,
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\nimport time\nimport random\nfrom datetime import datetime\n\ndef handler(event, context):\n    \"\"\"\n    Processes payment via external payment gateway.\n    Simulates API call with success/failure scenarios.\n    \"\"\"\n    try:\n        payment_id = event['paymentId']\n        amount = event['amount']\n        currency = event['currency']\n        \n        # Simulate API processing time\n        time.sleep(random.uniform(0.5, 2))\n        \n        # Simulate success rate (90% success for demo)\n        if random.random() > 0.9:\n            # Simulate transient failure\n            if random.random() > 0.5:\n                raise Exception(\"Payment gateway timeout\")\n            else:\n                return {\n                    'statusCode': 402,\n                    'success': False,\n                    'paymentId': payment_id,\n                    'error': 'Insufficient funds',\n                    'transactionId': None\n                }\n        \n        # Successful payment\n        transaction_id = f\"TXN-{payment_id}-{int(time.time())}\"\n        \n        return {\n            'statusCode': 200,\n            'success': True,\n            'paymentId': payment_id,\n            'transactionId': transaction_id,\n            'processedAt': datetime.utcnow().isoformat(),\n            'amount': amount,\n            'currency': currency\n        }\n        \n    except Exception as e:\n        print(f\"Payment processing error: {str(e)}\")\n        # Return retriable error\n        raise Exception(f\"Payment processing failed: {str(e)}\")\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "StoreTransactionLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Environment}-store-transaction-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "DynamoDBTablePaymentTransactions"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\nimport boto3\nfrom datetime import datetime\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\n\ndef handler(event, context):\n    \"\"\"\n    Stores transaction result in DynamoDB.\n    \"\"\"\n    try:\n        table_name = os.environ['TABLE_NAME']\n        table = dynamodb.Table(table_name)\n        \n        # Prepare item for DynamoDB\n        item = {\n            'paymentId': event['paymentId'],\n            'customerId': event.get('customerId'),\n            'amount': Decimal(str(event.get('amount', 0))),\n            'currency': event.get('currency'),\n            'customerEmail': event.get('customerEmail'),\n            'transactionId': event.get('transactionId'),\n            'status': 'SUCCESS' if event.get('success') else 'FAILED',\n            'timestamp': datetime.utcnow().isoformat(),\n            'processedAt': event.get('processedAt'),\n            'errorReason': event.get('error'),\n            'retries': event.get('retries', 0)\n        }\n        \n        # Remove None values\n        item = {k: v for k, v in item.items() if v is not None}\n        \n        # Store in DynamoDB with conditional write for idempotency\n        response = table.put_item(\n            Item=item,\n            ConditionExpression='attribute_not_exists(paymentId) OR #status = :pending',\n            ExpressionAttributeNames={'#status': 'status'},\n            ExpressionAttributeValues={':pending': 'PENDING'}\n        )\n        \n        return {\n            'statusCode': 200,\n            'stored': True,\n            'paymentId': event['paymentId'],\n            'status': item['status']\n        }\n        \n    except Exception as e:\n        print(f\"Storage error: {str(e)}\")\n        # For conditional check failures, return success (idempotent)\n        if 'ConditionalCheckFailedException' in str(e):\n            return {\n                'statusCode': 200,\n                'stored': True,\n                'paymentId': event['paymentId'],\n                'note': 'Already stored'\n            }\n        raise\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "NotifyCustomerLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Environment}-notify-customer-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 128,
+                "Environment": {
+                    "Variables": {
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "SNSTopicPaymentWorkflowAlerts"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\nimport boto3\n\nsns = boto3.client('sns')\n\ndef handler(event, context):\n    \"\"\"\n    Sends notification about payment status.\n    In production, this would send emails/SMS to customers.\n    \"\"\"\n    try:\n        payment_id = event['paymentId']\n        customer_email = event.get('customerEmail')\n        status = event.get('status', 'UNKNOWN')\n        transaction_id = event.get('transactionId')\n        \n        # Prepare notification message\n        if status == 'SUCCESS':\n            subject = f\"Payment Successful - {payment_id}\"\n            message = f\"\"\"\n            Dear Customer,\n            \n            Your payment has been successfully processed.\n            \n            Payment ID: {payment_id}\n            Transaction ID: {transaction_id}\n            Amount: {event.get('amount')} {event.get('currency')}\n            \n            Thank you for your business!\n            \"\"\"\n        else:\n            subject = f\"Payment Failed - {payment_id}\"\n            message = f\"\"\"\n            Dear Customer,\n            \n            Unfortunately, your payment could not be processed.\n            \n            Payment ID: {payment_id}\n            Error: {event.get('errorReason', 'Unknown error')}\n            \n            Please contact support if you need assistance.\n            \"\"\"\n        \n        # For demo, log the notification\n        print(f\"Notification - Subject: {subject}, To: {customer_email}\")\n        \n        # In production, send actual email/SMS here\n        # For now, just log success\n        \n        return {\n            'statusCode': 200,\n            'notified': True,\n            'paymentId': payment_id,\n            'customerEmail': customer_email,\n            'notificationType': 'email'\n        }\n        \n    except Exception as e:\n        print(f\"Notification error: {str(e)}\")\n        # Non-critical failure, don't retry\n        return {\n            'statusCode': 200,\n            'notified': False,\n            'paymentId': event.get('paymentId'),\n            'error': str(e)\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PaymentWorkflowStateMachine": {
+            "Type": "AWS::StepFunctions::StateMachine",
+            "Properties": {
+                "StateMachineName": {
+                    "Fn::Sub": "${Environment}-payment-workflow-${EnvironmentSuffix}"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "StepFunctionsRole",
+                        "Arn"
+                    ]
+                },
+                "Definition": {
+                    "Comment": "Payment processing workflow with retry logic",
+                    "StartAt": "ValidatePayment",
+                    "States": {
+                        "ValidatePayment": {
+                            "Type": "Task",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ValidatePaymentLambda",
+                                    "Arn"
+                                ]
+                            },
+                            "ResultPath": "$.validation",
+                            "Next": "CheckValidation",
+                            "Retry": [
+                                {
+                                    "ErrorEquals": [
+                                        "Lambda.ServiceException",
+                                        "Lambda.AWSLambdaException",
+                                        "Lambda.SdkClientException"
+                                    ],
+                                    "IntervalSeconds": 2,
+                                    "MaxAttempts": 3,
+                                    "BackoffRate": 2
+                                }
+                            ],
+                            "Catch": [
+                                {
+                                    "ErrorEquals": [
+                                        "States.ALL"
+                                    ],
+                                    "ResultPath": "$.error",
+                                    "Next": "ValidationFailed"
+                                }
+                            ]
+                        },
+                        "CheckValidation": {
+                            "Type": "Choice",
+                            "Choices": [
+                                {
+                                    "Variable": "$.validation.isValid",
+                                    "BooleanEquals": true,
+                                    "Next": "ProcessPayment"
+                                }
+                            ],
+                            "Default": "ValidationFailed"
+                        },
+                        "ValidationFailed": {
+                            "Type": "Task",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "StoreTransactionLambda",
+                                    "Arn"
+                                ]
+                            },
+                            "Parameters": {
+                                "paymentId.$": "$.paymentId",
+                                "status": "VALIDATION_FAILED",
+                                "errorReason.$": "$.validation.errors",
+                                "success": false
+                            },
+                            "ResultPath": "$.storeResult",
+                            "Next": "NotifyValidationFailure"
+                        },
+                        "ProcessPayment": {
+                            "Type": "Task",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ProcessPaymentLambda",
+                                    "Arn"
+                                ]
+                            },
+                            "Parameters": {
+                                "paymentId.$": "$.validation.paymentId",
+                                "customerId.$": "$.validation.customerId",
+                                "amount.$": "$.validation.amount",
+                                "currency.$": "$.validation.currency",
+                                "customerEmail.$": "$.validation.customerEmail"
+                            },
+                            "ResultPath": "$.payment",
+                            "Next": "CheckPaymentResult",
+                            "Retry": [
+                                {
+                                    "ErrorEquals": [
+                                        "States.ALL"
+                                    ],
+                                    "IntervalSeconds": 5,
+                                    "MaxAttempts": 3,
+                                    "BackoffRate": 2
+                                }
+                            ],
+                            "Catch": [
+                                {
+                                    "ErrorEquals": [
+                                        "States.ALL"
+                                    ],
+                                    "ResultPath": "$.error",
+                                    "Next": "PaymentFailed"
+                                }
+                            ]
+                        },
+                        "CheckPaymentResult": {
+                            "Type": "Choice",
+                            "Choices": [
+                                {
+                                    "Variable": "$.payment.success",
+                                    "BooleanEquals": true,
+                                    "Next": "StoreSuccessTransaction"
+                                }
+                            ],
+                            "Default": "PaymentFailed"
+                        },
+                        "StoreSuccessTransaction": {
+                            "Type": "Task",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "StoreTransactionLambda",
+                                    "Arn"
+                                ]
+                            },
+                            "Parameters": {
+                                "paymentId.$": "$.payment.paymentId",
+                                "customerId.$": "$.validation.customerId",
+                                "amount.$": "$.payment.amount",
+                                "currency.$": "$.payment.currency",
+                                "customerEmail.$": "$.validation.customerEmail",
+                                "transactionId.$": "$.payment.transactionId",
+                                "status": "SUCCESS",
+                                "processedAt.$": "$.payment.processedAt",
+                                "success": true
+                            },
+                            "ResultPath": "$.storeResult",
+                            "Next": "NotifySuccess"
+                        },
+                        "PaymentFailed": {
+                            "Type": "Task",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "StoreTransactionLambda",
+                                    "Arn"
+                                ]
+                            },
+                            "Parameters": {
+                                "paymentId.$": "$.validation.paymentId",
+                                "customerId.$": "$.validation.customerId",
+                                "amount.$": "$.validation.amount",
+                                "currency.$": "$.validation.currency",
+                                "customerEmail.$": "$.validation.customerEmail",
+                                "status": "FAILED",
+                                "errorReason.$": "$.payment.error",
+                                "success": false
+                            },
+                            "ResultPath": "$.storeResult",
+                            "Next": "NotifyAndAlert"
+                        },
+                        "NotifySuccess": {
+                            "Type": "Task",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "NotifyCustomerLambda",
+                                    "Arn"
+                                ]
+                            },
+                            "Parameters": {
+                                "paymentId.$": "$.payment.paymentId",
+                                "customerEmail.$": "$.validation.customerEmail",
+                                "status": "SUCCESS",
+                                "transactionId.$": "$.payment.transactionId",
+                                "amount.$": "$.payment.amount",
+                                "currency.$": "$.payment.currency"
+                            },
+                            "End": true
+                        },
+                        "NotifyValidationFailure": {
+                            "Type": "Task",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "NotifyCustomerLambda",
+                                    "Arn"
+                                ]
+                            },
+                            "Parameters": {
+                                "paymentId.$": "$.paymentId",
+                                "customerEmail.$": "$.customerEmail",
+                                "status": "VALIDATION_FAILED",
+                                "errorReason.$": "$.validation.errors"
+                            },
+                            "End": true
+                        },
+                        "NotifyAndAlert": {
+                            "Type": "Parallel",
+                            "End": true,
+                            "Branches": [
+                                {
+                                    "StartAt": "NotifyCustomer",
+                                    "States": {
+                                        "NotifyCustomer": {
+                                            "Type": "Task",
+                                            "Resource": {
+                                                "Fn::GetAtt": [
+                                                    "NotifyCustomerLambda",
+                                                    "Arn"
+                                                ]
+                                            },
+                                            "Parameters": {
+                                                "paymentId.$": "$.validation.paymentId",
+                                                "customerEmail.$": "$.validation.customerEmail",
+                                                "status": "FAILED",
+                                                "errorReason.$": "$.payment.error"
+                                            },
+                                            "End": true
+                                        }
+                                    }
+                                },
+                                {
+                                    "StartAt": "SendAlert",
+                                    "States": {
+                                        "SendAlert": {
+                                            "Type": "Task",
+                                            "Resource": "arn:aws:states:::sns:publish",
+                                            "Parameters": {
+                                                "TopicArn": {
+                                                    "Ref": "SNSTopicPaymentWorkflowAlerts"
+                                                },
+                                                "Message": {
+                                                    "Input.$": "$"
+                                                },
+                                                "Subject": "Payment Workflow Failed"
+                                            },
+                                            "End": true
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "StepFunctionsLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/stepfunctions/${Environment}-payment-workflow-${EnvironmentSuffix}"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "StateMachineArn": {
+            "Description": "ARN of the Payment Workflow State Machine",
+            "Value": {
+                "Ref": "PaymentWorkflowStateMachine"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StateMachineArn"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "Name of the Payment Transactions DynamoDB table",
+            "Value": {
+                "Ref": "DynamoDBTablePaymentTransactions"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBTableName"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "ARN of the SNS topic for alerts",
+            "Value": {
+                "Ref": "SNSTopicPaymentWorkflowAlerts"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
+                }
+            }
+        },
+        "TurnAroundPromptTableName": {
+            "Description": "Name of the DynamoDB table (legacy)",
+            "Value": {
+                "Ref": "DynamoDBTablePaymentTransactions"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+                }
+            }
+        },
+        "TurnAroundPromptTableArn": {
+            "Description": "ARN of the DynamoDB table (legacy)",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DynamoDBTablePaymentTransactions",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        },
+        "ValidatePaymentLambdaName": {
+            "Description": "Name of the Validate Payment Lambda function",
+            "Value": {
+                "Ref": "ValidatePaymentLambda"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ValidatePaymentLambdaName"
+                }
+            }
+        },
+        "ValidatePaymentLambdaArn": {
+            "Description": "ARN of the Validate Payment Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ValidatePaymentLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ValidatePaymentLambdaArn"
+                }
+            }
+        },
+        "ProcessPaymentLambdaName": {
+            "Description": "Name of the Process Payment Lambda function",
+            "Value": {
+                "Ref": "ProcessPaymentLambda"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProcessPaymentLambdaName"
+                }
+            }
+        },
+        "ProcessPaymentLambdaArn": {
+            "Description": "ARN of the Process Payment Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ProcessPaymentLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProcessPaymentLambdaArn"
+                }
+            }
+        },
+        "StoreTransactionLambdaName": {
+            "Description": "Name of the Store Transaction Lambda function",
+            "Value": {
+                "Ref": "StoreTransactionLambda"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StoreTransactionLambdaName"
+                }
+            }
+        },
+        "StoreTransactionLambdaArn": {
+            "Description": "ARN of the Store Transaction Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "StoreTransactionLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StoreTransactionLambdaArn"
+                }
+            }
+        },
+        "NotifyCustomerLambdaName": {
+            "Description": "Name of the Notify Customer Lambda function",
+            "Value": {
+                "Ref": "NotifyCustomerLambda"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NotifyCustomerLambdaName"
+                }
+            }
+        },
+        "NotifyCustomerLambdaArn": {
+            "Description": "ARN of the Notify Customer Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NotifyCustomerLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NotifyCustomerLambdaArn"
+                }
+            }
+        }
+    }
+}

@@ -181,7 +181,7 @@ jq --argjson valid_subtasks "$VALID_SUBTASKS" \
     complexity: (.complexity | validate_complexity),
     turn_type: (.turn_type | validate_turn_type),
     po_id: (.po_id // .task_id // "unknown"),
-    team: (.team | validate_team),
+    team: "synth-2",
     startedAt: (.startedAt | validate_started_at),
     subtask: (.subtask | enforce_subtask_string),
     provider: "localstack",
@@ -216,6 +216,7 @@ log_success "metadata.json sanitized successfully"
 # Show key fields
 echo "  Platform:       $(jq -r '.platform' "$METADATA_FILE")"
 echo "  Language:       $(jq -r '.language' "$METADATA_FILE")"
+echo "  Team:           $(jq -r '.team' "$METADATA_FILE")"
 echo "  Subtask:        $(jq -r '.subtask' "$METADATA_FILE")"
 echo "  Provider:       $(jq -r '.provider' "$METADATA_FILE")"
 echo "  Subject Labels: $(jq -r '.subject_labels | length' "$METADATA_FILE") items"
