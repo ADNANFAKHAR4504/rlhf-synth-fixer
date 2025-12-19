@@ -20,9 +20,12 @@ const isLocalStack =
 const endpoint = process.env.AWS_ENDPOINT_URL || "http://localhost:4566";
 
 // Use different stack names for LocalStack vs AWS
-// LocalStack uses "tap-stack-localstack" (see scripts/localstack-cloudformation-deploy.sh)
+// LocalStack CI uses "localstack-stack-pr${PR_NUMBER}" (see scripts/localstack-ci-deploy.sh)
+// LocalStack local uses "tap-stack-localstack" (see scripts/localstack-cloudformation-deploy.sh)
 // AWS uses "TapStack${ENVIRONMENT_SUFFIX}"
-const STACK_NAME = isLocalStack ? "tap-stack-localstack" : `TapStack${ENVIRONMENT_SUFFIX}`;
+const STACK_NAME = isLocalStack
+  ? `localstack-stack-${ENVIRONMENT_SUFFIX}`
+  : `TapStack${ENVIRONMENT_SUFFIX}`;
 
 let cfnClient: CloudFormationClient;
 let ec2Client: EC2Client;
