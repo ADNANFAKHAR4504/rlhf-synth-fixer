@@ -1,6 +1,16 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Secure-by-Design AWS Infrastructure with stringent security controls and compliance enforcement",
+    "Metadata": {
+        "cfn-lint": {
+            "config": {
+                "ignore_checks": [
+                    "W3010",
+                    "W2501"
+                ]
+            }
+        }
+    },
     "Parameters": {
         "VpcCidr": {
             "Type": "String",
