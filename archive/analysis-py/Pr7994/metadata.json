@@ -10,6 +10,18 @@
   "subject_labels": [
     "Infrastructure Analysis/Monitoring"
   ],
-  "aws_services": ["ec2", "vpc", "rds", "iam", "s3"],
-  "training_quality": 10
+  "aws_services": [
+    "ec2",
+    "vpc",
+    "rds",
+    "iam",
+    "s3"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
