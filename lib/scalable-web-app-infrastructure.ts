@@ -238,22 +238,29 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
     );
 
     // VPC Flow Logs
-    // Note: maxAggregationInterval set to 60 for LocalStack compatibility
-    new aws.ec2.FlowLog(
-      `vpc-flow-logs-${environmentSuffix}`,
-      {
-        iamRoleArn: vpcFlowLogsRole.arn,
-        logDestination: vpcFlowLogsGroup.arn,
-        logDestinationType: 'cloud-watch-logs',
-        vpcId: vpc.id,
-        trafficType: 'ALL',
-        maxAggregationInterval: 60,
-        tags: {
-          Name: `vpc-flow-logs-${environmentSuffix}`,
+    // Note: LocalStack doesn't support VPC Flow Logs with maxAggregationInterval,
+    // so we skip creating this resource when running against LocalStack
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('localstack');
+
+    if (!isLocalStack) {
+      new aws.ec2.FlowLog(
+        `vpc-flow-logs-${environmentSuffix}`,
+        {
+          iamRoleArn: vpcFlowLogsRole.arn,
+          logDestination: vpcFlowLogsGroup.arn,
+          logDestinationType: 'cloud-watch-logs',
+          vpcId: vpc.id,
+          trafficType: 'ALL',
+          maxAggregationInterval: 60,
+          tags: {
+            Name: `vpc-flow-logs-${environmentSuffix}`,
+          },
         },
-      },
-      { provider, parent: this, dependsOn: [vpcFlowLogsGroup] }
-    );
+        { provider, parent: this, dependsOn: [vpcFlowLogsGroup] }
+      );
+    }
 
     // Internet Gateway
     const igw = new aws.ec2.InternetGateway(
