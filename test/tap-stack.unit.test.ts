@@ -37,8 +37,8 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create NAT gateways for high availability', () => {
-      template.resourceCountIs('AWS::EC2::NatGateway', 2);
+    test('should create NAT gateway (LocalStack compatible)', () => {
+      template.resourceCountIs('AWS::EC2::NatGateway', 1); // Reduced for LocalStack
     });
   });
 
@@ -76,62 +76,17 @@ describe('TapStack', () => {
     });
   });
 
-  describe('VPC Flow Logs', () => {
-    test('should create VPC Flow Logs', () => {
-      template.hasResourceProperties('AWS::EC2::FlowLog', {
-        ResourceType: 'VPC',
-        TrafficType: 'ALL',
-      });
-    });
-
-    test('should create Flow Log CloudWatch group', () => {
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/vpc/flowlogs',
-        RetentionInDays: 30,
-      });
-    });
-
-    test('should create Flow Log IAM role with correct permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'vpc-flow-logs.amazonaws.com',
-              },
-            },
-          ],
-        },
-      });
-    });
-  });
-
-  describe('VPC Endpoints', () => {
-    test('should create S3 gateway endpoint', () => {
-      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        VpcEndpointType: 'Gateway',
-      });
-    });
-
-    test('should create Secrets Manager interface endpoint', () => {
-      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        VpcEndpointType: 'Interface',
-        PrivateDnsEnabled: true,
-      });
-    });
-  });
+  // VPC Flow Logs and VPC Endpoints removed for LocalStack Community compatibility
 
   describe('RDS Database', () => {
-    test('should create encrypted RDS instance', () => {
+    test('should create encrypted RDS instance (LocalStack compatible)', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'postgres',
         EngineVersion: '15.8',
         StorageEncrypted: true,
-        BackupRetentionPeriod: 7,
-        DeletionProtection: true,
-        EnablePerformanceInsights: true,
+        BackupRetentionPeriod: 1, // Reduced for LocalStack
+        DeletionProtection: false, // Disabled for LocalStack cleanup
+        MultiAZ: false, // Disabled for LocalStack
       });
     });
 
@@ -235,11 +190,11 @@ describe('TapStack', () => {
   });
 
   describe('CloudTrail Configuration', () => {
-    test('should create CloudTrail with proper configuration', () => {
+    test('should create CloudTrail (LocalStack compatible)', () => {
       template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        IncludeGlobalServiceEvents: true,
-        IsMultiRegionTrail: true,
-        EnableLogFileValidation: true,
+        IncludeGlobalServiceEvents: false, // Simplified for LocalStack
+        IsMultiRegionTrail: false, // Simplified for LocalStack
+        EnableLogFileValidation: false, // Disabled for LocalStack
       });
     });
 
@@ -251,14 +206,7 @@ describe('TapStack', () => {
     });
   });
 
-  describe('IAM Access Analyzer', () => {
-    test('should create IAM Access Analyzer', () => {
-      template.hasResourceProperties('AWS::AccessAnalyzer::Analyzer', {
-        Type: 'ACCOUNT',
-        AnalyzerName: 'secure-app-analyzer',
-      });
-    });
-  });
+  // IAM Access Analyzer removed (requires LocalStack Pro)
 
   describe('Resource Tagging', () => {
     test('should tag all resources with required tags', () => {
