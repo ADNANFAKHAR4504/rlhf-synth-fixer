@@ -1,17 +1,33 @@
-You are an expert in AWS infrastructure as code, specializing in the AWS CDK using Python.
+## AWS CDK Infrastructure Prompt (Aligned with Claude Sonnet 3.7 Best Practices)
 
-**Task**: Generate Python AWS CDK code that defines a security group with the following configuration:
+You are an expert AWS architect.
 
-- **Name**: Clearly label the security group for clarity (e.g., `WebOnlyIngressSG`).
-- **Inbound rule**: Allow HTTP traffic (port 80) **only** from a specific CIDR block (use `203.0.113.0/24` as an example).
-- **Outbound rules**: Block **all** outbound traffic (i.e., no default allow-all rule).
+Please write a complete Python AWS CDK application (in one or more stacks, if appropriate) that does the following:
 
-**Requirements**:
+1. **Creates a production-ready serverless REST API** using AWS **API Gateway** and **AWS Lambda**.
+2. The API must be designed to **handle 1000 concurrent requests** with **minimal latency**, using appropriate settings for Lambda concurrency, memory size, and timeout configuration.
+3. All resources must be deployed in the **`us-east-1` region** using the **Python CDK**.
+4. The **Lambda function(s)** should include:
+   - Proper **IAM permissions** following **least privilege** principles.
+   - **CloudWatch logging** for execution success and error metrics.
+   - Production-grade configurations (e.g., environment variables, reserved concurrency if needed).
+5. **API Gateway** should be integrated with the Lambda backend and properly configured with:
+   - At least one endpoint (e.g., `GET /status`) as an example.
+   - Security best practices such as **throttling**, **request validation**, and **logging**.
+6. All provisioned resources must be **tagged** with the key-value pair `Environment:Production`.
+7. Ensure the solution follows **AWS security best practices** for production environments:
+   - No public access where unnecessary.
+   - No hardcoded secrets.
+   - Use of secure IAM roles and policies.
 
-- Use the CDK v2 in Python.
-- Include necessary import statements.
-- Place the security group within a VPC (use an existing VPC reference or create one as a placeholder).
-- Ensure the outbound restriction is explicitly set (CDK sets outbound traffic to “allow all” by default unless overridden).
-- Add inline comments explaining each configuration block.
+### Additional Requirements:
 
-Return only the Python code block, ready to be used in a CDK app.
+- Output must be a **valid Python CDK app**, using constructs from `aws_cdk.aws_apigateway`, `aws_cdk.aws_lambda`, and other necessary CDK modules.
+- Include **comments** in the code explaining major components and decisions.
+- If necessary, modularize the CDK constructs (e.g., separate stacks or constructs for API, Lambda, logging, etc.).
+
+### Key Focus:
+
+- Ensure **resource connectivity** — API Gateway must be connected to Lambda.
+- Ensure logging flows to CloudWatch.
+- Ensure Lambda is configured to scale to the required concurrency.

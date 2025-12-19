@@ -1,142 +1,152 @@
-"""tap_stack.py
-This module defines the TapStack class, which serves as the main CDK stack for 
-the TAP (Test Automation Platform) project.
-It orchestrates the instantiation of other resource-specific stacks and 
-manages environment-specific configurations.
-"""
-
 from typing import Optional
-
-import aws_cdk as cdk
-from aws_cdk import aws_ec2 as ec2
+from aws_cdk import (
+    Stack,
+    NestedStack,
+    NestedStackProps,
+    Duration,
+    CfnOutput,
+    Tags
+)
+from aws_cdk import aws_lambda as _lambda
+from aws_cdk import aws_apigateway as apigateway
+from aws_cdk import aws_logs as logs
+from aws_cdk import aws_iam as iam
 from constructs import Construct
 
 
-class TapStackProps(cdk.StackProps):
-    """
-    TapStackProps defines the properties for the TapStack CDK stack.
+class ServerlessApiStack(NestedStack):
+  def __init__(
+      self,
+      scope: Construct,
+      id: str,
+      environment_suffix: str,
+      **kwargs
+  ) -> None:
+    super().__init__(scope, id, **kwargs)
 
-    Args:
-        environment_suffix (Optional[str]): An optional suffix to identify the 
-        deployment environment (e.g., 'dev', 'prod').
-        **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
+    # Define reusable tags
+    tags = {
+        "Environment": "Production",
+        "Stack": f"ServerlessApiStack-{environment_suffix}"
+    }
 
-    Attributes:
-        environment_suffix (Optional[str]): Stores the environment suffix for the stack.
-    """
+    api_name = f"ProductionService-{environment_suffix}"
+    lambda_name = f"StatusHandler-{environment_suffix}"
 
-    def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
-        super().__init__(**kwargs)
-        self.environment_suffix = environment_suffix
+    # Lambda Function
+    lambda_function = _lambda.Function(
+        self, lambda_name,
+        function_name=lambda_name,
+        runtime=_lambda.Runtime.PYTHON_3_9,
+        handler="handler.main",
+        code=_lambda.Code.from_asset("lib/lambda"),
+        environment={"LOG_LEVEL": "INFO"},
+        timeout=Duration.seconds(10),
+        memory_size=512,
+        reserved_concurrent_executions=100,
+        log_retention=logs.RetentionDays.ONE_WEEK
+    )
 
-
-class TapStack(cdk.Stack):
-    """
-    Represents the main CDK stack for the Tap project.
-
-    This stack creates a VPC and security group with specific inbound/outbound rules
-    as required by the task specification.
-
-    Args:
-        scope (Construct): The parent construct.
-        construct_id (str): The unique identifier for this stack.
-        props (Optional[TapStackProps]): Optional properties for configuring the
-          stack, including environment suffix.
-        **kwargs: Additional keyword arguments passed to the CDK Stack.
-
-    Attributes:
-        environment_suffix (str): The environment suffix used for resource naming
-          and configuration.
-        vpc (ec2.Vpc): The VPC created for the security group.
-        security_group (ec2.SecurityGroup): The security group with HTTP inbound
-          and blocked outbound rules.
-    """
-
-    def __init__(
-            self,
-            scope: Construct,
-            construct_id: str, 
-            props: Optional[TapStackProps] = None, 
-            **kwargs):
-        super().__init__(scope, construct_id, **kwargs)
-
-        # Get environment suffix from props, context, or use 'dev' as default
-        self.environment_suffix = (
-            props.environment_suffix if props else None
-        ) or self.node.try_get_context('environmentSuffix') or 'dev'
-
-        def resource_name(resource: str) -> str:
-            """Helper function to create consistent resource names with environment suffix."""
-            return f"tap-{self.environment_suffix}-{resource}"
-
-        # Create VPC for the security group
-        self.vpc = ec2.Vpc(
-            self,
-            "VPC",
-            vpc_name=resource_name("vpc"),
-            ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),  # Use newer ip_addresses property
-            enable_dns_hostnames=True,
-            enable_dns_support=True,
-            max_azs=2,  # Use 2 availability zones for high availability
-            subnet_configuration=[
-                ec2.SubnetConfiguration(
-                    name="Public",
-                    subnet_type=ec2.SubnetType.PUBLIC,
-                    cidr_mask=24
-                ),
-                ec2.SubnetConfiguration(
-                    name="Private",
-                    subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
-                    cidr_mask=24
-                )
-            ]
+    # IAM permissions (least privilege)
+    lambda_function.add_to_role_policy(
+        iam.PolicyStatement(
+            actions=[
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            resources=["arn:aws:logs:*:*:*"]
         )
+    )
 
-        # Create security group with specific inbound and outbound rules
-        self.security_group = ec2.SecurityGroup(
-            self,
-            "WebOnlyIngressSG",
-            security_group_name=resource_name("WebOnlyIngressSG"),
-            description=(
-                "WebOnlyIngressSG - Security group with HTTP inbound rule and "
-                "blocked outbound traffic"
-            ),
-            vpc=self.vpc,
-            allow_all_outbound=False  # Explicitly block all outbound traffic by default
+    # API Gateway
+    api = apigateway.RestApi(
+        self, api_name,
+        rest_api_name=api_name,
+        description="Production-ready API Gateway",
+        deploy_options=apigateway.StageOptions(
+            stage_name="prod",
+            throttling_burst_limit=2000,
+            throttling_rate_limit=1000,
+            logging_level=apigateway.MethodLoggingLevel.INFO,
+            data_trace_enabled=True
+        ),
+        cloud_watch_role=True,
+        default_cors_preflight_options=apigateway.CorsOptions(
+            allow_origins=apigateway.Cors.ALL_ORIGINS,
+            allow_methods=apigateway.Cors.ALL_METHODS
         )
+    )
 
-        # Add HTTP inbound rule from specific CIDR block
-        self.security_group.add_ingress_rule(
-            peer=ec2.Peer.ipv4("203.0.113.0/24"),
-            connection=ec2.Port.tcp(80),
-            description="Allow HTTP traffic from specific CIDR block"
+    # Define GET /status endpoint
+    status_resource = api.root.add_resource("status")
+    status_resource.add_method(
+        "GET",
+        apigateway.LambdaIntegration(lambda_function),
+        request_validator_options=apigateway.RequestValidatorOptions(
+            request_validator_name=f"StatusValidator-{environment_suffix}",
+            validate_request_body=False,
+            validate_request_parameters=True
         )
+    )
 
-        # Note: With allow_all_outbound=False, the security group blocks all
-        # outbound traffic by default. No need to add explicit egress rules
-        # as this is handled automatically
+    # Apply tags to all known resources
+    for construct in [self, lambda_function, api]:
+      for key, value in tags.items():
+        Tags.of(construct).add(key, value)
 
-        # Add tags to the security group for better resource management
-        cdk.Tags.of(self.security_group).add("Name", resource_name("WebOnlyIngressSG"))
-        cdk.Tags.of(self.security_group).add("Environment", self.environment_suffix)
-        cdk.Tags.of(self.security_group).add("Project", "tap")
+    # Outputs
+    CfnOutput(self, "LambdaFunctionName",
+              value=lambda_function.function_name,
+              description="Lambda function name")
 
-        # Add tags to the VPC as well
-        cdk.Tags.of(self.vpc).add("Name", resource_name("vpc"))
-        cdk.Tags.of(self.vpc).add("Environment", self.environment_suffix)
-        cdk.Tags.of(self.vpc).add("Project", "tap")
+    CfnOutput(self, "ApiEndpoint",
+              value=api.url,
+              description="API Gateway base URL")
 
-        # Add stack outputs for integration tests
-        cdk.CfnOutput(
-            self,
-            "VpcId",
-            value=self.vpc.vpc_id,
-            description="VPC ID for integration tests"
-        )
+    CfnOutput(self, "Environment",
+              value=tags["Environment"])
 
-        cdk.CfnOutput(
-            self,
-            "SecurityGroupId",
-            value=self.security_group.security_group_id,
-            description="Security Group ID for integration tests"
-        )
+    CfnOutput(self, "LambdaLogGroup",
+              value=f"/aws/lambda/{lambda_function.function_name}",
+              description="Lambda log group name")
+
+    CfnOutput(self, "HealthCheckEndpoint",
+              value=api.url + "health",
+              description="Health check URL")
+
+    CfnOutput(self, "ApiVersion",
+              value="v1",  # You could make this dynamic if needed
+              description="API version")
+
+
+class TapStackProps(Stack):
+  def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+    super().__init__(**kwargs)
+    self.environment_suffix = environment_suffix
+
+
+class TapStack(Stack):
+  def __init__(
+      self,
+      scope: Construct,
+      construct_id: str,
+      props: Optional[TapStackProps] = None,
+      **kwargs
+  ):
+    super().__init__(scope, construct_id, **kwargs)
+
+    environment_suffix = (
+        props.environment_suffix if props else None
+    ) or self.node.try_get_context('environmentSuffix') or 'dev'
+
+    # Global tags for the parent stack
+    Tags.of(self).add("Environment", "Production")
+    Tags.of(self).add("Project", "Tap")
+
+    # Instantiate nested stack
+    self.api_stack = ServerlessApiStack(
+        self,
+        f"ServerlessApiStack-{environment_suffix}",
+        environment_suffix=environment_suffix
+    )
