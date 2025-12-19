@@ -88,16 +88,14 @@ class TapStack(cdk.Stack):
             self,
             "LambdaFunctionName",
             value=self.lambda_function.function_name,
-            description="Lambda function name",
-            export_name=f"{project_name}-lambda-function-name"
+            description="Lambda function name"
         )
-        
+
         cdk.CfnOutput(
             self,
             "LambdaFunctionArn",
             value=self.lambda_function.function_arn,
-            description="Lambda function ARN",
-            export_name=f"{project_name}-lambda-function-arn"
+            description="Lambda function ARN"
         )
 
     def _create_ssm_parameters(self, project_name: str) -> None:
