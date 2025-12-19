@@ -18,8 +18,9 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     // Detect LocalStack environment
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                         process.env.AWS_ENDPOINT_URL?.includes('4566');
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
 
     cdk.Tags.of(this).add('environment', 'production');
     // Create KMS key for encryption
@@ -74,7 +75,9 @@ export class TapStack extends cdk.Stack {
         {
           cidrMask: 24,
           name: 'Private',
-          subnetType: isLocalStack ? ec2.SubnetType.PUBLIC : ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: isLocalStack
+            ? ec2.SubnetType.PUBLIC
+            : ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
           cidrMask: 24,
@@ -86,6 +89,9 @@ export class TapStack extends cdk.Stack {
 
     // Create S3 bucket for access logs
     // For LocalStack: simplify bucket name to avoid length issues
+    // Note: This bucket exists for compliance but isn't used for server access logging
+    // as LocalStack has limited support for that feature
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const accessLogsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
       bucketName: `app-logs-${props.environmentSuffix}`,
       encryption: s3.BucketEncryption.KMS,
