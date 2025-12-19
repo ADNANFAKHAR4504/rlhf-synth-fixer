@@ -442,8 +442,9 @@ describe('TapStack', () => {
     });
 
     test('uses simplified VPC configuration for LocalStack', () => {
-      // Should have 2 AZs instead of 3
-      localstackTemplate.resourceCountIs('AWS::EC2::Subnet', 2); // 2 public only
+      // LocalStack skips VPC entirely (EC2 service not enabled in CI/CD)
+      localstackTemplate.resourceCountIs('AWS::EC2::VPC', 0);
+      localstackTemplate.resourceCountIs('AWS::EC2::Subnet', 0);
     });
 
     test('does not create NAT gateways in LocalStack', () => {
