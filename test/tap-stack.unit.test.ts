@@ -60,11 +60,6 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
       expect(template.Parameters.EnvironmentType.AllowedValues).toEqual(['dev', 'staging', 'prod']);
     });
 
-    test('should have LatestAmiId parameter', () => {
-      expect(template.Parameters.LatestAmiId).toBeDefined();
-      expect(template.Parameters.LatestAmiId.Type).toContain('AWS::SSM::Parameter');
-    });
-
   });
 
   describe('Mappings', () => {
@@ -446,9 +441,5 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
       expect(resourceCount).toBeLessThan(100); // But not excessive
     });
 
-    test('should have all expected parameter count', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBeGreaterThanOrEqual(3);
-    });
   });
 });

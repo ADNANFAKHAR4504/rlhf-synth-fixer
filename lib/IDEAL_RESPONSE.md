@@ -16,16 +16,10 @@ Parameters:
 
   EnvironmentSuffix:
     Type: String
-    Description: Unique suffix for resource naming to avoid conflicts
-    Default : 'prod'
-    MinLength: 1
+    Description: Unique suffix for resource naming to avoid conflicts (defaults to environment type)
+    Default: ''
     MaxLength: 20
-    AllowedPattern: '[a-z0-9-]+'
-
-  LatestAmiId:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-    Description: Latest Amazon Linux 2 AMI ID
+    AllowedPattern: '[a-z0-9-]*'
 
 Mappings:
   EnvironmentConfig:
@@ -68,6 +62,7 @@ Conditions:
   IsStaging: !Equals [!Ref EnvironmentType, staging]
   EnableVersioning: !Or [!Condition IsProd, !Condition IsStaging]
   EnableMultiAZ: !Condition IsProd
+  UseDefaultSuffix: !Equals [!Ref EnvironmentSuffix, '']
 
 Resources:
   # VPC Resources
@@ -79,7 +74,9 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub vpc-${EnvironmentSuffix}
+          Value: !Sub 
+            - vpc-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -88,7 +85,9 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub igw-${EnvironmentSuffix}
+          Value: !Sub 
+            - igw-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -107,7 +106,9 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub public-subnet-1-${EnvironmentSuffix}
+          Value: !Sub 
+            - public-subnet-1-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -120,7 +121,9 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub public-subnet-2-${EnvironmentSuffix}
+          Value: !Sub 
+            - public-subnet-2-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -132,7 +135,9 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub private-subnet-1-${EnvironmentSuffix}
+          Value: !Sub 
+            - private-subnet-1-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -144,7 +149,9 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub private-subnet-2-${EnvironmentSuffix}
+          Value: !Sub 
+            - private-subnet-2-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -154,7 +161,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub public-rt-${EnvironmentSuffix}
+          Value: !Sub 
+            - public-rt-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -184,15 +193,21 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub private-rt-1-${EnvironmentSuffix}
+          Value: !Sub 
+            - private-rt-1-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
+  # For LocalStack testing - routing through IGW
+  # In production, you would use NAT Gateway instead
   PrivateRoute1:
     Type: AWS::EC2::Route
+    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -206,15 +221,21 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub private-rt-2-${EnvironmentSuffix}
+          Value: !Sub 
+            - private-rt-2-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
+  # For LocalStack testing - routing through IGW
+  # In production, you would use NAT Gateway instead
   PrivateRoute2:
     Type: AWS::EC2::Route
+    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -239,7 +260,9 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub alb-sg-${EnvironmentSuffix}
+          Value: !Sub 
+            - alb-sg-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -253,9 +276,15 @@ Resources:
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0  # For SSH access - restrict in production
       Tags:
         - Key: Name
-          Value: !Sub ec2-sg-${EnvironmentSuffix}
+          Value: !Sub 
+            - ec2-sg-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -275,7 +304,9 @@ Resources:
           SourceSecurityGroupId: !Ref LambdaSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub rds-sg-${EnvironmentSuffix}
+          Value: !Sub 
+            - rds-sg-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -286,7 +317,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub lambda-sg-${EnvironmentSuffix}
+          Value: !Sub 
+            - lambda-sg-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -294,7 +327,9 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub alb-${EnvironmentSuffix}
+      Name: !Sub 
+        - alb-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       Type: application
       Scheme: internet-facing
       IpAddressType: ipv4
@@ -305,14 +340,18 @@ Resources:
         - !Ref ALBSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub alb-${EnvironmentSuffix}
+          Value: !Sub 
+            - alb-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub tg-${EnvironmentSuffix}
+      Name: !Sub 
+        - tg-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -326,7 +365,9 @@ Resources:
       TargetType: instance
       Tags:
         - Key: Name
-          Value: !Sub tg-${EnvironmentSuffix}
+          Value: !Sub 
+            - tg-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -340,11 +381,13 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
 
-  # IAM Role for EC2 instances
+  # IAM Role for EC2 instances (kept for potential manual instances)
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ec2-role-${EnvironmentSuffix}
+      RoleName: !Sub 
+        - ec2-role-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -357,57 +400,37 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Tags:
         - Key: Name
-          Value: !Sub ec2-role-${EnvironmentSuffix}
+          Value: !Sub 
+            - ec2-role-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub ec2-profile-${EnvironmentSuffix}
+      InstanceProfileName: !Sub 
+        - ec2-profile-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       Roles:
         - !Ref EC2InstanceRole
-
-  # Launch Template
-  LaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: !Sub lt-${EnvironmentSuffix}
-      LaunchTemplateData:
-        ImageId: !Ref LatestAmiId
-        InstanceType: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, InstanceType]
-        IamInstanceProfile:
-          Arn: !GetAtt EC2InstanceProfile.Arn
-        SecurityGroupIds:
-          - !Ref EC2SecurityGroup
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-            yum update -y
-            yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
-            echo "<h1>Hello from ${EnvironmentType} environment</h1>" > /var/www/html/index.html
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: !Sub ec2-instance-${EnvironmentSuffix}
-              - Key: Environment
-                Value: !Ref EnvironmentType
 
   # RDS Subnet Group
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub db-subnet-group-${EnvironmentSuffix}
+      DBSubnetGroupName: !Sub 
+        - db-subnet-group-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub db-subnet-group-${EnvironmentSuffix}
+          Value: !Sub 
+            - db-subnet-group-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -416,7 +439,9 @@ Resources:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
     Properties:
-      DBInstanceIdentifier: !Sub rds-mysql-${EnvironmentSuffix}
+      DBInstanceIdentifier: !Sub 
+        - rds-mysql-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       Engine: mysql
       EngineVersion: 8.0.39
       DBInstanceClass: db.t3.micro
@@ -438,7 +463,9 @@ Resources:
         - slowquery
       Tags:
         - Key: Name
-          Value: !Sub rds-mysql-${EnvironmentSuffix}
+          Value: !Sub 
+            - rds-mysql-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -447,7 +474,9 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub fintech-${EnvironmentSuffix}-static-assets
+      BucketName: !Sub 
+        - fintech-${Suffix}-static-assets
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       VersioningConfiguration:
         Status: !If [EnableVersioning, Enabled, Suspended]
       PublicAccessBlockConfiguration:
@@ -461,7 +490,9 @@ Resources:
               SSEAlgorithm: AES256
       Tags:
         - Key: Name
-          Value: !Sub fintech-${EnvironmentSuffix}-static-assets
+          Value: !Sub 
+            - fintech-${Suffix}-static-assets
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -469,7 +500,9 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub fintech-${EnvironmentSuffix}-app-data
+      BucketName: !Sub 
+        - fintech-${Suffix}-app-data
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       VersioningConfiguration:
         Status: !If [EnableVersioning, Enabled, Suspended]
       PublicAccessBlockConfiguration:
@@ -483,7 +516,9 @@ Resources:
               SSEAlgorithm: AES256
       Tags:
         - Key: Name
-          Value: !Sub fintech-${EnvironmentSuffix}-app-data
+          Value: !Sub 
+            - fintech-${Suffix}-app-data
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -491,7 +526,9 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub lambda-role-${EnvironmentSuffix}
+      RoleName: !Sub 
+        - lambda-role-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -522,7 +559,9 @@ Resources:
                 Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*
       Tags:
         - Key: Name
-          Value: !Sub lambda-role-${EnvironmentSuffix}
+          Value: !Sub 
+            - lambda-role-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -530,7 +569,9 @@ Resources:
   DataProcessingFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub data-processor-${EnvironmentSuffix}
+      FunctionName: !Sub 
+        - data-processor-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -568,7 +609,9 @@ Resources:
               }
       Tags:
         - Key: Name
-          Value: !Sub data-processor-${EnvironmentSuffix}
+          Value: !Sub 
+            - data-processor-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -576,11 +619,15 @@ Resources:
   AlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub alarm-topic-${EnvironmentSuffix}
+      TopicName: !Sub 
+        - alarm-topic-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       DisplayName: !Sub CloudWatch Alarms for ${EnvironmentType}
       Tags:
         - Key: Name
-          Value: !Sub alarm-topic-${EnvironmentSuffix}
+          Value: !Sub 
+            - alarm-topic-${Suffix}
+            - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -588,7 +635,9 @@ Resources:
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub high-cpu-${EnvironmentSuffix}
+      AlarmName: !Sub 
+        - high-cpu-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       AlarmDescription: !Sub Alarm when CPU exceeds ${EnvironmentType} threshold
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -597,16 +646,15 @@ Resources:
       EvaluationPeriods: 2
       Threshold: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, CPUAlarmThreshold]
       ComparisonOperator: GreaterThanThreshold
-      # Dimensions:
-      #   - Name: AutoScalingGroupName
-      #     Value: !Ref AutoScalingGroup
       AlarmActions:
         - !Ref AlarmTopic
 
   RDSConnectionsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub rds-connections-${EnvironmentSuffix}
+      AlarmName: !Sub 
+        - rds-connections-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       AlarmDescription: Alarm when RDS connections are high
       MetricName: DatabaseConnections
       Namespace: AWS/RDS
@@ -624,7 +672,9 @@ Resources:
   RDSStorageAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub rds-storage-${EnvironmentSuffix}
+      AlarmName: !Sub 
+        - rds-storage-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       AlarmDescription: Alarm when RDS storage is low
       MetricName: FreeStorageSpace
       Namespace: AWS/RDS
@@ -642,7 +692,9 @@ Resources:
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub lambda-errors-${EnvironmentSuffix}
+      AlarmName: !Sub 
+        - lambda-errors-${Suffix}
+        - Suffix: !If [UseDefaultSuffix, !Ref EnvironmentType, !Ref EnvironmentSuffix]
       AlarmDescription: Alarm when Lambda function has errors
       MetricName: Errors
       Namespace: AWS/Lambda
