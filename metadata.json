@@ -11,5 +11,14 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": []
+  "aws_services": [
+    "Lambda",
+    "APIGateway",
+    "EventBridge",
+    "SSM",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "ready_for_merge": true
 }
