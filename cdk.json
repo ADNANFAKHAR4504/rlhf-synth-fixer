@@ -15,7 +15,9 @@
     ]
   },
   "context": {
-    "@aws-cdk/core:newStyleStackSynthesis": true,
+    "@aws-cdk/core:newStyleStackSynthesis": false,
+    "@aws-cdk/core:bootstrapQualifier": "localstack",
+    "acknowledge-experimental": true,
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": [

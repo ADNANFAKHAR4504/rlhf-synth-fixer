@@ -20,8 +20,10 @@ env = cdk.Environment(
     region=os.environ.get('CDK_DEFAULT_REGION', 'us-east-1')
 )
 
-# Use LegacyStackSynthesizer to avoid bootstrap requirement for LocalStack
-# This eliminates the need for ECR and other bootstrap resources
+# For LocalStack: ALWAYS use LegacyStackSynthesizer to avoid bootstrap/ECR requirements
+# LegacyStackSynthesizer generates CloudFormation with inline assets only
+# NO CDKToolkit bootstrap stack required (which would include ECR repository)
+# This is compatible with LocalStack Community Edition which doesn't have ECR enabled
 synthesizer = cdk.LegacyStackSynthesizer()
 
 # Create the main stack with environment suffix in the name
