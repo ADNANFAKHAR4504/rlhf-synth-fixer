@@ -102,7 +102,7 @@ export class TapStack extends pulumi.ComponentResource {
         period: 300, // 5 minutes
         statistic: 'Sum',
         threshold: 80,
-        dimensions: table.name.apply((name) => ({
+        dimensions: table.name.apply(name => ({
           TableName: name,
         })),
         alarmDescription: 'Alarm when read capacity exceeds threshold',
@@ -123,7 +123,7 @@ export class TapStack extends pulumi.ComponentResource {
         period: 300, // 5 minutes
         statistic: 'Sum',
         threshold: 80,
-        dimensions: table.name.apply((name) => ({
+        dimensions: table.name.apply(name => ({
           TableName: name,
         })),
         alarmDescription: 'Alarm when write capacity exceeds threshold',
