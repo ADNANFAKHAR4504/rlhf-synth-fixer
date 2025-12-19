@@ -11,7 +11,7 @@
   "subject_labels": [
     "Environment Migration",
     "Cloud Environment Setup",
-    "Multi-Environment Consistency"
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "lambda",
