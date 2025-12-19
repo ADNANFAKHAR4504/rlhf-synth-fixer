@@ -571,6 +571,8 @@ Exit code 0 if fixed, 1 if unable to fix, 2 if unsupported services.
 > **🏷️ Required Labels**: All PRs created by localstack-migrate automatically include:
 > - `synth-2` - Identifies PRs created by the synth-2 team/process
 > - `localstack` - Identifies PRs for LocalStack-compatible tasks
+> - `<platform>` - Platform type from metadata.json (e.g., `cdk`, `cfn`, `tf`, `pulumi`)
+> - `<language>` - Language from metadata.json (e.g., `ts`, `py`, `go`, `java`)
 
 ```bash
 log_header "📦 CREATING PULL REQUEST (Parallel-Safe)"

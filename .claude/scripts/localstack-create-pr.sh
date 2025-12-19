@@ -291,7 +291,7 @@ This PR will be processed by the CI/CD pipeline which will:
 *This PR was automatically created by the \`/localstack-migrate\` command.*
 *The PR pipeline will handle deployment and testing.*"
 
-# Create the PR with required labels
+# Create the PR with required labels (synth-2, localstack, platform, language)
 PR_RESULT=$(gh pr create \
   --repo "$GITHUB_REPO" \
   --title "$PR_TITLE" \
@@ -300,6 +300,8 @@ PR_RESULT=$(gh pr create \
   --head "$NEW_BRANCH" \
   --label "synth-2" \
   --label "localstack" \
+  --label "$PLATFORM" \
+  --label "$LANGUAGE" \
   2>&1) || {
   log_error "Failed to create Pull Request"
   echo "  Error: $PR_RESULT"

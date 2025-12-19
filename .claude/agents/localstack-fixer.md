@@ -1925,10 +1925,12 @@ With batch fix approach:
 
 When creating PRs for LocalStack migrations, the following labels MUST be added:
 
-| Label       | Purpose                                           |
-| ----------- | ------------------------------------------------- |
-| `synth-2`   | Identifies PRs created by the synth-2 team/process |
-| `localstack` | Identifies PRs for LocalStack-compatible tasks    |
+| Label        | Purpose                                            |
+| ------------ | -------------------------------------------------- |
+| `synth-2`    | Identifies PRs created by the synth-2 team/process |
+| `localstack` | Identifies PRs for LocalStack-compatible tasks     |
+| `<platform>` | Platform type from metadata.json (e.g., `cdk`, `cfn`, `tf`, `pulumi`) |
+| `<language>` | Language from metadata.json (e.g., `ts`, `py`, `go`, `java`) |
 
 These labels are automatically added by the `localstack-create-pr.sh` script when creating PRs via `/localstack-migrate`.
 
@@ -1938,7 +1940,9 @@ gh pr create \
   --title "[LocalStack] ls-Pr7179 - cdk/ts" \
   --body "LocalStack migration" \
   --label "synth-2" \
-  --label "localstack"
+  --label "localstack" \
+  --label "cdk" \
+  --label "ts"
 ```
 
 ## Related Commands
