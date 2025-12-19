@@ -25,6 +25,7 @@ describe('CloudFormation Template Tests', () => {
   test('template description', () => {
     expect(template.Description).toBeDefined();
     expect(template.Description).toContain('TAP Stack');
+    expect(template.Description).toContain('LocalStack Compatible');
   });
 
   test('metadata and parameter groups exist', () => {
@@ -41,17 +42,21 @@ describe('CloudFormation Template Tests', () => {
     expect(param.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
   });
 
-  test('Allowed SSH Location CIDR pattern', () => {
-    const sshParam = template.Parameters?.SshCidrBlock;
-    expect(sshParam).toBeDefined();
-    expect(sshParam.AllowedPattern).toBe(
-      '^([0-9]{1,3}\\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$'
-    );
+  test('VPC CIDR parameters exist', () => {
+    const vpcCidr = template.Parameters?.VpcCidrBlock;
+    const publicCidr = template.Parameters?.PublicSubnetCidrBlock;
+    const privateCidr = template.Parameters?.PrivateSubnetCidrBlock;
+
+    expect(vpcCidr).toBeDefined();
+    expect(publicCidr).toBeDefined();
+    expect(privateCidr).toBeDefined();
   });
 
-  test('AMI ID parameter exists', () => {
-    const ami = template.Parameters?.AmiId;
-    expect(ami).toBeDefined();
+  test('EC2-related parameters do not exist (LocalStack compatibility)', () => {
+    expect(template.Parameters?.SshCidrBlock).toBeUndefined();
+    expect(template.Parameters?.InstanceType).toBeUndefined();
+    expect(template.Parameters?.KeyName).toBeUndefined();
+    expect(template.Parameters?.AmiId).toBeUndefined();
   });
 
   test('VPC with DNS support and hostnames', () => {
@@ -62,6 +67,11 @@ describe('CloudFormation Template Tests', () => {
     expect(props.EnableDnsHostnames).toBe(true);
   });
 
+  test('Public and Private subnets exist', () => {
+    const subnets = getResourcesOfType(template, 'AWS::EC2::Subnet');
+    expect(subnets.length).toBe(2);
+  });
+
   test('InternetGateway and attachment exist', () => {
     const igws = getResourcesOfType(template, 'AWS::EC2::InternetGateway');
     const attachments = getResourcesOfType(template, 'AWS::EC2::VPCGatewayAttachment');
@@ -69,11 +79,11 @@ describe('CloudFormation Template Tests', () => {
     expect(attachments.length).toBe(1);
   });
 
-  test('NAT Gateway and EIP exist', () => {
+  test('NAT Gateway does not exist (LocalStack compatibility)', () => {
     const eips = getResourcesOfType(template, 'AWS::EC2::EIP');
     const natGws = getResourcesOfType(template, 'AWS::EC2::NatGateway');
-    expect(eips.length).toBeGreaterThanOrEqual(1);
-    expect(natGws.length).toBe(1);
+    expect(eips.length).toBe(0);
+    expect(natGws.length).toBe(0);
   });
 
   test('Public route to IGW exists', () => {
@@ -83,48 +93,53 @@ describe('CloudFormation Template Tests', () => {
     expect(publicRoute?.Properties?.DestinationCidrBlock).toBe('0.0.0.0/0');
   });
 
-  test('Private route using NAT exists', () => {
-    const routes = getResourcesOfType(template, 'AWS::EC2::Route');
-    const privateRoute = routes.find(r => r.Properties?.NatGatewayId);
-    expect(privateRoute).toBeDefined();
+  test('Route tables exist', () => {
+    const routeTables = getResourcesOfType(template, 'AWS::EC2::RouteTable');
+    expect(routeTables.length).toBe(2); // Public and Private
   });
 
-  test('EC2 Instances use AMI ID reference', () => {
+  test('EC2 Instances do not exist (LocalStack compatibility)', () => {
     const instances = getResourcesOfType(template, 'AWS::EC2::Instance');
-    expect(instances.length).toBe(2);
-    for (const inst of instances) {
-      const imageId = inst.Properties?.ImageId;
-      expect(imageId).toBeDefined();
-      expect(typeof imageId).toBe('object');
-      expect(imageId.Ref).toBe('AmiId');
-    }
+    expect(instances.length).toBe(0);
   });
 
-  test('Security group allows SSH and HTTP', () => {
+  test('Security group exists with HTTPS access', () => {
     const sgs = getResourcesOfType(template, 'AWS::EC2::SecurityGroup');
     expect(sgs.length).toBeGreaterThan(0);
     const ingress = sgs[0].Properties?.SecurityGroupIngress || [];
     const fromPorts = ingress.map((r: any) => r.FromPort);
     const toPorts = ingress.map((r: any) => r.ToPort);
-    expect(fromPorts).toContain(22);
-    expect(toPorts).toContain(22);
-    expect(fromPorts).toContain(80);
-    expect(toPorts).toContain(80);
+    expect(fromPorts).toContain(443);
+    expect(toPorts).toContain(443);
   });
 
-  test('Outputs section exists and has expected keys', () => {
+  test('Outputs section exists and has expected VPC keys', () => {
     const outputs = template.Outputs;
     expect(outputs).toBeDefined();
     const expected = [
       'VPCId',
       'PublicSubnetId',
       'PrivateSubnetId',
-      'PublicInstanceId',
-      'PrivateInstanceId',
-      'PublicInstancePublicIP',
+      'SecurityGroupId',
+      'InternetGatewayId',
     ];
     expected.forEach(key => {
       expect(outputs[key]).toBeDefined();
+    });
+  });
+
+  test('EC2 instance outputs do not exist (LocalStack compatibility)', () => {
+    const outputs = template.Outputs;
+    expect(outputs?.PublicInstanceId).toBeUndefined();
+    expect(outputs?.PrivateInstanceId).toBeUndefined();
+    expect(outputs?.PublicInstancePublicIP).toBeUndefined();
+  });
+
+  test('Outputs have exports with stack name', () => {
+    const outputs = template.Outputs;
+    Object.values(outputs).forEach((output: any) => {
+      expect(output.Export).toBeDefined();
+      expect(output.Export.Name).toBeDefined();
     });
   });
 });
