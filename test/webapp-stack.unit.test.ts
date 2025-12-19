@@ -215,8 +215,8 @@ describe('WebAppStack', () => {
         Engine: 'mysql',
         DBInstanceClass: 'db.t3.micro',
         AllocatedStorage: '20',
-        StorageEncrypted: true,
-        BackupRetentionPeriod: 0, // Disabled for LocalStack
+        StorageEncrypted: false, // Disabled for LocalStack compatibility
+        BackupRetentionPeriod: 1, // Minimum 1 day for LocalStack
         DeletionProtection: false,
         MultiAZ: false,
       });

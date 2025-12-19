@@ -144,13 +144,12 @@ export class WebAppStack extends cdk.Stack {
       ],
     });
 
-    // Auto Scaling Group (without LaunchTemplate for LocalStack compatibility)
-    // LaunchTemplate.LatestVersionNumber is not properly supported in LocalStack
-    this.autoScalingGroup = new autoscaling.AutoScalingGroup(
+    // Launch Template with explicit $Latest version for LocalStack compatibility
+    // LocalStack doesn't properly support GetAtt LatestVersionNumber
+    const launchTemplate = new ec2.LaunchTemplate(
       this,
-      'WebServerASG',
+      'WebServerLaunchTemplate',
       {
-        vpc: this.vpc,
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
           ec2.InstanceSize.MEDIUM
@@ -159,6 +158,19 @@ export class WebAppStack extends cdk.Stack {
         securityGroup: webServerSecurityGroup,
         userData,
         role: ec2Role,
+      }
+    );
+
+    // Auto Scaling Group with mixed instances policy to avoid LatestVersionNumber
+    this.autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'WebServerASG',
+      {
+        vpc: this.vpc,
+        mixedInstancesPolicy: {
+          launchTemplate,
+          launchTemplateOverrides: [{ instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM) }],
+        },
         minCapacity: 2,
         maxCapacity: 6,
         desiredCapacity: 2,
@@ -230,6 +242,7 @@ export class WebAppStack extends cdk.Stack {
     });
 
     // RDS MySQL Database
+    // Note: RDS in LocalStack may take longer than usual to become available
     this.database = new rds.DatabaseInstance(this, 'WebAppDatabase', {
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0,
@@ -244,8 +257,8 @@ export class WebAppStack extends cdk.Stack {
       securityGroups: [databaseSecurityGroup],
       multiAz: false, // Set to true for production
       allocatedStorage: 20,
-      storageEncrypted: true,
-      backupRetention: cdk.Duration.days(0), // Disabled for LocalStack
+      storageEncrypted: false, // Disabled for LocalStack compatibility
+      backupRetention: cdk.Duration.days(1), // Minimum 1 day for LocalStack
       deletionProtection: false, // Set to true for production
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For LocalStack cleanup
     });
