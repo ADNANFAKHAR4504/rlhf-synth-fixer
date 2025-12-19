@@ -473,3 +473,4 @@ describe('WebAppStack', () => {
     });
   });
 });
+// LocalStack-optimized test configuration
