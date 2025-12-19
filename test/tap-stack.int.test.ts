@@ -32,34 +32,47 @@ function discoverStackName(): string {
 
   try {
     const stacks = awsCli(`cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE`);
-    const matchingStack = stacks.StackSummaries.find(
+
+    if (!stacks || !stacks.StackSummaries || stacks.StackSummaries.length === 0) {
+      throw new Error(`No stacks found in region ${awsRegion}`);
+    }
+
+    // Priority 1: Exact match with ENVIRONMENT_SUFFIX
+    const exactMatch = stacks.StackSummaries.find(
       (stack: any) => stack.StackName === expectedStackName
     );
 
-    if (matchingStack) {
-      return matchingStack.StackName;
+    if (exactMatch) {
+      return exactMatch.StackName;
     }
 
-    // Fallback: find any stack with TapStack prefix
-    const tapStack = stacks.StackSummaries.find(
+    // Priority 2: Any stack with TapStack prefix
+    const tapStackMatch = stacks.StackSummaries.find(
       (stack: any) => stack.StackName.startsWith('TapStack')
     );
 
-    if (tapStack) {
-      return tapStack.StackName;
+    if (tapStackMatch) {
+      console.log(`Expected stack '${expectedStackName}' not found, using '${tapStackMatch.StackName}'`);
+      return tapStackMatch.StackName;
     }
 
-    // Fallback for LocalStack: find stack with tap-stack prefix
+    // Priority 3: Lowercase tapstack (LocalStack fallback)
     const localstackPattern = stacks.StackSummaries.find(
-      (stack: any) => stack.StackName.startsWith('tap-stack')
+      (stack: any) => stack.StackName.toLowerCase().startsWith('tapstack')
     );
 
     if (localstackPattern) {
+      console.log(`Using LocalStack stack name: ${localstackPattern.StackName}`);
       return localstackPattern.StackName;
     }
 
-    throw new Error(`No TapStack found in region ${awsRegion}`);
+    // List available stacks for debugging
+    const availableStacks = stacks.StackSummaries.map((s: any) => s.StackName).join(', ');
+    throw new Error(`No TapStack found in region ${awsRegion}. Available stacks: ${availableStacks}`);
   } catch (error: any) {
+    if (error.message.includes('No TapStack found')) {
+      throw error;
+    }
     throw new Error(`Failed to discover stack name: ${error.message}`);
   }
 }
