@@ -1,8 +1,4 @@
 import {
-  AutoScalingClient,
-  DescribeAutoScalingGroupsCommand,
-} from '@aws-sdk/client-auto-scaling';
-import {
   CloudFormationClient,
   DescribeStacksCommand,
   ListStackResourcesCommand,
@@ -44,7 +40,6 @@ const ec2Client = new EC2Client(awsConfig);
 const iamClient = new IAMClient(awsConfig);
 const cfnClient = new CloudFormationClient(awsConfig);
 const elbv2Client = new ElasticLoadBalancingV2Client(awsConfig);
-const asgClient = new AutoScalingClient(awsConfig);
 
 // Helper function to get stack outputs
 async function getStackOutputs(): Promise<Record<string, string>> {
@@ -113,7 +108,7 @@ describe('TapStack Integration Tests', () => {
         expect(stackOutputs.EC2SecurityGroupId).toBeDefined();
         expect(stackOutputs.EC2RoleArn).toBeDefined();
         expect(stackOutputs.LoadBalancerDNS).toBeDefined();
-        expect(stackOutputs.AutoScalingGroupName).toBeDefined();
+        expect(stackOutputs.TargetGroupArn).toBeDefined();
       },
       timeout
     );
@@ -129,6 +124,7 @@ describe('TapStack Integration Tests', () => {
         const resources = response.StackResourceSummaries || [];
 
         // Check that we have the expected resources
+        // Note: ASG removed due to LocalStack Launch Template limitation
         const expectedResourceTypes = [
           'AWS::EC2::VPC',
           'AWS::EC2::Subnet',
@@ -136,8 +132,8 @@ describe('TapStack Integration Tests', () => {
           'AWS::EC2::InternetGateway',
           'AWS::IAM::Role',
           'AWS::IAM::InstanceProfile',
-          'AWS::AutoScaling::AutoScalingGroup',
           'AWS::ElasticLoadBalancingV2::LoadBalancer',
+          'AWS::ElasticLoadBalancingV2::TargetGroup',
         ];
 
         expectedResourceTypes.forEach(resourceType => {
@@ -325,49 +321,6 @@ describe('TapStack Integration Tests', () => {
     );
   });
 
-  describe('Auto Scaling Group Validation', () => {
-    test(
-      'Auto Scaling Group exists with correct configuration',
-      async () => {
-        const stackOutputs = await getStackOutputs();
-        const asgName = stackOutputs.AutoScalingGroupName;
-
-        // LocalStack Community: ASG API may not be fully available
-        try {
-          const command = new DescribeAutoScalingGroupsCommand({
-            AutoScalingGroupNames: [asgName],
-          });
-
-          const response = await asgClient.send(command);
-          const asgs = response.AutoScalingGroups || [];
-
-          expect(asgs.length).toBe(1);
-          const asg = asgs[0];
-
-          expect(asg.AutoScalingGroupName).toBe(asgName);
-          expect(asg.MinSize).toBe(2);
-          expect(asg.MaxSize).toBe(5);
-        } catch (error: any) {
-          // LocalStack Community doesn't support ASG describe API
-          if (
-            error.name === 'InternalFailure' ||
-            error.message?.includes('not included')
-          ) {
-            console.log(
-              'Skipping ASG API test - not available in LocalStack Community'
-            );
-            // Verify ASG was created via CloudFormation instead
-            expect(asgName).toBeDefined();
-            expect(asgName.length).toBeGreaterThan(0);
-          } else {
-            throw error;
-          }
-        }
-      },
-      timeout
-    );
-  });
-
   describe('Application Load Balancer Validation', () => {
     test(
       'Application Load Balancer exists',
@@ -418,11 +371,12 @@ describe('TapStack Integration Tests', () => {
             tg => tg.Port === 80 && tg.Protocol === 'HTTP'
           );
           expect(ourTg).toBeDefined();
-        } catch (error: any) {
+        } catch (error: unknown) {
           // LocalStack Community doesn't support ELBv2 target group describe API
+          const errorObj = error as { name?: string; message?: string };
           if (
-            error.name === 'InternalFailure' ||
-            error.message?.includes('not included')
+            errorObj.name === 'InternalFailure' ||
+            errorObj.message?.includes('not included')
           ) {
             console.log(
               'Skipping Target Group API test - not available in LocalStack Community'

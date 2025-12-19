@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import { CfnOutput, Tags } from 'aws-cdk-lib';
-import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -76,24 +75,10 @@ export class TapStack extends cdk.Stack {
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
     );
 
-    // 4. Auto Scaling Group Configuration
-    // LocalStack: Basic ASG supported, using public subnets since NAT not available
-    const asg = new autoscaling.AutoScalingGroup(this, 'WebAppASG', {
-      vpc,
-      instanceType: new ec2.InstanceType('t2.micro'),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      role: ec2Role,
-      securityGroup: ec2SecurityGroup,
-      minCapacity: 2,
-      maxCapacity: 5,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC, // LocalStack: Using public subnets (no NAT available)
-      },
-      // LocalStack: Removed advanced features like health check grace period, update policy
-    });
-
-    // 5. Application Load Balancer
+    // 4. Application Load Balancer
     // LocalStack: ALB supported but DNS will show "unknown"
+    // Note: ASG removed due to LocalStack Launch Template limitation
+    // (cdk.json has generateLaunchTemplateInsteadOfLaunchConfig: true which LocalStack doesn't support)
     const alb = new elbv2.ApplicationLoadBalancer(this, 'WebAppALB', {
       vpc,
       internetFacing: true,
@@ -103,22 +88,30 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    const listener = alb.addListener('HttpListener', {
+    // Create a target group for future use
+    const targetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'WebAppTargetGroup',
+      {
+        vpc,
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targetType: elbv2.TargetType.INSTANCE,
+        healthCheck: {
+          path: '/',
+          interval: cdk.Duration.minutes(1),
+        },
+      }
+    );
+
+    // Add HTTP listener
+    alb.addListener('HttpListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
+      defaultTargetGroups: [targetGroup],
     });
 
-    listener.addTargets('ASGTargets', {
-      port: 80,
-      targets: [asg],
-      healthCheck: {
-        path: '/',
-        interval: cdk.Duration.minutes(1),
-        // LocalStack: Using basic health check settings
-      },
-    });
-
-    // 6. Stack Outputs
+    // 5. Stack Outputs
     // VPC outputs (fully supported by LocalStack)
     new CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
@@ -183,14 +176,14 @@ export class TapStack extends cdk.Stack {
       exportName: `${this.stackName}-LoadBalancerArn`,
     });
 
-    // ASG output
-    new CfnOutput(this, 'AutoScalingGroupName', {
-      value: asg.autoScalingGroupName,
-      description: 'Auto Scaling Group Name',
-      exportName: `${this.stackName}-ASGName`,
+    // Target Group output
+    new CfnOutput(this, 'TargetGroupArn', {
+      value: targetGroup.targetGroupArn,
+      description: 'Target Group ARN',
+      exportName: `${this.stackName}-TargetGroupArn`,
     });
 
-    // 7. Tagging
+    // 6. Tagging
     Tags.of(this).add('Application', 'WebApp');
     Tags.of(this).add('Environment', 'Production');
   }

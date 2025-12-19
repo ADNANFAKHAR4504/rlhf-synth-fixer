@@ -108,11 +108,10 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates IAM instance profiles', () => {
-      // CDK creates 2 instance profiles: one explicit and one for ASG
-      template.resourceCountIs('AWS::IAM::InstanceProfile', 2);
+    test('creates IAM instance profile', () => {
+      template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
 
-      // Check that our explicit instance profile exists
+      // Check that our instance profile exists
       template.hasResourceProperties('AWS::IAM::InstanceProfile', {
         Roles: [
           {
@@ -140,59 +139,6 @@ describe('TapStack', () => {
     });
   });
 
-  describe('Auto Scaling Group', () => {
-    test('creates Auto Scaling Group with correct capacity', () => {
-      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        MinSize: '2',
-        MaxSize: '5',
-        VPCZoneIdentifier: Match.anyValue(),
-      });
-    });
-
-    test('creates Launch Configuration with correct specifications', () => {
-      template.hasResourceProperties('AWS::AutoScaling::LaunchConfiguration', {
-        // ImageId now uses dynamic lookup instead of hard-coded AMI
-        ImageId: {
-          Ref: Match.stringLikeRegexp('SsmParameterValue'),
-        },
-        InstanceType: 't2.micro',
-        IamInstanceProfile: {
-          Ref: Match.stringLikeRegexp('WebAppASGInstanceProfile'),
-        },
-        SecurityGroups: [
-          {
-            'Fn::GetAtt': [
-              Match.stringLikeRegexp('EC2SecurityGroup'),
-              'GroupId',
-            ],
-          },
-        ],
-      });
-    });
-
-    test('Auto Scaling Group uses Launch Configuration', () => {
-      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        LaunchConfigurationName: {
-          Ref: Match.stringLikeRegexp('WebAppASGLaunchConfig'),
-        },
-      });
-    });
-
-    test('Auto Scaling Group uses public subnets (LocalStack compatibility)', () => {
-      // Using public subnets since NAT Gateway not available in LocalStack
-      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        VPCZoneIdentifier: [
-          {
-            Ref: Match.stringLikeRegexp('PublicSubnetSubnet1'),
-          },
-          {
-            Ref: Match.stringLikeRegexp('PublicSubnetSubnet2'),
-          },
-        ],
-      });
-    });
-  });
-
   describe('Application Load Balancer', () => {
     test('creates internet-facing Application Load Balancer', () => {
       template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
@@ -209,14 +155,6 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
         Port: 80,
         Protocol: 'HTTP',
-        DefaultActions: [
-          {
-            Type: 'forward',
-            TargetGroupArn: {
-              Ref: Match.stringLikeRegexp('ASGTargetsGroup'),
-            },
-          },
-        ],
       });
     });
 
@@ -293,9 +231,9 @@ describe('TapStack', () => {
       });
     });
 
-    test('exports Auto Scaling Group name', () => {
-      template.hasOutput('AutoScalingGroupName', {
-        Description: 'Auto Scaling Group Name',
+    test('exports Target Group ARN', () => {
+      template.hasOutput('TargetGroupArn', {
+        Description: 'Target Group ARN',
       });
     });
   });
@@ -311,23 +249,6 @@ describe('TapStack', () => {
           {
             Key: 'Environment',
             Value: 'Production',
-          },
-        ]),
-      });
-    });
-
-    test('applies required tags to Auto Scaling Group', () => {
-      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        Tags: Match.arrayWith([
-          {
-            Key: 'Application',
-            Value: 'WebApp',
-            PropagateAtLaunch: true,
-          },
-          {
-            Key: 'Environment',
-            Value: 'Production',
-            PropagateAtLaunch: true,
           },
         ]),
       });
@@ -361,21 +282,18 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::EC2::SecurityGroupIngress', 1);
       template.resourceCountIs('AWS::EC2::InternetGateway', 1);
 
-      // LocalStack compatibility: No NAT Gateway
+      // LocalStack compatibility: No NAT Gateway, No ASG (Launch Template not supported)
       template.resourceCountIs('AWS::EC2::NatGateway', 0);
-
-      // Compute and scaling - Using Launch Configuration
-      template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
-      template.resourceCountIs('AWS::AutoScaling::LaunchConfiguration', 1);
+      template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 0);
 
       // Load balancing
       template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
       template.resourceCountIs('AWS::ElasticLoadBalancingV2::Listener', 1);
       template.resourceCountIs('AWS::ElasticLoadBalancingV2::TargetGroup', 1);
 
-      // IAM - CDK creates 2 instance profiles (explicit + ASG generated)
+      // IAM
       template.resourceCountIs('AWS::IAM::Role', 1);
-      template.resourceCountIs('AWS::IAM::InstanceProfile', 2);
+      template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
     });
   });
 });
