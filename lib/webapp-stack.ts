@@ -144,31 +144,51 @@ export class WebAppStack extends cdk.Stack {
       ],
     });
 
-    // Auto Scaling Group without LaunchTemplate for LocalStack compatibility
-    // LocalStack doesn't properly support LaunchTemplate's LatestVersionNumber attribute
-    // Using direct instance configuration instead
-    this.autoScalingGroup = new autoscaling.AutoScalingGroup(
+    // Auto Scaling Group using LaunchConfiguration for LocalStack compatibility
+    // LocalStack doesn't support LaunchTemplate's LatestVersionNumber attribute
+    // Using the older LaunchConfiguration approach which is supported by LocalStack
+    const imageId = ec2.MachineImage.latestAmazonLinux2023().getImage(this)
+      .imageId;
+
+    const launchConfig = new autoscaling.CfnLaunchConfiguration(
       this,
-      'WebServerASG',
+      'WebServerLaunchConfig',
       {
-        vpc: this.vpc,
-        instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.T3,
-          ec2.InstanceSize.MEDIUM
-        ),
-        machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-        userData,
-        role: ec2Role,
-        securityGroup: webServerSecurityGroup,
-        minCapacity: 2,
-        maxCapacity: 6,
-        desiredCapacity: 2,
-        vpcSubnets: {
+        imageId,
+        instanceType: 't3.medium',
+        securityGroups: [webServerSecurityGroup.securityGroupId],
+        userData: cdk.Fn.base64(userData.render()),
+        iamInstanceProfile: new iam.CfnInstanceProfile(
+          this,
+          'WebServerInstanceProfile',
+          {
+            roles: [ec2Role.roleName],
+          }
+        ).ref,
+      }
+    );
+
+    // Create ASG using LaunchConfiguration (not LaunchTemplate)
+    const cfnAsg = new autoscaling.CfnAutoScalingGroup(
+      this,
+      'WebServerCfnASG',
+      {
+        minSize: '2',
+        maxSize: '6',
+        desiredCapacity: '2',
+        launchConfigurationName: launchConfig.ref,
+        vpcZoneIdentifier: this.vpc.selectSubnets({
           subnetType: ec2.SubnetType.PUBLIC,
-        },
-        healthCheck: autoscaling.HealthCheck.elb({
-          grace: cdk.Duration.seconds(60), // Reduced for LocalStack
-        }),
+        }).subnetIds,
+        healthCheckType: 'ELB',
+        healthCheckGracePeriod: 60,
+        tags: [
+          {
+            key: 'Name',
+            value: 'WebServerASG',
+            propagateAtLaunch: true,
+          },
+        ],
       }
     );
 
@@ -182,7 +202,7 @@ export class WebAppStack extends cdk.Stack {
       },
     });
 
-    // Target Group
+    // Target Group (without targets initially)
     const targetGroup = new elbv2.ApplicationTargetGroup(
       this,
       'WebAppTargetGroup',
@@ -190,7 +210,6 @@ export class WebAppStack extends cdk.Stack {
         vpc: this.vpc,
         port: 80,
         protocol: elbv2.ApplicationProtocol.HTTP,
-        targets: [this.autoScalingGroup],
         healthCheck: {
           enabled: true,
           healthyHttpCodes: '200',
@@ -199,6 +218,16 @@ export class WebAppStack extends cdk.Stack {
         },
       }
     );
+
+    // Connect ASG to target group
+    cfnAsg.targetGroupArns = [targetGroup.targetGroupArn];
+
+    // Create a wrapper for compatibility with the rest of the code
+    this.autoScalingGroup = autoscaling.AutoScalingGroup.fromAutoScalingGroupName(
+      this,
+      'WebServerASG',
+      cfnAsg.ref
+    ) as autoscaling.AutoScalingGroup;
 
     // ALB Listener
     this.loadBalancer.addListener('WebAppListener', {
