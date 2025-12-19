@@ -1,0 +1,903 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure-by-Design AWS Infrastructure with stringent security controls and compliance enforcement",
+    "Parameters": {
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for the VPC",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
+        },
+        "DBInstanceClass": {
+            "Type": "String",
+            "Default": "db.t3.micro",
+            "Description": "RDS instance class (e.g., db.t3.micro, db.m6g.large, db.r6g.xlarge)",
+            "AllowedPattern": "^db\\.[a-z0-9]+\\.[a-z0-9]+$",
+            "MinLength": 8,
+            "MaxLength": 20
+        },
+        "DBEngineVersion": {
+            "Type": "String",
+            "Default": "8.0.42",
+            "Description": "MySQL engine version"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix - used for resource naming and tagging",
+            "MinLength": 1,
+            "MaxLength": 64,
+            "AllowedPattern": "^[a-zA-Z0-9-_]+$"
+        }
+    },
+    "Conditions": {
+        "IsNotLocalStack": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "AWS::AccountId"
+                        },
+                        "000000000000"
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "SecureDataKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "Customer-managed KMS key for encrypting S3 and RDS data at rest",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow use of the key for S3 and RDS",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "s3.amazonaws.com",
+                                    "rds.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:ReEncrypt*",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureDataKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${AWS::StackName}-${EnvironmentSuffix}-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "SecureDataKMSKey"
+                }
+            }
+        },
+        "SecureVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-VPC-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": "us-east-1a",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Private-Subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": "us-east-1b",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Private-Subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for secure RDS instance",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-DB-SubnetGroup-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    }
+                ]
+            }
+        },
+        "ConfigServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "ConfigServiceMinimalAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "config:Put*",
+                                        "config:Get*",
+                                        "config:List*",
+                                        "config:Describe*"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": [
+                                            "${BucketArn}/*",
+                                            {
+                                                "BucketArn": {
+                                                    "Fn::GetAtt": [
+                                                        "CentralLoggingBucket",
+                                                        "Arn"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "Condition": {
+                                        "StringLike": {
+                                            "s3:x-amz-acl": "bucket-owner-full-control"
+                                        }
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketAcl"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": [
+                                            "arn:aws:s3:::${bucketName}",
+                                            {
+                                                "bucketName": {
+                                                    "Ref": "CentralLoggingBucket"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    }
+                ]
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "S3BucketName": {
+                    "Ref": "CentralLoggingBucket"
+                }
+            }
+        },
+        "ConfigurationRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigRecorder-${EnvironmentSuffix}"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigServiceRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "VPCDnsSupportConfigRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "Condition": "IsNotLocalStack",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "vpc-dns-support-enabled-${EnvironmentSuffix}"
+                },
+                "Description": "Validates that VPC has enableDnsSupport set to true",
+                "Source": {
+                    "Owner": "CUSTOM_LAMBDA",
+                    "SourceIdentifier": {
+                        "Fn::GetAtt": [
+                            "VPCDnsSupportFunction",
+                            "Arn"
+                        ]
+                    },
+                    "SourceDetails": [
+                        {
+                            "EventSource": "aws.config",
+                            "MessageType": "ConfigurationItemChangeNotification"
+                        }
+                    ]
+                },
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::EC2::VPC"
+                    ]
+                }
+            }
+        },
+        "VPCDnsSupportLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "IsNotLocalStack",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-VPCDnsSupportLambdaRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "VPCDnsSupportConfigAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:DescribeVpcs",
+                                        "config:PutEvaluations"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    }
+                ]
+            }
+        },
+        "VPCDnsSupportFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Condition": "IsNotLocalStack",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-vpc-dns-support-check-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "VPCDnsSupportLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef handler(event, context):\n    logger.info('Event: %s', json.dumps(event))\n    \n    # Initialize AWS clients\n    config = boto3.client('config')\n    ec2 = boto3.client('ec2')\n    \n    # Get the VPC ID from the event\n    vpc_id = event['configurationItem']['configuration']['vpcId']\n    \n    try:\n        # Describe the VPC to get enableDnsSupport setting\n        response = ec2.describe_vpcs(VpcIds=[vpc_id])\n        vpc = response['Vpcs'][0]\n        enable_dns_support = vpc['EnableDnsSupport']\n        \n        # Create evaluation\n        evaluation = {\n            'ComplianceType': 'COMPLIANT' if enable_dns_support else 'NON_COMPLIANT',\n            'OrderingTimestamp': event['notificationCreationTime'],\n            'ResultToken': event.get('resultToken')\n        }\n        \n        # Put evaluation\n        config.put_evaluations(Evaluations=[evaluation])\n        \n        logger.info('VPC %s DNS support: %s', vpc_id, enable_dns_support)\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps('Evaluation completed successfully')\n        }\n        \n    except Exception as e:\n        logger.error('Error evaluating VPC DNS support: %s', str(e))\n        return {\n            'statusCode': 500,\n            'body': json.dumps(f'Error: {str(e)}')\n        }\n"
+                }
+            }
+        },
+        "VPCDnsSupportLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Condition": "IsNotLocalStack",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "VPCDnsSupportFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "config.amazonaws.com",
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                }
+            }
+        },
+        "AppServerRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-AppServerRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "AppServerMinimalAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${SecureDataBucket}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "rds:DescribeDBInstances"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "SecureDataKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    },
+                    {
+                        "Key": "SecurityLevel",
+                        "Value": "Medium"
+                    }
+                ]
+            }
+        },
+        "LowSecurityReadOnlyRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-LowSecurityReadOnlyRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "LowSecurityReadOnlyAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${CentralLoggingBucket}"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${CentralLoggingBucket}/public-logs/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    },
+                    {
+                        "Key": "SecurityLevel",
+                        "Value": "Low"
+                    }
+                ]
+            }
+        },
+        "CentralLoggingBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tapstack-${EnvironmentSuffix}-central-logging-${AWS::AccountId}"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Fn::GetAtt": [
+                                        "SecureDataKMSKey",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "LogRetentionRule",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 2555,
+                            "NoncurrentVersionExpirationInDays": 30
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "CentralLogging"
+                    }
+                ]
+            }
+        },
+        "SecureDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tapstack-${EnvironmentSuffix}-secure-data-${AWS::AccountId}"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Fn::GetAtt": [
+                                        "SecureDataKMSKey",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "SecureDataStorage"
+                    }
+                ]
+            }
+        },
+        "SecureDataBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "SecureDataBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyLowSecurityLevelAccess",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${SecureDataBucket}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${SecureDataBucket}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:PrincipalTag/SecurityLevel": "Low"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowAuthorizedAccess",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": [
+                                        "AppServerRole",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:DeleteObject"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${SecureDataBucket}/*"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "RDSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for secure RDS instance",
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-RDS-SG-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    }
+                ]
+            }
+        },
+        "SecureRDSInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${AWS::StackName}-db-${EnvironmentSuffix}"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceClass"
+                },
+                "Engine": "mysql",
+                "EngineVersion": {
+                    "Ref": "DBEngineVersion"
+                },
+                "MasterUsername": "dbadmin",
+                "MasterUserPassword": "SecureP@ssw0rd123!",
+                "AllocatedStorage": 20,
+                "MaxAllocatedStorage": 100,
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "SecureDataKMSKey",
+                        "Arn"
+                    ]
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "RDSSecurityGroup"
+                    }
+                ],
+                "BackupRetentionPeriod": 30,
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "EnableCloudwatchLogsExports": [
+                    "audit",
+                    "error",
+                    "general",
+                    "slowquery"
+                ],
+                "DeletionProtection": false,
+                "MultiAZ": false,
+                "PubliclyAccessible": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-RDS-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "ID of the secure VPC",
+            "Value": {
+                "Ref": "SecureVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                }
+            }
+        },
+        "KMSKeyArn": {
+            "Description": "ARN of the customer-managed KMS key",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecureDataKMSKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMS-Key-ARN"
+                }
+            }
+        },
+        "CentralLoggingBucketName": {
+            "Description": "Name of the central logging S3 bucket",
+            "Value": {
+                "Ref": "CentralLoggingBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Central-Logging-Bucket"
+                }
+            }
+        },
+        "SecureDataBucketName": {
+            "Description": "Name of the secure data S3 bucket",
+            "Value": {
+                "Ref": "SecureDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Secure-Data-Bucket"
+                }
+            }
+        },
+        "RDSEndpoint": {
+            "Description": "RDS instance endpoint address",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecureRDSInstance",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RDS-Endpoint"
+                }
+            }
+        },
+        "AppServerRoleArn": {
+            "Description": "ARN of the Application Server IAM Role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppServerRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppServer-Role-ARN"
+                }
+            }
+        },
+        "LowSecurityRoleArn": {
+            "Description": "ARN of the Low Security Read-Only IAM Role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LowSecurityReadOnlyRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LowSecurity-Role-ARN"
+                }
+            }
+        },
+        "ConfigRuleName": {
+            "Condition": "IsNotLocalStack",
+            "Description": "Name of the AWS Config rule validating VPC DNS support",
+            "Value": {
+                "Ref": "VPCDnsSupportConfigRule"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Config-Rule-Name"
+                }
+            }
+        }
+    }
+}

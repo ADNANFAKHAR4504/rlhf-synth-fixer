@@ -1,0 +1,23 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291822",
+  "team": "synth-2",
+  "startedAt": "2025-08-05T05:06:26.628Z",
+  "subtask": "Secure Infrastructure",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security and Compliance Infrastructure"
+  ],
+  "aws_services": [
+    "VPC",
+    "KMS",
+    "S3",
+    "RDS",
+    "IAM",
+    "Lambda",
+    "AWS Config"
+  ]
+}
