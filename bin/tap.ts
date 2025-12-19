@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { Tags, DefaultStackSynthesizer } from 'aws-cdk-lib';
+import { Tags, DefaultStackSynthesizer, BootstraplessSynthesizer } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
@@ -21,8 +21,8 @@ Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
-// For LocalStack: Use custom synthesizer that ONLY uses S3 (no ECR)
-// This allows Lambda assets while avoiding ECR Pro requirement
+// For LocalStack: Use BootstraplessSynthesizer to avoid ECR requirement
+// This embeds assets inline without needing bootstrap stack or ECR
 if (isLocalStack) {
   new TapStack(app, stackName, {
     stackName: stackName,
@@ -31,13 +31,10 @@ if (isLocalStack) {
       account: process.env.CDK_DEFAULT_ACCOUNT || '000000000000',
       region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
     },
-    synthesizer: new DefaultStackSynthesizer({
-      qualifier: 'localstack',
-      fileAssetsBucketName: 'cdk-localstack-assets-${AWS::AccountId}-${AWS::Region}',
-      bucketPrefix: '',
-      // Disable Docker/ECR assets (Pro-only in LocalStack)
-      dockerTagPrefix: '',
-      generateBootstrapVersionRule: false,
+    synthesizer: new BootstraplessSynthesizer({
+      // CloudFormation execution role (LocalStack doesn't enforce this strictly)
+      cloudFormationExecutionRoleArn: 'arn:aws:iam::000000000000:role/LocalStackExecutionRole',
+      deployRoleArn: 'arn:aws:iam::000000000000:role/LocalStackDeployRole',
     }),
   });
 } else {

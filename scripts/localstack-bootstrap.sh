@@ -61,16 +61,33 @@ aws s3api put-bucket-versioning \
     --bucket "${BUCKET_NAME}" \
     --versioning-configuration Status=Enabled 2>/dev/null || echo "Versioning skipped"
 
-# Create SSM parameter for bootstrap version (CDK expects this)
-echo -e "${YELLOW}📝 Creating bootstrap version parameter...${NC}"
-aws ssm put-parameter \
-    --name "/cdk-bootstrap/localstack/version" \
-    --value "22" \
-    --type "String" \
-    --overwrite 2>/dev/null && echo -e "${GREEN}✅ Bootstrap version parameter created${NC}" || echo "Parameter creation skipped"
+# Create IAM roles (LocalStack is lenient but CDK expects them)
+echo -e "${YELLOW}🔐 Creating IAM roles...${NC}"
+
+# Create LocalStack execution role
+aws iam create-role \
+    --role-name LocalStackExecutionRole \
+    --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"cloudformation.amazonaws.com"},"Action":"sts:AssumeRole"}]}' \
+    2>/dev/null && echo -e "${GREEN}✅ Created LocalStackExecutionRole${NC}" || echo "   Role already exists or creation skipped"
+
+aws iam attach-role-policy \
+    --role-name LocalStackExecutionRole \
+    --policy-arn arn:aws:iam::aws:policy/AdministratorAccess \
+    2>/dev/null || true
+
+# Create LocalStack deploy role
+aws iam create-role \
+    --role-name LocalStackDeployRole \
+    --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"cloudformation.amazonaws.com"},"Action":"sts:AssumeRole"}]}' \
+    2>/dev/null && echo -e "${GREEN}✅ Created LocalStackDeployRole${NC}" || echo "   Role already exists or creation skipped"
+
+aws iam attach-role-policy \
+    --role-name LocalStackDeployRole \
+    --policy-arn arn:aws:iam::aws:policy/AdministratorAccess \
+    2>/dev/null || true
 
 echo ""
 echo -e "${GREEN}✅ Bootstrap complete!${NC}"
 echo -e "${GREEN}   Assets bucket: s3://${BUCKET_NAME}${NC}"
-echo -e "${GREEN}   Bootstrap version: 22${NC}"
+echo -e "${GREEN}   IAM roles: LocalStackExecutionRole, LocalStackDeployRole${NC}"
 echo ""
