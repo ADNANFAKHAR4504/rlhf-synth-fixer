@@ -21,7 +21,7 @@ const account = process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID ||
 const region = process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-1';
 
 // Create the primary stack in the primary region
-const primaryStack = new SecurityConfigStack(app, `TapStack-${environmentSuffix}`, {
+const primaryStack = new SecurityConfigStack(app, `TapStack${environmentSuffix}`, {
   environmentSuffix,
   isPrimaryRegion: true,
   env: {
