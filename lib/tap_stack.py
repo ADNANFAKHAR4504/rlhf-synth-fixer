@@ -390,11 +390,12 @@ class TapStack(cdk.Stack):
             value=bastion_host.instance_id,
             description="Bastion Host Instance ID"
         )
-        CfnOutput(
-            self, "DatabaseEndpoint",
-            value=database.instance_endpoint.hostname,
-            description="RDS Database Endpoint"
-        )
+        if database is not None:
+            CfnOutput(
+                self, "DatabaseEndpoint",
+                value=database.instance_endpoint.hostname,
+                description="RDS Database Endpoint"
+            )
         CfnOutput(
             self, "AppDataBucketName",
             value=app_data_bucket.bucket_name,
