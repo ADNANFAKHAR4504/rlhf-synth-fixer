@@ -6,13 +6,9 @@
   "po_id": "291741",
   "team": "synth-2",
   "startedAt": "2025-08-14T09:39:28.698Z",
-  "subtask": "General Infrastructure Provisioning",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Network Configuration",
-    "Security Configuration",
-    "Resource Scaling",
-    "Monitoring Setup"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "EC2",
