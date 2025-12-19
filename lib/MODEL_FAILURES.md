@@ -32,9 +32,9 @@
 If AWS credentials were available, the following deployment steps would be executed:
 
 1. **Pre-deployment Validation**
-   - ✅ CloudFormation template syntax validation
-   - ✅ Parameter validation for S3 bucket and CloudWatch log group names
-   - ✅ IAM policy validation for least privilege access
+   - CloudFormation template syntax validation
+   - Parameter validation for S3 bucket and CloudWatch log group names
+   - IAM policy validation for least privilege access
 
 2. **Deployment Parameters Required**
    - `S3BucketName`: Name of existing S3 bucket (must exist before deployment)
