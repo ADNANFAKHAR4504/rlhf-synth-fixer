@@ -49,15 +49,15 @@ describe('Secure Baseline CloudFormation Template', () => {
         'OwnerTag',
         'LogRetentionDays',
         'BucketNameSuffix',
-        'EnvironmentSuffix',
+        'Environment',
       ];
       expectedParams.forEach((param: string) => {
         expect(template.Parameters[param]).toBeDefined();
       });
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
+    test('Environment parameter should have correct properties', () => {
+      const envSuffixParam = template.Parameters.Environment;
       expect(envSuffixParam.Type).toBe('String');
       expect(envSuffixParam.Default).toBe('dev');
       expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
@@ -95,10 +95,10 @@ describe('Secure Baseline CloudFormation Template', () => {
       const s3Alias = template.Resources.S3KmsKeyAlias;
 
       expect(logsAlias.Properties.AliasName['Fn::Sub']).toBe(
-        'alias/${ResourcePrefix}-logs-${EnvironmentSuffix}'
+        'alias/${ResourcePrefix}-logs-${Environment}'
       );
       expect(s3Alias.Properties.AliasName['Fn::Sub']).toBe(
-        'alias/${ResourcePrefix}-s3-${EnvironmentSuffix}'
+        'alias/${ResourcePrefix}-s3-${Environment}'
       );
     });
   });
@@ -108,7 +108,7 @@ describe('Secure Baseline CloudFormation Template', () => {
       const logGroup = template.Resources.CentralLogGroup;
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
       expect(logGroup.Properties.LogGroupName['Fn::Sub']).toBe(
-        '/${ResourcePrefix}/central-${EnvironmentSuffix}'
+        '/${ResourcePrefix}/central-${Environment}'
       );
       expect(logGroup.Properties.KmsKeyId['Fn::GetAtt']).toEqual(['LogsKmsKey', 'Arn']);
       expect(logGroup.Properties.RetentionInDays.Ref).toBe('LogRetentionDays');
@@ -120,7 +120,7 @@ describe('Secure Baseline CloudFormation Template', () => {
       const bucket = template.Resources.SecureBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.Properties.BucketName['Fn::Sub']).toBe(
-        'prod-${BucketNameSuffix}-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+        'prod-${BucketNameSuffix}-${Environment}-${AWS::AccountId}-${AWS::Region}'
       );
 
       const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
@@ -165,7 +165,7 @@ describe('Secure Baseline CloudFormation Template', () => {
       const role = template.Resources.CentralLogsWriterRole;
       expect(role.Type).toBe('AWS::IAM::Role');
       expect(role.Properties.RoleName['Fn::Sub']).toBe(
-        '${ResourcePrefix}-CentralLogsWriter-${EnvironmentSuffix}'
+        '${ResourcePrefix}-CentralLogsWriter-${Environment}'
       );
 
       const policy = role.Properties.Policies[0];
@@ -188,7 +188,7 @@ describe('Secure Baseline CloudFormation Template', () => {
       const policy = template.Resources.MFAEnforcementPolicy;
       expect(policy.Type).toBe('AWS::IAM::ManagedPolicy');
       expect(policy.Properties.ManagedPolicyName['Fn::Sub']).toBe(
-        '${ResourcePrefix}-DenyWithoutMFA-${EnvironmentSuffix}'
+        '${ResourcePrefix}-DenyWithoutMFA-${Environment}'
       );
 
       const statements: any[] = policy.Properties.PolicyDocument.Statement as any[];
@@ -210,7 +210,7 @@ describe('Secure Baseline CloudFormation Template', () => {
       const group = template.Resources.MFARequiredGroup;
       expect(group.Type).toBe('AWS::IAM::Group');
       expect(group.Properties.GroupName['Fn::Sub']).toBe(
-        '${ResourcePrefix}-MFA-Required-${EnvironmentSuffix}'
+        '${ResourcePrefix}-MFA-Required-${Environment}'
       );
       expect(group.Properties.ManagedPolicyArns).toContainEqual({ Ref: 'MFAEnforcementPolicy' });
     });
@@ -308,7 +308,7 @@ describe('Secure Baseline CloudFormation Template', () => {
           resource.Properties.GroupName;
 
         if (nameProperty && nameProperty['Fn::Sub']) {
-          expect(nameProperty['Fn::Sub']).toContain('${EnvironmentSuffix}');
+          expect(nameProperty['Fn::Sub']).toContain('${Environment}');
         }
       });
     });

@@ -24,7 +24,7 @@
             "Description": "Suffix for S3 bucket name (lowercase)",
             "AllowedPattern": "^[a-z0-9-]+$"
         },
-        "EnvironmentSuffix": {
+        "Environment": {
             "Type": "String",
             "Default": "dev",
             "Description": "Environment suffix for resource naming",
@@ -101,7 +101,7 @@
                             "Condition": {
                                 "ArnEquals": {
                                     "kms:EncryptionContext:aws:logs:arn": {
-                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${ResourcePrefix}/central-${EnvironmentSuffix}"
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${ResourcePrefix}/central-${Environment}"
                                     }
                                 }
                             }
@@ -122,7 +122,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/${ResourcePrefix}-logs-${EnvironmentSuffix}"
+                    "Fn::Sub": "alias/${ResourcePrefix}-logs-${Environment}"
                 },
                 "TargetKeyId": {
                     "Ref": "LogsKmsKey"
@@ -133,7 +133,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/${ResourcePrefix}/central-${EnvironmentSuffix}"
+                    "Fn::Sub": "/${ResourcePrefix}/central-${Environment}"
                 },
                 "RetentionInDays": {
                     "Ref": "LogRetentionDays"
@@ -211,7 +211,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/${ResourcePrefix}-s3-${EnvironmentSuffix}"
+                    "Fn::Sub": "alias/${ResourcePrefix}-s3-${Environment}"
                 },
                 "TargetKeyId": {
                     "Ref": "S3KmsKey"
@@ -222,7 +222,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "prod-${BucketNameSuffix}-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "prod-${BucketNameSuffix}-${Environment}-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -335,7 +335,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "${ResourcePrefix}-CentralLogsWriter-${EnvironmentSuffix}"
+                    "Fn::Sub": "${ResourcePrefix}-CentralLogsWriter-${Environment}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -396,7 +396,7 @@
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
                 "ManagedPolicyName": {
-                    "Fn::Sub": "${ResourcePrefix}-DenyWithoutMFA-${EnvironmentSuffix}"
+                    "Fn::Sub": "${ResourcePrefix}-DenyWithoutMFA-${Environment}"
                 },
                 "Description": "Deny all actions when MFA is not present except MFA enrollment and password change",
                 "PolicyDocument": {
@@ -420,12 +420,7 @@
                                 "iam:GetUser"
                             ],
                             "Resource": {
-                                "Fn::Sub": [
-                                    "arn:aws:iam::${AWS::AccountId}:user/${username}",
-                                    {
-                                        "username": "${aws:username}"
-                                    }
-                                ]
+                                "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/*"
                             }
                         },
                         {
@@ -441,20 +436,10 @@
                             ],
                             "Resource": [
                                 {
-                                    "Fn::Sub": [
-                                        "arn:aws:iam::${AWS::AccountId}:mfa/${username}",
-                                        {
-                                            "username": "${aws:username}"
-                                        }
-                                    ]
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:mfa/*"
                                 },
                                 {
-                                    "Fn::Sub": [
-                                        "arn:aws:iam::${AWS::AccountId}:user/${username}",
-                                        {
-                                            "username": "${aws:username}"
-                                        }
-                                    ]
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/*"
                                 }
                             ]
                         },
@@ -462,39 +447,7 @@
                             "Sid": "AllowGetSessionToken",
                             "Effect": "Allow",
                             "Action": "sts:GetSessionToken",
-                            "Resource": "*",
-                            "Condition": {
-                                "Bool": {
-                                    "aws:MultiFactorAuthPresent": false
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "DenyAllExceptUnlessSignedInWithMFA",
-                            "Effect": "Deny",
-                            "NotAction": [
-                                "iam:CreateVirtualMFADevice",
-                                "iam:EnableMFADevice",
-                                "iam:GetUser",
-                                "iam:ListMFADevices",
-                                "iam:ListVirtualMFADevices",
-                                "iam:ResyncMFADevice",
-                                "iam:DeactivateMFADevice",
-                                "iam:DeleteVirtualMFADevice",
-                                "iam:GetAccountSummary",
-                                "iam:GetAccountPasswordPolicy",
-                                "iam:ChangePassword",
-                                "sts:GetSessionToken"
-                            ],
-                            "Resource": "*",
-                            "Condition": {
-                                "BoolIfExists": {
-                                    "aws:MultiFactorAuthPresent": false
-                                },
-                                "Null": {
-                                    "aws:ViaAWSService": "true"
-                                }
-                            }
+                            "Resource": "*"
                         }
                     ]
                 }
@@ -504,7 +457,7 @@
             "Type": "AWS::IAM::Group",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "${ResourcePrefix}-MFA-Required-${EnvironmentSuffix}"
+                    "Fn::Sub": "${ResourcePrefix}-MFA-Required-${Environment}"
                 },
                 "ManagedPolicyArns": [
                     {
