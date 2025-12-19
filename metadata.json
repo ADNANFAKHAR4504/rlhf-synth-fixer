@@ -6,10 +6,9 @@
   "po_id": "trainr60",
   "team": "synth-2",
   "startedAt": "2025-08-11T12:29:48-05:00",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "Cloud Environment Setup",
     "Web Application Deployment"
   ],
   "aws_services": [
