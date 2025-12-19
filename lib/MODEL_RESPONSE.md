@@ -338,7 +338,7 @@ Outputs:
 
 ## Template Features and Compliance
 
-### ✅ **Requirements Compliance:**
+### Requirements Compliance:
 
 1. **Region**: Template is designed for `us-east-1` region (hardcoded in Lambda permissions and environment variables)
 
@@ -367,7 +367,7 @@ Outputs:
    - Production-ready with proper tagging
    - Parameterized for flexibility
 
-### 🔧 **Key Components:**
+### Key Components:
 
 - **Lambda Function**: Python 3.9 runtime with comprehensive error handling
 - **API Gateway**: Regional endpoint with proper CORS headers
@@ -375,7 +375,7 @@ Outputs:
 - **CloudWatch**: Log groups with 14-day retention
 - **Outputs**: All important resource identifiers for reference
 
-### 🚀 **Deployment Instructions:**
+### Deployment Instructions:
 
 1. Save the template as `serverless-api.yaml`
 2. Deploy using AWS CLI:
