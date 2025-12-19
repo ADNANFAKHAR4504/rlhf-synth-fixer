@@ -944,7 +944,7 @@ class CloudWatchLogsAnalyzer:
             lg["optimization"]["estimated_savings"] for lg in sorted_logs
         )
 
-        print(f"📊 SUMMARY:")
+        print(f"SUMMARY:")
         print(f"   Total Log Groups Analyzed: {len(sorted_logs)}")
         print(f"   Total Monthly Cost: ${total_cost:,.2f}")
         print(f"   Potential Monthly Savings: ${total_savings:,.2f}")
@@ -979,7 +979,7 @@ class CloudWatchLogsAnalyzer:
                     ]
                 )
 
-            print("💰 TOP 10 MOST EXPENSIVE LOG GROUPS:")
+            print("TOP 10 MOST EXPENSIVE LOG GROUPS:")
             print(
                 tabulate(
                     table_data,
@@ -997,7 +997,7 @@ class CloudWatchLogsAnalyzer:
             )
 
         # Issues summary table - now showing specific log groups with issues
-        print("\n🔍 ISSUES SUMMARY:")
+        print("\nISSUES SUMMARY:")
         issue_counts = defaultdict(int)
         severity_counts = defaultdict(int)
         total_potential_savings = 0
@@ -1021,7 +1021,7 @@ class CloudWatchLogsAnalyzer:
             for issue_type, count in sorted(
                 issue_counts.items(), key=lambda x: x[1], reverse=True
             ):
-                print(f"\n📌 {issue_type.replace('_', ' ').title()} ({count} log groups affected):")
+                print(f"\n{issue_type.replace('_', ' ').title()} ({count} log groups affected):")
                 issue_table = []
                 for detail in issue_details[issue_type][:10]:  # Show top 10
                     log_group_short = (
@@ -1048,12 +1048,12 @@ class CloudWatchLogsAnalyzer:
                     print(f"   ... and {len(issue_details[issue_type]) - 10} more log groups")
 
             print(
-                f"\n💡 Total Potential Savings from All Issues: ${total_potential_savings:,.2f}"
+                f"\nTotal Potential Savings from All Issues: ${total_potential_savings:,.2f}"
             )
 
         # Monitoring gaps table
         if self.monitoring_gaps:
-            print(f"\n🚨 MONITORING GAPS ({len(self.monitoring_gaps)} issues):")
+            print(f"\nMONITORING GAPS ({len(self.monitoring_gaps)} issues):")
             gaps_table = []
             for gap in self.monitoring_gaps[:10]:
                 gaps_table.append(
