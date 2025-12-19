@@ -7,6 +7,7 @@ manages environment-specific configurations.
 
 from typing import Optional
 import textwrap
+import os
 
 import aws_cdk as cdk
 from aws_cdk import (
@@ -160,7 +161,9 @@ class TapStack(cdk.Stack):
             environment={
                 "DATABASE_URL_PARAM": self.database_url_param.parameter_name,
                 "API_KEY_PARAM": self.api_key_param.parameter_name,
-                "SECRET_TOKEN_PARAM": self.secret_token_param.parameter_name
+                "SECRET_TOKEN_PARAM": self.secret_token_param.parameter_name,
+                # Pass AWS_ENDPOINT_URL to Lambda for LocalStack SSM access
+                "AWS_ENDPOINT_URL": os.environ.get("AWS_ENDPOINT_URL", "")
             },
 
             # Link to the log group
