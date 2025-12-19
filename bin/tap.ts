@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { Tags, DefaultStackSynthesizer, BootstraplessSynthesizer } from 'aws-cdk-lib';
+import { Tags, DefaultStackSynthesizer } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
@@ -21,8 +21,8 @@ Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
-// For LocalStack: Use BootstraplessSynthesizer to avoid ECR requirement
-// This embeds assets inline without needing bootstrap stack or ECR
+// For LocalStack: Use DefaultStackSynthesizer with custom config
+// Avoids ECR repository creation (Pro-only) while supporting Lambda ZIP assets
 if (isLocalStack) {
   new TapStack(app, stackName, {
     stackName: stackName,
@@ -31,10 +31,16 @@ if (isLocalStack) {
       account: process.env.CDK_DEFAULT_ACCOUNT || '000000000000',
       region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
     },
-    synthesizer: new BootstraplessSynthesizer({
-      // CloudFormation execution role (LocalStack doesn't enforce this strictly)
-      cloudFormationExecutionRoleArn: 'arn:aws:iam::000000000000:role/LocalStackExecutionRole',
-      deployRoleArn: 'arn:aws:iam::000000000000:role/LocalStackDeployRole',
+    synthesizer: new DefaultStackSynthesizer({
+      // Use custom qualifier to avoid conflicts
+      qualifier: 'hnb659fds', // Use default qualifier for compatibility
+      // S3 bucket for file assets (Lambda ZIP files)
+      fileAssetsBucketName: 'cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}',
+      bucketPrefix: '',
+      // CRITICAL: Disable image assets completely (no ECR)
+      imageAssetsRepositoryName: '', // Empty string = no ECR repository
+      // Disable bootstrap version check (no SSM parameter needed)
+      generateBootstrapVersionRule: false,
     }),
   });
 } else {

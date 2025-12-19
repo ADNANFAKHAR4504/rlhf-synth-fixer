@@ -18,7 +18,7 @@ echo ""
 # Configuration
 ACCOUNT_ID="${CDK_DEFAULT_ACCOUNT:-000000000000}"
 REGION="${AWS_DEFAULT_REGION:-us-east-1}"
-BUCKET_NAME="cdk-localstack-assets-${ACCOUNT_ID}-${REGION}"
+BUCKET_NAME="cdk-hnb659fds-assets-${ACCOUNT_ID}-${REGION}"
 
 echo -e "${YELLOW}📋 Configuration:${NC}"
 echo "   Account: $ACCOUNT_ID"
