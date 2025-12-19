@@ -8,8 +8,8 @@ import * as path from 'path';
 const region = process.env.AWS_REGION || 'us-east-1';
 // Use 'dev' as default to match deployed resources, or allow override from environment
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-// Stack name should match actual CloudFormation stack name (tap-stack-Pr566)
-const stackName = process.env.STACK_NAME || 'tap-stack-Pr566';
+// Stack name should match actual CloudFormation stack name from bin/tap.ts
+const stackName = process.env.STACK_NAME || `TapStack${environmentSuffix}`;
 
 // Read outputs from deployment
 const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
