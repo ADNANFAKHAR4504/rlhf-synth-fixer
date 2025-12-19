@@ -234,15 +234,19 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create user pool client for API authentication
-    new cognito.UserPoolClient(this, 'ApiUserPoolClient', {
-      userPool,
-      userPoolClientName: `${props.environment}-api-client`,
-      generateSecret: false,
-      authFlows: {
-        userPassword: true,
-        userSrp: true,
-      },
-    });
+    const userPoolClient = new cognito.UserPoolClient(
+      this,
+      'ApiUserPoolClient',
+      {
+        userPool,
+        userPoolClientName: `${props.environment}-api-client`,
+        generateSecret: false,
+        authFlows: {
+          userPassword: true,
+          userSrp: true,
+        },
+      }
+    );
 
     // API Gateway with security features
     new logs.LogGroup(this, 'ApiGatewayLogGroup', {
@@ -547,6 +551,37 @@ export class TapStack extends cdk.Stack {
     // Apply tags to all resources
     Object.entries(commonTags).forEach(([key, value]) => {
       cdk.Tags.of(this).add(key, value);
+    });
+
+    // CloudFormation Outputs
+    new cdk.CfnOutput(this, 'ApiEndpoint', {
+      value: this.apiGateway.url,
+      description: 'API Gateway endpoint URL',
+      exportName: `${id}-ApiEndpoint`,
+    });
+
+    new cdk.CfnOutput(this, 'BucketName', {
+      value: this.s3Bucket.bucketName,
+      description: 'S3 bucket name',
+      exportName: `${id}-BucketName`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionArn', {
+      value: this.lambdaFunction.functionArn,
+      description: 'Lambda function ARN',
+      exportName: `${id}-LambdaFunctionArn`,
+    });
+
+    new cdk.CfnOutput(this, 'UserPoolId', {
+      value: userPool.userPoolId,
+      description: 'Cognito User Pool ID',
+      exportName: `${id}-UserPoolId`,
+    });
+
+    new cdk.CfnOutput(this, 'UserPoolClientId', {
+      value: userPoolClient.userPoolClientId,
+      description: 'Cognito User Pool Client ID',
+      exportName: `${id}-UserPoolClientId`,
     });
   }
 }
