@@ -33,6 +33,20 @@
             "Default": "whitelisteduser"
         }
     },
+    "Conditions": {
+        "NotLocalStack": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "AWS::AccountId"
+                        },
+                        "000000000000"
+                    ]
+                }
+            ]
+        }
+    },
     "Resources": {
         "VPC": {
             "Type": "AWS::EC2::VPC",
@@ -670,8 +684,20 @@
                     ]
                 },
                 "AllocatedStorage": 20,
-                "StorageEncrypted": true,
-                "MultiAZ": true,
+                "StorageEncrypted": {
+                    "Fn::If": [
+                        "NotLocalStack",
+                        true,
+                        false
+                    ]
+                },
+                "MultiAZ": {
+                    "Fn::If": [
+                        "NotLocalStack",
+                        true,
+                        false
+                    ]
+                },
                 "BackupRetentionPeriod": 7,
                 "DeletionProtection": false,
                 "MonitoringInterval": 60,
@@ -1065,6 +1091,7 @@
         },
         "CloudFrontOAI": {
             "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+            "Condition": "NotLocalStack",
             "Properties": {
                 "CloudFrontOriginAccessIdentityConfig": {
                     "Comment": "Restrict S3 access"
@@ -1073,6 +1100,7 @@
         },
         "CloudFrontDistribution": {
             "Type": "AWS::CloudFront::Distribution",
+            "Condition": "NotLocalStack",
             "Properties": {
                 "DistributionConfig": {
                     "Origins": [
