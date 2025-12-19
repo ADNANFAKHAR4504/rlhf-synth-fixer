@@ -4,7 +4,7 @@
 
 The MODEL_RESPONSE initially deployed to multiple regions, but the PROMPT requirements do not specify multi-region deployment. This added unnecessary complexity and cost.
 
-Simplified to single-region deployment as per actual requirements, with region configurable via CDK_DEFAULT_REGION environment variable.
+Simplified to single-region deployment as per actual requirements, with region configurable via CDK_DEFAULT_REGION environment variable
 
 ### Incorrect CloudWatch Actions Import
 
