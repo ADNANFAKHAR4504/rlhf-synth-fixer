@@ -11,7 +11,7 @@ Validate that `lib/PROMPT.md` meets quality standards for AWS infrastructure tra
 **MANDATORY**: Execute the prompt quality validation script:
 
 ```bash
-bash ./scripts/claude-validate-prompt-quality.sh
+bash .claude/scripts/claude-validate-prompt-quality.sh
 ```
 
 **Check the exit code:**
