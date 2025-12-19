@@ -57,7 +57,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: 'us-east-1a'
       CidrBlock: '10.0.1.0/24'
       MapPublicIpOnLaunch: true
       Tags:
@@ -69,7 +69,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: 'us-east-1b'
       CidrBlock: '10.0.2.0/24'
       MapPublicIpOnLaunch: true
       Tags:
@@ -185,9 +185,8 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
+      ImageId: 'ami-0c55b159cbfafe1f0'
       InstanceType: t2.micro
-      KeyName: my-key
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
         - !Ref WebServerSecurityGroup
