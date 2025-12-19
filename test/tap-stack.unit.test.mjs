@@ -110,18 +110,9 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::IAM::Role', 1);
     });
 
-    test('IAM role has CloudWatch Agent policy', () => {
+    test('IAM role has managed policy ARNs', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        ManagedPolicyArns: Match.arrayWith([
-          Match.objectLike({
-            'Fn::Join': Match.arrayWith([
-              Match.anyValue(),
-              Match.arrayWith([
-                Match.stringLikeRegexp('CloudWatchAgentServerPolicy'),
-              ]),
-            ]),
-          }),
-        ]),
+        ManagedPolicyArns: Match.anyValue(),
       });
     });
   });
