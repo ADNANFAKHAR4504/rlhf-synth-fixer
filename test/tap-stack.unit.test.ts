@@ -1350,19 +1350,39 @@ describe('ScalableWebAppInfrastructure Unit Tests', () => {
 
   describe('Resource Dependencies', () => {
     it('should create resources in correct order', () => {
-      infrastructure = new ScalableWebAppInfrastructure('test-infra', {
+      // Check if running in LocalStack environment
+      const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || 
+                           process.env.AWS_ENDPOINT_URL?.includes('localstack');
+      
+      const { ec2 } = require('@pulumi/aws');
+      (ec2.FlowLog as jest.Mock).mockClear();
+      
+      // Create infrastructure instance
+      const testInfra = new ScalableWebAppInfrastructure('test-infra-flowlog', {
         environmentSuffix: 'test'
       });
       
-      // VPC Flow Logs should be created with proper dependencies
-      const { ec2 } = require('@pulumi/aws');
-      expect(ec2.FlowLog).toHaveBeenCalledWith(
-        'vpc-flow-logs-test',
-        expect.any(Object),
-        expect.objectContaining({
-          dependsOn: expect.any(Array)
-        })
-      );
+      if (isLocalStack) {
+        // When running on LocalStack, FlowLog should NOT be created
+        expect(ec2.FlowLog).not.toHaveBeenCalled();
+      } else {
+        // When running on real AWS, FlowLog should be created with proper dependencies
+        expect(ec2.FlowLog).toHaveBeenCalled();
+        expect(ec2.FlowLog).toHaveBeenCalledWith(
+          'vpc-flow-logs-test',
+          expect.objectContaining({
+            iamRoleArn: expect.anything(),
+            logDestination: expect.anything(),
+            logDestinationType: 'cloud-watch-logs',
+            vpcId: expect.anything(),
+            trafficType: 'ALL',
+            maxAggregationInterval: 60,
+          }),
+          expect.objectContaining({
+            dependsOn: expect.any(Array)
+          })
+        );
+      }
     });
   });
 
