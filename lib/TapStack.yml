@@ -1,0 +1,536 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Email Notification System with SNS, SES, Lambda, DynamoDB, and CloudWatch"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - EnvironmentSuffix
+          - VerifiedDomain
+          - SesFromAddress
+          - EnableProductionSES
+          - TestEmailAddress
+          - AlarmEmail
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: "dev"
+    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
+
+  VerifiedDomain:
+    Type: String
+    Description: "Verified SES domain (e.g., example.com)"
+    Default: "example.com"
+
+  SesFromAddress:
+    Type: String
+    Description: "From email address for sending emails"
+    Default: "no-reply@example.com"
+
+  EnableProductionSES:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable production SES sending (false routes to test address)"
+
+  TestEmailAddress:
+    Type: String
+    Default: "test@example.com"
+    Description: "Test email address for sandbox mode"
+
+  AlarmEmail:
+    Type: String
+    Description: "Email address for CloudWatch alarm notifications"
+    Default: "ops@example.com"
+
+Resources:
+  # ========== SNS Topics ==========
+  SNSTopicOrderConfirmations:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${EnvironmentSuffix}-order-confirmations"
+      DisplayName: "Order Confirmation Events"
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+        - Key: "Environment"
+          Value: !Ref EnvironmentSuffix
+        - Key: "Service"
+          Value: "email-notifications"
+
+  SNSTopicSesDelivery:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${EnvironmentSuffix}-ses-delivery-notifications"
+      DisplayName: "SES Delivery Notifications"
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+        - Key: "Environment"
+          Value: !Ref EnvironmentSuffix
+
+  SNSTopicSesBounce:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${EnvironmentSuffix}-ses-bounce-notifications"
+      DisplayName: "SES Bounce Notifications"
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+        - Key: "Environment"
+          Value: !Ref EnvironmentSuffix
+
+  SNSTopicSesComplaint:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${EnvironmentSuffix}-ses-complaint-notifications"
+      DisplayName: "SES Complaint Notifications"
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+        - Key: "Environment"
+          Value: !Ref EnvironmentSuffix
+
+  # ========== DynamoDB Tables ==========
+  EmailDeliveriesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub "${EnvironmentSuffix}-email-deliveries"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: "orderId"
+          AttributeType: "S"
+        - AttributeName: "messageId"
+          AttributeType: "S"
+        - AttributeName: "to"
+          AttributeType: "S"
+        - AttributeName: "status"
+          AttributeType: "S"
+        - AttributeName: "timestamp"
+          AttributeType: "N"
+      KeySchema:
+        - AttributeName: "orderId"
+          KeyType: "HASH"
+        - AttributeName: "messageId"
+          KeyType: "RANGE"
+      GlobalSecondaryIndexes:
+        - IndexName: "EmailIndex"
+          KeySchema:
+            - AttributeName: "to"
+              KeyType: "HASH"
+            - AttributeName: "timestamp"
+              KeyType: "RANGE"
+          Projection:
+            ProjectionType: "ALL"
+        - IndexName: "StatusIndex"
+          KeySchema:
+            - AttributeName: "status"
+              KeyType: "HASH"
+            - AttributeName: "timestamp"
+              KeyType: "RANGE"
+          Projection:
+            ProjectionType: "ALL"
+      TimeToLiveSpecification:
+        AttributeName: "ttl"
+        Enabled: true
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+        - Key: "Environment"
+          Value: !Ref EnvironmentSuffix
+        - Key: "Service"
+          Value: "email-notifications"
+
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub "TurnAroundPromptTable${EnvironmentSuffix}"
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+        - Key: "Environment"
+          Value: !Ref EnvironmentSuffix
+
+  # ========== Lambda Execution Roles ==========
+  LambdaSendOrderEmailRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentSuffix}-lambda-send-order-email-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: "SendOrderEmailPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ses:SendEmail"
+                  - "ses:SendRawEmail"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "dynamodb:PutItem"
+                  - "dynamodb:GetItem"
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:Query"
+                Resource:
+                  - !GetAtt EmailDeliveriesTable.Arn
+                  - !Sub "${EmailDeliveriesTable.Arn}/index/*"
+              - Effect: Allow
+                Action:
+                  - "cloudwatch:PutMetricData"
+                Resource: "*"
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+  LambdaSesFeedbackProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentSuffix}-lambda-ses-feedback-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: "SesFeedbackProcessorPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:Query"
+                Resource:
+                  - !GetAtt EmailDeliveriesTable.Arn
+                  - !Sub "${EmailDeliveriesTable.Arn}/index/*"
+              - Effect: Allow
+                Action:
+                  - "cloudwatch:PutMetricData"
+                Resource: "*"
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+  LambdaCostMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentSuffix}-lambda-cost-monitoring-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: "CostMonitoringPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "cloudwatch:GetMetricStatistics"
+                  - "cloudwatch:PutMetricData"
+                  - "logs:DescribeLogGroups"
+                  - "logs:DescribeLogStreams"
+                  - "logs:GetLogEvents"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource: !Ref SNSTopicOrderConfirmations
+              - Effect: Allow
+                Action:
+                  - "dynamodb:PutItem"
+                  - "dynamodb:Query"
+                  - "dynamodb:Scan"
+                Resource:
+                  - !GetAtt EmailDeliveriesTable.Arn
+                  - !Sub "${EmailDeliveriesTable.Arn}/index/*"
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+  # ========== Lambda Functions ==========
+  LambdaSendOrderEmail:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${EnvironmentSuffix}-send-order-email"
+      Runtime: "python3.12"
+      Handler: "index.lambda_handler"
+      Role: !GetAtt LambdaSendOrderEmailRole.Arn
+      Timeout: 30
+
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref EnvironmentSuffix
+          VERIFIED_DOMAIN: !Ref VerifiedDomain
+          SES_FROM_ADDRESS: !Ref SesFromAddress
+          ENABLE_PRODUCTION_SES: !Ref EnableProductionSES
+          TEST_EMAIL_ADDRESS: !Ref TestEmailAddress
+          EMAIL_DELIVERIES_TABLE: !Ref EmailDeliveriesTable
+      Code:
+        ZipFile: |
+          # Lambda function code is in external file: lambda/send_order_email.py
+          # This is a placeholder - the actual code should be deployed separately
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': 'Lambda function placeholder - deploy actual code separately'}
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+        - Key: "Environment"
+          Value: !Ref EnvironmentSuffix
+
+  LambdaSesFeedbackProcessor:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${EnvironmentSuffix}-ses-feedback-processor"
+      Runtime: "python3.12"
+      Handler: "index.lambda_handler"
+      Role: !GetAtt LambdaSesFeedbackProcessorRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref EnvironmentSuffix
+          EMAIL_DELIVERIES_TABLE: !Ref EmailDeliveriesTable
+      Code:
+        ZipFile: |
+          # Lambda function code is in external file: lambda/ses_feedback_processor.py
+          # This is a placeholder - the actual code should be deployed separately
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': 'Lambda function placeholder - deploy actual code separately'}
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+  LambdaCostMonitoring:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${EnvironmentSuffix}-cost-monitoring"
+      Runtime: "python3.12"
+      Handler: "cost-monitoring.lambda_handler"
+      Role: !GetAtt LambdaCostMonitoringRole.Arn
+      Timeout: 300
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref EnvironmentSuffix
+          EMAIL_DELIVERIES_TABLE: !Ref EmailDeliveriesTable
+          SNS_TOPIC_ARN: !Ref SNSTopicOrderConfirmations
+      Code:
+        ZipFile: |
+          # Lambda function code is in external file: lambda/cost-monitoring.py
+          # This is a placeholder - the actual code should be deployed separately
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': 'Lambda function placeholder - deploy actual code separately'}
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+  # ========== Lambda Permissions ==========
+  LambdaPermissionOrderConfirmations:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaSendOrderEmail
+      Action: "lambda:InvokeFunction"
+      Principal: "sns.amazonaws.com"
+      SourceArn: !Ref SNSTopicOrderConfirmations
+
+  LambdaPermissionSesDelivery:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaSesFeedbackProcessor
+      Action: "lambda:InvokeFunction"
+      Principal: "sns.amazonaws.com"
+      SourceArn: !Ref SNSTopicSesDelivery
+
+  LambdaPermissionSesBounce:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaSesFeedbackProcessor
+      Action: "lambda:InvokeFunction"
+      Principal: "sns.amazonaws.com"
+      SourceArn: !Ref SNSTopicSesBounce
+
+  LambdaPermissionSesComplaint:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaSesFeedbackProcessor
+      Action: "lambda:InvokeFunction"
+      Principal: "sns.amazonaws.com"
+      SourceArn: !Ref SNSTopicSesComplaint
+
+  # ========== SNS Subscriptions ==========
+  SNSSubscriptionOrderConfirmations:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: lambda
+      TopicArn: !Ref SNSTopicOrderConfirmations
+      Endpoint: !GetAtt LambdaSendOrderEmail.Arn
+
+  SNSSubscriptionSesDelivery:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: lambda
+      TopicArn: !Ref SNSTopicSesDelivery
+      Endpoint: !GetAtt LambdaSesFeedbackProcessor.Arn
+
+  SNSSubscriptionSesBounce:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: lambda
+      TopicArn: !Ref SNSTopicSesBounce
+      Endpoint: !GetAtt LambdaSesFeedbackProcessor.Arn
+
+  SNSSubscriptionSesComplaint:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: lambda
+      TopicArn: !Ref SNSTopicSesComplaint
+      Endpoint: !GetAtt LambdaSesFeedbackProcessor.Arn
+
+  # ========== SNS Alarm Topic ==========
+  SNSTopicAlarms:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${EnvironmentSuffix}-email-system-alarms"
+      DisplayName: "Email System Alarms"
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+  # ========== CloudWatch Alarms ==========
+  AlarmHighBounceRate:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${EnvironmentSuffix}-high-bounce-rate"
+      AlarmDescription: "High email bounce rate detected"
+      MetricName: "BounceRate"
+      Namespace: !Sub "${EnvironmentSuffix}/EmailNotifications"
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopicAlarms
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+  AlarmEmailSendFailures:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${EnvironmentSuffix}-email-send-failures"
+      AlarmDescription: "High rate of email send failures"
+      MetricName: "SendFailures"
+      Namespace: !Sub "${EnvironmentSuffix}/EmailNotifications"
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopicAlarms
+      Tags:
+        - Key: "iac-rlhf-amazon"
+          Value: "true"
+
+Outputs:
+  # ========== SNS Outputs ==========
+  OrderConfirmationsTopicArn:
+    Description: "ARN of the order confirmations SNS topic"
+    Value: !Ref SNSTopicOrderConfirmations
+    Export:
+      Name: !Sub "${AWS::StackName}-OrderConfirmationsTopicArn"
+
+  # ========== DynamoDB Outputs ==========
+  EmailDeliveriesTableName:
+    Description: "Name of the email deliveries DynamoDB table"
+    Value: !Ref EmailDeliveriesTable
+    Export:
+      Name: !Sub "${AWS::StackName}-EmailDeliveriesTableName"
+
+  EmailDeliveriesTableArn:
+    Description: "ARN of the email deliveries DynamoDB table"
+    Value: !GetAtt EmailDeliveriesTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EmailDeliveriesTableArn"
+
+  TurnAroundPromptTableName:
+    Description: "Name of the DynamoDB table"
+    Value: !Ref TurnAroundPromptTable
+    Export:
+      Name: !Sub "${AWS::StackName}-TurnAroundPromptTableName"
+
+  TurnAroundPromptTableArn:
+    Description: "ARN of the DynamoDB table"
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TurnAroundPromptTableArn"
+
+  # ========== Lambda Outputs ==========
+  SendOrderEmailFunctionArn:
+    Description: "ARN of the send order email Lambda function"
+    Value: !GetAtt LambdaSendOrderEmail.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-SendOrderEmailFunctionArn"
+
+  SesFeedbackProcessorFunctionArn:
+    Description: "ARN of the SES feedback processor Lambda function"
+    Value: !GetAtt LambdaSesFeedbackProcessor.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-SesFeedbackProcessorFunctionArn"
+
+  CostMonitoringFunctionArn:
+    Description: "ARN of the cost monitoring Lambda function"
+    Value: !GetAtt LambdaCostMonitoring.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CostMonitoringFunctionArn"
+
+  StackName:
+    Description: "Name of this CloudFormation stack"
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub "${AWS::StackName}-StackName"
+
+  EnvironmentSuffix:
+    Description: "Environment suffix used for this deployment"
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
