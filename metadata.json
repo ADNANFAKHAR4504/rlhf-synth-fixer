@@ -6,7 +6,7 @@
   "po_id": "Pr921",
   "team": "synth-2",
   "startedAt": "2025-12-19T13:52:44Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
     "Web Application Deployment"
