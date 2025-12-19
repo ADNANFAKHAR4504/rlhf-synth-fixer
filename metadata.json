@@ -6,10 +6,15 @@
   "po_id": "294",
   "team": "synth",
   "startedAt": "2025-08-05T22:32:28-05:00",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": []
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "Cognito",
+    "API Gateway"
+  ]
 }
