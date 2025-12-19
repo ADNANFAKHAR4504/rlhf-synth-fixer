@@ -8,10 +8,6 @@ import { Construct } from 'constructs';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Detect LocalStack environment
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566');
-
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -74,7 +70,10 @@ export class TapStack extends cdk.Stack {
     );
 
     // Lambda Function - Use inline code for LocalStack compatibility
-    const lambdaCode = fs.readFileSync(path.join(__dirname, 'lambda', 'index.js'), 'utf8');
+    const lambdaCode = fs.readFileSync(
+      path.join(__dirname, 'lambda', 'index.js'),
+      'utf8'
+    );
 
     const lambdaFunction = new lambda.Function(this, 'ProcessingLambda', {
       functionName: uniqueFunctionName,
