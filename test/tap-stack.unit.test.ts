@@ -188,6 +188,26 @@ describe('ServerlessStack', () => {
       });
     });
 
+    test('Skips schedule creation when disableScheduler context is true', () => {
+      // Create a stack with disableScheduler context set to true
+      const disabledApp = new cdk.App({
+        context: { disableScheduler: 'true' },
+      });
+      const disabledStack = new ServerlessStack(disabledApp, 'DisabledSchedulerStack', {
+        environmentSuffix: 'disabled',
+      });
+      const disabledTemplate = Template.fromStack(disabledStack);
+
+      // Should still create the schedule group (it's created before the check)
+      disabledTemplate.hasResourceProperties('AWS::Scheduler::ScheduleGroup', {
+        Name: 'serverless-schedules-disabled',
+      });
+
+      // Should NOT create any schedules when disabled
+      const schedules = disabledTemplate.findResources('AWS::Scheduler::Schedule');
+      expect(Object.keys(schedules).length).toBe(0);
+    });
+
     test('Creates Daily Processing Schedule', () => {
       template.hasResourceProperties('AWS::Scheduler::Schedule', {
         Name: `daily-processing-${environmentSuffix}`,
