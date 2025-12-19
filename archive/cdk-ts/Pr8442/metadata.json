@@ -12,11 +12,18 @@
     "Web Application Deployment"
   ],
   "aws_services": [
-    "EC2",
-    "Auto Scaling",
-    "Application Load Balancer",
-    "IAM",
-    "Secrets Manager",
-    "VPC"
-  ]
+    "secretsmanager",
+    "iam",
+    "ec2",
+    "autoscaling",
+    "elasticloadbalancingv2",
+    "vpc"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
