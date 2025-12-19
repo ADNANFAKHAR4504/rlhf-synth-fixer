@@ -45,8 +45,9 @@ export class SecurityStack extends Construct {
     // Create VPC Endpoints for Systems Manager (Session Manager)
     // Note: VPC Endpoints have limited support in LocalStack Community Edition
     // These are created but may not be fully functional
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                         process.env.AWS_ENDPOINT_URL?.includes('4566');
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
 
     let ssmVpcEndpoint: ec2.InterfaceVpcEndpoint | undefined;
     let vpcEndpointSecurityGroup: ec2.SecurityGroup | undefined;
