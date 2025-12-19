@@ -9,14 +9,17 @@ import { TapStack } from "../lib/tap-stack";
 // Mock console methods to reduce test noise
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
 beforeAll(() => {
   console.log = jest.fn();
   console.error = jest.fn();
+  console.warn = jest.fn();
 });
 
 afterAll(() => {
   console.log = originalConsoleLog;
   console.error = originalConsoleError;
+  console.warn = originalConsoleWarn;
 });
 
 // Mock the aws.getAvailabilityZones function BEFORE setting Pulumi mocks
@@ -558,6 +561,29 @@ describe("Infrastructure Components End-to-End Tests", () => {
       expect(envName2).toBe("nova-env-uswest1-suffix2");
       expect(envName1).not.toBe(envName2);
     });
+
+    it("should handle empty subnet arrays gracefully", () => {
+      // Test with empty subnet arrays to cover warning branches (lines 109-112, 120-123)
+      const ebWithEmptySubnets = new ElasticBeanstalkInfrastructure("test-eb-empty-subnets", {
+        region: "us-east-1",
+        isPrimary: true,
+        environment: "test",
+        environmentSuffix: "empty-test",
+        vpcId: pulumi.output("vpc-mock"),
+        publicSubnetIds: [], // Empty array to trigger warning
+        privateSubnetIds: [], // Empty array to trigger warning
+        albSecurityGroupId: pulumi.output("sg-alb-mock"),
+        ebSecurityGroupId: pulumi.output("sg-eb-mock"),
+        ebServiceRoleArn: pulumi.output("arn:aws:iam::123456789012:role/mock-role"),
+        ebInstanceProfileName: pulumi.output("mock-instance-profile"),
+        tags: testTags,
+      });
+
+      // Verify the infrastructure is still created despite empty subnets
+      expect(ebWithEmptySubnets.application).toBeDefined();
+      expect(ebWithEmptySubnets.configTemplate).toBeDefined();
+      expect(ebWithEmptySubnets.ebEnvironment).toBeDefined();
+    });
   });
 
   describe("MonitoringInfrastructure", () => {
@@ -651,6 +677,7 @@ describe("Infrastructure Components End-to-End Tests", () => {
         environmentSuffix: "test",
         regions: ["us-east-1"],
         tags: testTags,
+        isLocalStack: false, // Force EB creation for unit tests
       });
     });
 
