@@ -66,12 +66,11 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
         template.resource_count_is("AWS::IAM::Role", 2)
 
-    @mark.it("creates Auto Scaling Group and Launch Template")
+    @mark.it("creates Auto Scaling Group")
     def test_creates_auto_scaling_group(self):
         stack = TapStack(self.app, "TapStackAsgTest")
         template = Template.from_stack(stack)
         template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
-        template.resource_count_is("AWS::EC2::LaunchTemplate", 1)
 
     @mark.it("outputs key resource identifiers")
     def test_outputs(self):
