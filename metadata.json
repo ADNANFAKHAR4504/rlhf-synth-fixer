@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291741",
+  "team": "synth-2",
+  "startedAt": "2025-08-14T09:39:28.698Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Resource Scaling",
+    "Monitoring Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "CloudWatch",
+    "Auto Scaling",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Tables",
+    "Subnets",
+    "Security Groups",
+    "Launch Template"
+  ],
+  "provider": "localstack"
+}
