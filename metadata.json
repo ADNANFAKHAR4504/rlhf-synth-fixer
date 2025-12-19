@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "provider": "localstack",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291596",
+  "team": "5",
+  "startedAt": "2025-08-22T16:46:53.835Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS CloudFormation",
+    "AWS KMS",
+    "AWS VPC",
+    "AWS EC2",
+    "AWS Lambda",
+    "AWS S3",
+    "AWS IAM",
+    "AWS CloudTrail",
+    "AWS CloudWatch",
+    "AWS Secrets Manager",
+    "AWS EIP",
+    "AWS NAT Gateway",
+    "AWS Internet Gateway",
+    "AWS Security Groups",
+    "AWS CloudWatch Logs"
+  ]
+}
