@@ -1,4 +1,4 @@
-Certainly! Here's a rewritten version of your original prompt that is more precise, action-oriented, and well-scoped for generating a correct AWS CloudFormation template:
+Certainly! Here's a rewritten version of your original prompt that is more precise, action-oriented, and well-scoped for generating a correct AWS CloudFormation template: 
 
 ---
 
