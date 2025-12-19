@@ -6,9 +6,16 @@
   "po_id": "350094",
   "team": "2",
   "startedAt": "2025-11-13T16:06:41.714Z",
-  "subtask": "IaC Program Optimization",
+  "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "IaC Optimization"
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Redshift",
+    "CloudWatch"
   ],
   "provider": "localstack"
 }
