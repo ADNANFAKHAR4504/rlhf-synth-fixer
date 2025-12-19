@@ -10,5 +10,12 @@
   "subject_labels": [
     "IaC Optimization"
   ],
+  "aws_services": [
+    "EC2",
+    "CloudWatch",
+    "Cost Explorer",
+    "STS",
+    "IAM"
+  ],
   "provider": "localstack"
 }
