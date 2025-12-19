@@ -1,0 +1,30 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "provider": "localstack",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291551",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T15:14:09.558Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "IAM",
+    "CloudWatch Logs",
+    "S3",
+    "STS"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
+}

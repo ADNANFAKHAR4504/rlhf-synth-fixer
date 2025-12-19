@@ -58,13 +58,18 @@ if docker ps -a | grep -q localstack; then
     docker rm localstack 2>/dev/null || true
 fi
 
-# LocalStack enables all services by default when SERVICES is not set
-# Only set SERVICES if explicitly provided via environment variable
+# LocalStack Pro 4.12+ requires explicit service configuration
+# Enable core services needed for CDK/CloudFormation deployments
 if [ -n "$LOCALSTACK_SERVICES" ]; then
     SERVICES="$LOCALSTACK_SERVICES"
     echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
 else
-    echo -e "${BLUE}📋 All LocalStack services enabled (default)${NC}"
+    # Default services for CDK/CFN/Terraform/Pulumi deployments
+    # Include all commonly needed services to avoid "service not enabled" errors
+    # Note: elasticloadbalancing is separate from elb and elbv2 in LocalStack
+    SERVICES="acm,apigateway,cloudformation,cloudwatch,dynamodb,ec2,ecr,ecs,elb,elbv2,events,iam,kms,lambda,logs,route53,s3,secretsmanager,sns,sqs,ssm,sts,autoscaling"
+    echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
+    echo -e "${YELLOW}💡 To customize, set LOCALSTACK_SERVICES environment variable${NC}"
 fi
 
 # Check for LocalStack API Key
