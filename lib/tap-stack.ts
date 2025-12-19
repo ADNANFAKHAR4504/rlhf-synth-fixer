@@ -34,6 +34,9 @@ export class TapStack extends cdk.Stack {
       vpcName: `migration-vpc-${environmentSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 2,
+      // Explicitly specify availability zones to prevent CDK from calling EC2 DescribeAvailabilityZones API
+      // This is required because EC2 service is not enabled in the LocalStack GitHub Actions container
+      availabilityZones: ['us-east-1a', 'us-east-1b'],
       subnetConfiguration: [
         {
           cidrMask: 24,
