@@ -453,4 +453,93 @@ describe('TapStack', () => {
       expect(stack.region).toBe('ap-northeast-1');
     });
   });
+
+  describe('LocalStack Specific Configuration', () => {
+    let localStackApp: cdk.App;
+    let localStackStack: TapStack;
+    let localStackTemplate: Template;
+
+    beforeEach(() => {
+      // Set LocalStack environment variable
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+
+      localStackApp = new cdk.App();
+      localStackStack = new TapStack(localStackApp, 'TestLocalStackTapStack', {
+        environmentSuffix: 'localstack',
+        env: {
+          account: '000000000000',
+          region: 'us-east-1',
+        },
+      });
+      localStackTemplate = Template.fromStack(localStackStack);
+    });
+
+    afterEach(() => {
+      // Clean up environment variable
+      delete process.env.AWS_ENDPOINT_URL;
+    });
+
+    test('should configure VPC with no NAT gateways for LocalStack', () => {
+      // In LocalStack mode, NAT gateways should be reduced to 0
+      localStackTemplate.resourceCountIs('AWS::EC2::NatGateway', 0);
+    });
+
+    test('should use public subnets instead of private with egress for LocalStack', () => {
+      // Verify that private subnets are created as PUBLIC in LocalStack mode
+      const subnets = localStackTemplate.findResources('AWS::EC2::Subnet');
+      const privateSubnets = Object.values(subnets).filter((subnet: any) =>
+        subnet.Properties?.Tags?.some(
+          (tag: any) =>
+            tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Private'
+        )
+      );
+
+      // All "private" subnets should have MapPublicIpOnLaunch set to true in LocalStack
+      privateSubnets.forEach((subnet: any) => {
+        expect(subnet.Properties?.MapPublicIpOnLaunch).toBe(true);
+      });
+    });
+
+    test('should not encrypt CloudTrail with KMS in LocalStack', () => {
+      // CloudTrail should not have KMS encryption key in LocalStack mode
+      const trails = localStackTemplate.findResources('AWS::CloudTrail::Trail');
+      Object.values(trails).forEach((trail: any) => {
+        // KMSKeyId should not be present in LocalStack mode
+        expect(trail.Properties?.KMSKeyId).toBeUndefined();
+      });
+    });
+
+    test('should disable RDS storage encryption in LocalStack', () => {
+      // RDS storage should not be encrypted in LocalStack (limited support)
+      localStackTemplate.hasResourceProperties('AWS::RDS::DBInstance', {
+        StorageEncrypted: false,
+      });
+    });
+
+    test('should not encrypt RDS credentials with KMS in LocalStack', () => {
+      // Check that RDS secret doesn't have KMS key reference in LocalStack
+      const secrets = localStackTemplate.findResources(
+        'AWS::SecretsManager::Secret'
+      );
+      Object.values(secrets).forEach((secret: any) => {
+        // In LocalStack mode, KmsKeyId should not be set
+        expect(secret.Properties?.KmsKeyId).toBeUndefined();
+      });
+    });
+
+    test('should not create GuardDuty detector in LocalStack', () => {
+      // GuardDuty requires Pro and should not be created in LocalStack mode
+      localStackTemplate.resourceCountIs('AWS::GuardDuty::Detector', 0);
+    });
+
+    test('should create all required outputs for LocalStack', () => {
+      localStackTemplate.hasOutput('KMSKeyId', {});
+      localStackTemplate.hasOutput('WebAssetsBucketName', {});
+      localStackTemplate.hasOutput('DatabaseEndpoint', {});
+      localStackTemplate.hasOutput('LoadBalancerDNS', {});
+      localStackTemplate.hasOutput('VPCId', {});
+      localStackTemplate.hasOutput('CloudTrailArn', {});
+      localStackTemplate.hasOutput('CloudTrailBucketName', {});
+    });
+  });
 });
