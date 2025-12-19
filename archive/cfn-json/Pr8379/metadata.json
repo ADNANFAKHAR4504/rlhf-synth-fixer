@@ -33,5 +33,12 @@
     "AWS::CloudWatch::Alarm",
     "AWS::QuickSight::DataSource",
     "AWS::QuickSight::DataSet"
-  ]
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
 }
