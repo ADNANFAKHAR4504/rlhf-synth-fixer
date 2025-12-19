@@ -1,0 +1,20 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291568",
+  "team": "synth-2",
+  "startedAt": "2025-08-17T15:40:00.000Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": "Web App Deployment, Security Config, Network Config, Access Control, General Infrastructure QA",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "RDS",
+    "CloudWatch"
+  ],
+  "provider": "localstack"
+}
