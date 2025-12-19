@@ -42,19 +42,19 @@ describe('TapStack CloudFormation Template - CI/CD Pipeline', () => {
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have Environment parameter', () => {
+      expect(template.Parameters.Environment).toBeDefined();
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
+    test('Environment parameter should have correct properties', () => {
+      const envSuffixParam = template.Parameters.Environment;
       expect(envSuffixParam.Type).toBe('String');
       expect(envSuffixParam.Description).toBeDefined();
       expect(typeof envSuffixParam.Description).toBe('string');
     });
 
-    test('EnvironmentSuffix parameter should have validation constraints', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
+    test('Environment parameter should have validation constraints', () => {
+      const envSuffixParam = template.Parameters.Environment;
       expect(envSuffixParam.AllowedPattern).toBeDefined();
       expect(envSuffixParam.ConstraintDescription).toBeDefined();
     });
@@ -109,7 +109,7 @@ describe('TapStack CloudFormation Template - CI/CD Pipeline', () => {
     test('ArtifactBucket name should include environment suffix', () => {
       const bucket = template.Resources.ArtifactBucket;
       expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'cicd-artifacts-${EnvironmentSuffix}',
+        'Fn::Sub': 'cicd-artifacts-${Environment}',
       });
     });
   });
@@ -127,7 +127,7 @@ describe('TapStack CloudFormation Template - CI/CD Pipeline', () => {
     test('SourceRepository should have a name with environment suffix', () => {
       const repo = template.Resources.SourceRepository;
       expect(repo.Properties.RepositoryName).toEqual({
-        'Fn::Sub': 'education-platform-${EnvironmentSuffix}',
+        'Fn::Sub': 'education-platform-${Environment}',
       });
     });
 
@@ -158,7 +158,7 @@ describe('TapStack CloudFormation Template - CI/CD Pipeline', () => {
     test('BuildLogGroup name should include environment suffix', () => {
       const logGroup = template.Resources.BuildLogGroup;
       expect(logGroup.Properties.LogGroupName).toEqual({
-        'Fn::Sub': '/aws/codebuild/education-build-${EnvironmentSuffix}',
+        'Fn::Sub': '/aws/codebuild/education-build-${Environment}',
       });
     });
   });
@@ -228,7 +228,7 @@ describe('TapStack CloudFormation Template - CI/CD Pipeline', () => {
     test('CodeBuildServiceRole name should include environment suffix', () => {
       const role = template.Resources.CodeBuildServiceRole;
       expect(role.Properties.RoleName).toEqual({
-        'Fn::Sub': 'codebuild-service-role-${EnvironmentSuffix}',
+        'Fn::Sub': 'codebuild-service-role-${Environment}',
       });
     });
   });
@@ -313,7 +313,7 @@ describe('TapStack CloudFormation Template - CI/CD Pipeline', () => {
     test('CodePipelineServiceRole name should include environment suffix', () => {
       const role = template.Resources.CodePipelineServiceRole;
       expect(role.Properties.RoleName).toEqual({
-        'Fn::Sub': 'codepipeline-service-role-${EnvironmentSuffix}',
+        'Fn::Sub': 'codepipeline-service-role-${Environment}',
       });
     });
   });
@@ -395,7 +395,7 @@ describe('TapStack CloudFormation Template - CI/CD Pipeline', () => {
     test('BuildProject name should include environment suffix', () => {
       const project = template.Resources.BuildProject;
       expect(project.Properties.Name).toEqual({
-        'Fn::Sub': 'education-build-${EnvironmentSuffix}',
+        'Fn::Sub': 'education-build-${Environment}',
       });
     });
   });
@@ -419,7 +419,7 @@ describe('TapStack CloudFormation Template - CI/CD Pipeline', () => {
     test('PipelineNotificationTopic name should include environment suffix', () => {
       const topic = template.Resources.PipelineNotificationTopic;
       expect(topic.Properties.TopicName).toEqual({
-        'Fn::Sub': 'pipeline-notifications-${EnvironmentSuffix}',
+        'Fn::Sub': 'pipeline-notifications-${Environment}',
       });
     });
 
@@ -586,7 +586,7 @@ describe('TapStack CloudFormation Template - CI/CD Pipeline', () => {
     test('Pipeline name should include environment suffix', () => {
       const pipeline = template.Resources.Pipeline;
       expect(pipeline.Properties.Name).toEqual({
-        'Fn::Sub': 'education-pipeline-${EnvironmentSuffix}',
+        'Fn::Sub': 'education-pipeline-${Environment}',
       });
     });
   });
@@ -635,7 +635,7 @@ describe('TapStack CloudFormation Template - CI/CD Pipeline', () => {
     test('PipelineEventRule name should include environment suffix', () => {
       const rule = template.Resources.PipelineEventRule;
       expect(rule.Properties.Name).toEqual({
-        'Fn::Sub': 'pipeline-event-rule-${EnvironmentSuffix}',
+        'Fn::Sub': 'pipeline-event-rule-${Environment}',
       });
     });
   });
@@ -790,7 +790,7 @@ describe('TapStack CloudFormation Template - CI/CD Pipeline', () => {
         if (nameProperty) {
           const nameValue = resource.Properties[nameProperty];
           expect(nameValue['Fn::Sub']).toBeDefined();
-          expect(nameValue['Fn::Sub']).toContain('${EnvironmentSuffix}');
+          expect(nameValue['Fn::Sub']).toContain('${Environment}');
         }
       });
     });
