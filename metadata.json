@@ -4,10 +4,22 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "293",
-  "team": "synth",
+  "team": "synth-2",
   "startedAt": "2025-08-05T21:30:19-05:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
-  "subject_labels": ["Cloud Environment Setup"],
-  "aws_services": ["EC2", "VPC", "RDS", "ELB", "AutoScaling", "S3", "SecretsManager", "CloudWatch", "IAM"]
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "ELB",
+    "AutoScaling",
+    "S3",
+    "SecretsManager",
+    "CloudWatch",
+    "IAM"
+  ]
 }
