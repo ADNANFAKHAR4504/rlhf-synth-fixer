@@ -1141,7 +1141,7 @@ class S3SecurityAuditor:
     def print_findings(self):
         """Print findings to console grouped by severity"""
         if not self.findings:
-            logger.info("✅ No security issues found!")
+            logger.info(" No security issues found!")
             return
 
         findings_by_severity = defaultdict(list)

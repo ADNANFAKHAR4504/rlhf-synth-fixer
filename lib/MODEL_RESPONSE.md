@@ -639,7 +639,7 @@ class S3SecurityAuditor:
     def print_findings(self):
         """Print findings to console grouped by severity"""
         if not self.findings:
-            print("\n✅ No security issues found!")
+            print("\n No security issues found!")
             return
         
         # Group findings by severity
