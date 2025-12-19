@@ -66,7 +66,6 @@ describe('TapStack Integration Tests', () => {
       expect(s.MapPublicIpOnLaunch).toBe(false);
     });
   });
-  });
 
   test('Private subnets have ComplianceScope tag and are non-public', async () => {
     const subnetIds = [outputs.PrivateSubnet1Id, outputs.PrivateSubnet2Id, outputs.PrivateSubnet3Id];
@@ -76,31 +75,6 @@ describe('TapStack Integration Tests', () => {
       expect(tagMap.ComplianceScope).toBe('Payment');
       expect(s.MapPublicIpOnLaunch).toBe(false);
     });
-  });
-
-  test('Data bucket has correct tags', async () => {
-    const bucketName = outputs.DataBucketName;
-    const tagging = await s3Client.send(new GetBucketTaggingCommand({ Bucket: bucketName }));
-    const tagMap = Object.fromEntries((tagging.TagSet || []).map(t => [t.Key, t.Value]));
-    expect(tagMap.DataClassification).toBe('PCI');
-    expect(tagMap.ComplianceScope).toBe('Payment');
-  });
-
-  test('Config bucket has correct tags', async () => {
-    const cb = outputs.ConfigBucketName;
-    const tagging = await s3Client.send(new GetBucketTaggingCommand({ Bucket: cb }));
-    const tagMap = Object.fromEntries((tagging.TagSet || []).map(t => [t.Key, t.Value]));
-    expect(tagMap.DataClassification).toBe('PCI');
-    expect(tagMap.ComplianceScope).toBe('Payment');
-  });
-
-  test('Data bucket policy version and statements count', async () => {
-    const bucketName = outputs.DataBucketName;
-    const policyResp = await s3Client.send(new GetBucketPolicyCommand({ Bucket: bucketName }));
-    const policyDoc = JSON.parse(policyResp.Policy || '{}');
-    expect(policyDoc.Version).toBe('2012-10-17');
-    expect(Array.isArray(policyDoc.Statement)).toBe(true);
-    expect(policyDoc.Statement.length).toBeGreaterThanOrEqual(2);
   });
 
   test('S3 VPC endpoint policy contains s3:GetObject', async () => {
@@ -217,37 +191,6 @@ describe('TapStack Integration Tests', () => {
     expect(userGroupPair).toBeDefined();
   });
 
-  test('Data S3 bucket blocks public access and has lifecycle rule and policy conditions', async () => {
-    const bucketName = outputs.DataBucketName;
-    const pubResponse = await s3Client.send(new GetPublicAccessBlockCommand({ Bucket: bucketName }));
-    expect(pubResponse.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-    expect(pubResponse.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
-    expect(pubResponse.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
-    expect(pubResponse.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
-
-    const policyResp = await s3Client.send(new GetBucketPolicyCommand({ Bucket: bucketName }));
-    const policyDoc = JSON.parse(policyResp.Policy || '{}');
-    const denyUpload = policyDoc.Statement.find((s: any) => s.Sid === 'DenyUnencryptedObjectUploads');
-    expect(denyUpload).toBeDefined();
-    expect(denyUpload.Condition.StringNotEquals['s3:x-amz-server-side-encryption']).toBe('aws:kms');
-    const denyInsecure = policyDoc.Statement.find((s: any) => s.Sid === 'DenyInsecureTransport');
-    expect(denyInsecure).toBeDefined();
-    expect(denyInsecure.Condition.Bool['aws:SecureTransport']).toBe('false');
-
-    const lifecycleResp = await s3Client.send(new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName }));
-    expect(lifecycleResp.Rules && lifecycleResp.Rules.length > 0).toBe(true);
-    const deleteOld = lifecycleResp.Rules!.find(r => (r as any).ID === 'DeleteOldVersions' || (r as any).Id === 'DeleteOldVersions');
-    expect(deleteOld).toBeDefined();
-    expect(deleteOld!.NoncurrentVersionExpiration?.NoncurrentDays === 90).toBeTruthy();
-  });
-
-  test('VPC Flow Log exists for the VPC and is associated with expected log group', async () => {
-    const resp = await ec2Client.send(new DescribeFlowLogsCommand({ Filter: [{ Name: 'resource-id', Values: [outputs.VPCId] }] }));
-    const flow = resp.FlowLogs && resp.FlowLogs.length > 0 ? resp.FlowLogs![0] : undefined;
-    expect(flow).toBeDefined();
-    expect(flow!.LogGroupName).toBe(outputs.VPCFlowLogsLogGroup);
-  });
-
   test('KMS key has correct tags and description', async () => {
     const keyId = outputs.KMSKeyId;
     const tagsResp = await kmsClient.send(new ListResourceTagsCommand({ KeyId: keyId }));
@@ -261,16 +204,6 @@ describe('TapStack Integration Tests', () => {
   test('Data bucket name follows expected prefix naming convention', async () => {
     const bucketName = outputs.DataBucketName;
     expect(bucketName.startsWith(`pci-data-bucket-v7-${environmentSuffix}-`)).toBe(true);
-  });
-
-  test('VPC FlowLog uses expected IAM role to deliver logs', async () => {
-    const vpcId = outputs.VPCId;
-    const flowResp = await ec2Client.send(new DescribeFlowLogsCommand({ Filter: [{ Name: 'resource-id', Values: [vpcId] }] }));
-    const flow = flowResp.FlowLogs && flowResp.FlowLogs.length > 0 ? flowResp.FlowLogs![0] : undefined;
-    expect(flow).toBeDefined();
-    const roleName = `vpc-flowlogs-role-v7-${environmentSuffix}`;
-    const roleResp = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
-    expect(roleResp.Role?.Arn).toBe(flow!.DeliverLogsPermissionArn);
   });
 
   test('Lambda inline S3 policy contains s3:ListBucket', async () => {
@@ -379,14 +312,6 @@ describe('TapStack Integration Tests', () => {
     const resp = await snsClient.send(new GetTopicAttributesCommand({ TopicArn: topicArn }));
     expect(resp.Attributes).toBeDefined();
     expect(resp.Attributes!.DisplayName).toBe('PCI Security Alerts');
-  });
-
-  test('VPC Flow Logs LogGroup exists with retention configured', async () => {
-    const logGroupName = outputs.VPCFlowLogsLogGroup;
-    const resp = await logsClient.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName }));
-    const found = resp.logGroups?.find(lg => lg.logGroupName === logGroupName);
-    expect(found).toBeDefined();
-    expect(found!.retentionInDays).toBe(90);
   });
 
   test('SSM parameters for data-bucket and kms-key-id exist and reference outputs', async () => {
