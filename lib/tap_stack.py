@@ -209,75 +209,81 @@ class TapStack(cdk.Stack):
     def _get_lambda_code(self) -> str:
         """Return the Lambda function code as a dedented string"""
         return textwrap.dedent("""
-                                                    import json
-                                                    import boto3
-                                                    import os
-                                                    import logging
+            import json
+            import boto3
+            import os
+            import logging
 
-                                                    # Configure logging
-                                                    logger = logging.getLogger()
-                                                    logger.setLevel(logging.INFO)
+            # Configure logging
+            logger = logging.getLogger()
+            logger.setLevel(logging.INFO)
 
-                                                    # LocalStack configuration
-                                                    endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
+            # LocalStack configuration
+            endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
 
-                                                    # Initialize SSM client with LocalStack endpoint if available
-                                                    ssm_client = boto3.client(
-                                                            'ssm',
-                                                            region_name=os.environ.get('AWS_REGION', 'us-east-1'),
-                                                            endpoint_url=endpoint_url
-                                                    )
+            # Initialize SSM client with LocalStack endpoint if available
+            ssm_client = boto3.client(
+                'ssm',
+                region_name=os.environ.get('AWS_REGION', 'us-east-1'),
+                endpoint_url=endpoint_url
+            )
 
-                                                    def get_parameter(parameter_name, decrypt=False):
-                                                            \"\"\"Securely retrieve parameter from SSM Parameter Store\"\"\"
-                                                            try:
-                                                                    response = ssm_client.get_parameter(
-                                                                            Name=parameter_name,
-                                                                            WithDecryption=decrypt
-                                                                    )
-                                                                    return response['Parameter']['Value']
-                                                            except Exception as e:
-                                                                    logger.error(f"Error retrieving parameter {parameter_name}: {str(e)}")
-                                                                    raise
+            def get_parameter(parameter_name, decrypt=False):
+                \"\"\"Securely retrieve parameter from SSM Parameter Store\"\"\"
+                try:
+                    response = ssm_client.get_parameter(
+                        Name=parameter_name,
+                        WithDecryption=decrypt
+                    )
+                    return response['Parameter']['Value']
+                except Exception as e:
+                    logger.error(f"Error retrieving parameter {parameter_name}: {str(e)}")
+                    raise
 
-                                                    def lambda_handler(event, context):
-                                                            \"\"\"Main Lambda handler function\"\"\"
-                                                            logger.info("Lambda function started")
-                                                            logger.info(f"Received event: {json.dumps(event)}")
-                                                                                                                        try:
-                                                                    # Retrieve environment variables securely from SSM
-                                                                    database_url = get_parameter(os.environ['DATABASE_URL_PARAM'])
-                                                                    api_key = get_parameter(os.environ['API_KEY_PARAM'])
-                                                                    secret_token = get_parameter(os.environ['SECRET_TOKEN_PARAM'], decrypt=True)
-                                                                                                                                        # Log successful parameter retrieval (don't log actual values!)
-                                                                    logger.info("Successfully retrieved all SSM parameters")
-                                                                                                                                        # Your business logic here
-                                                                    processed_data = {
-                                                                            "message": "Hello from Lambda!",
-                                                                            "event_keys": list(event.keys()) if isinstance(event, dict) else [],
-                                                                            "timestamp": context.aws_request_id,
-                                                                            "function_name": context.function_name,
-                                                                            "remaining_time": context.get_remaining_time_in_millis()
-                                                                    }
-                                                                                                                                        logger.info("Processing completed successfully")
-                                                                                                                                        return {
-                                                                            'statusCode': 200,
-                                                                            'headers': {
-                                                                                    'Content-Type': 'application/json',
-                                                                                    'Access-Control-Allow-Origin': '*'
-                                                                            },
-                                                                            'body': json.dumps(processed_data)
-                                                                    }
-                                                                                                                                except Exception as e:
-                                                                    logger.error(f"Error in lambda_handler: {str(e)}")
-                                                                    return {
-                                                                            'statusCode': 500,
-                                                                            'headers': {
-                                                                                    'Content-Type': 'application/json'
-                                                                            },
-                                                                            'body': json.dumps({
-                                                                                    'error': 'Internal server error',
-                                                                                    'message': str(e)
-                                                                            })
-                                                                    }
-                                            """)
+            def lambda_handler(event, context):
+                \"\"\"Main Lambda handler function\"\"\"
+                logger.info("Lambda function started")
+                logger.info(f"Received event: {json.dumps(event)}")
+
+                try:
+                    # Retrieve environment variables securely from SSM
+                    database_url = get_parameter(os.environ['DATABASE_URL_PARAM'])
+                    api_key = get_parameter(os.environ['API_KEY_PARAM'])
+                    secret_token = get_parameter(os.environ['SECRET_TOKEN_PARAM'], decrypt=True)
+
+                    # Log successful parameter retrieval (don't log actual values!)
+                    logger.info("Successfully retrieved all SSM parameters")
+
+                    # Your business logic here
+                    processed_data = {
+                        "message": "Hello from Lambda!",
+                        "event_keys": list(event.keys()) if isinstance(event, dict) else [],
+                        "timestamp": context.aws_request_id,
+                        "function_name": context.function_name,
+                        "remaining_time": context.get_remaining_time_in_millis()
+                    }
+
+                    logger.info("Processing completed successfully")
+
+                    return {
+                        'statusCode': 200,
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        },
+                        'body': json.dumps(processed_data)
+                    }
+
+                except Exception as e:
+                    logger.error(f"Error in lambda_handler: {str(e)}")
+                    return {
+                        'statusCode': 500,
+                        'headers': {
+                            'Content-Type': 'application/json'
+                        },
+                        'body': json.dumps({
+                            'error': 'Internal server error',
+                            'message': str(e)
+                        })
+                    }
+        """)
