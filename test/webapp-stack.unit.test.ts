@@ -27,8 +27,8 @@ describe('WebAppStack', () => {
       stack = new WebAppStack(app, 'TestStack');
       template = Template.fromStack(stack);
 
-      // Check for public subnets
-      template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private
+      // Check for public subnets (only public subnets for LocalStack)
+      template.resourceCountIs('AWS::EC2::Subnet', 2); // 2 public subnets
 
       // Verify public subnet configuration
       template.hasResourceProperties('AWS::EC2::Subnet', {
@@ -36,14 +36,13 @@ describe('WebAppStack', () => {
       });
     });
 
-    test('creates two private subnets', () => {
+    test('does not create private subnets for LocalStack', () => {
       stack = new WebAppStack(app, 'TestStack');
       template = Template.fromStack(stack);
 
-      // Check for private subnets (they don't have MapPublicIpOnLaunch)
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        MapPublicIpOnLaunch: false,
-      });
+      // LocalStack Community doesn't support NAT Gateway, so no private subnets
+      // All subnets are public
+      template.resourceCountIs('AWS::EC2::Subnet', 2); // Only public subnets
     });
 
     test('creates Internet Gateway', () => {
@@ -54,13 +53,13 @@ describe('WebAppStack', () => {
       template.resourceCountIs('AWS::EC2::VPCGatewayAttachment', 1);
     });
 
-    test('creates NAT Gateways for private subnets', () => {
+    test('does not create NAT Gateways for LocalStack', () => {
       stack = new WebAppStack(app, 'TestStack');
       template = Template.fromStack(stack);
 
-      // Two NAT gateways for high availability
-      template.resourceCountIs('AWS::EC2::NatGateway', 2);
-      template.resourceCountIs('AWS::EC2::EIP', 2);
+      // NAT Gateway not supported in LocalStack Community
+      template.resourceCountIs('AWS::EC2::NatGateway', 0);
+      template.resourceCountIs('AWS::EC2::EIP', 0);
     });
 
     test('creates VPC Flow Logs', () => {
@@ -217,7 +216,7 @@ describe('WebAppStack', () => {
         DBInstanceClass: 'db.t3.micro',
         AllocatedStorage: '20',
         StorageEncrypted: true,
-        BackupRetentionPeriod: 7,
+        BackupRetentionPeriod: 0, // Disabled for LocalStack
         DeletionProtection: false,
         MultiAZ: false,
       });
