@@ -1,14 +1,3 @@
-# Ideal Response: AWS Serverless Infrastructure with Lambda, S3, and DynamoDB
-
-## Overview
-
-This implements a serverless event-driven architecture using AWS CDK TypeScript that creates a Lambda function triggered by S3 object creation events, with invocation logging to DynamoDB.
-
-## Infrastructure Code Implementation
-
-### Main Stack (lib/tap-stack.ts)
-
-```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -99,18 +88,18 @@ def lambda_handler(event, context):
     try:
         request_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat()
-
+        
         logger.info(f"Processing S3 event with request ID: {request_id}")
-
+        
         # Process S3 event
         for record in event.get('Records', []):
             if 's3' in record:
                 bucket = record['s3']['bucket']['name']
                 key = record['s3']['object']['key']
                 event_name = record['eventName']
-
+                
                 logger.info(f"Processing {event_name} for {key} in bucket {bucket}")
-
+                
                 # Log invocation to DynamoDB
                 table.put_item(
                     Item={
@@ -123,7 +112,7 @@ def lambda_handler(event, context):
                         'awsRequestId': context.aws_request_id
                     }
                 )
-
+        
         return {
             'statusCode': 200,
             'body': json.dumps({
@@ -131,7 +120,7 @@ def lambda_handler(event, context):
                 'requestId': request_id
             })
         }
-
+        
     except Exception as e:
         logger.error(f"Error processing event: {str(e)}")
         return {
@@ -174,99 +163,3 @@ def lambda_handler(event, context):
     });
   }
 }
-```
-
-### Entry Point (bin/tap.ts)
-
-```typescript
-#!/usr/bin/env node
-import 'source-map-support/register';
-import * as cdk from 'aws-cdk-lib';
-import { TapStack } from '../lib/tap-stack';
-
-const app = new cdk.App();
-
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = process.env.AWS_REGION || 'us-west-2';
-
-new TapStack(app, `TapStack-${environmentSuffix}`, {
-  environmentSuffix,
-  env: {
-    region,
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-  },
-});
-```
-
-## Key Implementation Features
-
-### 1. DynamoDB Table
-- Partition key: requestId (STRING) - unique UUID for each invocation
-- Sort key: timestamp (STRING) - ISO 8601 timestamp
-- PAY_PER_REQUEST billing mode (cost-optimized on-demand)
-- Point-in-time recovery enabled
-- RemovalPolicy.DESTROY for clean teardown
-
-### 2. S3 Bucket
-- Event notification for OBJECT_CREATED events
-- BlockPublicAccess.BLOCK_ALL for security
-- SSL enforcement (enforceSSL: true)
-- S3-managed encryption at rest
-- autoDeleteObjects for clean resource teardown
-
-### 3. Lambda Function
-- Python 3.8 runtime
-- 30-second timeout, 128 MB memory
-- LocalStack endpoint detection via AWS_ENDPOINT_URL
-- Processes S3 events and logs to DynamoDB
-- Comprehensive error handling and CloudWatch logging
-- Generates unique UUID request ID for each invocation
-
-### 4. IAM Role
-- AWSLambdaBasicExecutionRole managed policy (CloudWatch Logs)
-- DynamoDB write permissions (granted via logsTable.grantWriteData)
-- S3 read permissions (granted via triggerBucket.grantRead)
-- Follows least-privilege principle
-
-### 5. Event Flow
-```
-S3 Object Created → S3 Event Notification → Lambda Invocation → DynamoDB Log Entry
-```
-
-## LocalStack Compatibility
-
-- Lambda function detects AWS_ENDPOINT_URL and configures DynamoDB client accordingly
-- Integration tests use forcePathStyle: true for S3 bucket access
-- Test credentials (accessKeyId: 'test', secretAccessKey: 'test') for LocalStack
-
-## Security Best Practices
-
-1. No hardcoded credentials
-2. S3 bucket blocks all public access
-3. HTTPS enforcement on S3 bucket
-4. IAM roles with minimal required permissions
-5. Encryption at rest (S3-managed)
-6. Managed policies for CloudWatch Logs
-
-## Deployment
-
-```bash
-export AWS_REGION=us-west-2
-export ENVIRONMENT_SUFFIX=prod
-cdk deploy
-```
-
-## CloudFormation Outputs
-
-- BucketName: S3 bucket name for uploading test files
-- DynamoDBTableName: Table name for querying invocation logs
-- LambdaFunctionName: Function name for monitoring
-
-## Testing
-
-The implementation includes comprehensive unit tests (67 test cases) and integration tests (25 test cases) that verify:
-- Stack construction and resource properties
-- End-to-end flow: S3 upload triggers Lambda, logs to DynamoDB
-- Security configurations (public access blocking, encryption)
-- Error handling and resilience
-- Data consistency and schema validation
