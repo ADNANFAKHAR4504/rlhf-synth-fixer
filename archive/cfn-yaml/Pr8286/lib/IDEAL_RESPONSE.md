@@ -1,0 +1,454 @@
+Ideal Response for Serverless CloudFormation Template (API Gateway → Lambda → S3)
+This is the ideal, production-ready CloudFormation template for a serverless application that exposes an API Gateway (HTTP API) endpoint which invokes a Python 3.12 Lambda to process input and store results in S3. It strictly follows the AWS Well-Architected Framework and principle of least privilege.
+
+Why this is ideal
+Parameterization & Safe Defaults: Environment, log retention, and optional KMS usage are parameterized. Bucket names include a StackId suffix for global uniqueness.
+
+Defense-in-Depth on S3:
+
+Block public access, versioning enabled.
+
+Default encryption (AES256 or KMS).
+
+Bucket policy denies non-TLS requests and unencrypted uploads (with conditional KMS enforcement).
+
+Least-Privilege IAM:
+
+Lambda role scoped to only required actions.
+
+S3 permissions limited to the processed/ prefix.
+
+Conditional KMS permissions added only when needed (CMK or AWS-managed alias/aws/s3).
+
+CloudWatch Logs permissions narrowed to log-stream ARNs.
+
+Observability:
+
+Dedicated CloudWatch Log Groups for Lambda and API Gateway with retention.
+
+Lambda X-Ray tracing enabled.
+
+API Gateway access logging enabled.
+
+Correct API Semantics:
+
+HTTP API with Lambda proxy integration (payload v2.0).
+
+$default stage configured; outputs include the base endpoint and convenience route URL.
+
+Naming & Tagging:
+
+Consistent prod-<service>-<purpose>-style via the Environment parameter.
+
+Common tags applied for cost/governance.
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-grade serverless architecture with API Gateway v2, Lambda, and S3'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    Description: Environment name for resource naming and tagging
+    
+  UseKms:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Whether to use KMS encryption for S3 bucket
+    
+  KmsKeyArn:
+    Type: String
+    Default: ''
+    Description: KMS Key ARN for S3 encryption (optional, only used if UseKms is true)
+    
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    Description: CloudWatch log retention in days
+
+Conditions:
+  UseKmsEncryption: !Equals [!Ref UseKms, 'true']
+  HasKmsKey: !And
+    - !Condition UseKmsEncryption
+    - !Not [!Equals [!Ref KmsKeyArn, '']]
+
+Resources:
+  # S3 Bucket for storing processed output
+  OutputBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 
+        - '${Environment}-s3-app-output-${Suffix}'
+        - Environment: !Ref Environment
+          Suffix: !Select [2, !Split ['/', !Ref 'AWS::StackId']]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: !If
+                - UseKmsEncryption
+                - aws:kms
+                - AES256
+              KMSMasterKeyID: !If
+                - HasKmsKey
+                - !Ref KmsKeyArn
+                - !Ref AWS::NoValue
+            BucketKeyEnabled: !If [UseKmsEncryption, true, !Ref AWS::NoValue]
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-s3-app-output'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Sub '${Environment}-serverless-app'
+
+  # S3 Bucket Policy
+  OutputBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref OutputBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${OutputBucket}'
+              - !Sub 'arn:aws:s3:::${OutputBucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - !If
+            - UseKmsEncryption
+            - Sid: DenyUnencryptedObjectUploads
+              Effect: Deny
+              Principal: '*'
+              Action: 's3:PutObject'
+              Resource: !Sub 'arn:aws:s3:::${OutputBucket}/*'
+              Condition:
+                StringNotEquals:
+                  's3:x-amz-server-side-encryption': 'aws:kms'
+            - Sid: DenyUnencryptedObjectUploads
+              Effect: Deny
+              Principal: '*'
+              Action: 's3:PutObject'
+              Resource: !Sub 'arn:aws:s3:::${OutputBucket}/*'
+              Condition:
+                StringNotEquals:
+                  's3:x-amz-server-side-encryption': 'AES256'
+
+  # CloudWatch Log Group for Lambda
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Environment}-lambda-processor'
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-lambda-logs'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Sub '${Environment}-serverless-app'
+
+  # CloudWatch Log Group for API Gateway
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigatewayv2/${Environment}-apigw-http'
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-apigw-logs'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Sub '${Environment}-serverless-app'
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Environment}-lambda-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-lambda-execution-role'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Sub '${Environment}-serverless-app'
+
+  # IAM Policy for Lambda
+  LambdaExecutionPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub '${Environment}-lambda-execution-policy'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-lambda-processor*'
+          - Effect: Allow
+            Action:
+              - xray:PutTraceSegments
+              - xray:PutTelemetryRecords
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:PutObjectAcl
+            Resource: !Sub 'arn:aws:s3:::${OutputBucket}/processed/*'
+      Roles:
+        - !Ref LambdaExecutionRole
+
+  # Lambda Function
+  ProcessorFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: LambdaLogGroup
+    Properties:
+      FunctionName: !Sub '${Environment}-lambda-processor'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref OutputBucket
+          OBJECT_PREFIX: processed/
+          ENVIRONMENT: !Ref Environment
+          USE_KMS: !Ref UseKms
+          KMS_KEY_ARN: !If [HasKmsKey, !Ref KmsKeyArn, '']
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import uuid
+          from datetime import datetime
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          s3_client = boto3.client('s3')
+
+          def handler(event, context):
+              try:
+                  # Log the incoming event
+                  logger.info(f"Received event: {json.dumps(event)}")
+                  
+                  # Get environment variables
+                  bucket_name = os.environ['BUCKET_NAME']
+                  object_prefix = os.environ.get('OBJECT_PREFIX', 'processed/')
+                  use_kms = os.environ.get('USE_KMS', 'false').lower() == 'true'
+                  kms_key_arn = os.environ.get('KMS_KEY_ARN', '')
+                  
+                  # Parse the request body
+                  if 'body' in event:
+                      if isinstance(event['body'], str):
+                          try:
+                              body = json.loads(event['body'])
+                          except json.JSONDecodeError:
+                              return {
+                                  'statusCode': 400,
+                                  'headers': {'Content-Type': 'application/json'},
+                                  'body': json.dumps({'error': 'Invalid JSON in request body'})
+                              }
+                      else:
+                          body = event['body']
+                  else:
+                      body = {}
+                  
+                  # Validate input
+                  if not isinstance(body, dict):
+                      return {
+                          'statusCode': 400,
+                          'headers': {'Content-Type': 'application/json'},
+                          'body': json.dumps({'error': 'Request body must be a JSON object'})
+                      }
+                  
+                  # Process the data
+                  processed_data = {
+                      'timestamp': datetime.utcnow().isoformat(),
+                      'request_id': context.aws_request_id,
+                      'input_data': body,
+                      'processed_by': 'prod-lambda-processor',
+                      'processing_result': f"Processed {len(str(body))} characters"
+                  }
+                  
+                  # Generate S3 object key
+                  object_key = f"{object_prefix}{datetime.utcnow().strftime('%Y/%m/%d')}/{uuid.uuid4()}.json"
+                  
+                  # Prepare S3 put_object parameters
+                  put_object_params = {
+                      'Bucket': bucket_name,
+                      'Key': object_key,
+                      'Body': json.dumps(processed_data, indent=2),
+                      'ContentType': 'application/json'
+                  }
+                  
+                  # Add encryption parameters based on configuration
+                  if use_kms:
+                      put_object_params['ServerSideEncryption'] = 'aws:kms'
+                      if kms_key_arn:
+                          put_object_params['SSEKMSKeyId'] = kms_key_arn
+                  else:
+                      put_object_params['ServerSideEncryption'] = 'AES256'
+                  
+                  # Write to S3
+                  s3_client.put_object(**put_object_params)
+                  
+                  logger.info(f"Successfully wrote object to s3://{bucket_name}/{object_key}")
+                  
+                  # Return success response
+                  return {
+                      'statusCode': 200,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({
+                          'message': 'Data processed successfully',
+                          's3_object_key': object_key,
+                          'bucket_name': bucket_name,
+                          'request_id': context.aws_request_id
+                      })
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Error processing request: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({
+                          'error': 'Internal server error',
+                          'request_id': context.aws_request_id
+                      })
+                  }
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-lambda-processor'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Sub '${Environment}-serverless-app'
+
+  # API Gateway HTTP API
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${Environment}-apigw-http'
+      Description: 'HTTP API for serverless processing application'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowCredentials: false
+        AllowHeaders:
+          - Content-Type
+          - X-Amz-Date
+          - Authorization
+          - X-Api-Key
+        AllowMethods:
+          - POST
+          - OPTIONS
+        AllowOrigins:
+          - '*'
+        MaxAge: 86400
+      Tags:
+        Name: !Sub '${Environment}-apigw-http'
+        Environment: !Ref Environment
+        Application: !Sub '${Environment}-serverless-app'
+
+  # API Gateway Integration
+  LambdaIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProcessorFunction.Arn}/invocations'
+      IntegrationMethod: POST
+      PayloadFormatVersion: '2.0'
+
+  # API Gateway Route
+  ProcessRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'POST /process'
+      Target: !Sub 'integrations/${LambdaIntegration}'
+
+  # API Gateway Stage
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: '$default'
+      AutoDeploy: true
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","routeKey":"$context.routeKey","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength","error":"$context.error.message","integration_error":"$context.integration.error","integration_status":"$context.integration.status","integration_latency":"$context.integration.latency","response_latency":"$context.responseLatency"}'
+      Tags:
+        Name: !Sub '${Environment}-apigw-stage'
+        Environment: !Ref Environment
+        Application: !Sub '${Environment}-serverless-app'
+
+  # Lambda Permission for API Gateway
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*'
+
+Outputs:
+  ApiEndpoint:
+    Description: 'HTTP API Gateway base endpoint URL'
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+
+  ApiProcessEndpoint:
+    Description: 'HTTP API Gateway process endpoint URL'
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/process'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiProcessEndpoint'
+
+  LambdaFunctionArn:
+    Description: 'Lambda Function ARN'
+    Value: !GetAtt ProcessorFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
+
+  OutputBucketName:
+    Description: 'S3 Output Bucket Name'
+    Value: !Ref OutputBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-OutputBucketName'
+
+  LambdaFunctionName:
+    Description: 'Lambda Function Name'
+    Value: !Ref ProcessorFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionName'
+```

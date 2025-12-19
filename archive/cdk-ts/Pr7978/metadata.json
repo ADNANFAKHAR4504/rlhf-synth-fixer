@@ -1,0 +1,27 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "z8u5f1v6",
+  "team": "synth",
+  "startedAt": "2025-12-05T10:48:19Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Diagnosis/Edits"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "IAM",
+    "RDS",
+    "CloudWatch"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
