@@ -1,0 +1,37 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291740",
+  "team": "synth-2",
+  "startedAt": "2025-08-16T13:17:10.657Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CloudFront",
+    "S3",
+    "Lambda@Edge",
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "Kinesis",
+    "VPC",
+    "Security Groups",
+    "IAM",
+    "NAT Gateway",
+    "CloudWatch",
+    "SNS",
+    "VPC Endpoints"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,19 @@
+{
+  "AuroraClusterEndpoint": "localhost.localstack.cloud",
+  "AuroraClusterIdentifier": "dbc-988e9f1c",
+  "AuroraClusterReaderEndpoint": "localhost.localstack.cloud",
+  "AuroraKmsKeyArn": "arn:aws:kms:us-east-1:000000000000:key/ec1d6d36-41c6-48a0-b892-db757e92776e",
+  "AuroraSecretArn": "arn:aws:secretsmanager:us-east-1:000000000000:secret:TapStackdev-AuroraClusterdevSecret88-560e2ca0-RdtNAc",
+  "DynamoDBTableArn": "arn:aws:dynamodb:us-east-1:000000000000:table/dr-table-dev",
+  "DynamoDBTableName": "dr-table-dev",
+  "LambdaFunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:dr-function-dev",
+  "LambdaFunctionName": "dr-function-dev",
+  "Region": "us-east-1",
+  "S3BucketArn": "arn:aws:s3:::dr-backup-bucket-dev",
+  "S3BucketName": "dr-backup-bucket-dev",
+  "S3KmsKeyArn": "arn:aws:kms:us-east-1:000000000000:key/2006357e-0403-4ead-88c8-6a0de8201da3",
+  "SnsTopicArn": "arn:aws:sns:us-east-1:000000000000:dr-notifications-dev",
+  "SnsTopicName": "dr-notifications-dev",
+  "VpcCidr": "10.0.0.0/16",
+  "VpcId": "vpc-35c9236b8c49c8fba"
+}

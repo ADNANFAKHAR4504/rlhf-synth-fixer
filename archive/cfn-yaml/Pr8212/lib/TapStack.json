@@ -1,0 +1,855 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TAP Stack - Task Assignment Platform CloudFormation Template with Complete Feedback System",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        }
+    },
+    "Resources": {
+        "TurnAroundPromptTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    },
+                    {
+                        "AttributeName": "sentiment",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "datePartition",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "DeletionProtectionEnabled": false,
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "DateSentimentIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "datePartition",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "timestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    },
+                    {
+                        "IndexName": "SentimentTimestampIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "sentiment",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "timestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ReportsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "feedback-reports-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldReports",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "FeedbackProcessorRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "FeedbackProcessorRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "FeedbackProcessorPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:GetItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TurnAroundPromptTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ReportGeneratorRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "ReportGeneratorRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ReportGeneratorPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan",
+                                        "dynamodb:GetItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TurnAroundPromptTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${TurnAroundPromptTable.Arn}/index/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:PutObjectAcl"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${ReportsBucket.Arn}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "FeedbackProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "FeedbackProcessor-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.10",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "FeedbackProcessorRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "TurnAroundPromptTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport uuid\nimport time\nimport logging\nfrom datetime import datetime\nfrom decimal import Decimal\nimport os\nimport re\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndynamodb = boto3.resource('dynamodb')\ncloudwatch = boto3.client('cloudwatch')\n\nTABLE_NAME = os.environ['TABLE_NAME']\nENVIRONMENT = os.environ['ENVIRONMENT']\n\ndef decimal_default(obj):\n    if isinstance(obj, Decimal):\n        return float(obj)\n    raise TypeError\n\ndef validate_input(body):\n    \"\"\"Validate input data\"\"\"\n    errors = []\n    \n    if not body.get('feedback'):\n        errors.append('Feedback text is required')\n    elif len(body['feedback']) < 10:\n        errors.append('Feedback must be at least 10 characters')\n    elif len(body['feedback']) > 5000:\n        errors.append('Feedback must not exceed 5000 characters')\n    \n    if not body.get('userEmail'):\n        errors.append('User email is required')\n    elif '@' not in body['userEmail']:\n        errors.append('Invalid email format')\n    \n    if not body.get('category'):\n        errors.append('Category is required')\n    elif body['category'] not in ['general', 'bug', 'feature', 'improvement']:\n        errors.append('Invalid category. Must be: general, bug, feature, or improvement')\n    \n    return errors\n\ndef analyze_sentiment_simple(text):\n    \"\"\"Simple rule-based sentiment analysis for LocalStack compatibility\"\"\"\n    text_lower = text.lower()\n    \n    # Simple keyword-based sentiment detection\n    positive_words = ['good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', \n                     'love', 'awesome', 'best', 'perfect', 'happy', 'pleased', 'satisfied']\n    negative_words = ['bad', 'terrible', 'awful', 'hate', 'worst', 'horrible', 'poor',\n                     'disappointed', 'frustrating', 'broken', 'issue', 'problem', 'error']\n    \n    positive_count = sum(1 for word in positive_words if word in text_lower)\n    negative_count = sum(1 for word in negative_words if word in text_lower)\n    \n    # Determine sentiment\n    if positive_count > negative_count:\n        sentiment = 'POSITIVE'\n        scores = {'Positive': 0.7, 'Negative': 0.1, 'Neutral': 0.15, 'Mixed': 0.05}\n    elif negative_count > positive_count:\n        sentiment = 'NEGATIVE'\n        scores = {'Positive': 0.1, 'Negative': 0.7, 'Neutral': 0.15, 'Mixed': 0.05}\n    elif positive_count == negative_count and positive_count > 0:\n        sentiment = 'MIXED'\n        scores = {'Positive': 0.3, 'Negative': 0.3, 'Neutral': 0.2, 'Mixed': 0.2}\n    else:\n        sentiment = 'NEUTRAL'\n        scores = {'Positive': 0.1, 'Negative': 0.1, 'Neutral': 0.75, 'Mixed': 0.05}\n    \n    # Extract simple key phrases (words longer than 5 characters)\n    words = re.findall(r'\\b\\w{6,}\\b', text)\n    key_phrases = list(set(words))[:5]\n    \n    return {\n        'sentiment': sentiment,\n        'sentimentScores': scores,\n        'keyPhrases': key_phrases,\n        'entities': []\n    }\n\ndef send_metrics(sentiment):\n    \"\"\"Send custom metrics to CloudWatch\"\"\"\n    try:\n        cloudwatch.put_metric_data(\n            Namespace=f'FeedbackSystem/{ENVIRONMENT}',\n            MetricData=[\n                {\n                    'MetricName': 'FeedbackSubmissions',\n                    'Value': 1,\n                    'Unit': 'Count',\n                    'Dimensions': [\n                        {\n                            'Name': 'Sentiment',\n                            'Value': sentiment\n                        },\n                        {\n                            'Name': 'Environment',\n                            'Value': ENVIRONMENT\n                        }\n                    ]\n                }\n            ]\n        )\n    except Exception as e:\n        logger.error(f\"Failed to send metrics: {str(e)}\")\n\ndef lambda_handler(event, context):\n    \"\"\"Main Lambda handler for processing feedback\"\"\"\n    try:\n        # Parse request body\n        if isinstance(event.get('body'), str):\n            body = json.loads(event['body'])\n        else:\n            body = event.get('body', {})\n        \n        # Validate input\n        validation_errors = validate_input(body)\n        if validation_errors:\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({\n                    'error': 'Validation failed',\n                    'details': validation_errors\n                })\n            }\n        \n        # Analyze sentiment using simple rule-based approach\n        sentiment_data = analyze_sentiment_simple(body['feedback'])\n        \n        # Prepare item for DynamoDB\n        timestamp = int(time.time())\n        date_partition = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m')\n        \n        item = {\n            'id': str(uuid.uuid4()),\n            'timestamp': timestamp,\n            'datePartition': date_partition,\n            'feedback': body['feedback'],\n            'userEmail': body['userEmail'],\n            'category': body['category'],\n            'sentiment': sentiment_data['sentiment'],\n            'sentimentScores': sentiment_data['sentimentScores'],\n            'keyPhrases': sentiment_data['keyPhrases'],\n            'entities': sentiment_data['entities'],\n            'createdAt': datetime.utcnow().isoformat(),\n            'environment': ENVIRONMENT,\n            'rating': body.get('rating', 0),\n            'metadata': body.get('metadata', {})\n        }\n        \n        # Store in DynamoDB\n        table = dynamodb.Table(TABLE_NAME)\n        table.put_item(Item=item)\n        \n        # Send metrics\n        send_metrics(sentiment_data['sentiment'])\n        \n        logger.info(f\"Successfully processed feedback: {item['id']}\")\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'message': 'Feedback processed successfully',\n                'feedbackId': item['id'],\n                'sentiment': sentiment_data['sentiment']\n            }, default=decimal_default)\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error processing feedback: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'error': 'Internal server error',\n                'message': 'Failed to process feedback'\n            })\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ReportGeneratorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "ReportGenerator-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.10",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "ReportGeneratorRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "MemorySize": 512,
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "TurnAroundPromptTable"
+                        },
+                        "BUCKET_NAME": {
+                            "Ref": "ReportsBucket"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport logging\nimport os\nfrom datetime import datetime, timedelta\nfrom collections import defaultdict\nfrom decimal import Decimal\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndynamodb = boto3.resource('dynamodb')\ns3 = boto3.client('s3')\ncloudwatch = boto3.client('cloudwatch')\n\nTABLE_NAME = os.environ['TABLE_NAME']\nBUCKET_NAME = os.environ['BUCKET_NAME']\nENVIRONMENT = os.environ['ENVIRONMENT']\n\ndef decimal_default(obj):\n    if isinstance(obj, Decimal):\n        return float(obj)\n    raise TypeError\n\ndef query_weekly_feedback():\n    \"\"\"Query feedback from the last 7 days\"\"\"\n    table = dynamodb.Table(TABLE_NAME)\n    \n    # Calculate date range\n    end_date = datetime.utcnow()\n    start_date = end_date - timedelta(days=7)\n    start_timestamp = int(start_date.timestamp())\n    end_timestamp = int(end_date.timestamp())\n    \n    # Get current and previous month partitions\n    partitions = [\n        start_date.strftime('%Y-%m'),\n        end_date.strftime('%Y-%m')\n    ]\n    \n    all_items = []\n    \n    for partition in set(partitions):\n        try:\n            response = table.query(\n                IndexName='DateSentimentIndex',\n                KeyConditionExpression='datePartition = :partition AND #ts BETWEEN :start AND :end',\n                ExpressionAttributeNames={\n                    '#ts': 'timestamp'\n                },\n                ExpressionAttributeValues={\n                    ':partition': partition,\n                    ':start': start_timestamp,\n                    ':end': end_timestamp\n                }\n            )\n            all_items.extend(response.get('Items', []))\n            \n            # Handle pagination\n            while 'LastEvaluatedKey' in response:\n                response = table.query(\n                    IndexName='DateSentimentIndex',\n                    KeyConditionExpression='datePartition = :partition AND #ts BETWEEN :start AND :end',\n                    ExpressionAttributeNames={\n                        '#ts': 'timestamp'\n                    },\n                    ExpressionAttributeValues={\n                        ':partition': partition,\n                        ':start': start_timestamp,\n                        ':end': end_timestamp\n                    },\n                    ExclusiveStartKey=response['LastEvaluatedKey']\n                )\n                all_items.extend(response.get('Items', []))\n        except Exception as e:\n            logger.error(f\"Error querying partition {partition}: {str(e)}\")\n    \n    return all_items\n\ndef generate_report(feedback_items):\n    \"\"\"Generate weekly report from feedback items\"\"\"\n    report = {\n        'reportDate': datetime.utcnow().isoformat(),\n        'environment': ENVIRONMENT,\n        'totalFeedback': len(feedback_items),\n        'dateRange': {\n            'start': (datetime.utcnow() - timedelta(days=7)).isoformat(),\n            'end': datetime.utcnow().isoformat()\n        }\n    }\n    \n    # Analyze sentiments\n    sentiment_counts = defaultdict(int)\n    category_counts = defaultdict(int)\n    sentiment_scores_sum = defaultdict(float)\n    ratings = []\n    key_phrases_all = []\n    \n    for item in feedback_items:\n        sentiment_counts[item.get('sentiment', 'UNKNOWN')] += 1\n        category_counts[item.get('category', 'uncategorized')] += 1\n        \n        if 'rating' in item and item['rating']:\n            ratings.append(float(item['rating']))\n        \n        if 'sentimentScores' in item:\n            for key, value in item['sentimentScores'].items():\n                sentiment_scores_sum[key] += float(value)\n        \n        if 'keyPhrases' in item:\n            key_phrases_all.extend(item['keyPhrases'])\n    \n    # Calculate averages\n    if feedback_items:\n        avg_sentiment_scores = {\n            key: value / len(feedback_items) \n            for key, value in sentiment_scores_sum.items()\n        }\n    else:\n        avg_sentiment_scores = {}\n    \n    # Find top key phrases\n    phrase_counts = defaultdict(int)\n    for phrase in key_phrases_all:\n        phrase_counts[phrase] += 1\n    top_phrases = sorted(phrase_counts.items(), key=lambda x: x[1], reverse=True)[:10]\n    \n    report['sentimentDistribution'] = dict(sentiment_counts)\n    report['categoryDistribution'] = dict(category_counts)\n    report['averageSentimentScores'] = avg_sentiment_scores\n    report['averageRating'] = sum(ratings) / len(ratings) if ratings else 0\n    report['topKeyPhrases'] = [{'phrase': phrase, 'count': count} for phrase, count in top_phrases]\n    \n    # Add sample feedback by sentiment\n    report['samplesBySentiment'] = {}\n    for sentiment in ['POSITIVE', 'NEGATIVE', 'NEUTRAL', 'MIXED']:\n        samples = [item for item in feedback_items if item.get('sentiment') == sentiment][:2]\n        report['samplesBySentiment'][sentiment] = [\n            {\n                'feedback': sample.get('feedback', ''),\n                'category': sample.get('category', ''),\n                'rating': float(sample.get('rating', 0))\n            }\n            for sample in samples\n        ]\n    \n    return report\n\ndef save_report_to_s3(report):\n    \"\"\"Save report to S3\"\"\"\n    timestamp = datetime.utcnow()\n    file_key = f\"reports/{ENVIRONMENT}/{timestamp.strftime('%Y/%m')}/weekly_report_{timestamp.strftime('%Y%m%d_%H%M%S')}.json\"\n    \n    s3.put_object(\n        Bucket=BUCKET_NAME,\n        Key=file_key,\n        Body=json.dumps(report, indent=2, default=decimal_default),\n        ContentType='application/json',\n        Metadata={\n            'environment': ENVIRONMENT,\n            'report_type': 'weekly',\n            'generated_at': timestamp.isoformat()\n        }\n    )\n    \n    return file_key\n\ndef send_metrics(report):\n    \"\"\"Send report metrics to CloudWatch\"\"\"\n    try:\n        cloudwatch.put_metric_data(\n            Namespace=f'FeedbackSystem/{ENVIRONMENT}',\n            MetricData=[\n                {\n                    'MetricName': 'WeeklyReportGenerated',\n                    'Value': 1,\n                    'Unit': 'Count'\n                },\n                {\n                    'MetricName': 'WeeklyFeedbackCount',\n                    'Value': report['totalFeedback'],\n                    'Unit': 'Count'\n                },\n                {\n                    'MetricName': 'WeeklyAverageRating',\n                    'Value': report['averageRating'],\n                    'Unit': 'None'\n                }\n            ]\n        )\n    except Exception as e:\n        logger.error(f\"Failed to send metrics: {str(e)}\")\n\ndef lambda_handler(event, context):\n    \"\"\"Main Lambda handler for generating reports\"\"\"\n    try:\n        logger.info(\"Starting weekly report generation\")\n        \n        # Query feedback data\n        feedback_items = query_weekly_feedback()\n        logger.info(f\"Found {len(feedback_items)} feedback items\")\n        \n        # Generate report\n        report = generate_report(feedback_items)\n        \n        # Save to S3\n        report_key = save_report_to_s3(report)\n        logger.info(f\"Report saved to S3: {report_key}\")\n        \n        # Send metrics\n        send_metrics(report)\n        \n        logger.info(f\"Weekly report generated successfully: {report_key}\")\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Report generated successfully',\n                'reportKey': report_key,\n                'totalFeedback': report['totalFeedback']\n            }, default=decimal_default)\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error generating report: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'error': 'Failed to generate report',\n                'details': str(e)\n            })\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "FeedbackApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "FeedbackAPI-${EnvironmentSuffix}"
+                },
+                "Description": "REST API for feedback submission",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiRequestValidator": {
+            "Type": "AWS::ApiGateway::RequestValidator",
+            "Properties": {
+                "Name": "RequestBodyValidator",
+                "RestApiId": {
+                    "Ref": "FeedbackApi"
+                },
+                "ValidateRequestBody": true,
+                "ValidateRequestParameters": false
+            }
+        },
+        "FeedbackModel": {
+            "Type": "AWS::ApiGateway::Model",
+            "Properties": {
+                "ContentType": "application/json",
+                "Name": "FeedbackModel",
+                "RestApiId": {
+                    "Ref": "FeedbackApi"
+                },
+                "Schema": {
+                    "$schema": "http://json-schema.org/draft-04/schema#",
+                    "title": "Feedback",
+                    "type": "object",
+                    "required": [
+                        "feedback",
+                        "userEmail",
+                        "category"
+                    ],
+                    "properties": {
+                        "feedback": {
+                            "type": "string",
+                            "minLength": 10,
+                            "maxLength": 5000
+                        },
+                        "userEmail": {
+                            "type": "string",
+                            "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+                        },
+                        "category": {
+                            "type": "string",
+                            "enum": [
+                                "general",
+                                "bug",
+                                "feature",
+                                "improvement"
+                            ]
+                        },
+                        "rating": {
+                            "type": "number",
+                            "minimum": 1,
+                            "maximum": 5
+                        },
+                        "metadata": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "FeedbackResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "FeedbackApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "feedback",
+                "RestApiId": {
+                    "Ref": "FeedbackApi"
+                }
+            }
+        },
+        "FeedbackMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "AuthorizationType": "NONE",
+                "HttpMethod": "POST",
+                "ResourceId": {
+                    "Ref": "FeedbackResource"
+                },
+                "RestApiId": {
+                    "Ref": "FeedbackApi"
+                },
+                "RequestValidatorId": {
+                    "Ref": "ApiRequestValidator"
+                },
+                "RequestModels": {
+                    "application/json": {
+                        "Ref": "FeedbackModel"
+                    }
+                },
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FeedbackProcessorFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    },
+                    {
+                        "StatusCode": 400
+                    },
+                    {
+                        "StatusCode": 500
+                    }
+                ]
+            }
+        },
+        "ApiGatewayInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "FeedbackProcessorFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${FeedbackApi}/*/*"
+                }
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "FeedbackMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "FeedbackApi"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            }
+        },
+        "WeeklyReportSchedule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "WeeklyReportSchedule-${EnvironmentSuffix}"
+                },
+                "Description": "Trigger weekly report generation every Monday at 9 AM UTC",
+                "ScheduleExpression": "cron(0 9 ? * MON *)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "ReportGeneratorFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "ReportGeneratorTarget"
+                    }
+                ]
+            }
+        },
+        "EventBridgeInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ReportGeneratorFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "WeeklyReportSchedule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "FeedbackProcessorErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "FeedbackProcessor-Errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when feedback processor Lambda has errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "FeedbackProcessorFunction"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ReportGeneratorErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "ReportGenerator-Errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when report generator Lambda has errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "ReportGeneratorFunction"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ApiGateway4xxAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "API-4xx-Errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when API has high 4xx error rate",
+                "MetricName": "4XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Fn::Sub": "FeedbackAPI-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Name": "Stage",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ApiGateway5xxAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "API-5xx-Errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when API has 5xx errors",
+                "MetricName": "5XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 3,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Fn::Sub": "FeedbackAPI-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Name": "Stage",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "FeedbackProcessorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/FeedbackProcessor-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "ReportGeneratorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/ReportGenerator-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        }
+    },
+    "Outputs": {
+        "TurnAroundPromptTableName": {
+            "Description": "Name of the DynamoDB table",
+            "Value": {
+                "Ref": "TurnAroundPromptTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+                }
+            }
+        },
+        "TurnAroundPromptTableArn": {
+            "Description": "ARN of the DynamoDB table",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TurnAroundPromptTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+                }
+            }
+        },
+        "ApiEndpoint": {
+            "Description": "API Gateway endpoint URL for feedback submission",
+            "Value": {
+                "Fn::Sub": "https://${FeedbackApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}/feedback"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
+                }
+            }
+        },
+        "ReportsBucketName": {
+            "Description": "Name of the S3 bucket for reports",
+            "Value": {
+                "Ref": "ReportsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ReportsBucketName"
+                }
+            }
+        },
+        "FeedbackProcessorFunctionArn": {
+            "Description": "ARN of the Feedback Processor Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "FeedbackProcessorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FeedbackProcessorFunctionArn"
+                }
+            }
+        },
+        "ReportGeneratorFunctionArn": {
+            "Description": "ARN of the Report Generator Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ReportGeneratorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ReportGeneratorFunctionArn"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        }
+    }
+}
