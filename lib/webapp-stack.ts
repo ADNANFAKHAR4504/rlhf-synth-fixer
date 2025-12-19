@@ -111,6 +111,7 @@ export class WebAppStack extends cdk.Stack {
     );
 
     // Create Auto Scaling Group
+    // LocalStack: Using PUBLIC subnets since VPC has no private subnets
     const autoScalingGroup = new autoscaling.AutoScalingGroup(
       this,
       `ASG-${props.regionName}`,
@@ -121,7 +122,7 @@ export class WebAppStack extends cdk.Stack {
         maxCapacity: 10,
         desiredCapacity: 2,
         vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: ec2.SubnetType.PUBLIC,
         },
         healthCheck: autoscaling.HealthCheck.elb({
           grace: cdk.Duration.minutes(5),
