@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291403",
+  "team": "synth-2",
+  "startedAt": "2025-08-20T20:20:35.822Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "S3",
+    "RDS",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "AWS Config",
+    "Secrets Manager",
+    "Parameter Store",
+    "ACM"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,8 @@
+{
+  "DataKmsKeyArn": "4b0e67aa-6fdf-4e2b-b4ba-27ea87d16204",
+  "DataProcessorFunctionName": "tap-stack-localstack-abcd-data-processor",
+  "InputBucketName": "tap-stack-localstack-abcd-tapinputbucket-ecafeef1",
+  "OutputBucketName": "tap-stack-localstack-abcd-tapoutputbucket-c31d15f7",
+  "TransactionMetadataTableName": "tap-transaction-metadata",
+  "VpcId": "vpc-d0926a69c70b849c4"
+}
