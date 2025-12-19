@@ -48,14 +48,30 @@ if (fs.existsSync(outputsPath)) {
 
 const region = process.env.AWS_REGION || 'us-east-1';
 
+// LocalStack configuration
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+                     process.env.LOCALSTACK_ENDPOINT !== undefined;
+const endpoint = process.env.AWS_ENDPOINT_URL || process.env.LOCALSTACK_ENDPOINT || 'http://localhost:4566';
+
+const clientConfig = isLocalStack ? {
+  region,
+  endpoint,
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: 'test',
+    secretAccessKey: 'test'
+  }
+} : { region };
+
 // AWS Clients
-const s3Client = new S3Client({ region });
-const rdsClient = new RDSClient({ region });
-const ec2Client = new EC2Client({ region });
-const lambdaClient = new LambdaClient({ region });
-const logsClient = new CloudWatchLogsClient({ region });
-const elbClient = new ElasticLoadBalancingV2Client({ region });
-const iamClient = new IAMClient({ region });
+const s3Client = new S3Client(clientConfig);
+const rdsClient = new RDSClient(clientConfig);
+const ec2Client = new EC2Client(clientConfig);
+const lambdaClient = new LambdaClient(clientConfig);
+const logsClient = new CloudWatchLogsClient(clientConfig);
+const elbClient = new ElasticLoadBalancingV2Client(clientConfig);
+const iamClient = new IAMClient(clientConfig);
 
 describe('TapStack Integration Tests', () => {
   describe('Deployment Outputs Validation', () => {

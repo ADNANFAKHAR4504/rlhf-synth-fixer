@@ -230,7 +230,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      # RoleName removed for LocalStack compatibility - CloudFormation will generate unique name
+      RoleName: !Sub 'SecureWebAppLambdaRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -263,7 +263,7 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      # RoleName removed for LocalStack compatibility - CloudFormation will generate unique name
+      RoleName: !Sub 'SecureWebAppEC2Role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
