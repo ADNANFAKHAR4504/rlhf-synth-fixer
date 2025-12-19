@@ -82,9 +82,10 @@ describe('Production Infrastructure CloudFormation Template', () => {
     const multiAZ = rds.Properties.MultiAZ;
     const storageEncrypted = rds.Properties.StorageEncrypted;
 
-    // Accept either direct boolean or Fn::If condition
-    const isMultiAZValid = multiAZ === true || (typeof multiAZ === 'object' && multiAZ['Fn::If']);
-    const isStorageEncryptedValid = storageEncrypted === true || (typeof storageEncrypted === 'object' && storageEncrypted['Fn::If']);
+    // Accept either direct boolean or Fn::If condition (represented as array)
+    // Fn::If format in JSON: ["NotLocalStack", true, false]
+    const isMultiAZValid = multiAZ === true || (Array.isArray(multiAZ) && multiAZ[0] === 'NotLocalStack' && multiAZ[1] === true);
+    const isStorageEncryptedValid = storageEncrypted === true || (Array.isArray(storageEncrypted) && storageEncrypted[0] === 'NotLocalStack' && storageEncrypted[1] === true);
 
     expect(isMultiAZValid).toBe(true);
     expect(isStorageEncryptedValid).toBe(true);
@@ -112,7 +113,8 @@ describe('Production Infrastructure CloudFormation Template', () => {
     const storageEncrypted = rds.Properties.StorageEncrypted;
 
     // Accept either direct boolean or Fn::If condition for LocalStack compatibility
-    const isValid = storageEncrypted === true || (typeof storageEncrypted === 'object' && storageEncrypted['Fn::If']);
+    // Fn::If format in JSON: ["NotLocalStack", true, false]
+    const isValid = storageEncrypted === true || (Array.isArray(storageEncrypted) && storageEncrypted[0] === 'NotLocalStack' && storageEncrypted[1] === true);
     expect(isValid).toBe(true);
   });
 
