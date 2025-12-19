@@ -18,6 +18,20 @@ import {
 } from '@aws-sdk/client-s3';
 import fs from 'fs';
 
+// LocalStack detection
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+                     process.env.AWS_DEFAULT_REGION === 'us-east-1';
+const endpoint = isLocalStack ? 'http://localhost:4566' : undefined;
+
+// Region configuration - LocalStack uses us-east-1, AWS uses us-west-2
+const region = process.env.AWS_DEFAULT_REGION || (isLocalStack ? 'us-east-1' : 'us-west-2');
+
+console.log('Test Configuration:');
+console.log(`  LocalStack: ${isLocalStack}`);
+console.log(`  Region: ${region}`);
+console.log(`  Endpoint: ${endpoint || 'AWS default'}`);
+
 // Configuration - Get outputs from CloudFormation stack
 let outputs: any = {};
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr81';
@@ -34,10 +48,22 @@ try {
   );
 }
 
-// AWS SDK clients
-const cfnClient = new CloudFormationClient({ region: 'us-west-2' });
-const s3Client = new S3Client({ region: 'us-west-2' });
-const logsClient = new CloudWatchLogsClient({ region: 'us-west-2' });
+// AWS SDK clients with LocalStack support
+const clientConfig = {
+  region,
+  ...(isLocalStack && endpoint ? {
+    endpoint,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: 'test',
+      secretAccessKey: 'test',
+    },
+  } : {}),
+};
+
+const cfnClient = new CloudFormationClient(clientConfig);
+const s3Client = new S3Client(clientConfig);
+const logsClient = new CloudWatchLogsClient(clientConfig);
 
 describe('TapStack Integration Tests - Serverless Web Application', () => {
   let stackOutputs: any = {};
@@ -187,7 +213,16 @@ describe('TapStack Integration Tests - Serverless Web Application', () => {
 
   describe('API Gateway Integration', () => {
     test('API Gateway endpoint should be accessible', async () => {
-      const response = await fetch(stackOutputs.ApiGatewayEndpoint, {
+      // For LocalStack, construct the endpoint URL properly
+      let apiEndpoint = stackOutputs.ApiGatewayEndpoint;
+
+      if (isLocalStack && apiEndpoint) {
+        // Replace AWS API Gateway domain with LocalStack endpoint
+        apiEndpoint = apiEndpoint.replace(/https?:\/\/[^\/]+/, endpoint || 'http://localhost:4566');
+        console.log(`Using LocalStack API endpoint: ${apiEndpoint}`);
+      }
+
+      const response = await fetch(apiEndpoint, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -201,7 +236,13 @@ describe('TapStack Integration Tests - Serverless Web Application', () => {
     });
 
     test('API Gateway should handle CORS properly', async () => {
-      const response = await fetch(stackOutputs.ApiGatewayEndpoint, {
+      let apiEndpoint = stackOutputs.ApiGatewayEndpoint;
+
+      if (isLocalStack && apiEndpoint) {
+        apiEndpoint = apiEndpoint.replace(/https?:\/\/[^\/]+/, endpoint || 'http://localhost:4566');
+      }
+
+      const response = await fetch(apiEndpoint, {
         method: 'OPTIONS',
       });
 
@@ -210,7 +251,13 @@ describe('TapStack Integration Tests - Serverless Web Application', () => {
     });
 
     test('API Gateway should handle invalid methods appropriately', async () => {
-      const response = await fetch(stackOutputs.ApiGatewayEndpoint, {
+      let apiEndpoint = stackOutputs.ApiGatewayEndpoint;
+
+      if (isLocalStack && apiEndpoint) {
+        apiEndpoint = apiEndpoint.replace(/https?:\/\/[^\/]+/, endpoint || 'http://localhost:4566');
+      }
+
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
       });
 
@@ -253,7 +300,13 @@ describe('TapStack Integration Tests - Serverless Web Application', () => {
 
     test('should be able to generate and verify logs after API call', async () => {
       // Make API call to generate logs
-      await fetch(stackOutputs.ApiGatewayEndpoint);
+      let apiEndpoint = stackOutputs.ApiGatewayEndpoint;
+
+      if (isLocalStack && apiEndpoint) {
+        apiEndpoint = apiEndpoint.replace(/https?:\/\/[^\/]+/, endpoint || 'http://localhost:4566');
+      }
+
+      await fetch(apiEndpoint);
 
       // Wait a bit for logs to be written
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -314,8 +367,14 @@ describe('TapStack Integration Tests - Serverless Web Application', () => {
 
   describe('End-to-End Workflow', () => {
     test('complete serverless web application workflow', async () => {
+      let apiEndpoint = stackOutputs.ApiGatewayEndpoint;
+
+      if (isLocalStack && apiEndpoint) {
+        apiEndpoint = apiEndpoint.replace(/https?:\/\/[^\/]+/, endpoint || 'http://localhost:4566');
+      }
+
       // 1. Make API call
-      const response = await fetch(stackOutputs.ApiGatewayEndpoint);
+      const response = await fetch(apiEndpoint);
       expect(response.status).toBe(200);
 
       // 2. Verify response content
@@ -330,7 +389,7 @@ describe('TapStack Integration Tests - Serverless Web Application', () => {
       // 4. Make multiple calls to test scalability
       const promises = [];
       for (let i = 0; i < 5; i++) {
-        promises.push(fetch(stackOutputs.ApiGatewayEndpoint));
+        promises.push(fetch(apiEndpoint));
       }
 
       const responses = await Promise.all(promises);
@@ -379,9 +438,11 @@ describe('TapStack Integration Tests - Serverless Web Application', () => {
       expect(true).toBe(true);
     });
 
-    test('infrastructure should be deployed in us-west-2', async () => {
+    test('infrastructure should be deployed in correct region', async () => {
       // Verify we're testing in the correct region
-      expect(process.env.AWS_DEFAULT_REGION || 'us-west-2').toBe('us-west-2');
+      // LocalStack uses us-east-1, AWS uses us-west-2
+      const expectedRegion = isLocalStack ? 'us-east-1' : 'us-west-2';
+      expect(region).toBe(expectedRegion);
     });
   });
 });
