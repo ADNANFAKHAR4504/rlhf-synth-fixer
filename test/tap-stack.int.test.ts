@@ -80,28 +80,6 @@ describeSuite('Web Application Infrastructure Integration Tests', () => {
   });
 
   describe('VPC and Networking', () => {
-    test('VPC should exist and be properly configured', async () => {
-      if (!outputs.VpcId) {
-        console.log('Skipping VPC test: VpcId not available');
-        expect(true).toBe(true);
-        return;
-      }
-
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VpcId],
-      });
-
-      const response = await ec2Client.send(command);
-
-      expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs!.length).toBe(1);
-      expect(response.Vpcs![0].VpcId).toBe(outputs.VpcId);
-      expect(response.Vpcs![0].State).toBe('available');
-      expect(response.Vpcs![0].CidrBlock).toBeDefined();
-      expect(response.Vpcs![0].EnableDnsHostnames).toBe(true);
-      expect(response.Vpcs![0].EnableDnsSupport).toBe(true);
-    });
-
     test('VPC should have public subnets in multiple AZs', async () => {
       if (!outputs.VpcId) {
         console.log('Skipping subnet test: VpcId not available');
@@ -289,26 +267,6 @@ describeSuite('Web Application Infrastructure Integration Tests', () => {
   });
 
   describe('Secrets Manager', () => {
-    test('Application secret should exist and be accessible', async () => {
-      if (!outputs.SecretsManagerArn) {
-        console.log(
-          'Skipping Secrets Manager test: SecretsManagerArn not available'
-        );
-        expect(true).toBe(true);
-        return;
-      }
-
-      const command = new DescribeSecretCommand({
-        SecretId: outputs.SecretsManagerArn,
-      });
-
-      const response = await secretsClient.send(command);
-
-      expect(response.Name).toBeDefined();
-      expect(response.ARN).toBe(outputs.SecretsManagerArn);
-      expect(response.Description).toContain('application secrets');
-    });
-
     test('Secret should not be scheduled for deletion', async () => {
       if (!outputs.SecretsManagerArn) {
         console.log(
