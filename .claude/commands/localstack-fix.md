@@ -240,22 +240,25 @@ ${FAILING_CHECKS}
 
 **CRITICAL INSTRUCTIONS**:
 
-1. **Create isolated worktree**: MUST work in isolated worktree at `worktree/localstack-Pr${PR_NUMBER}`
+1. **Add yourself as assignee**: Add your GitHub user as assignee to PR #${PR_NUMBER}
+   - Command: \`gh pr edit ${PR_NUMBER} --add-assignee \$(gh api user --jq '.login')\`
+
+2. **Create isolated worktree**: MUST work in isolated worktree at `worktree/localstack-Pr${PR_NUMBER}`
    - This enables parallel execution of multiple PR fixes
    - Do NOT work directly on the branch
    - Worktree path: `$(git rev-parse --show-toplevel)/worktree/localstack-Pr${PR_NUMBER}`
 
-2. **Sync with main**: Automatically sync branch with main (fetch, rebase if behind)
+3. **Sync with main**: Automatically sync branch with main (fetch, rebase if behind)
    - Automatically resolve merge conflicts (accept main's version for scripts/configs)
    - If unresolvable conflicts: Exit with instructions for manual resolution
 
-3. **Fetch and analyze CI/CD job status**:
+4. **Fetch and analyze CI/CD job status**:
    - Create complete checklist of all CI/CD pipeline jobs
    - Identify which jobs passed, failed, or are pending
    - For each failed job, fetch logs and identify failure reasons
    - Use this to prioritize fixes
 
-4. **Apply batch fixes based on CI/CD failures**:
+5. **Apply batch fixes based on CI/CD failures**:
    - Identify ALL errors from failed job logs
    - Map errors to known LocalStack fixes (metadata, endpoints, S3 path-style, etc.)
    - Apply ALL fixes in ONE batch commit
@@ -264,15 +267,16 @@ ${FAILING_CHECKS}
 
 **Your Mission**:
 
-1. Create isolated worktree at `worktree/localstack-Pr${PR_NUMBER}`
-2. **CRITICAL: Sync branch with latest main** (rebase if behind)
-3. Fetch CI/CD pipeline status and create job checklist
-4. Analyze failed jobs and extract ALL error patterns
-5. Map errors to LocalStack-specific fixes
-6. Apply ALL fixes in batch (single commit)
-7. Push changes and monitor CI/CD re-runs
-8. Iterate until all CI/CD jobs pass (max 3 iterations)
-9. Report completion status
+1. Add assignee to PR #${PR_NUMBER}
+2. Create isolated worktree at `worktree/localstack-Pr${PR_NUMBER}`
+3. **CRITICAL: Sync branch with latest main** (rebase if behind)
+4. Fetch CI/CD pipeline status and create job checklist
+5. Analyze failed jobs and extract ALL error patterns
+6. Map errors to LocalStack-specific fixes
+7. Apply ALL fixes in batch (single commit)
+8. Push changes and monitor CI/CD re-runs
+9. Iterate until all CI/CD jobs pass (max 3 iterations)
+10. Report completion status
 
 **Expected Outcome**:
 
