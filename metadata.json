@@ -3,7 +3,7 @@
   "platform": "cfn",
   "language": "yaml",
   "complexity": "expert",
-  "team": "synth",
+  "team": "synth-2",
   "turn_type": "single",
   "provider": "localstack",
   "startedAt": "2025-11-17T12:59:11+00:00",
