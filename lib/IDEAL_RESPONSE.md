@@ -488,7 +488,7 @@ class RDSAnalyzer:
                     low_issues.append(issue_row)
 
         if critical_issues:
-            print("\n🔴 CRITICAL (Immediate Action Required)")
+            print("\n[CRITICAL] CRITICAL (Immediate Action Required)")
             print(tabulate(
                 critical_issues,
                 headers=['DB Identifier', 'Issue Type', 'Current Value', 'Recommendation'],
@@ -497,7 +497,7 @@ class RDSAnalyzer:
             ))
 
         if high_issues:
-            print("\n🟠 HIGH PRIORITY")
+            print("\n[HIGH] HIGH PRIORITY")
             print(tabulate(
                 high_issues,
                 headers=['DB Identifier', 'Issue Type', 'Current Value', 'Recommendation'],
@@ -506,7 +506,7 @@ class RDSAnalyzer:
             ))
 
         if medium_issues:
-            print("\n🟡 MEDIUM PRIORITY")
+            print("\n[MEDIUM] MEDIUM PRIORITY")
             print(tabulate(
                 medium_issues[:10],  # Limit to top 10
                 headers=['DB Identifier', 'Issue Type', 'Current Value', 'Recommendation'],

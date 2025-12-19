@@ -502,7 +502,7 @@ class RDSAnalyzer:
                         low_issues.append((db_id, issue))
             
             if result['cost_optimization']['potential_savings'] > 0:
-                print(f"  💰 Potential Monthly Savings: ${result['cost_optimization']['potential_savings']:.2f}")
+                print(f"  $ Potential Monthly Savings: ${result['cost_optimization']['potential_savings']:.2f}")
         
         # Summary by severity
         print("\n" + "="*80)
@@ -510,17 +510,17 @@ class RDSAnalyzer:
         print("="*80)
         
         if critical_issues:
-            print("\n🔴 CRITICAL (Immediate Action Required):")
+            print("\n[CRITICAL] CRITICAL (Immediate Action Required):")
             for db_id, issue in critical_issues[:5]:  # Top 5
                 print(f"  - {db_id}: {issue['type']} - {issue['recommendation']}")
         
         if high_issues:
-            print("\n🟠 HIGH PRIORITY:")
+            print("\n[HIGH] HIGH PRIORITY:")
             for db_id, issue in high_issues[:5]:
                 print(f"  - {db_id}: {issue['type']} - {issue['recommendation']}")
         
         if medium_issues:
-            print("\n🟡 MEDIUM PRIORITY:")
+            print("\n[MEDIUM] MEDIUM PRIORITY:")
             for db_id, issue in medium_issues[:5]:
                 print(f"  - {db_id}: {issue['type']} - {issue['recommendation']}")
         
@@ -1385,7 +1385,7 @@ pytest test_analyze_rds_performance.py -v
 
 ## Features Implemented
 
-- ✅ All 14 analysis criteria
+- All 14 analysis criteria
 - ✅ Exclusion rules (30+ days, test-, ExcludeFromAnalysis tag)
 - ✅ Performance scoring (0-100)
 - ✅ Cost optimization calculations
