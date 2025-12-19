@@ -17,6 +17,9 @@
     ]
   },
   "context": {
+    "@aws-cdk/core:newStyleStackSynthesis": false,
+    "@aws-cdk/core:bootstrapQualifier": "hnb659fds",
+    "aws-cdk:enableDiffNoFail": "true",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": [
