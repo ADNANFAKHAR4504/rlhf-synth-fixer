@@ -2,7 +2,7 @@
   "platform": "cdk",
   "language": "ts",
   "complexity": "expert",
-  "turn_type": null,
+  "turn_type": "single",
   "po_id": "trainr87",
   "team": "synth-2",
   "startedAt": "2025-08-12T11:54:32-05:00",
