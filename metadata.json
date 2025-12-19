@@ -1,0 +1,23 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "provider": "localstack",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291588",
+  "team": "2",
+  "startedAt": "2025-08-19T17:06:11.256Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS",
+    "IAM"
+  ]
+}
