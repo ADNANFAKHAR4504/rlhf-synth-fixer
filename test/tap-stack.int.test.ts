@@ -207,8 +207,11 @@ describe('TapStack Integration Tests', () => {
 
       const response = await iamClient.send(command);
       expect(response.Role).toBeDefined();
+
+      // For LocalStack, the role uses lambda.amazonaws.com, for AWS it uses ec2.amazonaws.com
+      const expectedPrincipal = isLocalStack ? 'lambda.amazonaws.com' : 'ec2.amazonaws.com';
       expect(response.Role?.AssumeRolePolicyDocument).toContain(
-        'ec2.amazonaws.com'
+        expectedPrincipal
       );
 
       // Check for inline policies
