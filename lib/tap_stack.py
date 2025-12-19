@@ -295,26 +295,9 @@ class TapStack(Stack):
                 "echo '</p>' >> /var/www/html/index.html"
             )
         
-        # Launch template
         # Use T2 for LocalStack compatibility, T3 for AWS
         instance_class = ec2.InstanceClass.T2 if is_localstack else ec2.InstanceClass.T3
 
-        launch_template = ec2.LaunchTemplate(
-            self, f"{name}-LaunchTemplate",
-            instance_type=ec2.InstanceType.of(
-                instance_class,
-                ec2.InstanceSize.MICRO
-            ),
-            machine_image=ec2.AmazonLinuxImage(
-                generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2
-            ),
-            security_group=security_group,
-            user_data=user_data,
-            role=self.ec2_role
-        )
-        
-        Tags.of(launch_template).add("Name", f"{name}-LaunchTemplate")
-        
         # Auto Scaling Group
         # Use EC2 health check for better LocalStack compatibility
         health_check = autoscaling.HealthCheck.ec2(grace=Duration.seconds(300))
@@ -347,6 +330,23 @@ class TapStack(Stack):
                 health_check=health_check
             )
         else:
+            # Create launch template for AWS (not supported well in LocalStack)
+            launch_template = ec2.LaunchTemplate(
+                self, f"{name}-LaunchTemplate",
+                instance_type=ec2.InstanceType.of(
+                    instance_class,
+                    ec2.InstanceSize.MICRO
+                ),
+                machine_image=ec2.AmazonLinuxImage(
+                    generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2
+                ),
+                security_group=security_group,
+                user_data=user_data,
+                role=self.ec2_role
+            )
+
+            Tags.of(launch_template).add("Name", f"{name}-LaunchTemplate")
+
             asg = autoscaling.AutoScalingGroup(
                 self, name,
                 vpc=vpc,
