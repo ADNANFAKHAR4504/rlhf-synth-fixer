@@ -1,15 +1,15 @@
 {
   "platform": "cdk",
   "language": "py",
-  "complexity": "expert",
+  "complexity": "hard",
   "turn_type": "single",
-  "po_id": "229208",
+  "po_id": "291330",
   "team": "4",
-  "startedAt": "2025-12-19T12:20:39.549Z",
-  "subtask": "Application Deployment",
+  "startedAt": "2025-12-19T13:34:46.917Z",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "Serverless Infrastructure (Functions as Code)"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "Lambda",
