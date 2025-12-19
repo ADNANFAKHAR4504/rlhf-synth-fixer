@@ -14,5 +14,12 @@
   "aws_services": [
     "S3",
     "IAM"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
 }
