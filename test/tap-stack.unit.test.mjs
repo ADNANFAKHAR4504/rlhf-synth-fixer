@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.mjs';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
@@ -264,8 +264,8 @@ describe('TapStack', () => {
   describe('Tags', () => {
     test('resources have Owner tag', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        Tags: expect.arrayContaining([
-          expect.objectContaining({
+        Tags: Match.arrayWith([
+          Match.objectLike({
             Key: 'Owner',
             Value: 'FinTechMLOps',
           }),
@@ -275,8 +275,8 @@ describe('TapStack', () => {
 
     test('resources have CostCenter tag', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        Tags: expect.arrayContaining([
-          expect.objectContaining({
+        Tags: Match.arrayWith([
+          Match.objectLike({
             Key: 'CostCenter',
             Value: 'ML-Infrastructure',
           }),
@@ -286,8 +286,8 @@ describe('TapStack', () => {
 
     test('resources have Application tag', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        Tags: expect.arrayContaining([
-          expect.objectContaining({
+        Tags: Match.arrayWith([
+          Match.objectLike({
             Key: 'Application',
             Value: 'FraudPrediction',
           }),
