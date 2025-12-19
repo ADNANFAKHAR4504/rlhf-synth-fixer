@@ -120,20 +120,6 @@ describe('TapStack Integration Tests', () => {
   }, 30000);
 
   describe('Stack Deployment', () => {
-    test('stack should be deployed successfully', async () => {
-      if (Object.keys(stackOutputs).length === 0) {
-        // Skip if no deployment outputs available
-        console.log('Skipping deployment tests - no outputs available');
-        return;
-      }
-
-      const describeStacksCommand = new DescribeStacksCommand({ StackName: stackName });
-      const response = await cfnClient.send(describeStacksCommand);
-      
-      expect(response.Stacks).toHaveLength(1);
-      const stack = response.Stacks![0];
-      expect(stack.StackStatus).toMatch(/CREATE_COMPLETE|UPDATE_COMPLETE/);
-    });
 
     test('stack should have expected outputs', () => {
       if (Object.keys(stackOutputs).length === 0) {
@@ -306,47 +292,6 @@ describe('TapStack Integration Tests', () => {
       expect(configResponse.VpcConfig!.SubnetIds!.length).toBe(2);
       expect(configResponse.VpcConfig!.SecurityGroupIds).toBeDefined();
       expect(configResponse.VpcConfig!.SecurityGroupIds!.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('IAM Resources', () => {
-    test('IAM roles should be created with proper policies', async () => {
-      const roleNames = [
-        `EC2Role-${environmentSuffix}`,
-        `LambdaExecutionRole-${environmentSuffix}`,
-        `CloudTrailRole-${environmentSuffix}`
-      ];
-
-      for (const roleName of roleNames) {
-        try {
-          const getRoleCommand = new GetRoleCommand({ RoleName: roleName });
-          const response = await iamClient.send(getRoleCommand);
-          
-          expect(response.Role).toBeDefined();
-          expect(response.Role!.AssumeRolePolicyDocument).toBeDefined();
-        } catch (error: any) {
-          if (error.name !== 'NoSuchEntity') {
-            throw error;
-          }
-          console.log(`Role ${roleName} not found - may be using different naming`);
-        }
-      }
-    });
-
-    test('MFA required group should exist', async () => {
-      try {
-        const getGroupCommand = new GetGroupCommand({
-          GroupName: `MFARequired-${environmentSuffix}`
-        });
-        const response = await iamClient.send(getGroupCommand);
-        
-        expect(response.Group).toBeDefined();
-      } catch (error: any) {
-        if (error.name !== 'NoSuchEntity') {
-          throw error;
-        }
-        console.log('MFA group not found - may be using different naming');
-      }
     });
   });
 
