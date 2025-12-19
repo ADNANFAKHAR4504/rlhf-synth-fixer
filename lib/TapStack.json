@@ -4,6 +4,7 @@
   "Parameters": {
     "Environment": {
       "Type": "String",
+      "Default": "dev",
       "Description": "Unique suffix for resource naming to enable multiple deployments",
       "AllowedPattern": "[a-zA-Z0-9-]+",
       "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
