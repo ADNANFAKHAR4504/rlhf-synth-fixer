@@ -1468,19 +1468,7 @@
                     "LaunchTemplateId": {
                         "Ref": "LaunchTemplate"
                     },
-                    "Version": {
-                        "Fn::Sub": [
-                            "${V}",
-                            {
-                                "V": {
-                                    "Fn::GetAtt": [
-                                        "LaunchTemplate",
-                                        "LatestVersionNumber"
-                                    ]
-                                }
-                            }
-                        ]
-                    }
+                    "Version": "$Latest"
                 },
                 "ImageId": {
                     "Ref": "LatestAmiId"
