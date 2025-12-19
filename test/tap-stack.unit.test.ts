@@ -107,4 +107,29 @@ describe('TapStack Unit Tests', () => {
     // Verify S3 bucket exists
     template.resourceCountIs('AWS::S3::Bucket', 1);
   });
+
+  test('Stack outputs LocalStack compatibility flag when AWS_ENDPOINT_URL is set', () => {
+    // Simulate LocalStack environment
+    const originalEndpoint = process.env.AWS_ENDPOINT_URL;
+    process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+
+    const app = new cdk.App();
+    const localstackStack = new TapStack(app, 'TestLocalStackStack', {
+      env: { region: 'us-east-1', account: '123456789012' },
+      environmentSuffix: 'test',
+    });
+    const localstackTemplate = Template.fromStack(localstackStack);
+
+    // Verify LocalStack compatibility output exists
+    localstackTemplate.hasOutput('LocalStackCompatibility', {
+      Value: 'true',
+    });
+
+    // Restore original environment
+    if (originalEndpoint) {
+      process.env.AWS_ENDPOINT_URL = originalEndpoint;
+    } else {
+      delete process.env.AWS_ENDPOINT_URL;
+    }
+  });
 });
