@@ -7,9 +7,9 @@
   "team": "4",
   "provider": "localstack",
   "startedAt": "2025-10-02T18:14:36.449Z",
-  "subtask": "Cloud Environment Setup",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Provisioning of Infrastructure Environments"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "SNS",
@@ -18,6 +18,5 @@
     "DynamoDB",
     "CloudWatch",
     "IAM"
-  ],
-  "training_quality": 8
+  ]
 }
