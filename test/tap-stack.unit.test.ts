@@ -55,8 +55,10 @@ describe('TapStack Unit Tests', () => {
       expect(Object.keys(privateSubnets).length).toBe(2);
     });
 
-    test('Creates exactly 1 NAT Gateway', () => {
-      template.resourceCountIs('AWS::EC2::NatGateway', 1);
+    test('NAT Gateway disabled for LocalStack compatibility', () => {
+      // LocalStack Community edition has limited NAT Gateway support
+      // Verify NAT Gateways are disabled
+      template.resourceCountIs('AWS::EC2::NatGateway', 0);
     });
 
     test('Creates Internet Gateway', () => {
@@ -359,19 +361,11 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('CloudWatch Application Insights', () => {
-    test('Resource group is created for Application Insights', () => {
-      template.hasResourceProperties('AWS::ResourceGroups::Group', {
-        Name: `migration-resources-${environmentSuffix}`,
-        Description: 'Resource group for migration application monitoring',
-      });
-    });
-
-    test('Application Insights application is created', () => {
-      template.hasResourceProperties('AWS::ApplicationInsights::Application', {
-        AutoConfigurationEnabled: true,
-        CWEMonitorEnabled: true,
-        OpsCenterEnabled: true,
-      });
+    test('Application Insights disabled for LocalStack (Pro/Enterprise feature)', () => {
+      // Application Insights is a Pro/Enterprise feature in LocalStack
+      // Verify it's disabled for LocalStack compatibility
+      template.resourceCountIs('AWS::ResourceGroups::Group', 0);
+      template.resourceCountIs('AWS::ApplicationInsights::Application', 0);
     });
 
     test('Application log group is created', () => {
@@ -430,10 +424,11 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('Application Insights resource group output is created', () => {
-      template.hasOutput('ApplicationInsightsResourceGroupName', {
-        Description: 'CloudWatch Application Insights resource group name',
-      });
+    test('Application Insights resource group output disabled for LocalStack', () => {
+      // Application Insights is disabled for LocalStack, so output should not exist
+      // Verify the output is not present
+      const outputs = template.toJSON().Outputs || {};
+      expect(outputs.ApplicationInsightsResourceGroupName).toBeUndefined();
     });
   });
 
@@ -474,13 +469,15 @@ describe('TapStack Unit Tests', () => {
       expect(azs.size).toBeGreaterThanOrEqual(2);
     });
 
-    test('Private subnets have NAT gateway routes', () => {
+    test('Private subnets configured without NAT gateway for LocalStack', () => {
+      // NAT Gateway is disabled for LocalStack compatibility
+      // Verify no NAT Gateway routes exist
       const routes = template.findResources('AWS::EC2::Route', {
         Properties: {
           NatGatewayId: Match.anyValue(),
         },
       });
-      expect(Object.keys(routes).length).toBeGreaterThanOrEqual(2);
+      expect(Object.keys(routes).length).toBe(0);
     });
 
     test('All required security measures are in place', () => {
