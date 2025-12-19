@@ -516,21 +516,17 @@ run_pulumi_tests() {
         "go")
             print_status $YELLOW "🧪 Running Go tests..."
             
-            # Check for Go test files in tests/integration/ directory (including subdirectories)
+            # Check for Go test files in tests/integration/ only
             if ! find "$test_dir/integration" -name "*_test.go" 2>/dev/null | grep -q .; then
                 print_status $RED "❌ No Go test files found in tests/integration/"
                 exit 1
             fi
             
-            # Run tests from tests/integration/ where the Go files are
+            # Run tests from tests/integration/ only
             cd "$test_dir/integration"
             
             if [ -f "go.mod" ]; then
                 go mod download
-            elif [ -f "$test_dir/go.mod" ]; then
-                cd "$test_dir"
-                go mod download
-                cd "$test_dir/integration"
             fi
             
             go test -v -timeout 30m ./... 2>&1
@@ -543,13 +539,14 @@ run_pulumi_tests() {
         "java")
             print_status $YELLOW "🧪 Running Java tests..."
             
-            # Check for Java test files in tests/integration/ directory
+            # Check for Java test files in tests/integration/ only
             if ! find "$test_dir/integration" -name "*Test.java" -o -name "*Tests.java" 2>/dev/null | grep -q .; then
                 print_status $RED "❌ No Java test files found in tests/integration/"
                 exit 1
             fi
             
-            cd "$PROJECT_ROOT"
+            # Run tests from tests/integration/ only
+            cd "$test_dir/integration"
             
             if [ -f "pom.xml" ]; then
                 mvn test -B 2>&1
@@ -566,7 +563,7 @@ run_pulumi_tests() {
                     exit $exit_code
                 fi
             else
-                print_status $RED "❌ No Java build file (pom.xml or build.gradle) found"
+                print_status $RED "❌ No Java build file (pom.xml or build.gradle) found in tests/integration/"
                 exit 1
             fi
             ;;
