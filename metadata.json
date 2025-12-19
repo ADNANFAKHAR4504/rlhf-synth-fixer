@@ -6,10 +6,9 @@
   "po_id": "350088",
   "team": "2",
   "startedAt": "2025-11-12T12:17:57.977Z",
-  "subtask": "Application Deployment",
+  "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "Web Application Deployment",
-    "Serverless Infrastructure (Functions as Code)"
+    "Infrastructure Analysis/Monitoring"
   ],
   "aws_services": [
     "EC2",
