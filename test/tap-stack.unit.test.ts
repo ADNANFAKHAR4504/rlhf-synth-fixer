@@ -620,12 +620,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(instance.Properties.LaunchTemplate.LaunchTemplateId['Ref']).toBe(
         'LaunchTemplate'
       );
-      expect(instance.Properties.LaunchTemplate.Version['Fn::Sub']).toEqual([
-        '${V}',
-        {
-          V: { 'Fn::GetAtt': ['LaunchTemplate', 'LatestVersionNumber'] },
-        },
-      ]);
+      expect(instance.Properties.LaunchTemplate.Version).toBe('$Latest');
     });
   });
 

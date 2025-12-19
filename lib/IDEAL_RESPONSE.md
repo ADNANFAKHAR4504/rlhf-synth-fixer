@@ -807,9 +807,7 @@ Resources:
     Properties:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !Sub
-          - '${V}'
-          - V: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: '$Latest'
       ImageId: !Ref LatestAmiId
       SubnetId: !If [CreateNewVPC, !Ref PublicSubnet1, !Ref 'AWS::NoValue']
       Tags:
