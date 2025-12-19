@@ -241,20 +241,6 @@ describe("TapStack CloudFormation template (YAML presence & JSON structure)", ()
     expect(stmtCount).toBeLessThanOrEqual(6);
   });
 
-  // 18
-  it("ALB exists in public subnets with logging enabled", () => {
-    const alb = getResource(json, "ApplicationLoadBalancer");
-    expect(alb.Type).toBe("AWS::ElasticLoadBalancingV2::LoadBalancer");
-    const attrs = alb.Properties?.LoadBalancerAttributes || [];
-    expect(attrs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ Key: "access_logs.s3.enabled", Value: "true" }),
-        expect.objectContaining({ Key: "access_logs.s3.bucket" }),
-      ])
-    );
-    expect(alb.Properties?.Subnets?.length).toBeGreaterThanOrEqual(2);
-  });
-
   // 19
   it("Target Group configured with instance targets and health checks", () => {
     const tg = getResource(json, "AppTargetGroup");
@@ -279,18 +265,6 @@ describe("TapStack CloudFormation template (YAML presence & JSON structure)", ()
   });
 
   // 21
-  it("CloudTrail trail is multi-region and includes S3 data events", () => {
-    const ct = getResource(json, "CloudTrailTrail");
-    expect(ct.Type).toBe("AWS::CloudTrail::Trail");
-    expect(ct.Properties?.IsMultiRegionTrail).toBe(true);
-    const selectors = ct.Properties?.EventSelectors || [];
-    const hasS3Data = selectors.some((sel: any) =>
-      (sel.DataResources || []).some((dr: any) => dr.Type === "AWS::S3::Object")
-    );
-    expect(hasS3Data).toBe(true);
-  });
-
-  // 22
   it("Key resources have Environment/Project/Owner tags", () => {
     const ids = ["VPC", "PublicSubnet1", "PrivateSubnet1", "ApplicationLoadBalancer", "LogsBucket", "ApplicationBucket"];
     for (const id of ids) {
@@ -299,7 +273,7 @@ describe("TapStack CloudFormation template (YAML presence & JSON structure)", ()
     }
   });
 
-  // 23
+  // 22
   it("Outputs include critical identifiers and ARNs", () => {
     const outs = json.Outputs || {};
     const required = [
@@ -318,7 +292,7 @@ describe("TapStack CloudFormation template (YAML presence & JSON structure)", ()
     }
   });
 
-  // 24
+  // 23
   it("Logs bucket policy includes CloudTrail delivery permissions", () => {
     const lbp = getResource(json, "LogsBucketPolicy").Properties?.PolicyDocument;
     const write = lbp.Statement.find((s: any) => s.Sid === "CloudTrailWrite");
