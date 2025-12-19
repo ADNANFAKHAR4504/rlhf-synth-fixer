@@ -6,7 +6,8 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
-// LocalStack detection
+// LocalStack detection - kept for future enhancements
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const isLocalStack =
   process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
   process.env.AWS_ENDPOINT_URL?.includes('4566');
@@ -159,7 +160,7 @@ export class ElasticBeanstalkStack extends cdk.Stack {
       'cd /opt/webapp',
       '',
       '# Create a simple Node.js web server',
-      'cat > server.js << \'EOF\'',
+      "cat > server.js << 'EOF'",
       'const http = require("http");',
       'const os = require("os");',
       '',
@@ -200,7 +201,7 @@ export class ElasticBeanstalkStack extends cdk.Stack {
       'ExecStart=/usr/bin/node server.js',
       'Restart=always',
       'RestartSec=10',
-      `Environment="NODE_ENV=production"`,
+      'Environment="NODE_ENV=production"',
       `Environment="APP_SECRET_ARN=${appSecret.secretArn}"`,
       '',
       '[Install]',
@@ -233,29 +234,26 @@ export class ElasticBeanstalkStack extends cdk.Stack {
     );
 
     // Target group
-    const targetGroup = new elbv2.ApplicationTargetGroup(
-      this,
-      'TargetGroup',
-      {
-        vpc: this.vpc,
-        targetGroupName: `web-app-tg-${environmentSuffix}`,
-        port: 8080,
-        protocol: elbv2.ApplicationProtocol.HTTP,
-        targetType: elbv2.TargetType.INSTANCE,
-        healthCheck: {
-          enabled: true,
-          path: '/',
-          interval: cdk.Duration.seconds(30),
-          timeout: cdk.Duration.seconds(5),
-          healthyThresholdCount: 2,
-          unhealthyThresholdCount: 3,
-          healthyHttpCodes: '200',
-        },
-        deregistrationDelay: cdk.Duration.seconds(30),
-      }
-    );
+    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
+      vpc: this.vpc,
+      targetGroupName: `web-app-tg-${environmentSuffix}`,
+      port: 8080,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targetType: elbv2.TargetType.INSTANCE,
+      healthCheck: {
+        enabled: true,
+        path: '/',
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+        healthyHttpCodes: '200',
+      },
+      deregistrationDelay: cdk.Duration.seconds(30),
+    });
 
-    // Listener
+    // Listener - attached to load balancer for HTTP traffic
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const listener = this.loadBalancer.addListener('HttpListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
@@ -303,6 +301,7 @@ export class ElasticBeanstalkStack extends cdk.Stack {
     });
 
     // Add custom scaling policy for ALB request count
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const requestCountScaling = new autoscaling.TargetTrackingScalingPolicy(
       this,
       'RequestCountScaling',
@@ -348,9 +347,7 @@ export class ElasticBeanstalkStack extends cdk.Stack {
       this.loadBalancer.addListener('HttpsListener', {
         port: 443,
         protocol: elbv2.ApplicationProtocol.HTTPS,
-        certificates: [
-          elbv2.ListenerCertificate.fromArn(props.certificateArn),
-        ],
+        certificates: [elbv2.ListenerCertificate.fromArn(props.certificateArn)],
         defaultTargetGroups: [targetGroup],
       });
 
