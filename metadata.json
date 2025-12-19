@@ -4,12 +4,11 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "291326",
-  "team": "synth",
+  "team": "synth-2",
   "startedAt": "2025-07-31T09:00:41.678Z",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "Security Configuration as Code",
     "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
