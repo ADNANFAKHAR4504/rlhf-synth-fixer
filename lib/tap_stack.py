@@ -211,8 +211,8 @@ class TapStack(Stack):
 
     # Auto Scaling Group
     # Note: Using public subnets for LocalStack since NAT Gateway is not available
-    # Using instance_type and machine_image directly instead of launch_template
-    # to avoid CloudFormation LaunchTemplate.LatestVersionNumber issues in LocalStack
+    # Removed block_devices to avoid LocalStack LaunchTemplate.LatestVersionNumber issues
+    # LocalStack has issues with LaunchTemplate version references when block devices are specified
     asg = autoscaling.AutoScalingGroup(
       self, f"tap-asg-{environment_suffix}",
       vpc=vpc,
@@ -232,16 +232,7 @@ class TapStack(Stack):
       security_group=ec2_sg,
       role=ec2_role,
       user_data=user_data_script,
-      block_devices=[
-        autoscaling.BlockDevice(
-          device_name="/dev/xvda",
-          volume=autoscaling.BlockDeviceVolume.ebs(
-            volume_size=8,
-            encrypted=True,
-            delete_on_termination=True,
-          ),
-        )
-      ],
+      # Removed block_devices - causes LocalStack LaunchTemplate issues
       min_capacity=2,
       max_capacity=10,
       desired_capacity=2,

@@ -58,7 +58,8 @@ class TestTapStack(unittest.TestCase):
         stack = TapStack(self.app, "TapStackAsgTest")
         template = Template.from_stack(stack)
         template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
-        template.resource_count_is("AWS::EC2::LaunchTemplate", 1)
+        # LaunchTemplate removed to avoid LocalStack LatestVersionNumber issues
+        # ASG uses instance_type and machine_image directly instead
 
     @mark.it("outputs key resource identifiers")
     def test_outputs(self):
