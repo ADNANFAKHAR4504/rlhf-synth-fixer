@@ -8,6 +8,7 @@ Parameters:
     Description: 'Environment suffix to distinguish deployments (e.g., dev, stg, prod)'
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
+    Default: 'pr8439'
 
   RootDomainName:
     Type: String

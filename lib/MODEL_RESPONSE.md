@@ -498,7 +498,7 @@ Outputs:
 
 ## Key Features and Architecture
 
-### 🏗️ **Infrastructure Components**
+### **Infrastructure Components**
 
 1. **DNS Management**: Creates a Route 53 hosted zone and manages DNS records
 2. **SSL/TLS**: Provisions ACM certificates with automatic DNS validation
@@ -507,7 +507,7 @@ Outputs:
 5. **API**: REST API Gateway with CORS support and optional custom domain
 6. **Monitoring**: CloudWatch alarms and SNS notifications
 
-### 🔧 **Deployment Instructions**
+### **Deployment Instructions**
 
 ```bash
 # Deploy with custom domain
@@ -527,7 +527,7 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM
 ```
 
-### 🚀 **Usage Examples**
+### **Usage Examples**
 
 **API Testing:**
 
@@ -539,7 +539,7 @@ curl https://api-prod.example.com/process
 aws s3 cp myfile.txt s3://serverless-files-prod-123456789012/
 ```
 
-### ⚠️ **Important Notes**
+### **Important Notes**
 
 1. **Certificate Validation**: Stack deployment may pause during ACM certificate DNS validation. This is normal and can take 5-30 minutes.
 
