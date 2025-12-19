@@ -202,7 +202,8 @@ class TapStack(cdk.Stack):
                 }
             }
         )
-                    self.lambda_function.add_to_role_policy(kms_policy)
+
+        self.lambda_function.add_to_role_policy(kms_policy)
 
     def _get_lambda_code(self) -> str:
         """Return the Lambda function code as a dedented string"""
