@@ -208,7 +208,7 @@ class TapStack(cdk.Stack):
 
     def _get_lambda_code(self) -> str:
         """Return the Lambda function code as a dedented string"""
-        return textwrap.dedent("""
+        return textwrap.dedent("""\
             import json
             import boto3
             import os
@@ -286,4 +286,4 @@ class TapStack(cdk.Stack):
                             'message': str(e)
                         })
                     }
-        """)
+            """)
