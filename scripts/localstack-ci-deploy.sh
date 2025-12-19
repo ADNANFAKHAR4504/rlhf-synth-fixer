@@ -351,8 +351,17 @@ deploy_cdk() {
     print_status $BLUE "📌 Environment suffix: $env_suffix"
 
     # Create minimal bootstrap for LocalStack without ECR
-    # LocalStack Community doesn't support ECR, but CDK needs the SSM parameter
+    # LocalStack Community doesn't support ECR, but CDK needs SSM parameter and S3 bucket
     print_status $YELLOW "🔧 Creating minimal bootstrap for LocalStack (without ECR)..."
+
+    # Get AWS account ID and region
+    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "000000000000")
+    AWS_REGION=${AWS_REGION:-us-east-1}
+
+    # Create the CDK bootstrap S3 bucket for assets
+    BOOTSTRAP_BUCKET="cdk-hnb659fds-assets-${AWS_ACCOUNT_ID}-${AWS_REGION}"
+    aws s3 mb "s3://${BOOTSTRAP_BUCKET}" 2>/dev/null || true
+    print_status $GREEN "✅ Bootstrap S3 bucket created: ${BOOTSTRAP_BUCKET}"
 
     # Create the required SSM parameter that CDK looks for
     aws ssm put-parameter \
