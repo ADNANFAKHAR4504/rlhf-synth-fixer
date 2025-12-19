@@ -56,7 +56,7 @@ Mappings:
       AMI: 'ami-0c2ab3b8efb09f272'
 
 Conditions:
-  IsLocal: !Equals [!Ref LocalTesting, 'true']
+  #IsLocal: !Equals [!Ref LocalTesting, 'true']
   IsAws: !Equals [!Ref LocalTesting, 'false']
 
 Resources:
