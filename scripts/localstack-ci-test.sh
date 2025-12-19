@@ -522,10 +522,15 @@ run_pulumi_tests() {
                 exit 1
             fi
             
-            cd "$test_dir"
+            # Run tests from tests/integration/ where the Go files are
+            cd "$test_dir/integration"
             
             if [ -f "go.mod" ]; then
                 go mod download
+            elif [ -f "$test_dir/go.mod" ]; then
+                cd "$test_dir"
+                go mod download
+                cd "$test_dir/integration"
             fi
             
             go test -v -timeout 30m ./... 2>&1
