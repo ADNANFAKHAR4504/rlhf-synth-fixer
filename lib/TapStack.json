@@ -247,16 +247,6 @@
             "Description": "Select \"yes\" to create an EC2 instance. Select \"no\" to skip instance creation."
         }
     },
-    "Mappings": {
-        "RegionMap": {
-            "us-west-2": {
-                "AMI": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1}}"
-            },
-            "us-east-1": {
-                "AMI": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1}}"
-            }
-        }
-    },
     "Conditions": {
         "CreateNewVPC": {
             "Fn::Equals": [
@@ -1301,8 +1291,6 @@
         "Database": {
             "Type": "AWS::RDS::DBInstance",
             "Condition": "CreateNewDatabase",
-            "DeletionPolicy": "Snapshot",
-            "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "AllocatedStorage": 20,
                 "DBInstanceClass": {
@@ -1374,15 +1362,7 @@
                     "Fn::Sub": "${AWS::StackName}-lt"
                 },
                 "LaunchTemplateData": {
-                    "ImageId": {
-                        "Fn::FindInMap": [
-                            "RegionMap",
-                            {
-                                "Ref": "AWS::Region"
-                            },
-                            "AMI"
-                        ]
-                    },
+                    "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
