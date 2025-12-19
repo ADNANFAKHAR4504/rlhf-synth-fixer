@@ -28,5 +28,11 @@
   ],
   "turn_type": "single",
   "team": "synth",
-  "startedAt": "2025-12-05T18:23:31.3NZ"
+  "startedAt": "2025-12-05T18:23:31.3NZ",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
