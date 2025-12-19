@@ -26,9 +26,10 @@ const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
 
 // For LocalStack, only deploy to primary region (us-east-1)
 // Multi-region deployment causes issues in LocalStack Community
+// Use TapStack naming to match CI/CD pipeline expectations
 if (isLocalStack) {
-  new SecurityConfigStack(app, `SecurityConfigStack-${environmentSuffix}-primary`, {
-    stackName: `SecurityConfigStack-${environmentSuffix}-primary`,
+  new SecurityConfigStack(app, `TapStack-${environmentSuffix}`, {
+    stackName: `TapStack-${environmentSuffix}`,
     environmentSuffix: environmentSuffix,
     isPrimaryRegion: true,
     env: {
@@ -38,8 +39,8 @@ if (isLocalStack) {
   });
 } else {
   // Deploy to us-east-1 (primary region)
-  new SecurityConfigStack(app, `SecurityConfigStack-${environmentSuffix}-primary`, {
-    stackName: `SecurityConfigStack-${environmentSuffix}-primary`,
+  new SecurityConfigStack(app, `TapStack-${environmentSuffix}-primary`, {
+    stackName: `TapStack-${environmentSuffix}-primary`,
     environmentSuffix: environmentSuffix,
     isPrimaryRegion: true,
     env: {
@@ -49,8 +50,8 @@ if (isLocalStack) {
   });
 
   // Deploy to us-west-2 (secondary region)
-  new SecurityConfigStack(app, `SecurityConfigStack-${environmentSuffix}-secondary`, {
-    stackName: `SecurityConfigStack-${environmentSuffix}-secondary`,
+  new SecurityConfigStack(app, `TapStack-${environmentSuffix}-secondary`, {
+    stackName: `TapStack-${environmentSuffix}-secondary`,
     environmentSuffix: environmentSuffix,
     isPrimaryRegion: false,
     env: {
