@@ -64,9 +64,8 @@ describe('TapStack', () => {
       return (
         props.Name.match(/^TestTapStack-live-[a-zA-Z0-9]+$/) &&
         typeof props.Description === 'string' &&
-        props.Description.includes('Live alias for production traffic') &&
-        props.ProvisionedConcurrencyConfig &&
-        props.ProvisionedConcurrencyConfig.ProvisionedConcurrentExecutions === 100
+        props.Description.includes('Live alias for production traffic')
+        // Note: ProvisionedConcurrencyConfig removed for LocalStack compatibility
       );
     });
     expect(found).toBe(true);
