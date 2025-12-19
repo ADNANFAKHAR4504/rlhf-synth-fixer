@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349074",
+  "team": "3",
+  "startedAt": "2025-12-19T13:08:40.975Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM Role",
+    "S3 Bucket",
+    "RDS Instance",
+    "CloudTrail",
+    "KMS Key",
+    "EC2 Instance",
+    "CloudWatch Alarm",
+    "VPC",
+    "Public Subnet",
+    "Private Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Security Group",
+    "WAF Web ACL"
+  ]
+}
