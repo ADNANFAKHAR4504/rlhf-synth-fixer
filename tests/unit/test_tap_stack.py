@@ -159,8 +159,13 @@ class TestRdsHighAvailabilityInfra(unittest.TestCase):
     def test_creates_required_resources(self):
         """Test that all required AWS resources are created."""
         # ARRANGE
-        rds_stack = RdsHighAvailabilityInfra(self.stack, "RdsInfra",
-                                             self.props)
+        # Use is_localstack=False to test full AWS resources
+        props = RdsHighAvailabilityInfraProps(
+            environment_suffix="test",
+            admin_email="test@example.com",
+            is_localstack=False
+        )
+        rds_stack = RdsHighAvailabilityInfra(self.stack, "RdsInfra", props)
         template = assertions.Template.from_stack(rds_stack)
 
         # ASSERT - Verify key resources are created
@@ -282,8 +287,13 @@ class TestRdsHighAvailabilityInfra(unittest.TestCase):
     def test_backup_plan_rpo(self):
         """Test backup plan with hourly backup schedule."""
         # ARRANGE
-        rds_stack = RdsHighAvailabilityInfra(self.stack, "RdsInfra",
-                                             self.props)
+        # Use is_localstack=False to test AWS Backup (not supported in LocalStack)
+        props = RdsHighAvailabilityInfraProps(
+            environment_suffix="test",
+            admin_email="test@example.com",
+            is_localstack=False
+        )
+        rds_stack = RdsHighAvailabilityInfra(self.stack, "RdsInfra", props)
         template = assertions.Template.from_stack(rds_stack)
 
         # ASSERT
@@ -370,22 +380,22 @@ class TestRdsHighAvailabilityInfra(unittest.TestCase):
         template = assertions.Template.from_stack(rds_stack)
 
         # ASSERT
-        template.has_output("RdsEndpoint",
-                            {"Export": {
-                                "Name": "RdsEndpoint-test"
-                            }})
+        # No Export names for nested stack outputs (LocalStack compatibility)
+        template.has_output("RdsEndpoint", {
+            "Description": "RDS PostgreSQL endpoint"
+        })
 
-        template.has_output("RdsPort", {"Export": {"Name": "RdsPort-test"}})
+        template.has_output("RdsPort", {
+            "Description": "RDS PostgreSQL port"
+        })
 
-        template.has_output("BackupBucketName",
-                            {"Export": {
-                                "Name": "BackupBucketName-test"
-                            }})
+        template.has_output("BackupBucketName", {
+            "Description": "S3 backup bucket name"
+        })
 
-        template.has_output("NotificationTopicArn",
-                            {"Export": {
-                                "Name": "NotificationTopicArn-test"
-                            }})
+        template.has_output("NotificationTopicArn", {
+            "Description": "SNS notification topic ARN"
+        })
 
 
 @mark.describe("TapStackProps")
