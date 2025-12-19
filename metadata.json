@@ -9,8 +9,7 @@
   "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "Security Configuration as Code",
-    "General Infrastructure Tooling QA"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "IAM"
