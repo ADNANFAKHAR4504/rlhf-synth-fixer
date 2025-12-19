@@ -14,11 +14,10 @@
         },
         "EnvironmentSuffix": {
             "Type": "String",
-            "Description": "Unique suffix for resource naming to avoid conflicts",
-            "Default": "prod",
-            "MinLength": 1,
+            "Description": "Unique suffix for resource naming to avoid conflicts (defaults to environment type)",
+            "Default": "",
             "MaxLength": 20,
-            "AllowedPattern": "[a-z0-9-]+"
+            "AllowedPattern": "[a-z0-9-]*"
         },
         "LatestAmiId": {
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
@@ -95,6 +94,14 @@
         },
         "EnableMultiAZ": {
             "Condition": "IsProd"
+        },
+        "UseDefaultSuffix": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnvironmentSuffix"
+                },
+                ""
+            ]
         }
     },
     "Resources": {
@@ -116,7 +123,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "vpc-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "vpc-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -135,7 +157,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "igw-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "igw-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -186,7 +223,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "public-subnet-1-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -226,7 +278,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "public-subnet-2-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -265,7 +332,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "private-subnet-1-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -304,7 +386,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "private-subnet-2-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -326,7 +423,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "public-rt-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "public-rt-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -383,7 +495,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "private-rt-1-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "private-rt-1-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -397,11 +524,15 @@
         },
         "PrivateRoute1": {
             "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable1"
                 },
-                "DestinationCidrBlock": "0.0.0.0/0"
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
             }
         },
         "PrivateSubnet1RouteTableAssociation": {
@@ -425,7 +556,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "private-rt-2-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "private-rt-2-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -439,11 +585,15 @@
         },
         "PrivateRoute2": {
             "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable2"
                 },
-                "DestinationCidrBlock": "0.0.0.0/0"
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
             }
         },
         "PrivateSubnet2RouteTableAssociation": {
@@ -482,7 +632,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "alb-sg-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -509,13 +674,34 @@
                         "SourceSecurityGroupId": {
                             "Ref": "ALBSecurityGroup"
                         }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": "0.0.0.0/0"
                     }
                 ],
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "ec2-sg-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "ec2-sg-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -556,7 +742,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "rds-sg-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "rds-sg-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -579,7 +780,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "lambda-sg-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "lambda-sg-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -595,7 +811,22 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "alb-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "alb-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "Type": "application",
                 "Scheme": "internet-facing",
@@ -617,7 +848,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "alb-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "alb-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -633,7 +879,22 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "tg-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "tg-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -652,7 +913,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "tg-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "tg-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -686,7 +962,22 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "ec2-role-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "ec2-role-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -708,7 +999,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "ec2-role-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "ec2-role-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -724,7 +1030,22 @@
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "InstanceProfileName": {
-                    "Fn::Sub": "ec2-profile-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "ec2-profile-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "Roles": [
                     {
@@ -733,70 +1054,26 @@
                 ]
             }
         },
-        "LaunchTemplate": {
-            "Type": "AWS::EC2::LaunchTemplate",
-            "Properties": {
-                "LaunchTemplateName": {
-                    "Fn::Sub": "lt-${EnvironmentSuffix}"
-                },
-                "LaunchTemplateData": {
-                    "ImageId": {
-                        "Ref": "LatestAmiId"
-                    },
-                    "InstanceType": {
-                        "Fn::FindInMap": [
-                            "EnvironmentConfig",
-                            {
-                                "Ref": "EnvironmentType"
-                            },
-                            "InstanceType"
-                        ]
-                    },
-                    "IamInstanceProfile": {
-                        "Arn": {
-                            "Fn::GetAtt": [
-                                "EC2InstanceProfile",
-                                "Arn"
-                            ]
-                        }
-                    },
-                    "SecurityGroupIds": [
-                        {
-                            "Ref": "EC2SecurityGroup"
-                        }
-                    ],
-                    "UserData": {
-                        "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Hello from ${EnvironmentType} environment</h1>\" > /var/www/html/index.html\n"
-                        }
-                    },
-                    "TagSpecifications": [
-                        {
-                            "ResourceType": "instance",
-                            "Tags": [
-                                {
-                                    "Key": "Name",
-                                    "Value": {
-                                        "Fn::Sub": "ec2-instance-${EnvironmentSuffix}"
-                                    }
-                                },
-                                {
-                                    "Key": "Environment",
-                                    "Value": {
-                                        "Ref": "EnvironmentType"
-                                    }
-                                }
-                            ]
-                        }
-                    ]
-                }
-            }
-        },
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupName": {
-                    "Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "db-subnet-group-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "DBSubnetGroupDescription": "Subnet group for RDS database",
                 "SubnetIds": [
@@ -811,7 +1088,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "db-subnet-group-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -828,7 +1120,22 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "rds-mysql-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "rds-mysql-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "Engine": "mysql",
                 "EngineVersion": "8.0.39",
@@ -875,7 +1182,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "rds-mysql-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "rds-mysql-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -892,7 +1214,22 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "fintech-${EnvironmentSuffix}-static-assets"
+                    "Fn::Sub": [
+                        "fintech-${Suffix}-static-assets",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "VersioningConfiguration": {
                     "Status": {
@@ -922,7 +1259,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "fintech-${EnvironmentSuffix}-static-assets"
+                            "Fn::Sub": [
+                                "fintech-${Suffix}-static-assets",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -939,7 +1291,22 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "fintech-${EnvironmentSuffix}-app-data"
+                    "Fn::Sub": [
+                        "fintech-${Suffix}-app-data",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "VersioningConfiguration": {
                     "Status": {
@@ -969,7 +1336,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "fintech-${EnvironmentSuffix}-app-data"
+                            "Fn::Sub": [
+                                "fintech-${Suffix}-app-data",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -985,7 +1367,22 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "lambda-role-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "lambda-role-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -1046,7 +1443,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "lambda-role-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "lambda-role-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -1062,7 +1474,22 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "data-processor-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "data-processor-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "Runtime": "python3.11",
                 "Handler": "index.lambda_handler",
@@ -1120,7 +1547,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "data-processor-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "data-processor-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -1136,7 +1578,22 @@
             "Type": "AWS::SNS::Topic",
             "Properties": {
                 "TopicName": {
-                    "Fn::Sub": "alarm-topic-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "alarm-topic-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "DisplayName": {
                     "Fn::Sub": "CloudWatch Alarms for ${EnvironmentType}"
@@ -1145,7 +1602,22 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "alarm-topic-${EnvironmentSuffix}"
+                            "Fn::Sub": [
+                                "alarm-topic-${Suffix}",
+                                {
+                                    "Suffix": {
+                                        "Fn::If": [
+                                            "UseDefaultSuffix",
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            },
+                                            {
+                                                "Ref": "EnvironmentSuffix"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -1161,7 +1633,22 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "high-cpu-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "high-cpu-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "AlarmDescription": {
                     "Fn::Sub": "Alarm when CPU exceeds ${EnvironmentType} threshold"
@@ -1192,7 +1679,22 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "rds-connections-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "rds-connections-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "AlarmDescription": "Alarm when RDS connections are high",
                 "MetricName": "DatabaseConnections",
@@ -1221,7 +1723,22 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "rds-storage-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "rds-storage-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "AlarmDescription": "Alarm when RDS storage is low",
                 "MetricName": "FreeStorageSpace",
@@ -1250,7 +1767,22 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "lambda-errors-${EnvironmentSuffix}"
+                    "Fn::Sub": [
+                        "lambda-errors-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::If": [
+                                    "UseDefaultSuffix",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "AlarmDescription": "Alarm when Lambda function has errors",
                 "MetricName": "Errors",

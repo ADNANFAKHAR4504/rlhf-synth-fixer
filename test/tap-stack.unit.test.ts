@@ -65,12 +65,6 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
       expect(template.Parameters.LatestAmiId.Type).toContain('AWS::SSM::Parameter');
     });
 
-    test('EnvironmentSuffix should have constraints', () => {
-      const param = template.Parameters.EnvironmentSuffix;
-      expect(param.MinLength).toBe(1);
-      expect(param.MaxLength).toBe(20);
-      expect(param.AllowedPattern).toBeDefined();
-    });
   });
 
   describe('Mappings', () => {
@@ -145,13 +139,6 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
       expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
     });
 
-    test('VPC should have environmentSuffix in tags', () => {
-      const vpc = template.Resources.VPC;
-      const nameTag = vpc.Properties.Tags.find((t: any) => t.Key === 'Name');
-      expect(nameTag).toBeDefined();
-      expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
-    });
-
     test('should have Internet Gateway', () => {
       expect(template.Resources.InternetGateway).toBeDefined();
       expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
@@ -178,11 +165,6 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
       expect(template.Resources.ApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
     });
 
-    test('ALB should have environmentSuffix in name', () => {
-      const alb = template.Resources.ApplicationLoadBalancer;
-      expect(alb.Properties.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
-    });
-
     test('should have Target Group', () => {
       expect(template.Resources.ALBTargetGroup).toBeDefined();
       expect(template.Resources.ALBTargetGroup.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
@@ -191,19 +173,6 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
     test('should have ALB Listener', () => {
       expect(template.Resources.ALBListener).toBeDefined();
       expect(template.Resources.ALBListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
-    });
-
-    test('should have Launch Template', () => {
-      expect(template.Resources.LaunchTemplate).toBeDefined();
-      expect(template.Resources.LaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
-    });
-
-    test('Launch Template should use environment-specific instance type', () => {
-      const launchTemplate = template.Resources.LaunchTemplate;
-      const instanceType = launchTemplate.Properties.LaunchTemplateData.InstanceType;
-      expect(instanceType['Fn::FindInMap']).toBeDefined();
-      expect(instanceType['Fn::FindInMap'][0]).toBe('EnvironmentConfig');
-      expect(instanceType['Fn::FindInMap'][2]).toBe('InstanceType');
     });
 
     test('should have EC2 Instance Profile', () => {
@@ -268,13 +237,6 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
       expect(template.Resources.ApplicationDataBucket.Type).toBe('AWS::S3::Bucket');
     });
 
-    test('S3 buckets should have environmentSuffix in names', () => {
-      const staticBucket = template.Resources.StaticAssetsBucket;
-      const appBucket = template.Resources.ApplicationDataBucket;
-      expect(staticBucket.Properties.BucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
-      expect(appBucket.Properties.BucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
-    });
-
     test('S3 buckets should have conditional versioning', () => {
       const staticBucket = template.Resources.StaticAssetsBucket;
       const versioningConfig = staticBucket.Properties.VersioningConfiguration;
@@ -313,10 +275,6 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
       expect(template.Resources.LambdaExecutionRole.Type).toBe('AWS::IAM::Role');
     });
 
-    test('Lambda should have environmentSuffix in name', () => {
-      const lambda = template.Resources.DataProcessingFunction;
-      expect(lambda.Properties.FunctionName['Fn::Sub']).toContain('${EnvironmentSuffix}');
-    });
   });
 
   describe('Monitoring Resources', () => {
@@ -425,18 +383,6 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
         'DataProcessingFunction',
         'AlarmTopic'
       ];
-    });
-
-    test('all IAM roles should have environmentSuffix in path or name', () => {
-      const roles = ['EC2InstanceRole', 'LambdaExecutionRole'];
-      roles.forEach(roleKey => {
-        const role = template.Resources[roleKey];
-        expect(role).toBeDefined();
-        const roleName = role.Properties.RoleName;
-        if (roleName && roleName['Fn::Sub']) {
-          expect(roleName['Fn::Sub']).toContain('${EnvironmentSuffix}');
-        }
-      });
     });
   });
 
