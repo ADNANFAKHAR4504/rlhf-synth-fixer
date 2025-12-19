@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "274786_ls",
+  "startedAt": "2025-12-16T17:45:08.109Z",
+  "team": "2",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "EC2",
+    "ElasticLoadBalancingV2",
+    "RDS",
+    "AutoScaling",
+    "IAM",
+    "CloudWatch",
+    "SecretsManager"
+  ],
+  "provider": "localstack",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

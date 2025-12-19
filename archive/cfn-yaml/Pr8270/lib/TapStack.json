@@ -1,0 +1,1081 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "LocalStack Compatible - High Availability Web Application Infrastructure",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "Environment",
+                        "ProjectName"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "ProjectName": {
+            "Type": "String",
+            "Default": "TapStack",
+            "Description": "Project name for resource tagging"
+        },
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "production"
+            ],
+            "Description": "Environment type"
+        },
+        "AllowedCIDR": {
+            "Type": "String",
+            "Default": "0.0.0.0/0",
+            "Description": "CIDR block allowed to access the application"
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-VPC-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-IGW-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Public-Subnet-AZ1-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Public-Subnet-AZ2-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.10.0/24",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Private-Subnet-AZ1-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.11.0/24",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Private-Subnet-AZ2-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Public-Routes-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                }
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Private-Routes-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                }
+            }
+        },
+        "WebSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-Web-SG-${Environment}"
+                },
+                "GroupDescription": "Security group for web tier",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": {
+                            "Ref": "AllowedCIDR"
+                        },
+                        "Description": "HTTP access"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": {
+                            "Ref": "AllowedCIDR"
+                        },
+                        "Description": "HTTPS access"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "-1",
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Web-SecurityGroup-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "AppSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-App-SG-${Environment}"
+                },
+                "GroupDescription": "Security group for application tier",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 8080,
+                        "ToPort": 8080,
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebSecurityGroup"
+                        },
+                        "Description": "Application port from web tier"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "-1",
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-App-SecurityGroup-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "DataSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-Data-SG-${Environment}"
+                },
+                "GroupDescription": "Security group for data tier",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "SourceSecurityGroupId": {
+                            "Ref": "AppSecurityGroup"
+                        },
+                        "Description": "DynamoDB access from app tier"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Data-SecurityGroup-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "AppRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-AppRole-${Environment}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com",
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-S3Access-${Environment}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${AppBucket}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${AppBucket}"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-DynamoDBAccess-${Environment}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "AppTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-SNSAccess-${Environment}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "NotificationTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-LogsAccess-${Environment}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/${ProjectName}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "AppInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "${ProjectName}-InstanceProfile-${Environment}"
+                },
+                "Roles": [
+                    {
+                        "Ref": "AppRole"
+                    }
+                ]
+            }
+        },
+        "AppBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tapstack-assets-${Environment}-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Assets-Bucket-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "AppTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${ProjectName}-AppData-${Environment}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "createdAt",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "createdAt",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-AppData-Table-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "NotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${ProjectName}-Notifications-${Environment}"
+                },
+                "DisplayName": {
+                    "Fn::Sub": "${ProjectName} Application Notifications"
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApplicationLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/${ProjectName}/application-${Environment}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProcessingQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${ProjectName}-ProcessingQueue-${Environment}"
+                },
+                "VisibilityTimeout": 300,
+                "MessageRetentionPeriod": 345600,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Processing-Queue-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet1-ID"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet2-ID"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet1-ID"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet2-ID"
+                }
+            }
+        },
+        "PublicSubnets": {
+            "Description": "Public Subnet IDs",
+            "Value": {
+                "Fn::Sub": "${PublicSubnet1},${PublicSubnet2}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Public-Subnets"
+                }
+            }
+        },
+        "PrivateSubnets": {
+            "Description": "Private Subnet IDs",
+            "Value": {
+                "Fn::Sub": "${PrivateSubnet1},${PrivateSubnet2}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Private-Subnets"
+                }
+            }
+        },
+        "WebSecurityGroupId": {
+            "Description": "Web Security Group ID",
+            "Value": {
+                "Ref": "WebSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Web-SG-ID"
+                }
+            }
+        },
+        "AppSecurityGroupId": {
+            "Description": "Application Security Group ID",
+            "Value": {
+                "Ref": "AppSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-App-SG-ID"
+                }
+            }
+        },
+        "AppRoleArn": {
+            "Description": "Application IAM Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppRole-ARN"
+                }
+            }
+        },
+        "AppBucketName": {
+            "Description": "Application S3 Bucket Name",
+            "Value": {
+                "Ref": "AppBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppBucket-Name"
+                }
+            }
+        },
+        "AppBucketArn": {
+            "Description": "Application S3 Bucket ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppBucket-ARN"
+                }
+            }
+        },
+        "AppTableName": {
+            "Description": "Application DynamoDB Table Name",
+            "Value": {
+                "Ref": "AppTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppTable-Name"
+                }
+            }
+        },
+        "AppTableArn": {
+            "Description": "Application DynamoDB Table ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppTable-ARN"
+                }
+            }
+        },
+        "NotificationTopicArn": {
+            "Description": "SNS Topic ARN for Notifications",
+            "Value": {
+                "Ref": "NotificationTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SNS-Topic-ARN"
+                }
+            }
+        },
+        "LogGroupName": {
+            "Description": "CloudWatch Log Group Name",
+            "Value": {
+                "Ref": "ApplicationLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogGroup-Name"
+                }
+            }
+        },
+        "ProcessingQueueUrl": {
+            "Description": "SQS Queue URL for async processing",
+            "Value": {
+                "Ref": "ProcessingQueue"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Queue-URL"
+                }
+            }
+        },
+        "ProcessingQueueArn": {
+            "Description": "SQS Queue ARN for async processing",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ProcessingQueue",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Queue-ARN"
+                }
+            }
+        },
+        "Region": {
+            "Description": "AWS Region",
+            "Value": {
+                "Ref": "AWS::Region"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Region"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "CloudFormation Stack Name",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "Environment": {
+            "Description": "Environment",
+            "Value": {
+                "Ref": "Environment"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Environment"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "53364950",
+  "team": "3",
+  "provider": "localstack",
+  "startedAt": "2025-10-03T17:22:44.158Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "S3",
+    "Lambda",
+    "IAM",
+    "API Gateway",
+    "EventBridge",
+    "CloudWatch",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,457 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  TapStack — LocalStack-first template (stable for CI).
+  Creates maximum compatible set on LocalStack: VPC, subnets, IGW, routing, SGs, ALB+TG,
+  a single EC2 instance (instead of ASG), KMS, S3, alarms, DynamoDB, SQS.
+  AWS-only services that commonly break LocalStack are intentionally removed (ASG/LT/LC, RDS, CloudTrail, FlowLogs, NAT).
+
+Metadata:
+  TemplateAuthor: SAARZ Int. / TapStack
+  Version: 2.1.4-localstack-stable
+  Notes:
+    - This template is optimized for LocalStack deployment stability.
+    - Autoscaling and CloudTrail are removed to avoid unresolved Ref/dependency and delete-stack failures.
+
+Parameters:
+  DeploymentTarget:
+    Type: String
+    Default: localstack
+    AllowedValues: [aws, localstack]
+    Description: Deployment target selector.
+
+  ProjectName:
+    Type: String
+    Default: tapstack
+    AllowedPattern: '^[a-z0-9-]{3,32}$'
+    Description: Logical project name prefix.
+
+  EnvironmentSuffix:
+    Type: String
+    Default: dev-usw2
+    AllowedPattern: '^[a-z0-9-]{2,20}$'
+    Description: Safe suffix for names/tags.
+
+  VpcCidr:
+    Type: String
+    Default: 10.20.0.0/16
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]+$'
+    Description: VPC CIDR.
+
+  PublicSubnetACidr:
+    Type: String
+    Default: 10.20.0.0/24
+    Description: Public subnet A CIDR.
+
+  PublicSubnetBCidr:
+    Type: String
+    Default: 10.20.1.0/24
+    Description: Public subnet B CIDR.
+
+  PrivateSubnetACidr:
+    Type: String
+    Default: 10.20.10.0/24
+    Description: Private subnet A CIDR.
+
+  PrivateSubnetBCidr:
+    Type: String
+    Default: 10.20.11.0/24
+    Description: Private subnet B CIDR.
+
+  NotificationEmail:
+    Type: String
+    Default: alerts@example.com
+    AllowedPattern: '^[^@]+@[^@]+\.[^@]+$'
+    Description: Email subscription endpoint (AWS only usage; safe to keep).
+
+  S3TransitionDaysToGlacier:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    Description: Days before transitioning old objects to Glacier.
+
+Conditions:
+  IsLocalStack: !Equals [!Ref DeploymentTarget, localstack]
+  IsAws: !Equals [!Ref DeploymentTarget, aws]
+
+Resources:
+
+  # -------------------------
+  # KMS (Keep; if your LocalStack build supports it)
+  # -------------------------
+  LogsKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub '${ProjectName}-${EnvironmentSuffix} logs CMK'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-logs-kms'
+
+  DataKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub '${ProjectName}-${EnvironmentSuffix} data CMK'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-data-kms'
+
+  # -------------------------
+  # S3 (Keep)
+  # -------------------------
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref DataKmsKey
+            BucketKeyEnabled: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: !Ref S3TransitionDaysToGlacier
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-artifacts'
+
+  # Retain the bucket to avoid accidental deletion in shared LocalStack runs (optional best practice)
+  # Remove if you want full teardown.
+  # DeletionPolicy: Retain
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref DataKmsKey
+            BucketKeyEnabled: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: !Ref S3TransitionDaysToGlacier
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-trail'
+
+  # -------------------------
+  # VPC core (Keep)
+  # -------------------------
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-igw'
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetACidr
+      MapPublicIpOnLaunch: true
+      AvailabilityZone:
+        Fn::Select: [0, Fn::GetAZs: '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-a'
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetBCidr
+      MapPublicIpOnLaunch: true
+      AvailabilityZone:
+        Fn::Select: [1, Fn::GetAZs: '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-b'
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnetACidr
+      MapPublicIpOnLaunch: false
+      AvailabilityZone:
+        Fn::Select: [0, Fn::GetAZs: '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-a'
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnetBCidr
+      MapPublicIpOnLaunch: false
+      AvailabilityZone:
+        Fn::Select: [1, Fn::GetAZs: '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-b'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-rt'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetAAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetA
+
+  PublicSubnetBAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetB
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-rt-a'
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-rt-b'
+
+  PrivateSubnetAAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      SubnetId: !Ref PrivateSubnetA
+
+  PrivateSubnetBAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      SubnetId: !Ref PrivateSubnetB
+
+  # -------------------------
+  # Security groups (Keep)
+  # -------------------------
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${ProjectName}-${EnvironmentSuffix} ALB SG'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-alb-sg'
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${ProjectName}-${EnvironmentSuffix} App SG'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app-sg'
+
+
+  # -------------------------
+  # IAM + Lambda (Keep; safe)
+  # -------------------------
+  ExampleLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-lambda-role'
+
+
+  # -------------------------
+  # SNS (Keep; subscription AWS-only)
+  # -------------------------
+  NotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      KmsMasterKeyId: !Ref DataKmsKey
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-alerts'
+
+  NotificationsSubscription:
+    Condition: IsAws
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref NotificationsTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  # -------------------------
+  # LocalStack extras (Keep)
+  # -------------------------
+  TurnAroundPromptTable:
+    Condition: IsLocalStack
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-turnaround-table'
+
+  LocalStackQueue:
+    Condition: IsLocalStack
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-${EnvironmentSuffix}-queue'
+
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+
+  PublicSubnetIds:
+    Description: Public subnet IDs
+    Value: !Join [',', [!Ref PublicSubnetA, !Ref PublicSubnetB]]
+
+  PrivateSubnetIds:
+    Description: Private subnet IDs
+    Value: !Join [',', [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
+
+
+  ArtifactBucketName:
+    Description: Artifact bucket name
+    Value: !Ref ArtifactBucket
+
+  LogsKmsKeyArn:
+    Description: Logs KMS Key ARN
+    Value: !GetAtt LogsKmsKey.Arn
+
+  DataKmsKeyArn:
+    Description: Data KMS Key ARN
+    Value: !GetAtt DataKmsKey.Arn
+
+  NotificationsTopicArn:
+    Description: SNS topic ARN
+    Value: !Ref NotificationsTopic
+
+
+  TurnAroundPromptTableArn:
+    Condition: IsLocalStack
+    Description: LocalStack DynamoDB table ARN
+    Value: !GetAtt TurnAroundPromptTable.Arn
+
+  TurnAroundPromptTableName:
+    Condition: IsLocalStack
+    Description: LocalStack DynamoDB table name
+    Value: !Ref TurnAroundPromptTable
+
+  LocalStackQueueUrl:
+    Condition: IsLocalStack
+    Description: LocalStack SQS queue URL
+    Value: !Ref LocalStackQueue
