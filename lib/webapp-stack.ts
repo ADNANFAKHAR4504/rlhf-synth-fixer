@@ -144,40 +144,22 @@ export class WebAppStack extends cdk.Stack {
       ],
     });
 
-    // Launch Template with explicit $Latest version for LocalStack compatibility
-    // LocalStack doesn't properly support GetAtt LatestVersionNumber
-    const launchTemplate = new ec2.LaunchTemplate(
-      this,
-      'WebServerLaunchTemplate',
-      {
-        instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.T3,
-          ec2.InstanceSize.MEDIUM
-        ),
-        machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-        securityGroup: webServerSecurityGroup,
-        userData,
-        role: ec2Role,
-      }
-    );
-
-    // Auto Scaling Group with mixed instances policy to avoid LatestVersionNumber
+    // Auto Scaling Group without LaunchTemplate for LocalStack compatibility
+    // LocalStack doesn't properly support LaunchTemplate's LatestVersionNumber attribute
+    // Using direct instance configuration instead
     this.autoScalingGroup = new autoscaling.AutoScalingGroup(
       this,
       'WebServerASG',
       {
         vpc: this.vpc,
-        mixedInstancesPolicy: {
-          launchTemplate,
-          launchTemplateOverrides: [
-            {
-              instanceType: ec2.InstanceType.of(
-                ec2.InstanceClass.T3,
-                ec2.InstanceSize.MEDIUM
-              ),
-            },
-          ],
-        },
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MEDIUM
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2023(),
+        userData,
+        role: ec2Role,
+        securityGroup: webServerSecurityGroup,
         minCapacity: 2,
         maxCapacity: 6,
         desiredCapacity: 2,
