@@ -68,7 +68,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${AWS::StackName}-s3-file-processor'
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
@@ -129,7 +129,7 @@ Resources:
                   await cloudWatchClient.send(createLogStreamCommand);
                 } catch (error) {
                   // Log stream might already exist, continue
-                  if (!error.name === 'ResourceAlreadyExistsException') {
+                  if (error.name !== 'ResourceAlreadyExistsException') {
                     throw error;
                   }
                 }
