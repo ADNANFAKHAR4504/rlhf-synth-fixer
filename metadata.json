@@ -22,5 +22,6 @@
     "IAM",
     "VPC Endpoints"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 9
 }
