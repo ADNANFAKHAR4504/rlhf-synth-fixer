@@ -21,5 +21,6 @@
     "sns",
     "cloudwatch",
     "iam"
-  ]
+  ],
+  "training_quality": 10
 }
