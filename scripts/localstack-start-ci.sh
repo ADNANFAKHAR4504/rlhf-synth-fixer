@@ -58,13 +58,16 @@ if docker ps -a | grep -q localstack; then
     docker rm localstack 2>/dev/null || true
 fi
 
-# LocalStack enables all services by default when SERVICES is not set
-# Only set SERVICES if explicitly provided via environment variable
+# LocalStack Community Edition requires explicit SERVICES configuration
+# Set default services including ECR (required for CDK bootstrap) and EC2
 if [ -n "$LOCALSTACK_SERVICES" ]; then
     SERVICES="$LOCALSTACK_SERVICES"
     echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
 else
-    echo -e "${BLUE}📋 All LocalStack services enabled (default)${NC}"
+    # Default service list for LocalStack Community Edition
+    # Including ECR for CDK bootstrap and EC2 for compute resources
+    SERVICES="s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs,ecr"
+    echo -e "${BLUE}📋 Services to enable (default): ${SERVICES}${NC}"
 fi
 
 # Check for LocalStack API Key
