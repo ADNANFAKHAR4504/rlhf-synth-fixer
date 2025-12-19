@@ -623,7 +623,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-alb'
+      Name: !Sub 'alb-${EnvironmentSuffix}'
       Type: application
       Scheme: internet-facing
       SecurityGroups:
@@ -638,7 +638,7 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-tg'
+      Name: !Sub 'tg-${EnvironmentSuffix}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
