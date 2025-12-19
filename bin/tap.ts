@@ -7,8 +7,7 @@ const app = new cdk.App();
 
 // Get environment from context or environment variable
 const environment =
-  app.node.tryGetContext('environment') ||
-  process.env.ENVIRONMENT ||
+  process.env.ENVIRONMENT_SUFFIX ||
   'dev';
 
 // Get region from environment variable or default to us-east-1
