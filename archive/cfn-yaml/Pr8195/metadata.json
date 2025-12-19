@@ -18,5 +18,12 @@
     "IAM",
     "KMS",
     "CloudWatch"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajc-turing",
+  "dockerS3Location": ""
 }
