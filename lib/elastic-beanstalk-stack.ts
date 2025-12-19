@@ -274,7 +274,7 @@ export class ElasticBeanstalkStack extends cdk.Stack {
         }),
         userData: userData,
         role: instanceRole,
-        securityGroups: [instanceSecurityGroup],
+        securityGroup: instanceSecurityGroup,
         minCapacity: 2,
         maxCapacity: 10,
         desiredCapacity: 2,
