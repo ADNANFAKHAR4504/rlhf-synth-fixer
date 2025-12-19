@@ -61,10 +61,17 @@ Parameters:
     AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
     Description: 'CloudWatch log retention period in days'
 
+  EnableCloudTrail:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable CloudTrail (set to false for LocalStack Community)'
+
 Conditions:
   # Update conditions to use EnvironmentSuffix instead of EnvironmentName
   IsProdEnvironment: !Equals [!Ref EnvironmentSuffix, 'prod']
   EnableMFACondition: !Equals [!Ref EnableMFA, 'true']
+  EnableCloudTrailCondition: !Equals [!Ref EnableCloudTrail, 'true']
 
 Resources:
   # ===== NETWORKING RESOURCES =====
@@ -405,6 +412,7 @@ Resources:
 
   CloudTrailRole:
     Type: AWS::IAM::Role
+    Condition: EnableCloudTrailCondition
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -427,6 +435,7 @@ Resources:
 
   SecurityCloudTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: EnableCloudTrailCondition
     DependsOn: SecureLogBucketPolicy
     Properties:
       TrailName: !Sub '${EnvironmentSuffix}-security-trail'
@@ -710,9 +719,10 @@ Resources:
             Action: sns:Publish
             Resource: !Ref SecurityAlertsTopic
 
-  
+
   UnauthorizedAPICallsAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: EnableCloudTrailCondition
     Properties:
       AlarmName: !Sub '${EnvironmentSuffix}-unauthorized-api-calls'
       AlarmDescription: 'Alarm for unauthorized API calls'
@@ -729,6 +739,7 @@ Resources:
 
   ConsoleSignInWithoutMFAAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: EnableCloudTrailCondition
     Properties:
       AlarmName: !Sub '${EnvironmentSuffix}-console-signin-without-mfa'
       AlarmDescription: 'Alarm for console sign-ins without MFA'
@@ -810,6 +821,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-DatabaseSG-ID'
 
   CloudTrailArn:
+    Condition: EnableCloudTrailCondition
     Description: 'ARN of the CloudTrail'
     Value: !GetAtt SecurityCloudTrail.Arn
     Export:
