@@ -260,27 +260,42 @@ export class WebAppStack extends cdk.Stack {
       },
     });
 
-    // RDS MySQL Database
-    // Note: RDS in LocalStack may take longer than usual to become available
-    this.database = new rds.DatabaseInstance(this, 'WebAppDatabase', {
-      engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0,
-      }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      credentials: rds.Credentials.fromSecret(dbCredentials),
-      vpc: this.vpc,
-      subnetGroup: dbSubnetGroup,
-      securityGroups: [databaseSecurityGroup],
-      multiAz: false, // Set to true for production
-      allocatedStorage: 20,
-      storageEncrypted: false, // Disabled for LocalStack compatibility
-      backupRetention: cdk.Duration.days(1), // Minimum 1 day for LocalStack
-      deletionProtection: false, // Set to true for production
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For LocalStack cleanup
+    // RDS MySQL Database using CfnDBInstance for LocalStack compatibility
+    // Note: Using L1 construct (CfnDBInstance) for better LocalStack support
+    // LocalStack Community has limited RDS support, L1 construct avoids high-level waiters
+    const cfnDatabase = new rds.CfnDBInstance(this, 'WebAppDatabase', {
+      dbInstanceClass: 'db.t3.micro',
+      allocatedStorage: '20',
+      engine: 'mysql',
+      engineVersion: '8.0',
+      masterUsername: dbCredentials
+        .secretValueFromJson('username')
+        .unsafeUnwrap(),
+      masterUserPassword: dbCredentials
+        .secretValueFromJson('password')
+        .unsafeUnwrap(),
+      dbSubnetGroupName: dbSubnetGroup.subnetGroupName,
+      vpcSecurityGroups: [databaseSecurityGroup.securityGroupId],
+      multiAz: false,
+      storageEncrypted: false,
+      backupRetentionPeriod: 0,
+      deletionProtection: false,
+      publiclyAccessible: false,
     });
+
+    cfnDatabase.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+
+    // Create DatabaseInstance wrapper for compatibility
+    this.database = rds.DatabaseInstance.fromDatabaseInstanceAttributes(
+      this,
+      'WebAppDatabaseRef',
+      {
+        instanceIdentifier: cfnDatabase.ref,
+        instanceEndpointAddress: cfnDatabase.attrEndpointAddress,
+        port: 3306,
+        securityGroups: [databaseSecurityGroup],
+      }
+    ) as rds.DatabaseInstance;
 
     // S3 Bucket for application assets and metadata
     const appBucket = new s3.Bucket(this, 'WebAppBucket', {

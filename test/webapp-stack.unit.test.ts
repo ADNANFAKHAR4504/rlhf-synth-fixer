@@ -212,7 +212,7 @@ describe('WebAppStack', () => {
         DBInstanceClass: 'db.t3.micro',
         AllocatedStorage: '20',
         StorageEncrypted: false, // Disabled for LocalStack compatibility
-        BackupRetentionPeriod: 1, // Minimum 1 day for LocalStack
+        BackupRetentionPeriod: 0, // Disabled for LocalStack (no backups)
         DeletionProtection: false,
         MultiAZ: false,
       });
