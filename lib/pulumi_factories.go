@@ -19,8 +19,8 @@ import (
 var (
 	newAWSProvider         = aws.NewProvider
 	getAvailabilityZones   = aws.GetAvailabilityZones
-	newVpc                = ec2.NewVpc
-	newSubnet             = ec2.NewSubnet
+	newVpc                 = ec2.NewVpc
+	newSubnet              = ec2.NewSubnet
 	newInternetGateway     = ec2.NewInternetGateway
 	newRouteTable          = ec2.NewRouteTable
 	newRouteTableAssoc     = ec2.NewRouteTableAssociation
@@ -43,5 +43,3 @@ var (
 	newCloudWatchDashboard = cloudwatch.NewDashboard
 	newCloudTrailTrail     = cloudtrail.NewTrail
 )
-
-
