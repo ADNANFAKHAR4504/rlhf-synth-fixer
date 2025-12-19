@@ -22,6 +22,5 @@
     "CloudWatch",
     "IAM",
     "Systems Manager"
-  ],
-  "training_quality": 9
+  ]
 }
