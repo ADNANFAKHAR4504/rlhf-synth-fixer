@@ -46,7 +46,8 @@ export class StorageStack extends cdk.NestedStack {
         },
       ],
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Always DESTROY for LocalStack compatibility
-      autoDeleteObjects: true, // Always true for LocalStack compatibility
+      // autoDeleteObjects removed - requires ECR which is Pro-only in LocalStack
+      // Manual cleanup or destroy stack will remove bucket
     });
 
     // Note: BucketDeployment removed for LocalStack compatibility
