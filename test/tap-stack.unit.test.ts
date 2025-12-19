@@ -265,9 +265,8 @@ describe('DynamoDBStack', () => {
     });
 
     test('should create DynamoDB Table with correct schema', () => {
-      // The stack creates either a regular Table (LocalStack) or GlobalTable (AWS)
-      // Check for regular Table which is what gets created in most environments
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+      // The stack creates GlobalTable for AWS (non-LocalStack) environments
+      template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
         TableName: `serverless-processed-data-${environmentSuffix}`,
         BillingMode: 'PAY_PER_REQUEST',
         StreamSpecification: {
@@ -287,7 +286,7 @@ describe('DynamoDBStack', () => {
     });
 
     test('should create Global Secondary Indexes', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+      template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
         GlobalSecondaryIndexes: Match.arrayWith([
           Match.objectLike({
             IndexName: 'ProcessingStatusIndex',
@@ -310,10 +309,16 @@ describe('DynamoDBStack', () => {
     });
 
     test('should configure point-in-time recovery', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
-        PointInTimeRecoverySpecification: Match.objectLike({
-          PointInTimeRecoveryEnabled: true,
-        }),
+      // For GlobalTable, PITR is configured per replica
+      template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+        Replicas: Match.arrayWith([
+          Match.objectLike({
+            Region: 'us-east-1',
+            PointInTimeRecoverySpecification: {
+              PointInTimeRecoveryEnabled: true,
+            },
+          }),
+        ]),
       });
     });
 
