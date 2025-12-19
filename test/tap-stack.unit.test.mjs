@@ -312,3 +312,138 @@ describe('TapStack', () => {
   });
 });
 
+// Separate test suite for non-LocalStack environment to cover SageMaker resources
+describe('TapStack (Non-LocalStack Environment)', () => {
+  let originalCdkLocal;
+  let originalAwsEndpointUrl;
+  let originalLocalstackHostname;
+
+  beforeAll(() => {
+    // Save original environment variables
+    originalCdkLocal = process.env.CDK_LOCAL;
+    originalAwsEndpointUrl = process.env.AWS_ENDPOINT_URL;
+    originalLocalstackHostname = process.env.LOCALSTACK_HOSTNAME;
+
+    // Clear LocalStack environment variables
+    delete process.env.CDK_LOCAL;
+    delete process.env.AWS_ENDPOINT_URL;
+    delete process.env.LOCALSTACK_HOSTNAME;
+  });
+
+  afterAll(() => {
+    // Restore original environment variables
+    if (originalCdkLocal !== undefined) {
+      process.env.CDK_LOCAL = originalCdkLocal;
+    }
+    if (originalAwsEndpointUrl !== undefined) {
+      process.env.AWS_ENDPOINT_URL = originalAwsEndpointUrl;
+    }
+    if (originalLocalstackHostname !== undefined) {
+      process.env.LOCALSTACK_HOSTNAME = originalLocalstackHostname;
+    }
+  });
+
+  test('creates SageMaker model when not in LocalStack', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'NonLocalStackTest', {
+      env: {
+        account: '123456789012',
+        region: 'us-east-1',
+      },
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::SageMaker::Model', 1);
+  });
+
+  test('creates SageMaker endpoint config when not in LocalStack', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'NonLocalStackTest2', {
+      env: {
+        account: '123456789012',
+        region: 'us-east-1',
+      },
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::SageMaker::EndpointConfig', 1);
+  });
+
+  test('creates SageMaker endpoint when not in LocalStack', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'NonLocalStackTest3', {
+      env: {
+        account: '123456789012',
+        region: 'us-east-1',
+      },
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::SageMaker::Endpoint', 1);
+  });
+
+  test('SageMaker model has correct configuration', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'NonLocalStackTest4', {
+      env: {
+        account: '123456789012',
+        region: 'us-east-1',
+      },
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(stack);
+
+    template.hasResourceProperties('AWS::SageMaker::Model', {
+      ModelName: 'fraud-model-test',
+      PrimaryContainer: {
+        Environment: {
+          MODEL_VERSION: '1.0.0',
+          SAGEMAKER_PROGRAM: 'inference.py',
+        },
+      },
+    });
+  });
+
+  test('SageMaker endpoint config has data capture enabled', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'NonLocalStackTest5', {
+      env: {
+        account: '123456789012',
+        region: 'us-east-1',
+      },
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(stack);
+
+    template.hasResourceProperties('AWS::SageMaker::EndpointConfig', {
+      DataCaptureConfig: {
+        EnableCapture: true,
+        InitialSamplingPercentage: 20,
+        CaptureOptions: [
+          { CaptureMode: 'Input' },
+          { CaptureMode: 'Output' },
+        ],
+      },
+    });
+  });
+
+  test('SageMaker endpoint has correct name', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'NonLocalStackTest6', {
+      env: {
+        account: '123456789012',
+        region: 'us-east-1',
+      },
+      environmentSuffix: 'test',
+    });
+    const template = Template.fromStack(stack);
+
+    template.hasResourceProperties('AWS::SageMaker::Endpoint', {
+      EndpointName: 'fraud-endpoint-test',
+    });
+  });
+});
+
