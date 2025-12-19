@@ -139,7 +139,56 @@ class TapStack(cdk.Stack):
         lambda_props = {
             "runtime": _lambda.Runtime.PYTHON_3_9,
             "handler": "index.lambda_handler",
-            "code": _lambda.Code.from_inline("def lambda_handler(event, context): return 'ok'"),
+            "code": _lambda.Code.from_inline("""
+import json
+import logging
+import traceback
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def lambda_handler(event, context):
+    try:
+        logger.info(f"Processing request: {json.dumps(event)}")
+
+        # Validate input
+        if not event:
+            raise ValueError("Empty event received")
+
+        # Process request
+        result = {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'Request processed successfully',
+                'requestId': context.request_id
+            })
+        }
+
+        logger.info(f"Request completed successfully: {context.request_id}")
+        return result
+
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        return {
+            'statusCode': 400,
+            'body': json.dumps({
+                'error': 'Bad Request',
+                'message': str(e),
+                'requestId': context.request_id
+            })
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(traceback.format_exc())
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'error': 'Internal Server Error',
+                'message': 'An unexpected error occurred',
+                'requestId': context.request_id
+            })
+        }
+"""),
             "role": self.lambda_execution_role,
             "memory_size": 512,
             "timeout": cdk.Duration.minutes(1),
@@ -163,12 +212,20 @@ class TapStack(cdk.Stack):
         # Publish a new version
         version = self.sample_function.current_version
 
-        # Attach alias without provisioned concurrency for LocalStack compatibility
+        # Attach alias with provisioned concurrency for production readiness
+        # Skip provisioned concurrency for LocalStack (not supported)
+        alias_props = {
+            "alias_name": "prod",
+            "version": version
+        }
+
+        if not is_localstack:
+            alias_props["provisioned_concurrent_executions"] = 5
+
         _lambda.Alias(
             self,
             "SampleFunctionAlias",
-            alias_name="prod",
-            version=version
+            **alias_props
         )
 
         return self.sample_function
@@ -183,7 +240,50 @@ class TapStack(cdk.Stack):
         lambda_props = {
             "runtime": _lambda.Runtime.PYTHON_3_9,
             "handler": "index.lambda_handler",
-            "code": _lambda.Code.from_inline("def lambda_handler(event, context): return 'ok'"),
+            "code": _lambda.Code.from_inline("""
+import json
+import logging
+import traceback
+import os
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def lambda_handler(event, context):
+    try:
+        logger.info("Starting monitoring check")
+
+        # Validate environment configuration
+        api_key_param = os.environ.get('DATADOG_API_KEY_PARAM')
+        if not api_key_param:
+            logger.warning("Datadog API key parameter not configured")
+
+        # Collect metrics (placeholder)
+        metrics = {
+            'timestamp': context.request_id,
+            'status': 'healthy',
+            'checks_performed': ['lambda_health', 'api_gateway_health']
+        }
+
+        logger.info(f"Monitoring completed: {json.dumps(metrics)}")
+        return {
+            'statusCode': 200,
+            'body': json.dumps(metrics)
+        }
+
+    except Exception as e:
+        logger.error(f"Monitoring error: {str(e)}")
+        logger.error(traceback.format_exc())
+        # Return success to avoid EventBridge retries
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'status': 'error',
+                'error': str(e),
+                'requestId': context.request_id
+            })
+        }
+"""),
             "role": self.lambda_execution_role,
             "memory_size": 512,
             "timeout": cdk.Duration.seconds(60),
