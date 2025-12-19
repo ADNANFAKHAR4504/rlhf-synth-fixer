@@ -86,19 +86,27 @@ describe('TapStack Unit Tests', () => {
 
   describe('Stack Outputs', () => {
     test('should have bucket name output', () => {
-      template.hasOutput(Match.stringLikeRegexp('WebsiteBucketName'), {});
+      const outputs = template.findOutputs('*');
+      const bucketOutput = Object.keys(outputs).find(k => k.includes('WebsiteBucketName'));
+      expect(bucketOutput).toBeDefined();
     });
 
     test('should have distribution ID output', () => {
-      template.hasOutput(Match.stringLikeRegexp('DistributionId'), {});
+      const outputs = template.findOutputs('*');
+      const distOutput = Object.keys(outputs).find(k => k.includes('DistributionId'));
+      expect(distOutput).toBeDefined();
     });
 
     test('should have distribution domain name output', () => {
-      template.hasOutput(Match.stringLikeRegexp('DistributionDomainName'), {});
+      const outputs = template.findOutputs('*');
+      const domainOutput = Object.keys(outputs).find(k => k.includes('DistributionDomainName'));
+      expect(domainOutput).toBeDefined();
     });
 
     test('should have KMS key ID output', () => {
-      template.hasOutput(Match.stringLikeRegexp('KMSKeyId'), {});
+      const outputs = template.findOutputs('*');
+      const kmsOutput = Object.keys(outputs).find(k => k.includes('KMSKeyId'));
+      expect(kmsOutput).toBeDefined();
     });
   });
 });
