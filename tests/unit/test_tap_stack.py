@@ -53,13 +53,14 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
         template.resource_count_is("AWS::IAM::Role", 1)
 
-    @mark.it("creates Auto Scaling Group")
+    @mark.it("creates Auto Scaling Group with Launch Configuration")
     def test_creates_auto_scaling_group(self):
         stack = TapStack(self.app, "TapStackAsgTest")
         template = Template.from_stack(stack)
         template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
-        # LaunchTemplate removed to avoid LocalStack LatestVersionNumber issues
-        # ASG uses instance_type and machine_image directly instead
+        # Using LaunchConfiguration instead of LaunchTemplate for LocalStack compatibility
+        template.resource_count_is("AWS::AutoScaling::LaunchConfiguration", 1)
+        template.resource_count_is("AWS::AutoScaling::ScalingPolicy", 1)
 
     @mark.it("outputs key resource identifiers")
     def test_outputs(self):

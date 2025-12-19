@@ -209,44 +209,71 @@ class TapStack(Stack):
       "yum install -y aws-cli",
     )
 
-    # Auto Scaling Group
-    # Note: Using public subnets for LocalStack since NAT Gateway is not available
-    # Removed block_devices to avoid LocalStack LaunchTemplate.LatestVersionNumber issues
-    # LocalStack has issues with LaunchTemplate version references when block devices are specified
-    asg = autoscaling.AutoScalingGroup(
-      self, f"tap-asg-{environment_suffix}",
-      vpc=vpc,
-      vpc_subnets=ec2.SubnetSelection(
-        subnet_type=ec2.SubnetType.PUBLIC  # Changed for LocalStack compatibility
-      ),
-      instance_type=ec2.InstanceType.of(
-        ec2.InstanceClass.BURSTABLE3,
-        ec2.InstanceSize.MICRO,
-      ),
-      machine_image=ec2.AmazonLinuxImage(
-        generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
-        edition=ec2.AmazonLinuxEdition.STANDARD,
-        virtualization=ec2.AmazonLinuxVirt.HVM,
-        storage=ec2.AmazonLinuxStorage.GENERAL_PURPOSE,
-      ),
-      security_group=ec2_sg,
-      role=ec2_role,
-      user_data=user_data_script,
-      # Removed block_devices - causes LocalStack LaunchTemplate issues
-      min_capacity=2,
-      max_capacity=10,
-      desired_capacity=2,
-      health_check=autoscaling.HealthCheck.elb(
-        grace=Duration.minutes(5)
-      ),
+    # Get AMI ID for Launch Configuration
+    ami_image = ec2.AmazonLinuxImage(
+      generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
+      edition=ec2.AmazonLinuxEdition.STANDARD,
+      virtualization=ec2.AmazonLinuxVirt.HVM,
+      storage=ec2.AmazonLinuxStorage.GENERAL_PURPOSE,
     )
-    asg.attach_to_application_target_group(target_group)
+    ami_id = ami_image.get_image(self).image_id
 
-    # Single target-tracking policy handles both scale out & in
-    asg.scale_on_cpu_utilization(
-      f"tap-cpu-scaling-{environment_suffix}",
-      target_utilization_percent=50,
-      cooldown=Duration.minutes(5),
+    # Get instance profile name (needed for Launch Configuration)
+    # Create instance profile
+    instance_profile = iam.CfnInstanceProfile(
+      self, f"tap-instance-profile-{environment_suffix}",
+      instance_profile_name=f"tap-instance-profile-{environment_suffix}",
+      roles=[ec2_role.role_name]
+    )
+
+    # Launch Configuration (L1) - avoids LocalStack LaunchTemplate.LatestVersionNumber issues
+    # Using LaunchConfiguration instead of LaunchTemplate for better LocalStack compatibility
+    launch_config = autoscaling.CfnLaunchConfiguration(
+      self, f"tap-launch-config-{environment_suffix}",
+      launch_configuration_name=f"tap-lc-{environment_suffix}",
+      image_id=ami_id,
+      instance_type="t3.micro",
+      security_groups=[ec2_sg.security_group_id],
+      iam_instance_profile=instance_profile.instance_profile_name,
+      user_data=cdk.Fn.base64(user_data_script.render()),
+    )
+    launch_config.add_dependency(instance_profile)
+
+    # Auto Scaling Group (L1) - using Launch Configuration to avoid LaunchTemplate
+    # Note: Using public subnets for LocalStack since NAT Gateway is not available
+    cfn_asg = autoscaling.CfnAutoScalingGroup(
+      self, f"tap-asg-{environment_suffix}",
+      auto_scaling_group_name=f"tap-asg-{environment_suffix}",
+      launch_configuration_name=launch_config.ref,
+      min_size="2",
+      max_size="10",
+      desired_capacity="2",
+      vpc_zone_identifier=[subnet.subnet_id for subnet in vpc.public_subnets],
+      target_group_arns=[target_group.target_group_arn],
+      health_check_type="ELB",
+      health_check_grace_period=300,
+      tags=[
+        autoscaling.CfnAutoScalingGroup.TagPropertyProperty(
+          key="Name",
+          value=f"tap-asg-instance-{environment_suffix}",
+          propagate_at_launch=True
+        )
+      ]
+    )
+    cfn_asg.add_dependency(launch_config)
+
+    # Create a scaling policy for CPU utilization
+    # Using L1 constructs to match the ASG
+    scaling_policy = autoscaling.CfnScalingPolicy(
+      self, f"tap-cpu-scaling-policy-{environment_suffix}",
+      auto_scaling_group_name=cfn_asg.ref,
+      policy_type="TargetTrackingScaling",
+      target_tracking_configuration=autoscaling.CfnScalingPolicy.TargetTrackingConfigurationProperty(
+        predefined_metric_specification=autoscaling.CfnScalingPolicy.PredefinedMetricSpecificationProperty(
+          predefined_metric_type="ASGAverageCPUUtilization"
+        ),
+        target_value=50.0
+      )
     )
 
     # Outputs
