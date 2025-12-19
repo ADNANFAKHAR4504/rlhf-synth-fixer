@@ -15,13 +15,30 @@ import {
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || "dev";
 const STACK_NAME = `TapStack${ENVIRONMENT_SUFFIX}`;
 
+// LocalStack configuration
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes("localhost") ||
+  process.env.AWS_ENDPOINT_URL?.includes("4566");
+const endpoint = process.env.AWS_ENDPOINT_URL || "http://localhost:4566";
+
 let cfnClient: CloudFormationClient;
 let ec2Client: EC2Client;
 let outputs: Record<string, string>;
 
 beforeAll(async () => {
-  cfnClient = new CloudFormationClient({});
-  ec2Client = new EC2Client({});
+  const clientConfig = isLocalStack
+    ? {
+        endpoint,
+        region: process.env.AWS_REGION || "us-east-1",
+        credentials: {
+          accessKeyId: "test",
+          secretAccessKey: "test",
+        },
+      }
+    : {};
+
+  cfnClient = new CloudFormationClient(clientConfig);
+  ec2Client = new EC2Client(clientConfig);
 
   const stackResp = await cfnClient.send(
     new DescribeStacksCommand({ StackName: STACK_NAME })

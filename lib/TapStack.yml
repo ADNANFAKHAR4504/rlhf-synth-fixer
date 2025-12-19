@@ -61,12 +61,12 @@ Parameters:
     Description: EC2 instance type
 
   KeyName:
-    Type: 'AWS::EC2::KeyPair::KeyName'
+    Type: String
     Default: iac-rlhf-aws-trainer-instance
     Description: Name of an existing EC2 KeyPair
 
   AmiId:
-    Type: AWS::EC2::Image::Id
+    Type: String
     Default: ami-0871b7e0b83ae16c4
     Description: AMI ID to use for EC2 instances (e.g., Amazon Linux 2 AMI)
 
