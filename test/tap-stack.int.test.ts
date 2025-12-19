@@ -77,9 +77,21 @@ describe('Serverless Image Detector Integration Tests', () => {
   describe('Infrastructure Validation', () => {
     test('should have valid API endpoint', () => {
       expect(API_ENDPOINT).toBeDefined();
-      expect(API_ENDPOINT).toMatch(
-        /^https:\/\/.*\.execute-api\.us-east-1\.amazonaws\.com\/.*\/$/
-      );
+      // LocalStack uses localhost.localstack.cloud domain instead of amazonaws.com
+      const isLocalStack =
+        API_ENDPOINT.includes('localhost.localstack.cloud') ||
+        API_ENDPOINT.includes('localhost:4566');
+      if (isLocalStack) {
+        // LocalStack endpoint pattern
+        expect(API_ENDPOINT).toMatch(
+          /^https:\/\/.*\.execute-api\.localhost\.localstack\.cloud:4566\/.*\/$/
+        );
+      } else {
+        // AWS endpoint pattern
+        expect(API_ENDPOINT).toMatch(
+          /^https:\/\/.*\.execute-api\.us-east-1\.amazonaws\.com\/.*\/$/
+        );
+      }
     });
 
     test('should have valid S3 bucket name', () => {
