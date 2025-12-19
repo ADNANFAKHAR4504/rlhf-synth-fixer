@@ -1,0 +1,21 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "221164",
+  "team": "3",
+  "startedAt": "2025-08-04T12:59:00.606Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "ec2",
+    "autoscaling",
+    "elasticloadbalancing",
+    "s3",
+    "iam"
+  ]
+}
