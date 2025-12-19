@@ -60,7 +60,6 @@ async function describeInstanceSafe(instanceId: string) {
   } catch (error: any) {
     if (isLocalStack && (error.name === 'InvalidInstanceID.NotFound' || error.message?.includes('does not exist'))) {
       // EC2 instances may not be fully supported in LocalStack Community
-      console.warn('EC2 instance not found in LocalStack - this is expected behavior');
       return null;
     }
     throw error;
@@ -76,7 +75,6 @@ async function describeAddressSafe(elasticIp: string) {
     return await ec2Client.send(command);
   } catch (error: any) {
     if (isLocalStack && (error.name === 'InvalidAddress.NotFound' || error.message?.includes('not found') || error.message?.includes('does not exist'))) {
-      console.warn('Elastic IP not found in LocalStack - this is expected behavior');
       return null;
     }
     throw error;
@@ -92,7 +90,6 @@ async function describeSecurityGroupSafe(groupId: string) {
     return await ec2Client.send(command);
   } catch (error: any) {
     if (isLocalStack && (error.message?.includes('not found') || error.message?.includes('does not exist'))) {
-      console.warn('Security Group not found in LocalStack - this is expected behavior');
       return null;
     }
     throw error;
@@ -272,7 +269,6 @@ describe('CloudEnvironmentSetup Integration Tests', () => {
         expect(subnet?.MapPublicIpOnLaunch).toBe(true);
       } catch (error: any) {
         if (isLocalStack) {
-          console.warn('Subnet describe not fully supported in LocalStack');
           return;
         }
         throw error;
@@ -378,7 +374,6 @@ describe('CloudEnvironmentSetup Integration Tests', () => {
         ) || [];
 
       if (securityGroupIds.length === 0) {
-        console.warn('No security groups found in LocalStack');
         return;
       }
 
@@ -412,7 +407,6 @@ describe('CloudEnvironmentSetup Integration Tests', () => {
         ) || [];
 
       if (securityGroupIds.length === 0) {
-        console.warn('No security groups found in LocalStack');
         return;
       }
 
@@ -497,7 +491,6 @@ describe('CloudEnvironmentSetup Integration Tests', () => {
       const vpcId = instanceResponse.Reservations?.[0].Instances?.[0].VpcId;
 
       if (!vpcId) {
-        console.warn('VPC ID not found in LocalStack');
         return;
       }
 
@@ -511,7 +504,6 @@ describe('CloudEnvironmentSetup Integration Tests', () => {
         expect(vpc?.CidrBlock).toBe('10.0.0.0/16');
       } catch (error: any) {
         if (isLocalStack) {
-          console.warn('VPC describe not fully supported in LocalStack');
           return;
         }
         throw error;
@@ -529,7 +521,6 @@ describe('CloudEnvironmentSetup Integration Tests', () => {
       const vpcId = instanceResponse.Reservations?.[0].Instances?.[0].VpcId;
 
       if (!vpcId) {
-        console.warn('VPC ID not found in LocalStack');
         return;
       }
 
@@ -544,7 +535,6 @@ describe('CloudEnvironmentSetup Integration Tests', () => {
         expect(vpc?.VpcId).toBe(vpcId);
       } catch (error: any) {
         if (isLocalStack) {
-          console.warn('VPC describe not fully supported in LocalStack');
           return;
         }
         throw error;
@@ -562,7 +552,6 @@ describe('CloudEnvironmentSetup Integration Tests', () => {
       const vpcId = instanceResponse.Reservations?.[0].Instances?.[0].VpcId;
 
       if (!vpcId) {
-        console.warn('VPC ID not found in LocalStack');
         return;
       }
 
@@ -585,7 +574,6 @@ describe('CloudEnvironmentSetup Integration Tests', () => {
         expect(azs.size).toBeGreaterThanOrEqual(2);
       } catch (error: any) {
         if (isLocalStack) {
-          console.warn('Subnet describe not fully supported in LocalStack');
           return;
         }
         throw error;
