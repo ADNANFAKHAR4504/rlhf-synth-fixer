@@ -20,12 +20,17 @@ env = cdk.Environment(
     region=os.environ.get('CDK_DEFAULT_REGION', 'us-east-1')
 )
 
+# Use LegacyStackSynthesizer to avoid bootstrap requirement for LocalStack
+# This eliminates the need for ECR and other bootstrap resources
+synthesizer = cdk.LegacyStackSynthesizer()
+
 # Create the main stack with environment suffix in the name
 TapStack(
     app,
     f"TapStack-{env_suffix}",
     props=TapStackProps(environment_suffix=env_suffix),
     env=env,
+    synthesizer=synthesizer,
     description="TAP Lambda Stack with SSM Parameter Store integration"
 )
 
