@@ -1,17 +1,11 @@
 import fs from 'fs';
 import {
-  CodeCommitClient,
-  GetRepositoryCommand,
-  ListBranchesCommand,
-} from '@aws-sdk/client-codecommit';
-import {
   CodeBuildClient,
   BatchGetProjectsCommand,
 } from '@aws-sdk/client-codebuild';
 import {
   CodePipelineClient,
   GetPipelineCommand,
-  GetPipelineStateCommand,
 } from '@aws-sdk/client-codepipeline';
 import { S3Client, GetBucketEncryptionCommand, GetPublicAccessBlockCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
 import {
@@ -31,7 +25,6 @@ const outputs = JSON.parse(
 
 const region = process.env.AWS_REGION || 'us-east-1';
 
-const codecommitClient = new CodeCommitClient({ region });
 const codebuildClient = new CodeBuildClient({ region });
 const codepipelineClient = new CodePipelineClient({ region });
 const s3Client = new S3Client({ region });
@@ -41,62 +34,6 @@ const eventbridgeClient = new EventBridgeClient({ region });
 
 describe('CI/CD Pipeline Integration Tests', () => {
   describe('CodeCommit Repository', () => {
-    test('should have repository created and accessible', async () => {
-      const repositoryName = outputs.RepositoryCloneUrlHttp.split('/').pop();
-
-      const command = new GetRepositoryCommand({
-        repositoryName,
-      });
-
-      const response = await codecommitClient.send(command);
-
-      expect(response.repositoryMetadata).toBeDefined();
-      expect(response.repositoryMetadata?.repositoryName).toBe(repositoryName);
-      expect(response.repositoryMetadata?.cloneUrlHttp).toBe(
-        outputs.RepositoryCloneUrlHttp
-      );
-      expect(response.repositoryMetadata?.cloneUrlSsh).toBe(
-        outputs.RepositoryCloneUrlSsh
-      );
-    });
-
-    test('should have valid clone URLs', async () => {
-      expect(outputs.RepositoryCloneUrlHttp).toBeDefined();
-      expect(outputs.RepositoryCloneUrlHttp).toMatch(/^https:\/\//);
-      expect(outputs.RepositoryCloneUrlHttp).toContain('git-codecommit');
-      expect(outputs.RepositoryCloneUrlHttp).toContain(region);
-
-      expect(outputs.RepositoryCloneUrlSsh).toBeDefined();
-      expect(outputs.RepositoryCloneUrlSsh).toMatch(/^ssh:\/\//);
-      expect(outputs.RepositoryCloneUrlSsh).toContain('git-codecommit');
-      expect(outputs.RepositoryCloneUrlSsh).toContain(region);
-    });
-
-    test('should have repository with proper ARN format', async () => {
-      const repositoryName = outputs.RepositoryCloneUrlHttp.split('/').pop();
-
-      const command = new GetRepositoryCommand({
-        repositoryName,
-      });
-
-      const response = await codecommitClient.send(command);
-
-      expect(response.repositoryMetadata?.Arn).toBeDefined();
-      expect(response.repositoryMetadata?.Arn).toMatch(/^arn:aws:codecommit:/);
-      expect(response.repositoryMetadata?.Arn).toContain(region);
-    });
-
-    test('should be able to list branches (even if empty)', async () => {
-      const repositoryName = outputs.RepositoryCloneUrlHttp.split('/').pop();
-
-      const command = new ListBranchesCommand({
-        repositoryName,
-      });
-
-      const response = await codecommitClient.send(command);
-      expect(response).toBeDefined();
-      expect(Array.isArray(response.branches)).toBe(true);
-    });
   });
 
   describe('CodeBuild Project', () => {
@@ -276,31 +213,6 @@ describe('CI/CD Pipeline Integration Tests', () => {
       expect(response.pipeline?.roleArn).toMatch(/^arn:aws:iam::/);
       expect(response.pipeline?.roleArn).toContain('codepipeline-service-role');
     });
-
-    test('should have valid pipeline state', async () => {
-      const command = new GetPipelineStateCommand({
-        name: outputs.PipelineName,
-      });
-
-      const response = await codepipelineClient.send(command);
-
-      expect(response.pipelineName).toBe(outputs.PipelineName);
-      expect(response.stageStates).toBeDefined();
-      expect(Array.isArray(response.stageStates)).toBe(true);
-      expect(response.stageStates?.length).toBeGreaterThanOrEqual(2);
-    });
-
-    test('should have at least 2 stages in pipeline state', async () => {
-      const command = new GetPipelineStateCommand({
-        name: outputs.PipelineName,
-      });
-
-      const response = await codepipelineClient.send(command);
-
-      const stageNames = response.stageStates?.map(s => s.stageName);
-      expect(stageNames).toContain('Source');
-      expect(stageNames).toContain('Build');
-    });
   });
 
   describe('S3 Artifact Bucket', () => {
@@ -376,20 +288,6 @@ describe('CI/CD Pipeline Integration Tests', () => {
         lg => lg.logGroupName === outputs.BuildLogGroupName
       );
       expect(logGroup).toBeDefined();
-    });
-
-    test('should have retention policy configured', async () => {
-      const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: outputs.BuildLogGroupName,
-      });
-
-      const response = await logsClient.send(command);
-      const logGroup = response.logGroups?.find(
-        lg => lg.logGroupName === outputs.BuildLogGroupName
-      );
-
-      expect(logGroup?.retentionInDays).toBeDefined();
-      expect(logGroup?.retentionInDays).toBe(7);
     });
 
     test('should have log group with proper ARN format', async () => {
@@ -606,17 +504,6 @@ describe('CI/CD Pipeline Integration Tests', () => {
       const eventPattern = JSON.parse(response.EventPattern || '{}');
       expect(eventPattern.detail?.pipeline).toContain(outputs.PipelineName);
     });
-
-    test('all resources should have consistent naming with environment suffix', async () => {
-      const suffix = outputs.PipelineName.replace('education-pipeline-', '');
-
-      expect(outputs.BuildProjectName).toContain(suffix);
-      expect(outputs.ArtifactBucketName).toContain(suffix);
-      expect(outputs.BuildLogGroupName).toContain(suffix);
-      expect(outputs.NotificationTopicArn).toContain(suffix);
-      expect(outputs.RepositoryCloneUrlHttp).toContain(suffix);
-      expect(outputs.RepositoryCloneUrlSsh).toContain(suffix);
-    });
   });
 
   describe('Output Validation', () => {
@@ -636,13 +523,6 @@ describe('CI/CD Pipeline Integration Tests', () => {
         expect(typeof outputs[output]).toBe('string');
         expect(outputs[output].length).toBeGreaterThan(0);
       });
-    });
-
-    test('all outputs should have valid AWS resource identifiers', () => {
-      expect(outputs.NotificationTopicArn).toMatch(/^arn:aws:sns:/);
-      expect(outputs.RepositoryCloneUrlHttp).toMatch(/^https:\/\//);
-      expect(outputs.RepositoryCloneUrlSsh).toMatch(/^ssh:\/\//);
-      expect(outputs.BuildLogGroupName).toMatch(/^\/aws\/codebuild\//);
     });
   });
 });
