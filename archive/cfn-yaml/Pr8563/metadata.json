@@ -26,5 +26,12 @@
     "NAT Gateway",
     "Security Group",
     "WAF Web ACL"
-  ]
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
 }
