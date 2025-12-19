@@ -19,7 +19,6 @@ Metadata:
         Parameters:
           - InstanceType
           - KeyName
-          - AmiId
           - SshCidrBlock
     ParameterLabels:
       EnvironmentSuffix:
@@ -64,11 +63,6 @@ Parameters:
     Type: String
     Default: iac-rlhf-aws-trainer-instance
     Description: Name of an existing EC2 KeyPair
-
-  AmiId:
-    Type: String
-    Default: ami-0871b7e0b83ae16c4
-    Description: AMI ID to use for EC2 instances (e.g., Amazon Linux 2 AMI)
 
 Resources:
 
@@ -201,7 +195,7 @@ Resources:
     Properties:
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyName
-      ImageId: ami-0871b7e0b83ae16c4
+      ImageId: ami-12345678
       SecurityGroupIds:
         - !Ref SecurityGroup
       SubnetId: !Ref PublicSubnet
@@ -214,7 +208,7 @@ Resources:
     Properties:
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyName
-      ImageId: ami-0871b7e0b83ae16c4
+      ImageId: ami-12345678
       SecurityGroupIds:
         - !Ref SecurityGroup
       SubnetId: !Ref PrivateSubnet
