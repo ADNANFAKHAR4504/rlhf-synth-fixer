@@ -1151,16 +1151,17 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
 
           # Build sanitized object with ONLY allowed fields
           # NOTE: subtask uses enforce_subtask_string to ensure it's a single value!
+          # NOTE: team is always set to "synth-2" for LocalStack migrations
           {
             platform: (.platform | validate_platform),
             language: (.language | validate_language),
             complexity: (.complexity | validate_complexity),
             turn_type: (.turn_type | validate_turn_type),
             po_id: (.po_id // .task_id // "unknown"),
-            team: (.team | validate_team),
+            team: "synth-2",
             startedAt: (.startedAt | validate_started_at),
             subtask: (.subtask | enforce_subtask_string),
-            provider: (.provider // "localstack"),
+            provider: "localstack",
             subject_labels: (
               [.subject_labels[]? | map_label]
               | unique

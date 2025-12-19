@@ -35,7 +35,7 @@ This command uses modular shell scripts in `.claude/scripts/` for better maintai
 | `localstack-init.sh`              | Environment validation and initialization        |
 | `localstack-select-task.sh`       | Task selection logic                             |
 | `localstack-fetch-github.sh`      | Fetch tasks from GitHub PRs                      |
-| `localstack-sanitize-metadata.sh` | Sanitize metadata.json for schema compliance     |
+| `localstack-sanitize-metadata.sh` | Sanitize metadata.json for schema compliance (sets team to `synth-2`) |
 | `localstack-create-pr.sh`         | Create GitHub PR with migrated code              |
 | `localstack-update-log.sh`        | Update migration log with file locking           |
 
