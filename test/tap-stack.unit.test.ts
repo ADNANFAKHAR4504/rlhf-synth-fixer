@@ -105,11 +105,11 @@ describe('TapStack Unit Tests', () => {
           GroupName: `web-server-sg-${environmentSuffix}`,
         },
       });
-      
+
       Object.values(securityGroups).forEach((sg: any) => {
         const ingressRules = sg.Properties?.SecurityGroupIngress || [];
-        const sshRule = ingressRules.find((rule: any) => 
-          rule.FromPort === 22 && rule.ToPort === 22
+        const sshRule = ingressRules.find(
+          (rule: any) => rule.FromPort === 22 && rule.ToPort === 22
         );
         expect(sshRule).toBeUndefined();
       });
@@ -241,7 +241,10 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('RDS secret attachment is created', () => {
-      template.resourceCountIs('AWS::SecretsManager::SecretTargetAttachment', 1);
+      template.resourceCountIs(
+        'AWS::SecretsManager::SecretTargetAttachment',
+        1
+      );
     });
   });
 
@@ -261,7 +264,7 @@ describe('TapStack Unit Tests', () => {
           Status: 'Enabled',
         }),
       });
-      
+
       // Verify bucket naming contains environment suffix
       const buckets = template.findResources('AWS::S3::Bucket');
       const bucketResource = Object.values(buckets)[0] as any;
@@ -462,13 +465,13 @@ describe('TapStack Unit Tests', () => {
     test('Infrastructure supports multi-AZ deployment', () => {
       const subnets = template.findResources('AWS::EC2::Subnet');
       const azs = new Set<string>();
-      
+
       Object.values(subnets).forEach((subnet: any) => {
         if (subnet.Properties?.AvailabilityZone) {
           azs.add(subnet.Properties.AvailabilityZone);
         }
       });
-      
+
       expect(azs.size).toBeGreaterThanOrEqual(2);
     });
 

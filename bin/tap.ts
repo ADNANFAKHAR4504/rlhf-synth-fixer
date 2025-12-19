@@ -34,7 +34,8 @@ new TapStack(app, stackName, {
   enableApplicationInsights: false,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT || '000000000000',
-    region: process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-1',
+    region:
+      process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-1',
   },
 });
 

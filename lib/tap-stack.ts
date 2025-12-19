@@ -286,9 +286,10 @@ EOF`,
     // S3 Bucket for application logs with blocked public access
     // Note: autoDeleteObjects requires Lambda custom resource which needs ECR (LocalStack Pro)
     // For LocalStack Community, we use removalPolicy.DESTROY without autoDeleteObjects
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                         process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-                         props?.environmentSuffix?.startsWith('pr'); // CI uses pr prefix
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+      props?.environmentSuffix?.startsWith('pr'); // CI uses pr prefix
 
     const logsBucket = new s3.Bucket(this, 'ApplicationLogsBucket', {
       bucketName: `migration-app-logs-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,

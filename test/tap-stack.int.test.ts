@@ -1,16 +1,46 @@
-import { EC2Client, DescribeInstancesCommand, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
+import {
+  EC2Client,
+  DescribeInstancesCommand,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+} from '@aws-sdk/client-ec2';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { S3Client, HeadBucketCommand, GetBucketVersioningCommand, GetBucketEncryptionCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
-import { SSMClient, DescribeInstanceInformationCommand } from '@aws-sdk/client-ssm';
-import { ApplicationInsightsClient, DescribeApplicationCommand } from '@aws-sdk/client-application-insights';
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  S3Client,
+  HeadBucketCommand,
+  GetBucketVersioningCommand,
+  GetBucketEncryptionCommand,
+  GetPublicAccessBlockCommand,
+} from '@aws-sdk/client-s3';
+import {
+  SecretsManagerClient,
+  GetSecretValueCommand,
+} from '@aws-sdk/client-secrets-manager';
+import {
+  SSMClient,
+  DescribeInstanceInformationCommand,
+} from '@aws-sdk/client-ssm';
+import {
+  ApplicationInsightsClient,
+  DescribeApplicationCommand,
+} from '@aws-sdk/client-application-insights';
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
 import * as fs from 'fs';
 import * as path from 'path';
 import fetch from 'node-fetch';
 
 // Load the deployed outputs
-const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+const outputsPath = path.join(
+  __dirname,
+  '..',
+  'cfn-outputs',
+  'flat-outputs.json'
+);
 let outputs: any = {};
 
 if (fs.existsSync(outputsPath)) {
@@ -28,7 +58,8 @@ const cloudWatchLogsClient = new CloudWatchLogsClient({ region });
 
 describe('TapStack Integration Tests', () => {
   // Skip tests if no outputs are available
-  const skipIfNoOutputs = outputs && Object.keys(outputs).length > 0 ? test : test.skip;
+  const skipIfNoOutputs =
+    outputs && Object.keys(outputs).length > 0 ? test : test.skip;
 
   describe('VPC and Networking', () => {
     skipIfNoOutputs('VPC exists and has correct CIDR block', async () => {
@@ -36,7 +67,7 @@ describe('TapStack Integration Tests', () => {
         VpcIds: [outputs.VpcId],
       });
       const response = await ec2Client.send(command);
-      
+
       expect(response.Vpcs).toHaveLength(1);
       expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
       expect(response.Vpcs![0].State).toBe('available');
@@ -45,26 +76,35 @@ describe('TapStack Integration Tests', () => {
       expect(vpc).toBeDefined();
     });
 
-    skipIfNoOutputs('VPC has subnets in multiple availability zones', async () => {
-      const command = new DescribeSubnetsCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VpcId],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
-      
-      const azs = new Set(response.Subnets?.map(subnet => subnet.AvailabilityZone));
-      expect(azs.size).toBeGreaterThanOrEqual(2);
-      
-      const publicSubnets = response.Subnets?.filter(subnet => subnet.MapPublicIpOnLaunch);
-      const privateSubnets = response.Subnets?.filter(subnet => !subnet.MapPublicIpOnLaunch);
-      
-      expect(publicSubnets?.length).toBe(2);
-      expect(privateSubnets?.length).toBe(2);
-    });
+    skipIfNoOutputs(
+      'VPC has subnets in multiple availability zones',
+      async () => {
+        const command = new DescribeSubnetsCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [outputs.VpcId],
+            },
+          ],
+        });
+        const response = await ec2Client.send(command);
+
+        const azs = new Set(
+          response.Subnets?.map(subnet => subnet.AvailabilityZone)
+        );
+        expect(azs.size).toBeGreaterThanOrEqual(2);
+
+        const publicSubnets = response.Subnets?.filter(
+          subnet => subnet.MapPublicIpOnLaunch
+        );
+        const privateSubnets = response.Subnets?.filter(
+          subnet => !subnet.MapPublicIpOnLaunch
+        );
+
+        expect(publicSubnets?.length).toBe(2);
+        expect(privateSubnets?.length).toBe(2);
+      }
+    );
 
     // NAT Gateway is disabled for LocalStack Community compatibility
     test.skip('NAT Gateway is active', async () => {
@@ -90,7 +130,7 @@ describe('TapStack Integration Tests', () => {
         InstanceIds: [outputs.WebServerInstanceId],
       });
       const response = await ec2Client.send(command);
-      
+
       const instance = response.Reservations![0].Instances![0];
       expect(instance.State?.Name).toBe('running');
       expect(instance.InstanceType).toBe('t3.micro');
@@ -102,18 +142,29 @@ describe('TapStack Integration Tests', () => {
         InstanceIds: [outputs.WebServerInstanceId],
       });
       const instanceResponse = await ec2Client.send(instanceCommand);
-      const securityGroupIds = instanceResponse.Reservations![0].Instances![0].SecurityGroups?.map(sg => sg.GroupId);
-      
+      const securityGroupIds =
+        instanceResponse.Reservations![0].Instances![0].SecurityGroups?.map(
+          sg => sg.GroupId
+        );
+
       const sgCommand = new DescribeSecurityGroupsCommand({
-        GroupIds: securityGroupIds?.filter((id): id is string => id !== undefined),
+        GroupIds: securityGroupIds?.filter(
+          (id): id is string => id !== undefined
+        ),
       });
       const sgResponse = await ec2Client.send(sgCommand);
-      
+
       const webServerSg = sgResponse.SecurityGroups![0];
-      const httpRule = webServerSg.IpPermissions?.find(rule => rule.FromPort === 80);
-      const httpsRule = webServerSg.IpPermissions?.find(rule => rule.FromPort === 443);
-      const sshRule = webServerSg.IpPermissions?.find(rule => rule.FromPort === 22);
-      
+      const httpRule = webServerSg.IpPermissions?.find(
+        rule => rule.FromPort === 80
+      );
+      const httpsRule = webServerSg.IpPermissions?.find(
+        rule => rule.FromPort === 443
+      );
+      const sshRule = webServerSg.IpPermissions?.find(
+        rule => rule.FromPort === 22
+      );
+
       expect(httpRule).toBeDefined();
       expect(httpsRule).toBeDefined();
       expect(sshRule).toBeUndefined(); // SSH should not be allowed (using Session Manager instead)
@@ -123,7 +174,7 @@ describe('TapStack Integration Tests', () => {
       const response = await fetch(`http://${outputs.WebServerPublicIp}`, {
         timeout: 10000,
       });
-      
+
       expect(response.status).toBe(200);
       const text = await response.text();
       expect(text).toContain('Migration Server Ready');
@@ -137,7 +188,7 @@ describe('TapStack Integration Tests', () => {
         DBInstanceIdentifier: dbInstanceId,
       });
       const response = await rdsClient.send(command);
-      
+
       const dbInstance = response.DBInstances![0];
       expect(dbInstance.DBInstanceStatus).toBe('available');
       expect(dbInstance.Engine).toBe('mysql');
@@ -153,25 +204,28 @@ describe('TapStack Integration Tests', () => {
         DBInstanceIdentifier: dbInstanceId,
       });
       const response = await rdsClient.send(command);
-      
+
       const dbInstance = response.DBInstances![0];
       expect(dbInstance.BackupRetentionPeriod).toBe(7);
       expect(dbInstance.PreferredBackupWindow).toBeDefined();
     });
 
-    skipIfNoOutputs('Database credentials secret exists and is accessible', async () => {
-      const command = new GetSecretValueCommand({
-        SecretId: outputs.DatabaseCredentialsSecret,
-      });
-      
-      const response = await secretsClient.send(command);
-      expect(response.SecretString).toBeDefined();
-      
-      const secretValue = JSON.parse(response.SecretString!);
-      expect(secretValue.username).toBe('dbadmin');
-      expect(secretValue.password).toBeDefined();
-      expect(secretValue.password.length).toBeGreaterThanOrEqual(20);
-    });
+    skipIfNoOutputs(
+      'Database credentials secret exists and is accessible',
+      async () => {
+        const command = new GetSecretValueCommand({
+          SecretId: outputs.DatabaseCredentialsSecret,
+        });
+
+        const response = await secretsClient.send(command);
+        expect(response.SecretString).toBeDefined();
+
+        const secretValue = JSON.parse(response.SecretString!);
+        expect(secretValue.username).toBe('dbadmin');
+        expect(secretValue.password).toBeDefined();
+        expect(secretValue.password.length).toBeGreaterThanOrEqual(20);
+      }
+    );
   });
 
   describe('S3 Bucket', () => {
@@ -179,7 +233,7 @@ describe('TapStack Integration Tests', () => {
       const command = new HeadBucketCommand({
         Bucket: outputs.LogsBucketName,
       });
-      
+
       await expect(s3Client.send(command)).resolves.not.toThrow();
     });
 
@@ -188,7 +242,7 @@ describe('TapStack Integration Tests', () => {
         Bucket: outputs.LogsBucketName,
       });
       const response = await s3Client.send(command);
-      
+
       expect(response.Status).toBe('Enabled');
     });
 
@@ -197,9 +251,12 @@ describe('TapStack Integration Tests', () => {
         Bucket: outputs.LogsBucketName,
       });
       const response = await s3Client.send(command);
-      
+
       expect(response.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
-      expect(response.ServerSideEncryptionConfiguration?.Rules![0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+      expect(
+        response.ServerSideEncryptionConfiguration?.Rules![0]
+          .ApplyServerSideEncryptionByDefault?.SSEAlgorithm
+      ).toBe('AES256');
     });
 
     skipIfNoOutputs('S3 bucket has public access blocked', async () => {
@@ -207,11 +264,19 @@ describe('TapStack Integration Tests', () => {
         Bucket: outputs.LogsBucketName,
       });
       const response = await s3Client.send(command);
-      
-      expect(response.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-      expect(response.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
-      expect(response.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
-      expect(response.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+
+      expect(response.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(
+        true
+      );
+      expect(response.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(
+        true
+      );
+      expect(response.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(
+        true
+      );
+      expect(
+        response.PublicAccessBlockConfiguration?.RestrictPublicBuckets
+      ).toBe(true);
     });
   });
 
@@ -226,7 +291,7 @@ describe('TapStack Integration Tests', () => {
         ],
       });
       const response = await ssmClient.send(command);
-      
+
       expect(response.InstanceInformationList).toHaveLength(1);
       const instanceInfo = response.InstanceInformationList![0];
       expect(instanceInfo.PingStatus).toBe('Online');
@@ -238,9 +303,11 @@ describe('TapStack Integration Tests', () => {
         logGroupNamePrefix: outputs.SessionManagerLogGroupName,
       });
       const response = await cloudWatchLogsClient.send(command);
-      
+
       expect(response.logGroups).toHaveLength(1);
-      expect(response.logGroups![0].logGroupName).toBe(outputs.SessionManagerLogGroupName);
+      expect(response.logGroups![0].logGroupName).toBe(
+        outputs.SessionManagerLogGroupName
+      );
     });
   });
 
@@ -253,7 +320,9 @@ describe('TapStack Integration Tests', () => {
       const response = await appInsightsClient.send(command);
 
       expect(response.ApplicationInfo).toBeDefined();
-      expect(response.ApplicationInfo?.ResourceGroupName).toBe(outputs.ApplicationInsightsResourceGroupName);
+      expect(response.ApplicationInfo?.ResourceGroupName).toBe(
+        outputs.ApplicationInsightsResourceGroupName
+      );
       expect(response.ApplicationInfo?.CWEMonitorEnabled).toBe(true);
       expect(response.ApplicationInfo?.OpsCenterEnabled).toBe(true);
     });
@@ -263,9 +332,11 @@ describe('TapStack Integration Tests', () => {
         logGroupNamePrefix: outputs.ApplicationLogGroupName,
       });
       const response = await cloudWatchLogsClient.send(command);
-      
+
       expect(response.logGroups).toHaveLength(1);
-      expect(response.logGroups![0].logGroupName).toBe(outputs.ApplicationLogGroupName);
+      expect(response.logGroups![0].logGroupName).toBe(
+        outputs.ApplicationLogGroupName
+      );
     });
   });
 
@@ -278,51 +349,58 @@ describe('TapStack Integration Tests', () => {
       });
       const rdsResponse = await rdsClient.send(rdsCommand);
       const dbSecurityGroups = rdsResponse.DBInstances![0].VpcSecurityGroups;
-      
+
       // Get EC2 instance security groups
       const ec2Command = new DescribeInstancesCommand({
         InstanceIds: [outputs.WebServerInstanceId],
       });
       const ec2Response = await ec2Client.send(ec2Command);
-      const ec2SecurityGroups = ec2Response.Reservations![0].Instances![0].SecurityGroups;
-      
+      const ec2SecurityGroups =
+        ec2Response.Reservations![0].Instances![0].SecurityGroups;
+
       // Check that database security group allows traffic from EC2 security group
       const sgCommand = new DescribeSecurityGroupsCommand({
-        GroupIds: dbSecurityGroups?.map(sg => sg.VpcSecurityGroupId).filter((id): id is string => id !== undefined),
+        GroupIds: dbSecurityGroups
+          ?.map(sg => sg.VpcSecurityGroupId)
+          .filter((id): id is string => id !== undefined),
       });
       const sgResponse = await ec2Client.send(sgCommand);
-      
+
       const dbSg = sgResponse.SecurityGroups![0];
-      const mysqlRule = dbSg.IpPermissions?.find(rule => 
-        rule.FromPort === 3306 && 
-        rule.UserIdGroupPairs?.some(pair => 
-          ec2SecurityGroups?.some(ec2Sg => ec2Sg.GroupId === pair.GroupId)
-        )
+      const mysqlRule = dbSg.IpPermissions?.find(
+        rule =>
+          rule.FromPort === 3306 &&
+          rule.UserIdGroupPairs?.some(pair =>
+            ec2SecurityGroups?.some(ec2Sg => ec2Sg.GroupId === pair.GroupId)
+          )
       );
-      
+
       expect(mysqlRule).toBeDefined();
     });
 
-    skipIfNoOutputs('Infrastructure components are in the same VPC', async () => {
-      // Check EC2 instance VPC
-      const ec2Command = new DescribeInstancesCommand({
-        InstanceIds: [outputs.WebServerInstanceId],
-      });
-      const ec2Response = await ec2Client.send(ec2Command);
-      const ec2VpcId = ec2Response.Reservations![0].Instances![0].VpcId;
-      
-      // Check RDS VPC
-      const dbInstanceId = outputs.DatabaseEndpoint.split('.')[0];
-      const rdsCommand = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbInstanceId,
-      });
-      const rdsResponse = await rdsClient.send(rdsCommand);
-      const dbSubnetGroup = rdsResponse.DBInstances![0].DBSubnetGroup;
-      const dbVpcId = dbSubnetGroup?.VpcId;
-      
-      expect(ec2VpcId).toBe(outputs.VpcId);
-      expect(dbVpcId).toBe(outputs.VpcId);
-    });
+    skipIfNoOutputs(
+      'Infrastructure components are in the same VPC',
+      async () => {
+        // Check EC2 instance VPC
+        const ec2Command = new DescribeInstancesCommand({
+          InstanceIds: [outputs.WebServerInstanceId],
+        });
+        const ec2Response = await ec2Client.send(ec2Command);
+        const ec2VpcId = ec2Response.Reservations![0].Instances![0].VpcId;
+
+        // Check RDS VPC
+        const dbInstanceId = outputs.DatabaseEndpoint.split('.')[0];
+        const rdsCommand = new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbInstanceId,
+        });
+        const rdsResponse = await rdsClient.send(rdsCommand);
+        const dbSubnetGroup = rdsResponse.DBInstances![0].DBSubnetGroup;
+        const dbVpcId = dbSubnetGroup?.VpcId;
+
+        expect(ec2VpcId).toBe(outputs.VpcId);
+        expect(dbVpcId).toBe(outputs.VpcId);
+      }
+    );
 
     // NAT Gateway is disabled for LocalStack Community compatibility
     test.skip('Private subnets have internet access through NAT Gateway', async () => {
