@@ -1,0 +1,26 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "4028",
+  "team": "5",
+  "startedAt": "2025-10-09T14:59:45.857Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "ElastiCache",
+    "DynamoDB",
+    "CloudWatch",
+    "X-Ray",
+    "EventBridge",
+    "IAM",
+    "VPC",
+    "EC2"
+  ],
+  "provider": "localstack"
+}
