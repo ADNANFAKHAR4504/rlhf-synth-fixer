@@ -148,7 +148,7 @@ class TapStack(cdk.Stack):
             self,
             f"{project_name}-lambda-function",
             function_name=f"{project_name}-lambda-function",
-            runtime=_lambda.Runtime.PYTHON_3_12,  # Updated to Python 3.12
+            runtime=_lambda.Runtime.PYTHON_3_11,  # Using Python 3.11 for LocalStack compatibility
             handler="index.lambda_handler",
             code=_lambda.Code.from_inline(self._get_lambda_code()),
             timeout=Duration.seconds(30),
