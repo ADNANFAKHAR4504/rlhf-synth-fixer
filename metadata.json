@@ -1,0 +1,24 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291581",
+  "team": "synth-2",
+  "startedAt": "2025-08-19T15:15:43.223Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS",
+    "CloudWatch",
+    "IAM",
+    "VPC",
+    "Security Groups"
+  ],
+  "provider": "localstack"
+}
