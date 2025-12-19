@@ -408,4 +408,72 @@ describe('TapStack', () => {
       });
     });
   });
+
+  describe('LocalStack Configuration', () => {
+    let localstackApp: cdk.App;
+    let localstackStack: TapStack;
+    let localstackTemplate: Template;
+
+    beforeEach(() => {
+      // Set AWS_ENDPOINT_URL to simulate LocalStack environment
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+
+      localstackApp = new cdk.App({
+        context: {
+          environmentSuffix: environmentSuffix,
+        },
+      });
+      localstackStack = new TapStack(
+        localstackApp,
+        `TestLocalStackStack${environmentSuffix}`,
+        {
+          env: {
+            account: '000000000000',
+            region: 'us-east-1',
+          },
+        }
+      );
+      localstackTemplate = Template.fromStack(localstackStack);
+    });
+
+    afterEach(() => {
+      // Clean up environment variable
+      delete process.env.AWS_ENDPOINT_URL;
+    });
+
+    test('uses simplified VPC configuration for LocalStack', () => {
+      // Should have 2 AZs instead of 3
+      localstackTemplate.resourceCountIs('AWS::EC2::Subnet', 2); // 2 public only
+    });
+
+    test('does not create NAT gateways in LocalStack', () => {
+      localstackTemplate.resourceCountIs('AWS::EC2::NatGateway', 0);
+    });
+
+    test('does not create S3 VPC endpoint in LocalStack', () => {
+      // Should not have VPC endpoint in LocalStack mode
+      const resources = localstackTemplate.toJSON().Resources;
+      const vpcEndpoints = Object.values(resources).filter(
+        (r: any) => r.Type === 'AWS::EC2::VPCEndpoint'
+      );
+      expect(vpcEndpoints.length).toBe(0);
+    });
+
+    test('does not create Access Analyzer in LocalStack', () => {
+      // Should not have Access Analyzer in LocalStack mode
+      const resources = localstackTemplate.toJSON().Resources;
+      const accessAnalyzers = Object.values(resources).filter(
+        (r: any) => r.Type === 'AWS::AccessAnalyzer::Analyzer'
+      );
+      expect(accessAnalyzers.length).toBe(0);
+    });
+
+    test('outputs mock Access Analyzer ARN in LocalStack', () => {
+      localstackTemplate.hasOutput('AccessAnalyzerArn', {
+        Value: Match.stringLikeRegexp(
+          'arn:aws:access-analyzer:us-east-1:000000000000:analyzer/SecurityAccessAnalyzer-.*'
+        ),
+      });
+    });
+  });
 });
