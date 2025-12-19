@@ -61,7 +61,16 @@ aws s3api put-bucket-versioning \
     --bucket "${BUCKET_NAME}" \
     --versioning-configuration Status=Enabled 2>/dev/null || echo "Versioning skipped"
 
+# Create SSM parameter for bootstrap version (CDK expects this)
+echo -e "${YELLOW}📝 Creating bootstrap version parameter...${NC}"
+aws ssm put-parameter \
+    --name "/cdk-bootstrap/localstack/version" \
+    --value "22" \
+    --type "String" \
+    --overwrite 2>/dev/null && echo -e "${GREEN}✅ Bootstrap version parameter created${NC}" || echo "Parameter creation skipped"
+
 echo ""
 echo -e "${GREEN}✅ Bootstrap complete!${NC}"
 echo -e "${GREEN}   Assets bucket: s3://${BUCKET_NAME}${NC}"
+echo -e "${GREEN}   Bootstrap version: 22${NC}"
 echo ""
