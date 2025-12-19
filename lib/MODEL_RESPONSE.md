@@ -919,8 +919,8 @@ def main():
         # Save HTML report
         auditor.save_html_report(findings, summary)
         
-        print(f"\n📊 Audit complete! Found {len(findings)} issues across {summary['total_buckets_audited']} buckets.")
-        print(f"📄 Reports saved: s3_security_audit.json, s3_audit_report.html")
+        print(f"\n Audit complete! Found {len(findings)} issues across {summary['total_buckets_audited']} buckets.")
+        print(f" Reports saved: s3_security_audit.json, s3_audit_report.html")
         
         # Exit with error code if critical findings
         if any(f.severity == CRITICAL for f in findings):

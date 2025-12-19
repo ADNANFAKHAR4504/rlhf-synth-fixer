@@ -225,7 +225,7 @@ class MotoDemoDataSeeder:
 
         timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
         payloads = [
-            ("stream-critical", "🚨 critical access pattern recorded"),
+            ("stream-critical", " critical access pattern recorded"),
             ("stream-normal", "standard audit entry"),
         ]
         for stream, message in payloads:
@@ -1442,8 +1442,8 @@ def run_s3_security_audit():
             logger.warning(f"HTML report generation failed: {e}")
             logger.info("JSON report was generated successfully. HTML report requires: pip install plotly jinja2")
         
-        logger.info(f"📊 Audit complete! Found {len(findings)} issues across {summary['total_buckets_audited']} buckets.")
-        logger.info(f"📄 Reports saved: s3_security_audit.json (always generated)")
+        logger.info(f" Audit complete! Found {len(findings)} issues across {summary['total_buckets_audited']} buckets.")
+        logger.info(f" Reports saved: s3_security_audit.json (always generated)")
         
         # Exit with error code if critical findings
         if any(f.severity == CRITICAL for f in findings):
@@ -1639,8 +1639,8 @@ def main():
         # Save HTML report
         auditor.save_html_report(findings, summary)
         
-        print(f"\n📊 Audit complete! Found {len(findings)} issues across {summary['total_buckets_audited']} buckets.")
-        print(f"📄 Reports saved: s3_security_audit.json, s3_audit_report.html")
+        print(f"\n Audit complete! Found {len(findings)} issues across {summary['total_buckets_audited']} buckets.")
+        print(f" Reports saved: s3_security_audit.json, s3_audit_report.html")
         
         # Exit with error code if critical findings
         if any(f.severity == CRITICAL for f in findings):
