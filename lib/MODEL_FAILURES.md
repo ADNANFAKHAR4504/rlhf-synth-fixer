@@ -83,15 +83,15 @@ The training value is slightly reduced due to the architectural differences betw
 
 | Requirement | IDEAL_RESPONSE | MODEL_RESPONSE | Implementation | Status |
 |-------------|----------------|----------------|----------------|---------|
-| IAM least-privilege policies | ✅ Complete | ⚠️ Excessive permissions | ✅ Matches IDEAL | ✅ |
-| S3 KMS encryption | ✅ Complete | ✅ Complete | ✅ Matches IDEAL | ✅ |
-| CloudWatch monitoring for unauthorized API | ✅ CloudTrail-based | ❌ Generic pattern | ✅ Matches IDEAL | ✅ |
-| SNS security alerts | ✅ Complete | ✅ Complete | ✅ Matches IDEAL | ✅ |
-| Region restriction to us-west-2 | ✅ Complete | ✅ Complete | ✅ Matches IDEAL | ✅ |
-| No open 0.0.0.0/0 on sensitive ports | ✅ N/A | ⚠️ HTTP/HTTPS open | ✅ N/A | ✅ |
-| Encryption everywhere possible | ✅ Complete | ✅ Complete | ✅ Matches IDEAL | ✅ |
-| Consistent tagging | ✅ Complete | ✅ Complete | ✅ Matches IDEAL | ✅ |
-| Safe outputs only | ✅ Complete | ✅ Complete | ✅ Matches IDEAL | ✅ |
+| IAM least-privilege policies | [PASS] Complete | [WARN] Excessive permissions | [PASS] Matches IDEAL | [PASS] |
+| S3 KMS encryption | [PASS] Complete | [PASS] Complete | [PASS] Matches IDEAL | [PASS] |
+| CloudWatch monitoring for unauthorized API | [PASS] CloudTrail-based | [FAIL] Generic pattern | [PASS] Matches IDEAL | [PASS] |
+| SNS security alerts | [PASS] Complete | [PASS] Complete | [PASS] Matches IDEAL | [PASS] |
+| Region restriction to us-west-2 | [PASS] Complete | [PASS] Complete | [PASS] Matches IDEAL | [PASS] |
+| No open 0.0.0.0/0 on sensitive ports | [PASS] N/A | [WARN] HTTP/HTTPS open | [PASS] N/A | [PASS] |
+| Encryption everywhere possible | [PASS] Complete | [PASS] Complete | [PASS] Matches IDEAL | [PASS] |
+| Consistent tagging | [PASS] Complete | [PASS] Complete | [PASS] Matches IDEAL | [PASS] |
+| Safe outputs only | [PASS] Complete | [PASS] Complete | [PASS] Matches IDEAL | [PASS] |
 
 **Overall Compliance: 90%**
 
@@ -99,11 +99,11 @@ The training value is slightly reduced due to the architectural differences betw
 
 | Practice | IDEAL_RESPONSE | MODEL_RESPONSE | Implementation | Status |
 |----------|----------------|----------------|----------------|---------|
-| Resource naming conventions | ✅ Excellent | ⚠️ Inconsistent | ✅ Matches IDEAL | ✅ |
-| Tagging standards | ✅ Complete | ✅ Complete | ✅ Matches IDEAL | ✅ |
-| Backup and recovery (versioning) | ✅ Complete | ✅ Complete | ✅ Matches IDEAL | ✅ |
-| Monitoring and logging | ✅ Comprehensive | ⚠️ Incomplete | ✅ Matches IDEAL | ✅ |
-| Network security | ✅ N/A (focused) | ⚠️ Open to internet | ✅ N/A | ✅ |
+| Resource naming conventions | [PASS] Excellent | [WARN] Inconsistent | [PASS] Matches IDEAL | [PASS] |
+| Tagging standards | [PASS] Complete | [PASS] Complete | [PASS] Matches IDEAL | [PASS] |
+| Backup and recovery (versioning) | [PASS] Complete | [PASS] Complete | [PASS] Matches IDEAL | [PASS] |
+| Monitoring and logging | [PASS] Comprehensive | [WARN] Incomplete | [PASS] Matches IDEAL | [PASS] |
+| Network security | [PASS] N/A (focused) | [WARN] Open to internet | [PASS] N/A | [PASS] |
 
 **Overall Best Practices: 95%**
 
@@ -113,14 +113,14 @@ The training value is slightly reduced due to the architectural differences betw
 
 | Resource Type | Test Coverage | Quality | Notes |
 |---------------|---------------|---------|-------|
-| KMS Key | ✅ Excellent | High | Tests encryption, rotation, tagging |
-| S3 Buckets (App Data) | ✅ Excellent | High | Tests encryption, versioning, public access blocks, tagging |
-| S3 Buckets (CloudTrail) | ✅ Excellent | High | Complete security validation |
-| CloudWatch Log Groups | ✅ Good | Medium | Tests encryption and retention |
-| CloudTrail | ✅ Excellent | High | Tests configuration, logging status, KMS integration |
-| CloudWatch Alarms | ✅ Good | Medium | Validates UnauthorizedAPIRequests metric |
-| SNS Topic | ✅ Excellent | High | Tests KMS encryption and policy configuration |
-| Region Enforcement | ✅ Excellent | High | Validates us-west-2 constraint |
+| KMS Key | [PASS] Excellent | High | Tests encryption, rotation, tagging |
+| S3 Buckets (App Data) | [PASS] Excellent | High | Tests encryption, versioning, public access blocks, tagging |
+| S3 Buckets (CloudTrail) | [PASS] Excellent | High | Complete security validation |
+| CloudWatch Log Groups | [PASS] Good | Medium | Tests encryption and retention |
+| CloudTrail | [PASS] Excellent | High | Tests configuration, logging status, KMS integration |
+| CloudWatch Alarms | [PASS] Good | Medium | Validates UnauthorizedAPIRequests metric |
+| SNS Topic | [PASS] Excellent | High | Tests KMS encryption and policy configuration |
+| Region Enforcement | [PASS] Excellent | High | Validates us-west-2 constraint |
 
 **Test Coverage Score: 95%**
 
