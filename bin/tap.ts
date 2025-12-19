@@ -11,9 +11,9 @@ const environmentSuffix =
 
 const account = process.env.CDK_DEFAULT_ACCOUNT || process.env.CURRENT_ACCOUNT_ID;
 
-// Create stacks for multiple regions as top-level stacks
-new SecureNetworkStack(app, 'TapStack-SecureNetworkEast', {
-  environmentName: `${environmentSuffix}-east`,
+// Create primary stack in us-east-1 (required by deployment script)
+new SecureNetworkStack(app, 'TapStack', {
+  environmentName: `${environmentSuffix}`,
   costCenter: 'CC-001-Security',
   env: {
     account,
@@ -21,6 +21,7 @@ new SecureNetworkStack(app, 'TapStack-SecureNetworkEast', {
   },
 });
 
+// Create secondary stack in us-west-2 for multi-region setup
 new SecureNetworkStack(app, 'TapStack-SecureNetworkWest', {
   environmentName: `${environmentSuffix}-west`,
   costCenter: 'CC-001-Security',
