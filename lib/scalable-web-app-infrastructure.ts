@@ -238,6 +238,7 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
     );
 
     // VPC Flow Logs
+    // Note: maxAggregationInterval set to 60 for LocalStack compatibility
     new aws.ec2.FlowLog(
       `vpc-flow-logs-${environmentSuffix}`,
       {
@@ -246,6 +247,7 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
         logDestinationType: 'cloud-watch-logs',
         vpcId: vpc.id,
         trafficType: 'ALL',
+        maxAggregationInterval: 60,
         tags: {
           Name: `vpc-flow-logs-${environmentSuffix}`,
         },
