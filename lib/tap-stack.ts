@@ -132,6 +132,9 @@ export class TapStack extends cdk.Stack {
       ? ec2.MachineImage.genericLinux({ 'us-east-1': config.customAmiId })
       : ec2.MachineImage.latestAmazonLinux2();
 
+    // IAM Role for EC2 instances (create once, use in both launch template and ASG)
+    const ec2Role = this.createEC2Role();
+
     // User Data Script for Web Server Setup
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
@@ -154,29 +157,40 @@ export class TapStack extends cdk.Stack {
         securityGroup: webSecurityGroup,
         keyPair,
         userData,
-        role: this.createEC2Role(),
+        role: ec2Role,
       }
     );
 
     // Auto Scaling Group
-    // For LocalStack compatibility, we need to handle launch template version differently
-    const autoScalingGroup = new cdk.aws_autoscaling.AutoScalingGroup(
-      this,
-      'WebServerASG',
-      {
-        autoScalingGroupName: `webapp-asg-${environmentSuffix}`,
-        vpc,
-        launchTemplate,
-        // Explicitly set version to $Latest for LocalStack compatibility
-        ...(isLocalStack && { launchTemplateVersion: launchTemplate.versionNumber }),
-        minCapacity: environmentSuffix === 'Production' ? 2 : 1,
-        maxCapacity: environmentSuffix === 'Production' ? 6 : 3,
-        desiredCapacity: environmentSuffix === 'Production' ? 2 : 1,
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-      }
-    );
+    // For LocalStack compatibility, avoid using launchTemplate directly
+    // Use instanceType + machineImage instead for LocalStack (without keyPair)
+    const autoScalingGroup = isLocalStack
+      ? new cdk.aws_autoscaling.AutoScalingGroup(this, 'WebServerASG', {
+          autoScalingGroupName: `webapp-asg-${environmentSuffix}`,
+          vpc,
+          instanceType: config.instanceType,
+          machineImage,
+          securityGroup: webSecurityGroup,
+          userData,
+          role: ec2Role,
+          minCapacity: environmentSuffix === 'Production' ? 2 : 1,
+          maxCapacity: environmentSuffix === 'Production' ? 6 : 3,
+          desiredCapacity: environmentSuffix === 'Production' ? 2 : 1,
+          vpcSubnets: {
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          },
+        })
+      : new cdk.aws_autoscaling.AutoScalingGroup(this, 'WebServerASG', {
+          autoScalingGroupName: `webapp-asg-${environmentSuffix}`,
+          vpc,
+          launchTemplate,
+          minCapacity: environmentSuffix === 'Production' ? 2 : 1,
+          maxCapacity: environmentSuffix === 'Production' ? 6 : 3,
+          desiredCapacity: environmentSuffix === 'Production' ? 2 : 1,
+          vpcSubnets: {
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          },
+        });
 
     // Application Load Balancer
     const alb = new cdk.aws_elasticloadbalancingv2.ApplicationLoadBalancer(
