@@ -1,21 +1,19 @@
 {
   "platform": "cdk",
   "language": "ts",
-  "complexity": "expert",
+  "complexity": "hard",
   "turn_type": "single",
-  "po_id": "trainr87",
+  "po_id": "trainr98",
   "team": "synth-2",
-  "startedAt": "2025-08-12T11:54:32-05:00",
-  "subtask": "Infrastructure QA and Management",
+  "startedAt": "2025-08-12T13:19:29-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Multi-Environment Consistency",
+    "Cloud Environment Setup"
   ],
   "aws_services": [
-    "S3",
-    "IAM",
-    "Config",
-    "CloudWatch",
-    "Logs"
+    "dynamodb",
+    "iam"
   ]
 }
