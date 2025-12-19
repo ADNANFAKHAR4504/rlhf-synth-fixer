@@ -462,7 +462,7 @@ describe('TapStack CloudFormation Template', () => {
         expect(bucket.Properties.LoggingConfiguration).toBeDefined();
         expect(
           bucket.Properties.LoggingConfiguration.DestinationBucketName[
-            'Fn::Sub'
+          'Fn::Sub'
           ]
         ).toBeDefined();
         expect(bucket.Properties.LoggingConfiguration.LogFilePrefix).toBe(
@@ -620,9 +620,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(instance.Properties.LaunchTemplate.LaunchTemplateId['Ref']).toBe(
         'LaunchTemplate'
       );
-      expect(instance.Properties.LaunchTemplate.Version['Fn::GetAtt']).toEqual([
-        'LaunchTemplate',
-        'LatestVersionNumber',
+      expect(instance.Properties.LaunchTemplate.Version['Fn::Sub']).toEqual([
+        '${V}',
+        {
+          V: { 'Fn::GetAtt': ['LaunchTemplate', 'LatestVersionNumber'] },
+        },
       ]);
     });
   });
