@@ -196,7 +196,7 @@ class TapStack(Stack):
     )
     db_secret.grant_read(ec2_role)
 
-    # Launch Template for EC2
+    # User data for EC2 instances
     user_data_script = ec2.UserData.for_linux()
     user_data_script.add_commands(
       "yum update -y",
@@ -209,37 +209,10 @@ class TapStack(Stack):
       "yum install -y aws-cli",
     )
 
-    launch_template = ec2.LaunchTemplate(
-      self, f"tap-launch-template-{environment_suffix}",
-      instance_type=ec2.InstanceType.of(
-        ec2.InstanceClass.BURSTABLE3,
-        ec2.InstanceSize.MICRO,
-      ),
-      machine_image=ec2.AmazonLinuxImage(
-        generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
-        edition=ec2.AmazonLinuxEdition.STANDARD,
-        virtualization=ec2.AmazonLinuxVirt.HVM,
-        storage=ec2.AmazonLinuxStorage.GENERAL_PURPOSE,
-      ),
-      security_group=ec2_sg,
-      role=ec2_role,
-      user_data=user_data_script,
-      block_devices=[
-        ec2.BlockDevice(
-          device_name="/dev/xvda",
-          volume=ec2.BlockDeviceVolume.ebs(
-            volume_size=8,
-            encrypted=True,
-            delete_on_termination=True,
-          ),
-        )
-      ],
-    )
-
     # Auto Scaling Group
     # Note: Using public subnets for LocalStack since NAT Gateway is not available
     # Using instance_type and machine_image directly instead of launch_template
-    # to avoid CloudFormation LaunchTemplate.LatestVersionNumber issues
+    # to avoid CloudFormation LaunchTemplate.LatestVersionNumber issues in LocalStack
     asg = autoscaling.AutoScalingGroup(
       self, f"tap-asg-{environment_suffix}",
       vpc=vpc,
