@@ -327,9 +327,11 @@ class TapStack(Stack):
         # AWS: Use PRIVATE_WITH_EGRESS subnets (behind NAT Gateway)
         subnet_type = ec2.SubnetType.PUBLIC if is_localstack else ec2.SubnetType.PRIVATE_WITH_EGRESS
 
-        # For LocalStack, use instance_type directly instead of launch_template
-        # to avoid LatestVersionNumber error
+        # For LocalStack, use simplified configuration without launch template
+        # to avoid LatestVersionNumber error that occurs with LaunchTemplate in LocalStack
         if is_localstack:
+            # Create a simpler ASG configuration for LocalStack compatibility
+            # Note: We reduce capacity for LocalStack to minimize resource usage
             asg = autoscaling.AutoScalingGroup(
                 self, name,
                 vpc=vpc,
@@ -343,11 +345,14 @@ class TapStack(Stack):
                 security_group=security_group,
                 user_data=user_data,
                 role=self.ec2_role,
-                min_capacity=2,
-                max_capacity=6,
-                desired_capacity=2,
+                min_capacity=1,  # Reduced for LocalStack
+                max_capacity=2,  # Reduced for LocalStack
+                desired_capacity=1,  # Reduced for LocalStack
                 vpc_subnets=ec2.SubnetSelection(subnet_type=subnet_type),
-                health_check=health_check
+                health_check=health_check,
+                # Additional LocalStack compatibility settings
+                new_instances_protected_from_scale_in=False,
+                cooldown=Duration.seconds(60)  # Reduced cooldown
             )
         else:
             # Create launch template for AWS (not supported well in LocalStack)
