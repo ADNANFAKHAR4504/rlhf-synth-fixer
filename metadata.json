@@ -6,10 +6,10 @@
   "po_id": "291822",
   "team": "synth-2",
   "startedAt": "2025-08-05T05:06:26.628Z",
-  "subtask": "Secure Infrastructure",
+  "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "Security and Compliance Infrastructure"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "VPC",

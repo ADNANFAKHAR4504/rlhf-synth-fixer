@@ -26,7 +26,7 @@
     - Used `ConfigurationItemChangeNotification` message type for VPC configuration changes (without MaximumExecutionFrequency)
     - Lambda function evaluates VPC DNS support and reports compliance status
     - Added `VPCDnsSupportLambdaPermission` to allow AWS Config to invoke the Lambda function (without Tags property)
-  - **Status:** ✅ Fixed - Custom implementation provides required validation
+  - **Status:**  Fixed - Custom implementation provides required validation
 
 ## 4. IAM Role Issues
 - **Role Policies:**
@@ -92,18 +92,18 @@
 
 | Category         | PROMPT Requirement                                    | Model Implementation                                | Status    |
 |-----------------|------------------------------------------------------|---------------------------------------------------|-----------|
-| Regions         | us-east-1 and eu-west-1 support                      | Generic region support without explicit validation | ⚠️ Partial |
-| Project Tags    | All resources tagged with Project: SecureOps         | Inconsistent tag implementation                    | ⚠️ Partial |
-| Config Rules    | VPC DNS Support validation                           | Basic implementation                               | ✅ Done    |
-| IAM Roles       | Least-privilege inline policies                      | Uses some managed policies                         | ⚠️ Partial |
-| S3 Security     | Deny based on SecurityLevel tag                      | Implemented as required                            | ✅ Done    |
-| RDS Logging     | Export logs to central bucket                        | Implemented with all required types                | ✅ Done    |
-| Config Tags     | Resource tagging                                      | Tags not supported on Config Rules                  | ❌ Error   |
-| RDS Protection  | Resource protection policies                          | Missing UpdateReplacePolicy                        | ⚠️ Partial |
-| Secret Storage  | Secure credential management                          | Using parameters instead of Secrets Manager         | ❌ Error   |
-| Environment    | Flexible environment naming                             | Restricted to fixed values                         | ❌ Error   |
-| Instance Class | Parameterized RDS instance class                        | Restricted to only 4 T3 options                    | ❌ Error   |
-| Resource Names | Unique resource naming across stacks                     | Static names cause conflicts                        | ❌ Error   |
+| Regions         | us-east-1 and eu-west-1 support                      | Generic region support without explicit validation |  Partial |
+| Project Tags    | All resources tagged with Project: SecureOps         | Inconsistent tag implementation                    |  Partial |
+| Config Rules    | VPC DNS Support validation                           | Basic implementation                               |  Done    |
+| IAM Roles       | Least-privilege inline policies                      | Uses some managed policies                         |  Partial |
+| S3 Security     | Deny based on SecurityLevel tag                      | Implemented as required                            |  Done    |
+| RDS Logging     | Export logs to central bucket                        | Implemented with all required types                |  Done    |
+| Config Tags     | Resource tagging                                      | Tags not supported on Config Rules                  |  Error   |
+| RDS Protection  | Resource protection policies                          | Missing UpdateReplacePolicy                        |  Partial |
+| Secret Storage  | Secure credential management                          | Using parameters instead of Secrets Manager         |  Error   |
+| Environment    | Flexible environment naming                             | Restricted to fixed values                         |  Error   |
+| Instance Class | Parameterized RDS instance class                        | Restricted to only 4 T3 options                    |  Error   |
+| Resource Names | Unique resource naming across stacks                     | Static names cause conflicts                        |  Error   |
 
 ---
 
