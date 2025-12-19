@@ -10,7 +10,12 @@
   "subject_labels": [
     "CI/CD Pipeline"
   ],
-  "training_quality": 10,
+  "training_quality": 9,
   "author": "mayanksethi-turing",
-  "review_comments": []
+  "review_comments": [],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
