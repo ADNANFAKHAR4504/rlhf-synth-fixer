@@ -350,10 +350,18 @@ deploy_cdk() {
     local env_suffix="${ENVIRONMENT_SUFFIX:-dev}"
     print_status $BLUE "📌 Environment suffix: $env_suffix"
 
-    # Skip Bootstrap for LocalStack - ECR not available in Community edition
-    # Using --method=direct deployment which doesn't require bootstrap
-    print_status $YELLOW "🔧 Skipping CDK bootstrap (not needed for LocalStack Community)"
-    print_status $BLUE "   Using direct deployment method without ECR dependencies"
+    # Create minimal bootstrap for LocalStack without ECR
+    # LocalStack Community doesn't support ECR, but CDK needs the SSM parameter
+    print_status $YELLOW "🔧 Creating minimal bootstrap for LocalStack (without ECR)..."
+
+    # Create the required SSM parameter that CDK looks for
+    aws ssm put-parameter \
+        --name "/cdk-bootstrap/hnb659fds/version" \
+        --value "21" \
+        --type "String" \
+        --overwrite 2>/dev/null || true
+
+    print_status $GREEN "✅ Bootstrap SSM parameter created (skipping ECR repository)"
 
     # Deploy based on language
     print_status $YELLOW "🚀 Deploying stacks..."
@@ -361,7 +369,6 @@ deploy_cdk() {
     case "$language" in
         "ts"|"js")
             cdklocal deploy --all --require-approval never \
-                --method=direct \
                 -c environmentSuffix="$env_suffix" \
                 --no-rollback \
                 --verbose 2>&1
@@ -369,7 +376,6 @@ deploy_cdk() {
             ;;
         "py"|"python")
             cdklocal deploy --all --require-approval never \
-                --method=direct \
                 -c environmentSuffix="$env_suffix" \
                 --no-rollback \
                 --verbose 2>&1
@@ -377,7 +383,6 @@ deploy_cdk() {
             ;;
         "go")
             cdklocal deploy --all --require-approval never \
-                --method=direct \
                 -c environmentSuffix="$env_suffix" \
                 --no-rollback \
                 --verbose 2>&1
@@ -385,7 +390,6 @@ deploy_cdk() {
             ;;
         "java")
             cdklocal deploy --all --require-approval never \
-                --method=direct \
                 -c environmentSuffix="$env_suffix" \
                 --no-rollback \
                 --verbose 2>&1
@@ -400,7 +404,6 @@ deploy_cdk() {
     if [ $exit_code -ne 0 ]; then
         print_status $YELLOW "⚠️  Initial deployment failed, retrying..."
         cdklocal deploy --all --require-approval never \
-            --method=direct \
             -c environmentSuffix="$env_suffix" \
             --force \
             --no-rollback \
