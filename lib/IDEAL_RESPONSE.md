@@ -27,11 +27,9 @@ Mappings:
   # Region-specific AMI mappings
   RegionMap:
     us-west-2:
-      AMI: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI
       AvailabilityZone1: us-west-2a
       AvailabilityZone2: us-west-2b
     us-east-1:
-      AMI: ami-0e56c64a3a4acc345  # Amazon Linux 2 AMI (updated, valid)
       AvailabilityZone1: us-east-1a
       AvailabilityZone2: us-east-1b
   
