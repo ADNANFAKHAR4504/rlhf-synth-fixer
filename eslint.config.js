@@ -125,6 +125,7 @@ module.exports = [
       '**/*.js',
       '**/*.d.ts',
       '**/*.test.ts', // Exclude test files from linting
+      'test/**', // Exclude entire test folder from linting
       '.gen/**',
     ],
   },
