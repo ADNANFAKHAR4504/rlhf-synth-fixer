@@ -3,6 +3,7 @@ import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  outputs?: Record<string, string>;
 }
 
 export class TapStack extends cdk.Stack {
@@ -10,7 +11,6 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
@@ -22,5 +22,16 @@ export class TapStack extends cdk.Stack {
       value: `Multi-region deployment for environment: ${environmentSuffix}`,
       description: 'Information about the current deployment',
     });
+
+    // If outputs are provided from other stacks, aggregate them here
+    // This ensures the deployment validation script can find all outputs
+    if (props?.outputs) {
+      Object.entries(props.outputs).forEach(([key, value]) => {
+        new cdk.CfnOutput(this, key, {
+          value: value,
+          description: `Aggregated output: ${key}`,
+        });
+      });
+    }
   }
 }

@@ -4,6 +4,7 @@ import { Tags } from 'aws-cdk-lib';
 import { NetworkStack } from '../lib/network-stack';
 // LocalStack: Use simplified webapp stack without AutoScaling/ELB
 import { WebAppStack } from '../lib/webapp-stack-localstack';
+import { TapStack } from '../lib/tap-stack';
 // import { SimpleRoute53Stack } from '../lib/simple-route53-stack';
 
 const app = new cdk.App();
@@ -101,3 +102,22 @@ const secondaryWebAppStack = new WebAppStack(
 primaryWebAppStack.addDependency(primaryNetworkStack);
 // LocalStack: Secondary stack commented out
 // secondaryWebAppStack.addDependency(secondaryNetworkStack);
+
+// Create TapStack to aggregate outputs for deployment validation
+// The deployment script looks for stacks with "TapStack" in their name
+const tapStack = new TapStack(app, `TapStack${environmentSuffix}`, {
+  stackName: `TapStack-${environmentSuffix}`,
+  environmentSuffix,
+  outputs: {
+    PrimaryInstanceDns: primaryWebAppStack.instanceDnsName,
+    DeploymentRegion: 'us-east-1',
+    StackType: 'LocalStack-Compatible',
+  },
+  env: {
+    account,
+    region: 'us-east-1',
+  },
+});
+
+// TapStack depends on WebAppStack to ensure outputs are available
+tapStack.addDependency(primaryWebAppStack);
