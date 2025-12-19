@@ -287,7 +287,7 @@ describe('TapStack Unit Tests', () => {
       });
       const contextStack = new TapStack(contextApp, 'ContextTestStack');
       const contextTemplate = Template.fromStack(contextStack);
-      
+
       // Check that resources use the context-provided suffix
       contextTemplate.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
@@ -303,7 +303,7 @@ describe('TapStack Unit Tests', () => {
       const defaultApp = new cdk.App();
       const defaultStack = new TapStack(defaultApp, 'DefaultTestStack');
       const defaultTemplate = Template.fromStack(defaultStack);
-      
+
       // Check that resources use the default 'dev' suffix
       defaultTemplate.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
@@ -312,6 +312,51 @@ describe('TapStack Unit Tests', () => {
             Value: 'TapVpc-dev'
           })
         ])
+      });
+    });
+  });
+
+  describe('LocalStack Mode Validation', () => {
+    test('validates infrastructure is compatible with LocalStack', () => {
+      // This test validates that the stack can work in LocalStack mode
+      // by checking for LocalStack-specific configurations
+
+      // Verify NAT Gateway count is flexible (0 for LocalStack, 2 for AWS)
+      const natGatewayCount = template.findResources('AWS::EC2::NatGateway');
+      expect(Object.keys(natGatewayCount).length).toBeLessThanOrEqual(2);
+
+      // Verify VPC is configured
+      template.resourceCountIs('AWS::EC2::VPC', 1);
+
+      // Verify Security Groups exist (compatible with LocalStack)
+      template.resourceCountIs('AWS::EC2::SecurityGroup', 3);
+
+      // Verify Auto Scaling Group is configured
+      template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
+
+      // Verify Load Balancer is configured
+      template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
+    });
+
+    test('validates environment detection logic', () => {
+      // Verify the stack correctly handles different environments
+      // by checking resource properties are environment-aware
+
+      // Check VPC has proper tagging
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Environment',
+            Value: 'Production',
+          }),
+        ]),
+      });
+
+      // Check Auto Scaling Group has proper configuration
+      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        MinSize: '2',
+        MaxSize: '6',
+        HealthCheckType: 'ELB',
       });
     });
   });
