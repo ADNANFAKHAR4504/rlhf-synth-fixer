@@ -19,6 +19,5 @@
     "IAM",
     "CloudWatch Logs"
   ],
-  "provider": "localstack",
-  "training_quality": 8
+  "provider": "localstack"
 }
