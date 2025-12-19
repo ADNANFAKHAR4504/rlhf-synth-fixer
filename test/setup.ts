@@ -1,8 +1,9 @@
 // Test setup file for Jest
 
 // Detect LocalStack environment
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566');
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
 
 // Mock environment variables for testing
 process.env.ENVIRONMENT_SUFFIX = 'test';

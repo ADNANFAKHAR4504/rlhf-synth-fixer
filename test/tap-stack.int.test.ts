@@ -18,35 +18,42 @@ try {
 describe('TapStack Integration Tests', () => {
   // Test configuration
   const testConfig = {
-    apiEndpoint: outputs['ServerlessStackdevTapApiEndpoint11A33180'] || 
-                 process.env.API_ENDPOINT || 
-                 `https://mock-api.execute-api.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/dev`,
+    apiEndpoint:
+      outputs['ServerlessStackdevTapApiEndpoint11A33180'] ||
+      process.env.API_ENDPOINT ||
+      `https://mock-api.execute-api.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/dev`,
     apiKey: process.env.API_KEY || 'test-api-key',
-    cognitoUserPoolId: outputs['ServerlessStackdevApiUserPool7811AFAD'] || 
-                      process.env.COGNITO_USER_POOL_ID || 
-                      `${process.env.AWS_REGION || 'us-east-1'}_testpool`,
-    cognitoClientId: outputs['ServerlessStackdevApiUserPoolClient534B7097'] || 
-                    process.env.COGNITO_CLIENT_ID || 
-                    'test-client-id',
-    s3BucketName: outputs['ServerlessStackdevTapBucketA7C58615'] || 
-                  process.env.S3_BUCKET_NAME || 
-                  'test-tap-data-bucket',
-    lambdaFunctionName: outputs['ServerlessStackdevTapFunctionBF016626'] || 
-                      process.env.LAMBDA_FUNCTION_NAME || 
-                      'test-tap-function'
+    cognitoUserPoolId:
+      outputs['ServerlessStackdevApiUserPool7811AFAD'] ||
+      process.env.COGNITO_USER_POOL_ID ||
+      `${process.env.AWS_REGION || 'us-east-1'}_testpool`,
+    cognitoClientId:
+      outputs['ServerlessStackdevApiUserPoolClient534B7097'] ||
+      process.env.COGNITO_CLIENT_ID ||
+      'test-client-id',
+    s3BucketName:
+      outputs['ServerlessStackdevTapBucketA7C58615'] ||
+      process.env.S3_BUCKET_NAME ||
+      'test-tap-data-bucket',
+    lambdaFunctionName:
+      outputs['ServerlessStackdevTapFunctionBF016626'] ||
+      process.env.LAMBDA_FUNCTION_NAME ||
+      'test-tap-function',
   };
 
   // Test data
   const testData = {
     message: 'Integration test data',
     timestamp: new Date().toISOString(),
-    testId: `test-${Date.now()}`
+    testId: `test-${Date.now()}`,
   };
 
   describe('Infrastructure Validation', () => {
     test('should have valid API endpoint', () => {
       expect(testConfig.apiEndpoint).toBeDefined();
-      expect(testConfig.apiEndpoint).toMatch(/^https:\/\/.*\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/.*$/);
+      expect(testConfig.apiEndpoint).toMatch(
+        /^https:\/\/.*\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/.*$/
+      );
     });
 
     test('should have valid S3 bucket name', () => {
@@ -69,18 +76,25 @@ describe('TapStack Integration Tests', () => {
     describe('CORS Preflight', () => {
       test('should handle OPTIONS request for CORS', async () => {
         try {
-          const response = await axios.options(`${testConfig.apiEndpoint}/data`, {
-            headers: {
-              'Origin': 'https://test.example.com',
-              'Access-Control-Request-Method': 'GET',
-              'Access-Control-Request-Headers': 'Content-Type,Authorization'
+          const response = await axios.options(
+            `${testConfig.apiEndpoint}/data`,
+            {
+              headers: {
+                Origin: 'https://test.example.com',
+                'Access-Control-Request-Method': 'GET',
+                'Access-Control-Request-Headers': 'Content-Type,Authorization',
+              },
             }
-          });
+          );
 
           expect(response.status).toBe(204);
           expect(response.headers['access-control-allow-origin']).toBe('*');
-          expect(response.headers['access-control-allow-methods']).toContain('GET');
-          expect(response.headers['access-control-allow-headers']).toContain('Content-Type');
+          expect(response.headers['access-control-allow-methods']).toContain(
+            'GET'
+          );
+          expect(response.headers['access-control-allow-headers']).toContain(
+            'Content-Type'
+          );
         } catch (error) {
           // In test environment, API might not be deployed
           console.log('CORS test skipped - API not deployed');
@@ -107,8 +121,8 @@ describe('TapStack Integration Tests', () => {
         try {
           await axios.get(`${testConfig.apiEndpoint}/data`, {
             headers: {
-              'X-API-Key': testConfig.apiKey
-            }
+              'X-API-Key': testConfig.apiKey,
+            },
           });
           // In test environment, this might succeed due to mocking
           expect(true).toBe(true);
@@ -121,14 +135,18 @@ describe('TapStack Integration Tests', () => {
 
     describe('Rate Limiting', () => {
       test('should enforce rate limits', async () => {
-        const requests = Array(5).fill(0).map(() => 
-          axios.get(`${testConfig.apiEndpoint}/data`, {
-            headers: {
-              'X-API-Key': testConfig.apiKey,
-              'Authorization': 'Bearer test-token'
-            }
-          }).catch((error: any) => error.response?.status)
-        );
+        const requests = Array(5)
+          .fill(0)
+          .map(() =>
+            axios
+              .get(`${testConfig.apiEndpoint}/data`, {
+                headers: {
+                  'X-API-Key': testConfig.apiKey,
+                  Authorization: 'Bearer test-token',
+                },
+              })
+              .catch((error: any) => error.response?.status)
+          );
 
         const responses = await Promise.all(requests);
         // Just verify we got responses, don't check specific status codes
@@ -144,9 +162,9 @@ describe('TapStack Integration Tests', () => {
           httpMethod: 'GET',
           path: '/data',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
-          body: JSON.stringify(testData)
+          body: JSON.stringify(testData),
         };
 
         // This would require AWS SDK to invoke Lambda directly
@@ -161,9 +179,9 @@ describe('TapStack Integration Tests', () => {
           httpMethod: 'POST',
           path: '/data',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
-          body: 'invalid-json'
+          body: 'invalid-json',
         };
 
         // Simulate error handling
@@ -175,7 +193,7 @@ describe('TapStack Integration Tests', () => {
     describe('Environment Variables', () => {
       test('should have required environment variables', () => {
         const requiredEnvVars = ['BUCKET_NAME', 'ENVIRONMENT'];
-        
+
         requiredEnvVars.forEach(envVar => {
           expect(process.env[envVar] || 'mock-value').toBeDefined();
         });
@@ -201,7 +219,7 @@ describe('TapStack Integration Tests', () => {
         const testFile = {
           key: `test-${Date.now()}.json`,
           content: JSON.stringify(testData),
-          contentType: 'application/json'
+          contentType: 'application/json',
         };
 
         // Simulate file upload
@@ -212,7 +230,7 @@ describe('TapStack Integration Tests', () => {
 
       test('should handle file retrieval simulation', async () => {
         const testKey = `test-${Date.now()}.json`;
-        
+
         // Simulate file retrieval
         expect(testKey).toBeDefined();
         expect(testKey).toMatch(/^test-\d+\.json$/);
@@ -224,7 +242,9 @@ describe('TapStack Integration Tests', () => {
     describe('User Pool Configuration', () => {
       test('should have valid user pool ID', () => {
         expect(testConfig.cognitoUserPoolId).toBeDefined();
-        expect(testConfig.cognitoUserPoolId).toMatch(/^[a-z0-9-]+_[a-zA-Z0-9]+$/);
+        expect(testConfig.cognitoUserPoolId).toMatch(
+          /^[a-z0-9-]+_[a-zA-Z0-9]+$/
+        );
       });
 
       test('should have valid client ID', () => {
@@ -235,8 +255,9 @@ describe('TapStack Integration Tests', () => {
 
     describe('Authentication Flow', () => {
       test('should validate JWT token format', () => {
-        const mockToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
-        
+        const mockToken =
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+
         // Basic JWT validation
         const parts = mockToken.split('.');
         expect(parts.length).toBe(3);
@@ -327,19 +348,19 @@ describe('TapStack Integration Tests', () => {
     describe('Response Times', () => {
       test('should respond within acceptable time', async () => {
         const startTime = Date.now();
-        
+
         try {
           await axios.get(`${testConfig.apiEndpoint}/data`, {
             headers: {
               'X-API-Key': testConfig.apiKey,
-              'Authorization': 'Bearer test-token'
+              Authorization: 'Bearer test-token',
             },
-            timeout: 5000
+            timeout: 5000,
           });
         } catch (error) {
           // Expected to fail in test environment
         }
-        
+
         const responseTime = Date.now() - startTime;
         expect(responseTime).toBeLessThan(5000); // 5 seconds timeout
       });
@@ -348,15 +369,19 @@ describe('TapStack Integration Tests', () => {
     describe('Concurrent Requests', () => {
       test('should handle concurrent requests', async () => {
         const concurrentRequests = 5;
-        const requests = Array(concurrentRequests).fill(0).map(() => 
-          axios.get(`${testConfig.apiEndpoint}/data`, {
-            headers: {
-              'X-API-Key': testConfig.apiKey,
-              'Authorization': 'Bearer test-token'
-            },
-            timeout: 3000
-          }).catch((error: any) => ({ status: 'error' }))
-        );
+        const requests = Array(concurrentRequests)
+          .fill(0)
+          .map(() =>
+            axios
+              .get(`${testConfig.apiEndpoint}/data`, {
+                headers: {
+                  'X-API-Key': testConfig.apiKey,
+                  Authorization: 'Bearer test-token',
+                },
+                timeout: 3000,
+              })
+              .catch((error: any) => ({ status: 'error' }))
+          );
 
         const responses = await Promise.all(requests);
         expect(responses.length).toBe(concurrentRequests);
@@ -372,8 +397,8 @@ describe('TapStack Integration Tests', () => {
             headers: {
               'Content-Type': 'application/json',
               'X-API-Key': testConfig.apiKey,
-              'Authorization': 'Bearer test-token'
-            }
+              Authorization: 'Bearer test-token',
+            },
           });
           // In test environment, this might succeed due to mocking
           expect(true).toBe(true);
@@ -401,8 +426,8 @@ describe('TapStack Integration Tests', () => {
           await axios.get(`${testConfig.apiEndpoint}/nonexistent`, {
             headers: {
               'X-API-Key': testConfig.apiKey,
-              'Authorization': 'Bearer test-token'
-            }
+              Authorization: 'Bearer test-token',
+            },
           });
           // In test environment, this might succeed due to mocking
           expect(true).toBe(true);

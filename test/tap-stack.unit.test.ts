@@ -8,7 +8,7 @@ describe('TapStack', () => {
     environment: 'test',
     owner: 'TestOwner',
     costCenter: 'TEST-CC-001',
-    compliance: 'SOX'
+    compliance: 'SOX',
   };
 
   beforeEach(() => {
@@ -40,7 +40,7 @@ describe('TapStack', () => {
     test('should use environment from props when provided', () => {
       const stack = new TapStack(app, 'TestTapStack', {
         ...defaultProps,
-        environment: 'staging'
+        environment: 'staging',
       });
       expect(stack).toBeDefined();
     });
@@ -48,7 +48,7 @@ describe('TapStack', () => {
     test('should use owner from props when provided', () => {
       const stack = new TapStack(app, 'TestTapStack', {
         ...defaultProps,
-        owner: 'NewOwner'
+        owner: 'NewOwner',
       });
       expect(stack).toBeDefined();
     });
@@ -56,7 +56,7 @@ describe('TapStack', () => {
     test('should use costCenter from props when provided', () => {
       const stack = new TapStack(app, 'TestTapStack', {
         ...defaultProps,
-        costCenter: 'NEW-CC-002'
+        costCenter: 'NEW-CC-002',
       });
       expect(stack).toBeDefined();
     });
@@ -64,7 +64,7 @@ describe('TapStack', () => {
     test('should use compliance from props when provided', () => {
       const stack = new TapStack(app, 'TestTapStack', {
         ...defaultProps,
-        compliance: 'PCI'
+        compliance: 'PCI',
       });
       expect(stack).toBeDefined();
     });
@@ -74,7 +74,7 @@ describe('TapStack', () => {
     test('should have correct stack properties', () => {
       const stack = new TapStack(app, 'TestTapStack', {
         ...defaultProps,
-        env: { account: '123456789012', region: 'us-east-1' }
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       expect(stack).toBeDefined();
       expect(stack.node.id).toBe('TestTapStack');
@@ -91,7 +91,7 @@ describe('TapStack', () => {
     test('should throw error when required props are missing', () => {
       expect(() => {
         new TapStack(app, 'TestTapStack', {
-          environment: 'test'
+          environment: 'test',
           // Missing owner, costCenter, compliance
         } as any);
       }).toThrow();
@@ -101,7 +101,7 @@ describe('TapStack', () => {
       expect(() => {
         new TapStack(app, 'TestTapStack', {
           ...defaultProps,
-          environment: 'default'
+          environment: 'default',
         });
       }).not.toThrow();
     });
@@ -110,7 +110,7 @@ describe('TapStack', () => {
       expect(() => {
         new TapStack(app, 'TestTapStack', {
           ...defaultProps,
-          environment: 'default'
+          environment: 'default',
         });
       }).not.toThrow();
     });
@@ -145,7 +145,7 @@ describe('TapStack Unit Tests (Extended)', () => {
     environment: 'test',
     owner: 'TestOwner',
     costCenter: 'TEST-CC-001',
-    compliance: 'SOX'
+    compliance: 'SOX',
   };
 
   beforeEach(() => {
@@ -213,7 +213,7 @@ describe('TapStack Unit Tests (Extended)', () => {
           environment: 'test',
           owner: 'TestOwner',
           costCenter: 'TEST-CC-001',
-          compliance: 'SOX'
+          compliance: 'SOX',
         });
       }).not.toThrow();
     });
@@ -225,7 +225,7 @@ describe('TapStack Unit Tests (Extended)', () => {
           environment: 'default',
           owner: 'TestOwner',
           costCenter: 'TEST-CC-001',
-          compliance: 'SOX'
+          compliance: 'SOX',
         });
       }).not.toThrow();
     });
@@ -237,7 +237,7 @@ describe('TapStack Unit Tests (Extended)', () => {
           environment: 'default',
           owner: 'TestOwner',
           costCenter: 'TEST-CC-001',
-          compliance: 'SOX'
+          compliance: 'SOX',
         });
       }).not.toThrow();
     });
@@ -249,7 +249,7 @@ describe('TapStack Unit Tests (Extended)', () => {
           environment: 'test-env-123',
           owner: 'TestOwner',
           costCenter: 'TEST-CC-001',
-          compliance: 'SOX'
+          compliance: 'SOX',
         });
       }).not.toThrow();
     });
@@ -262,7 +262,7 @@ describe('TapStack Unit Tests (Extended)', () => {
         environment: 'test',
         owner: 'DifferentOwner',
         costCenter: 'TEST-CC-001',
-        compliance: 'SOX'
+        compliance: 'SOX',
       });
       expect(stack).toBeDefined();
     });
@@ -273,7 +273,7 @@ describe('TapStack Unit Tests (Extended)', () => {
         environment: 'test',
         owner: 'TestOwner',
         costCenter: 'DIFFERENT-CC-002',
-        compliance: 'SOX'
+        compliance: 'SOX',
       });
       expect(stack).toBeDefined();
     });
@@ -284,7 +284,7 @@ describe('TapStack Unit Tests (Extended)', () => {
         environment: 'test',
         owner: 'TestOwner',
         costCenter: 'TEST-CC-001',
-        compliance: 'GDPR'
+        compliance: 'GDPR',
       });
       expect(stack).toBeDefined();
     });
@@ -295,7 +295,7 @@ describe('TapStack Unit Tests (Extended)', () => {
         environment: 'test',
         owner: '',
         costCenter: 'TEST-CC-001',
-        compliance: 'SOX'
+        compliance: 'SOX',
       });
       expect(stack).toBeDefined();
     });
@@ -306,7 +306,7 @@ describe('TapStack Unit Tests (Extended)', () => {
         environment: 'test',
         owner: 'TestOwner',
         costCenter: '',
-        compliance: 'SOX'
+        compliance: 'SOX',
       });
       expect(stack).toBeDefined();
     });
@@ -317,7 +317,7 @@ describe('TapStack Unit Tests (Extended)', () => {
         environment: 'test',
         owner: 'TestOwner',
         costCenter: 'TEST-CC-001',
-        compliance: ''
+        compliance: '',
       });
       expect(stack).toBeDefined();
     });

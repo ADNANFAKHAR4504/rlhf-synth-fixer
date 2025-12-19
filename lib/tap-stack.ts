@@ -12,9 +12,10 @@ import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
 // Detect LocalStack environment
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-                     process.env.CDK_DEFAULT_ACCOUNT === '000000000000';
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+  process.env.CDK_DEFAULT_ACCOUNT === '000000000000';
 
 export interface TapStackProps extends cdk.StackProps {
   environment: string;
@@ -283,14 +284,10 @@ export class TapStack extends cdk.Stack {
     // Cognito Authorizer (conditional for LocalStack compatibility)
     const cognitoAuthorizer = isLocalStack
       ? undefined
-      : new apigateway.CognitoUserPoolsAuthorizer(
-          this,
-          'CognitoAuthorizer',
-          {
-            cognitoUserPools: [userPool],
-            authorizerName: `${props.environment}-cognito-authorizer`,
-          }
-        );
+      : new apigateway.CognitoUserPoolsAuthorizer(this, 'CognitoAuthorizer', {
+          cognitoUserPools: [userPool],
+          authorizerName: `${props.environment}-cognito-authorizer`,
+        });
 
     // API Key for additional security layer
     const apiKey = new apigateway.ApiKey(this, 'ApiKey', {
@@ -373,101 +370,103 @@ export class TapStack extends cdk.Stack {
     const dataResource = this.apiGateway.root.addResource('data');
 
     // Configure method options based on environment
-    const getMethodOptions: apigateway.MethodOptions = !isLocalStack && cognitoAuthorizer
-      ? {
-          authorizer: cognitoAuthorizer,
-          authorizationType: apigateway.AuthorizationType.COGNITO,
-          apiKeyRequired: true,
-          methodResponses: [
-            {
-              statusCode: '200',
-              responseParameters: {
-                'method.response.header.Access-Control-Allow-Origin': true,
+    const getMethodOptions: apigateway.MethodOptions =
+      !isLocalStack && cognitoAuthorizer
+        ? {
+            authorizer: cognitoAuthorizer,
+            authorizationType: apigateway.AuthorizationType.COGNITO,
+            apiKeyRequired: true,
+            methodResponses: [
+              {
+                statusCode: '200',
+                responseParameters: {
+                  'method.response.header.Access-Control-Allow-Origin': true,
+                },
               },
-            },
-            {
-              statusCode: '500',
-              responseParameters: {
-                'method.response.header.Access-Control-Allow-Origin': true,
+              {
+                statusCode: '500',
+                responseParameters: {
+                  'method.response.header.Access-Control-Allow-Origin': true,
+                },
               },
-            },
-          ],
-        }
-      : {
-          apiKeyRequired: true,
-          methodResponses: [
-            {
-              statusCode: '200',
-              responseParameters: {
-                'method.response.header.Access-Control-Allow-Origin': true,
+            ],
+          }
+        : {
+            apiKeyRequired: true,
+            methodResponses: [
+              {
+                statusCode: '200',
+                responseParameters: {
+                  'method.response.header.Access-Control-Allow-Origin': true,
+                },
               },
-            },
-            {
-              statusCode: '500',
-              responseParameters: {
-                'method.response.header.Access-Control-Allow-Origin': true,
+              {
+                statusCode: '500',
+                responseParameters: {
+                  'method.response.header.Access-Control-Allow-Origin': true,
+                },
               },
-            },
-          ],
-        };
+            ],
+          };
 
-    const postMethodOptions: apigateway.MethodOptions = !isLocalStack && cognitoAuthorizer
-      ? {
-          authorizer: cognitoAuthorizer,
-          authorizationType: apigateway.AuthorizationType.COGNITO,
-          apiKeyRequired: true,
-          requestValidator: requestValidator,
-          requestModels: {
-            'application/json': requestModel,
-          },
-          methodResponses: [
-            {
-              statusCode: '200',
-              responseParameters: {
-                'method.response.header.Access-Control-Allow-Origin': true,
-              },
+    const postMethodOptions: apigateway.MethodOptions =
+      !isLocalStack && cognitoAuthorizer
+        ? {
+            authorizer: cognitoAuthorizer,
+            authorizationType: apigateway.AuthorizationType.COGNITO,
+            apiKeyRequired: true,
+            requestValidator: requestValidator,
+            requestModels: {
+              'application/json': requestModel,
             },
-            {
-              statusCode: '400',
-              responseParameters: {
-                'method.response.header.Access-Control-Allow-Origin': true,
+            methodResponses: [
+              {
+                statusCode: '200',
+                responseParameters: {
+                  'method.response.header.Access-Control-Allow-Origin': true,
+                },
               },
-            },
-            {
-              statusCode: '500',
-              responseParameters: {
-                'method.response.header.Access-Control-Allow-Origin': true,
+              {
+                statusCode: '400',
+                responseParameters: {
+                  'method.response.header.Access-Control-Allow-Origin': true,
+                },
               },
-            },
-          ],
-        }
-      : {
-          apiKeyRequired: true,
-          requestValidator: requestValidator,
-          requestModels: {
-            'application/json': requestModel,
-          },
-          methodResponses: [
-            {
-              statusCode: '200',
-              responseParameters: {
-                'method.response.header.Access-Control-Allow-Origin': true,
+              {
+                statusCode: '500',
+                responseParameters: {
+                  'method.response.header.Access-Control-Allow-Origin': true,
+                },
               },
+            ],
+          }
+        : {
+            apiKeyRequired: true,
+            requestValidator: requestValidator,
+            requestModels: {
+              'application/json': requestModel,
             },
-            {
-              statusCode: '400',
-              responseParameters: {
-                'method.response.header.Access-Control-Allow-Origin': true,
+            methodResponses: [
+              {
+                statusCode: '200',
+                responseParameters: {
+                  'method.response.header.Access-Control-Allow-Origin': true,
+                },
               },
-            },
-            {
-              statusCode: '500',
-              responseParameters: {
-                'method.response.header.Access-Control-Allow-Origin': true,
+              {
+                statusCode: '400',
+                responseParameters: {
+                  'method.response.header.Access-Control-Allow-Origin': true,
+                },
               },
-            },
-          ],
-        };
+              {
+                statusCode: '500',
+                responseParameters: {
+                  'method.response.header.Access-Control-Allow-Origin': true,
+                },
+              },
+            ],
+          };
 
     dataResource.addMethod('GET', lambdaIntegration, getMethodOptions);
     dataResource.addMethod('POST', lambdaIntegration, postMethodOptions);
