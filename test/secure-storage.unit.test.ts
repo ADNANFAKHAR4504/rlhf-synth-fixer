@@ -180,8 +180,11 @@ describe('SecureStorage Construct', () => {
       const bucket = template.findResources('AWS::S3::Bucket');
       const bucketResource = Object.values(bucket)[0];
       const encryption = bucketResource.Properties.BucketEncryption;
-      
-      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toBeDefined();
+
+      expect(
+        encryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault.KMSMasterKeyID
+      ).toBeDefined();
     });
   });
 });

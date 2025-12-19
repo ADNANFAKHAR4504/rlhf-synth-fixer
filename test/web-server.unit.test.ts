@@ -73,12 +73,14 @@ describe('WebServer Construct', () => {
 
     test('attaches CloudWatch policy', () => {
       const roles = template.findResources('AWS::IAM::Role');
-      const webServerRole = Object.values(roles).find((role: any) => 
+      const webServerRole = Object.values(roles).find((role: any) =>
         role.Properties?.ManagedPolicyArns?.some((arn: any) => {
           if (typeof arn === 'object' && arn['Fn::Join']) {
             const parts = arn['Fn::Join'][1];
-            return parts.some((part: any) => 
-              typeof part === 'string' && part.includes('CloudWatchAgentServerPolicy')
+            return parts.some(
+              (part: any) =>
+                typeof part === 'string' &&
+                part.includes('CloudWatchAgentServerPolicy')
             );
           }
           return false;
@@ -90,9 +92,12 @@ describe('WebServer Construct', () => {
     test('grants S3 write permissions', () => {
       const policies = template.findResources('AWS::IAM::Policy');
       const s3Policy = Object.values(policies).find((policy: any) =>
-        policy.Properties?.PolicyDocument?.Statement?.some((statement: any) =>
-          statement.Effect === 'Allow' &&
-          statement.Action?.some((action: string) => action.includes('s3:PutObject'))
+        policy.Properties?.PolicyDocument?.Statement?.some(
+          (statement: any) =>
+            statement.Effect === 'Allow' &&
+            statement.Action?.some((action: string) =>
+              action.includes('s3:PutObject')
+            )
         )
       );
       expect(s3Policy).toBeDefined();
@@ -112,7 +117,9 @@ describe('WebServer Construct', () => {
     test('tags IAM role with Environment Production', () => {
       const roles = template.findResources('AWS::IAM::Role');
       const webServerRole = Object.values(roles).find((role: any) =>
-        role.Properties?.Tags?.some((tag: any) => tag.Key === 'Environment' && tag.Value === 'Production')
+        role.Properties?.Tags?.some(
+          (tag: any) => tag.Key === 'Environment' && tag.Value === 'Production'
+        )
       );
       expect(webServerRole).toBeDefined();
     });
@@ -124,7 +131,10 @@ describe('WebServer Construct', () => {
         vpc,
         securityGroup,
         logBucket,
-        instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.LARGE
+        ),
         keyName: 'my-key-pair',
       });
       template = Template.fromStack(stack);
@@ -156,8 +166,9 @@ describe('WebServer Construct', () => {
     test('includes Apache installation', () => {
       const instance = template.findResources('AWS::EC2::Instance');
       const instanceResource = Object.values(instance)[0];
-      const userData = instanceResource.Properties.UserData['Fn::Base64']['Fn::Join'][1];
-      
+      const userData =
+        instanceResource.Properties.UserData['Fn::Base64']['Fn::Join'][1];
+
       const userDataString = userData.join('');
       expect(userDataString).toContain('yum install -y httpd');
       expect(userDataString).toContain('systemctl start httpd');
@@ -167,8 +178,9 @@ describe('WebServer Construct', () => {
     test('includes CloudWatch agent installation', () => {
       const instance = template.findResources('AWS::EC2::Instance');
       const instanceResource = Object.values(instance)[0];
-      const userData = instanceResource.Properties.UserData['Fn::Base64']['Fn::Join'][1];
-      
+      const userData =
+        instanceResource.Properties.UserData['Fn::Base64']['Fn::Join'][1];
+
       const userDataString = userData.join('');
       expect(userDataString).toContain('amazon-cloudwatch-agent.rpm');
     });
@@ -176,16 +188,18 @@ describe('WebServer Construct', () => {
     test('includes S3 sync command', () => {
       const instance = template.findResources('AWS::EC2::Instance');
       const instanceResource = Object.values(instance)[0];
-      const userData = instanceResource.Properties.UserData['Fn::Base64']['Fn::Join'][1];
-      
+      const userData =
+        instanceResource.Properties.UserData['Fn::Base64']['Fn::Join'][1];
+
       expect(userData).toContain('/httpd-logs/');
     });
 
     test('creates CloudWatch log group', () => {
       const instance = template.findResources('AWS::EC2::Instance');
       const instanceResource = Object.values(instance)[0];
-      const userData = instanceResource.Properties.UserData['Fn::Base64']['Fn::Join'][1];
-      
+      const userData =
+        instanceResource.Properties.UserData['Fn::Base64']['Fn::Join'][1];
+
       const userDataString = userData.join('');
       expect(userDataString).toContain('aws logs create-log-group');
       expect(userDataString).toContain('/aws/ec2/webserver');
@@ -208,9 +222,12 @@ describe('WebServer Construct', () => {
       // when grantWrite is called on the bucket
       const policies = template.findResources('AWS::IAM::Policy');
       const hasS3Permissions = Object.values(policies).some((policy: any) =>
-        policy.Properties?.PolicyDocument?.Statement?.some((statement: any) =>
-          statement.Effect === 'Allow' &&
-          statement.Action?.some((action: string) => action.includes('s3:PutObject'))
+        policy.Properties?.PolicyDocument?.Statement?.some(
+          (statement: any) =>
+            statement.Effect === 'Allow' &&
+            statement.Action?.some((action: string) =>
+              action.includes('s3:PutObject')
+            )
         )
       );
       expect(hasS3Permissions).toBe(true);

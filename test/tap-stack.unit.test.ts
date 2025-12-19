@@ -216,12 +216,14 @@ describe('TapStack', () => {
 
     test('attaches CloudWatch policy to IAM role', () => {
       const roles = template.findResources('AWS::IAM::Role');
-      const webServerRole = Object.values(roles).find((role: any) => 
+      const webServerRole = Object.values(roles).find((role: any) =>
         role.Properties?.ManagedPolicyArns?.some((arn: any) => {
           if (typeof arn === 'object' && arn['Fn::Join']) {
             const parts = arn['Fn::Join'][1];
-            return parts.some((part: any) => 
-              typeof part === 'string' && part.includes('CloudWatchAgentServerPolicy')
+            return parts.some(
+              (part: any) =>
+                typeof part === 'string' &&
+                part.includes('CloudWatchAgentServerPolicy')
             );
           }
           return false;
@@ -233,9 +235,12 @@ describe('TapStack', () => {
     test('grants S3 write permissions to EC2 role', () => {
       const policies = template.findResources('AWS::IAM::Policy');
       const s3Policy = Object.values(policies).find((policy: any) =>
-        policy.Properties?.PolicyDocument?.Statement?.some((statement: any) =>
-          statement.Effect === 'Allow' &&
-          statement.Action?.some((action: string) => action.includes('s3:PutObject'))
+        policy.Properties?.PolicyDocument?.Statement?.some(
+          (statement: any) =>
+            statement.Effect === 'Allow' &&
+            statement.Action?.some((action: string) =>
+              action.includes('s3:PutObject')
+            )
         )
       );
       expect(s3Policy).toBeDefined();
@@ -245,14 +250,16 @@ describe('TapStack', () => {
   describe('Tagging', () => {
     test('applies Environment tag to all resources', () => {
       const resources = template.toJSON().Resources;
-      const taggableResources = Object.values(resources).filter((resource: any) =>
-        resource.Properties?.Tags !== undefined
+      const taggableResources = Object.values(resources).filter(
+        (resource: any) => resource.Properties?.Tags !== undefined
       );
-      
+
       expect(taggableResources.length).toBeGreaterThan(0);
-      
+
       taggableResources.forEach((resource: any) => {
-        const envTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
+        const envTag = resource.Properties.Tags.find(
+          (tag: any) => tag.Key === 'Environment'
+        );
         expect(envTag).toBeDefined();
         expect(envTag.Value).toBe('Production');
       });
@@ -260,14 +267,17 @@ describe('TapStack', () => {
 
     test('applies Project tag to stack', () => {
       const resources = template.toJSON().Resources;
-      const taggableResources = Object.values(resources).filter((resource: any) =>
-        resource.Properties?.Tags !== undefined
+      const taggableResources = Object.values(resources).filter(
+        (resource: any) => resource.Properties?.Tags !== undefined
       );
-      
+
       const projectTaggedResources = taggableResources.filter((resource: any) =>
-        resource.Properties.Tags.find((tag: any) => tag.Key === 'Project' && tag.Value === 'SecureWebInfrastructure')
+        resource.Properties.Tags.find(
+          (tag: any) =>
+            tag.Key === 'Project' && tag.Value === 'SecureWebInfrastructure'
+        )
       );
-      
+
       expect(projectTaggedResources.length).toBeGreaterThan(0);
     });
   });
