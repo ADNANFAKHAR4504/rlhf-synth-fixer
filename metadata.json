@@ -4,7 +4,7 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "291",
-  "team": "synth",
+  "team": "synth-2",
   "startedAt": "2025-12-18T06:59:00Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
