@@ -27,5 +27,12 @@
     "WAF",
     "VPC Flow Logs"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
 }
