@@ -16,5 +16,12 @@
     "API Gateway",
     "CloudWatch Logs",
     "IAM"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
 }
