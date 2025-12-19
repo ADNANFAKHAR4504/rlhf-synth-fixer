@@ -140,9 +140,16 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
     const rawOutputs = loadStackOutputs();
     console.log('Raw outputs loaded:', JSON.stringify(rawOutputs, null, 2));
     
-    // Extract outputs from the first (and likely only) stack
-    const stackKey = Object.keys(rawOutputs)[0];
-    outputs = rawOutputs[stackKey] || rawOutputs;
+    // Pulumi outputs are already flat, not nested under stack keys
+    // CDK/CFN outputs might be nested, so check if it's an object with nested structure
+    if (rawOutputs && typeof rawOutputs === 'object' && !rawOutputs.vpcId && !rawOutputs.albDnsName) {
+      // Try to extract from nested structure (CDK/CFN format)
+      const stackKey = Object.keys(rawOutputs)[0];
+      outputs = rawOutputs[stackKey] || rawOutputs;
+    } else {
+      // Already flat (Pulumi format)
+      outputs = rawOutputs;
+    }
     console.log('Extracted outputs:', JSON.stringify(outputs, null, 2));
     
     clients = initializeClients();
