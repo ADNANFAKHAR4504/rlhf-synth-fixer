@@ -7,7 +7,9 @@
   "team": "synth-2",
   "startedAt": "2025-08-16T13:17:10.657Z",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Cloud Environment Setup"],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "aws_services": [
     "CloudFront",
     "S3",
@@ -24,5 +26,12 @@
     "SNS",
     "VPC Endpoints"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
 }
