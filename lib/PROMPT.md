@@ -2,7 +2,7 @@ You are tasked with designing and deploying a **production-ready, serverless app
 
 ---
 
-### ✅ **Core Functional Requirements:**
+### Core Functional Requirements:
 
 1. **API Gateway + Lambda Integration:**
 
@@ -30,7 +30,7 @@ You are tasked with designing and deploying a **production-ready, serverless app
 
 ---
 
-### 🔐 **Security & IAM Requirements:**
+### Security & IAM Requirements:
 
 * Define **IAM roles and policies** to:
 
@@ -40,7 +40,7 @@ You are tasked with designing and deploying a **production-ready, serverless app
 
 ---
 
-### 📦 **Infrastructure as Code (IaC) Requirements:**
+### Infrastructure as Code (IaC) Requirements:
 
 * Use **AWS CDK in Python** to programmatically define all resources.
 * Follow **best practices** for:
@@ -52,7 +52,7 @@ You are tasked with designing and deploying a **production-ready, serverless app
 
 ---
 
-### ✅ **Success Criteria:**
+### Success Criteria:
 
 Your AWS CDK (Python) application should result in a **fully deployed serverless architecture** where:
 
