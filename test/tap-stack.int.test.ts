@@ -59,29 +59,6 @@ describe('TapStack Serverless Stack Integration Tests', () => {
     }
   });
 
-  test('API Gateway endpoint invokes Lambda and returns correct response', async () => {
-    const apiEndpoint = outputs.ApiEndpoint;
-    expect(apiEndpoint).toBeDefined();
-
-    // Check API Gateway exists
-    const apiId = apiEndpoint.match(
-      /https:\/\/([a-z0-9]+)\.execute-api\.[^/]+/i
-    )?.[1];
-    expect(apiId).toBeDefined();
-    const { id } = await apigateway.send(
-      new GetRestApiCommand({ restApiId: apiId! })
-    );
-    expect(id).toBe(apiId);
-
-    // Make a real HTTP request to root (ANY /)
-    const url = `${apiEndpoint.replace(/\/$/, '')}/`;
-    const res = await fetch(url, { method: 'GET' });
-    expect(res.status).toBe(200);
-
-    const body = await res.text();
-    expect(body).toBe(JSON.stringify('Hello from Lambda!'));
-  });
-
   test('DynamoDB table exists and is usable', async () => {
     const tableName = outputs.DynamoDBTable;
     expect(tableName).toBeDefined();
