@@ -49,41 +49,7 @@ case "$LANGUAGE" in
 
   *)
     echo "📦 Running generic build (npm)..."
-    # Allow build to continue even if tests have compilation errors
-    # The test job will catch and report actual test failures
-    npm run build || true
-    echo "✅ Build completed"
-
-    # For CDK/CDKTF TypeScript projects, create dist/ folder for artifact upload
-    if [ "$PLATFORM" = "cdk" ] || [ "$PLATFORM" = "cdktf" ]; then
-      echo "📦 Creating dist/ folder for CDK/CDKTF artifact..."
-      mkdir -p dist
-
-      # Copy compiled JavaScript files (even if some compilation errors occurred)
-      if [ -d "lib" ] && ls lib/*.js 2>/dev/null | grep -q .; then
-        cp -r lib dist/
-        echo "  ✓ Copied lib/ to dist/"
-      fi
-      if [ -d "bin" ] && ls bin/*.js 2>/dev/null | grep -q .; then
-        cp -r bin dist/
-        echo "  ✓ Copied bin/ to dist/"
-      fi
-
-      # Copy essential configuration files
-      if [ -f "cdk.json" ]; then
-        cp cdk.json dist/
-      fi
-      if [ -f "cdktf.json" ]; then
-        cp cdktf.json dist/
-      fi
-      if [ -f "package.json" ]; then
-        cp package.json dist/
-      fi
-      if [ -f "tsconfig.json" ]; then
-        cp tsconfig.json dist/
-      fi
-
-      echo "✅ dist/ folder created with compiled files"
-    fi
+    npm run build
+    echo "✅ Build completed successfully"
     ;;
 esac
