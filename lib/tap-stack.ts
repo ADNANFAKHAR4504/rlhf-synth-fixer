@@ -23,7 +23,7 @@ export class TapStack extends cdk.Stack {
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
 
-    new ServerlessInfrastructureStack(
+    const serverlessStack = new ServerlessInfrastructureStack(
       this,
       `ServerlessInfrastructureStack-${environmentSuffix}`,
       {
@@ -31,5 +31,23 @@ export class TapStack extends cdk.Stack {
         description: `Serverless Infrastructure Stack for ${environmentSuffix} environment`,
       }
     );
+
+    // Re-export outputs from nested stack to parent stack
+    // This ensures the outputs are accessible at the parent stack level
+    // for the deployment script to collect them
+    new cdk.CfnOutput(this, 'APIGatewayURL', {
+      value: serverlessStack.apiUrl,
+      description: 'API Gateway URL',
+    });
+
+    new cdk.CfnOutput(this, 'CloudFrontDomainName', {
+      value: serverlessStack.cloudFrontDomain,
+      description: 'CloudFront Distribution Domain Name',
+    });
+
+    new cdk.CfnOutput(this, 'DynamoDBTableName', {
+      value: serverlessStack.tableName,
+      description: 'DynamoDB Table Name',
+    });
   }
 }

@@ -16,6 +16,10 @@ export interface ServerlessInfrastructureStackProps extends cdk.StackProps {
 }
 
 export class ServerlessInfrastructureStack extends cdk.Stack {
+  public readonly apiUrl: string;
+  public readonly cloudFrontDomain: string;
+  public readonly tableName: string;
+
   constructor(
     scope: Construct,
     id: string,
@@ -555,19 +559,24 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       },
     });
 
+    // Store values for parent stack access
+    this.apiUrl = api.url;
+    this.cloudFrontDomain = distribution.distributionDomainName;
+    this.tableName = dynamoTable.tableName;
+
     // Outputs
     new cdk.CfnOutput(this, 'APIGatewayURL', {
-      value: api.url,
+      value: this.apiUrl,
       description: 'API Gateway URL',
     });
 
     new cdk.CfnOutput(this, 'CloudFrontDomainName', {
-      value: distribution.distributionDomainName,
+      value: this.cloudFrontDomain,
       description: 'CloudFront Distribution Domain Name',
     });
 
     new cdk.CfnOutput(this, 'DynamoDBTableName', {
-      value: dynamoTable.tableName,
+      value: this.tableName,
       description: 'DynamoDB Table Name',
     });
 
