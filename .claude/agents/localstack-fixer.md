@@ -444,35 +444,78 @@ absolutely_forbidden:
 
 ### Automatic Guardrail Enforcement
 
-The agent MUST add this check at the start of every fix application:
+The agent MUST add this check at the start of every fix application. **Use the shared verification script when available**:
 
 ```bash
 # At the start of fix application
 echo "🛡️ Validating working directory..."
 
-# Ensure we're in a worktree
 CURRENT_DIR=$(pwd)
-if [[ "$CURRENT_DIR" != *"worktree/"* ]]; then
-  echo "❌ FATAL: Not in a worktree directory!"
-  echo "   Current: $CURRENT_DIR"
-  echo "   Expected: */worktree/*"
-  echo ""
-  echo "🔧 To fix: cd to the correct worktree before applying fixes"
-  exit 1
-fi
+PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
 
-# Ensure we're not in a restricted subdirectory within worktree
-for restricted in scripts .github .claude config; do
-  if [[ "$CURRENT_DIR" == *"/$restricted"* ]] || [[ "$CURRENT_DIR" == *"/$restricted" ]]; then
-    echo "❌ FATAL: In restricted directory: $restricted"
-    echo "   Current: $CURRENT_DIR"
-    cd ..
-    echo "   Moved to: $(pwd)"
+# ═══════════════════════════════════════════════════════════════
+# PREFERRED: Use shared verify-worktree.sh script
+# ═══════════════════════════════════════════════════════════════
+
+if [[ -x "$PROJECT_ROOT/.claude/scripts/verify-worktree.sh" ]]; then
+  echo "🔍 Using shared worktree verification..."
+  if bash "$PROJECT_ROOT/.claude/scripts/verify-worktree.sh"; then
+    echo "✅ Worktree verified by shared script"
+  else
+    # For fixer worktrees, verification failure may be okay (no metadata.json)
+    if [[ "$CURRENT_DIR" == *"worktree/fixer-"* ]]; then
+      echo "⚠️ Verification warning (fixer worktree - continuing)"
+    else
+      echo "❌ Worktree verification failed!"
+      exit 1
+    fi
   fi
-done
+else
+  # ═══════════════════════════════════════════════════════════════
+  # FALLBACK: Manual verification if script not available
+  # ═══════════════════════════════════════════════════════════════
 
-echo "✅ Working directory validated: $CURRENT_DIR"
+  echo "⚠️ verify-worktree.sh not found, using manual verification..."
+
+  # Ensure we're in a worktree
+  if [[ "$CURRENT_DIR" != *"worktree/"* ]]; then
+    echo "❌ FATAL: Not in a worktree directory!"
+    echo "   Current: $CURRENT_DIR"
+    echo "   Expected: */worktree/*"
+    echo ""
+    echo "🔧 To fix: cd to the correct worktree before applying fixes"
+    exit 1
+  fi
+
+  # Ensure we're not in a restricted subdirectory within worktree
+  for restricted in scripts .github .claude config; do
+    if [[ "$CURRENT_DIR" == *"/$restricted"* ]] || [[ "$CURRENT_DIR" == *"/$restricted" ]]; then
+      echo "❌ FATAL: In restricted directory: $restricted"
+      echo "   Current: $CURRENT_DIR"
+      cd ..
+      echo "   Moved to: $(pwd)"
+    fi
+  done
+
+  echo "✅ Working directory validated: $CURRENT_DIR"
+fi
 ```
+
+### Shared Worktree Scripts
+
+The localstack-fixer agent should use these shared scripts from `.claude/scripts/`:
+
+| Script               | Purpose                                   | Usage                                               |
+| -------------------- | ----------------------------------------- | --------------------------------------------------- |
+| `setup-worktree.sh`  | Creates isolated worktree for PR work     | `./setup-worktree.sh <branch> <pr_id> --type fixer` |
+| `verify-worktree.sh` | Validates worktree location and structure | `bash verify-worktree.sh`                           |
+
+These scripts support multiple worktree types:
+
+- `synth` - For synth trainer tasks
+- `localstack` - For LocalStack migration tasks
+- `fixer` - For LocalStack fixer tasks (this agent)
+- `git` - For generic git operations on PRs
 
 ## Input Parameters
 
@@ -1201,29 +1244,74 @@ if [[ "$MODE" == "local" ]]; then
   echo "   (Local mode - no checkout needed)"
   echo ""
 
+  # Verify we're in a valid worktree/work directory
+  if [[ -x "$PROJECT_ROOT/.claude/scripts/verify-worktree.sh" ]]; then
+    echo "🔍 Verifying work directory..."
+    if bash "$PROJECT_ROOT/.claude/scripts/verify-worktree.sh" 2>/dev/null; then
+      echo "✅ Work directory verified"
+    else
+      echo "⚠️ Work directory verification warning (continuing anyway)"
+    fi
+  fi
+  echo ""
+
 else
-  # PR MODE: Checkout PR branch
+  # PR MODE: Checkout PR branch using shared worktree setup
   echo "═══════════════════════════════════════════════════"
-  echo "📥 CHECKING OUT PR BRANCH"
+  echo "📥 SETTING UP WORKTREE FOR PR BRANCH"
   echo "═══════════════════════════════════════════════════"
   echo ""
 
-  # Use git worktree for parallel safety
-  WORK_DIR="worktree/fixer-pr${PR_NUMBER}"
+  # ═══════════════════════════════════════════════════════════════
+  # WORKTREE SETUP - Use shared script for consistency
+  # ═══════════════════════════════════════════════════════════════
 
-  # Clean up existing worktree
-  if [[ -d "$WORK_DIR" ]]; then
-    echo "🧹 Cleaning existing worktree..."
-    git worktree remove "$WORK_DIR" --force 2>/dev/null || rm -rf "$WORK_DIR"
+  WORK_DIR="$PROJECT_ROOT/worktree/fixer-pr${PR_NUMBER}"
+
+  # Try using the shared setup script first
+  if [[ -x "$PROJECT_ROOT/.claude/scripts/setup-worktree.sh" ]]; then
+    echo "📥 Using shared worktree setup script..."
+
+    WORKTREE_OUTPUT=$("$PROJECT_ROOT/.claude/scripts/setup-worktree.sh" \
+      "$PR_BRANCH" \
+      "$PR_NUMBER" \
+      --type fixer 2>&1) || {
+      echo "⚠️ Shared script failed, using fallback..."
+      WORKTREE_OUTPUT=""
+    }
+
+    # Extract worktree path from output (last line)
+    if [[ -n "$WORKTREE_OUTPUT" ]]; then
+      WORK_DIR=$(echo "$WORKTREE_OUTPUT" | tail -1)
+      if [[ ! -d "$WORK_DIR" ]]; then
+        WORK_DIR="$PROJECT_ROOT/worktree/fixer-pr${PR_NUMBER}"
+      fi
+    fi
   fi
 
-  # Fetch the PR branch
-  echo "📥 Fetching PR branch: $PR_BRANCH..."
-  git fetch origin "$PR_BRANCH:$PR_BRANCH" 2>/dev/null || git fetch origin "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}" 2>/dev/null
+  # Fallback: Manual worktree setup if script not available or failed
+  if [[ ! -d "$WORK_DIR" ]]; then
+    echo "📁 Setting up worktree manually..."
 
-  # Create worktree
-  echo "📁 Creating worktree..."
-  git worktree add "$WORK_DIR" "$PR_BRANCH" 2>/dev/null || git worktree add "$WORK_DIR" "pr-${PR_NUMBER}" 2>/dev/null
+    # Clean up existing worktree
+    if [[ -d "$WORK_DIR" ]]; then
+      echo "🧹 Cleaning existing worktree..."
+      git worktree remove "$WORK_DIR" --force 2>/dev/null || rm -rf "$WORK_DIR"
+    fi
+
+    # Fetch the PR branch
+    echo "📥 Fetching PR branch: $PR_BRANCH..."
+    git fetch origin "$PR_BRANCH:$PR_BRANCH" 2>/dev/null || \
+      git fetch origin "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}" 2>/dev/null || true
+
+    # Create worktree
+    echo "📁 Creating worktree..."
+    git worktree add "$WORK_DIR" "$PR_BRANCH" 2>/dev/null || \
+      git worktree add "$WORK_DIR" "pr-${PR_NUMBER}" 2>/dev/null || {
+      echo "❌ Failed to create worktree for PR branch"
+      exit 1
+    }
+  fi
 
   if [[ ! -d "$WORK_DIR" ]]; then
     echo "❌ Failed to checkout PR branch"
@@ -1233,8 +1321,19 @@ else
   # Register worktree for cleanup on exit (handled by trap in Step 1)
   register_cleanup_worktree "$WORK_DIR"
 
-  echo "✅ Checked out to: $WORK_DIR"
+  echo "✅ Worktree ready: $WORK_DIR"
   cd "$WORK_DIR"
+
+  # Verify worktree
+  if [[ -x "$PROJECT_ROOT/.claude/scripts/verify-worktree.sh" ]]; then
+    echo ""
+    echo "🔍 Verifying worktree..."
+    if bash "$PROJECT_ROOT/.claude/scripts/verify-worktree.sh" 2>/dev/null; then
+      echo "✅ Worktree verified"
+    else
+      echo "⚠️ Worktree verification warning (continuing anyway - fixer worktrees may not have metadata.json)"
+    fi
+  fi
 fi
 
 # Read metadata if exists (both modes)
