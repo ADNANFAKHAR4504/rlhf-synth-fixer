@@ -31,7 +31,8 @@ let outputs: Record<string, string> = {};
 // Get environment suffix from environment variable
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
-const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+const region =
+  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 
 // AWS Client Configuration - supports LocalStack endpoint
 const endpoint = process.env.AWS_ENDPOINT_URL || undefined;
@@ -348,8 +349,13 @@ describe('TapStack Integration Tests', () => {
           expect(asg.MaxSize).toBe(5);
         } catch (error: any) {
           // LocalStack Community doesn't support ASG describe API
-          if (error.name === 'InternalFailure' || error.message?.includes('not included')) {
-            console.log('Skipping ASG API test - not available in LocalStack Community');
+          if (
+            error.name === 'InternalFailure' ||
+            error.message?.includes('not included')
+          ) {
+            console.log(
+              'Skipping ASG API test - not available in LocalStack Community'
+            );
             // Verify ASG was created via CloudFormation instead
             expect(asgName).toBeDefined();
             expect(asgName.length).toBeGreaterThan(0);
@@ -371,7 +377,9 @@ describe('TapStack Integration Tests', () => {
 
         // LocalStack: ALB ARN may show "unknown", skip if so
         if (albArn === 'unknown') {
-          console.log('Skipping ALB test - LocalStack returns "unknown" for ALB ARN');
+          console.log(
+            'Skipping ALB test - LocalStack returns "unknown" for ALB ARN'
+          );
           expect(true).toBe(true);
           return;
         }
@@ -412,8 +420,13 @@ describe('TapStack Integration Tests', () => {
           expect(ourTg).toBeDefined();
         } catch (error: any) {
           // LocalStack Community doesn't support ELBv2 target group describe API
-          if (error.name === 'InternalFailure' || error.message?.includes('not included')) {
-            console.log('Skipping Target Group API test - not available in LocalStack Community');
+          if (
+            error.name === 'InternalFailure' ||
+            error.message?.includes('not included')
+          ) {
+            console.log(
+              'Skipping Target Group API test - not available in LocalStack Community'
+            );
             // Resource was created via CloudFormation - validated by stack resources test
             expect(true).toBe(true);
           } else {

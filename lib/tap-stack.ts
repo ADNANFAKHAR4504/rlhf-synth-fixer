@@ -39,9 +39,13 @@ export class TapStack extends cdk.Stack {
     });
 
     // Requirement 6: Define an IAM Role and Instance Profile for EC2 instances.
-    const instanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
-      role: ec2Role,
-    });
+    const instanceProfile = new iam.InstanceProfile(
+      this,
+      'EC2InstanceProfile',
+      {
+        role: ec2Role,
+      }
+    );
 
     // 3. Security Groups
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
@@ -130,13 +134,13 @@ export class TapStack extends cdk.Stack {
 
     // Subnet outputs (fully supported by LocalStack)
     new CfnOutput(this, 'PublicSubnetIds', {
-      value: vpc.publicSubnets.map((s) => s.subnetId).join(','),
+      value: vpc.publicSubnets.map(s => s.subnetId).join(','),
       description: 'Public Subnet IDs',
       exportName: `${this.stackName}-PublicSubnetIds`,
     });
 
     new CfnOutput(this, 'PrivateSubnetIds', {
-      value: vpc.isolatedSubnets.map((s) => s.subnetId).join(','),
+      value: vpc.isolatedSubnets.map(s => s.subnetId).join(','),
       description: 'Private Subnet IDs',
       exportName: `${this.stackName}-PrivateSubnetIds`,
     });
