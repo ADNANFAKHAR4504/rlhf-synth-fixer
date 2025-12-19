@@ -1,19 +1,19 @@
-2025-11-18 10:47:52,330 - INFO - Found credentials in environment variables.
-2025-11-18 10:47:52,387 - INFO - Starting CloudFront distribution analysis...
-2025-11-18 10:47:52,619 - INFO - Skipping QR4ZN7TRYQ8D3 - ExcludeFromAnalysis tag
-2025-11-18 10:47:52,623 - INFO - Skipping BB2LGGQE8M541 - Internal only distribution
-2025-11-18 10:47:52,637 - INFO - Analyzing distribution: LSG1NU0Z5LJ87
-2025-11-18 10:47:52,657 - INFO - Analyzing distribution: WKQYVMG6WFXMC
-2025-11-18 10:47:52,685 - INFO - Analyzing distribution: BLDI0QH2RY0Y2
-2025-11-18 10:47:52,717 - INFO - Analyzing distribution: PZT028QZJGA7Z
-2025-11-18 10:47:52,743 - INFO - Analyzing distribution: QKFR421TWIV85
-2025-11-18 10:47:52,769 - INFO - Analyzing distribution: WEM494NX3KS8K
-2025-11-18 10:47:52,789 - INFO - Analyzing distribution: JRNPCTYI8JKPM
-2025-11-18 10:47:52,810 - INFO - Analyzing distribution: UTPUQRAZESA8A
-2025-11-18 10:47:52,869 - INFO - Analyzing distribution: JHVZVC46UXGDF
+2025-12-19 14:48:29,363 - INFO - Found credentials in environment variables.
+2025-12-19 14:48:29,410 - INFO - Starting CloudFront distribution analysis...
+2025-12-19 14:48:29,605 - INFO - Skipping DC254DNHSOQQY - ExcludeFromAnalysis tag
+2025-12-19 14:48:29,609 - INFO - Skipping N5BDL7WPJK3XL - Internal only distribution
+2025-12-19 14:48:29,621 - INFO - Analyzing distribution: TEEYP1E4W2A10
+2025-12-19 14:48:29,638 - INFO - Analyzing distribution: HZ2HGVGOGU9S6
+2025-12-19 14:48:29,659 - INFO - Analyzing distribution: OCFEJTB2Z938Z
+2025-12-19 14:48:29,684 - INFO - Analyzing distribution: WAU088EFJRIZV
+2025-12-19 14:48:29,705 - INFO - Analyzing distribution: PJVBLV7R9812U
+2025-12-19 14:48:29,726 - INFO - Analyzing distribution: BAKI4A0LDTKFD
+2025-12-19 14:48:29,743 - INFO - Analyzing distribution: CUWNGDLQAIPY8
+2025-12-19 14:48:29,761 - INFO - Analyzing distribution: M06B770J89ARO
+2025-12-19 14:48:29,810 - INFO - Analyzing distribution: MD3RY43QZL56M
 
 ================================================================================
-Distribution: LSG1NU0Z5LJ87 (wtfkk7j2sie8h.cloudfront.net)
+Distribution: TEEYP1E4W2A10 (quozx10ql6hw7.cloudfront.net)
 Performance Score: 68/100
 Cache Hit Ratio: 92.0%
 Potential Monthly Savings: $0.00
@@ -37,7 +37,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: WKQYVMG6WFXMC (iw2v7kdi84i25.cloudfront.net)
+Distribution: HZ2HGVGOGU9S6 (r89x41is5kq54.cloudfront.net)
 Performance Score: 48/100
 Cache Hit Ratio: 60.0%
 Potential Monthly Savings: $1.25
@@ -62,7 +62,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: BLDI0QH2RY0Y2 (muzjfrg0g8nxv.cloudfront.net)
+Distribution: OCFEJTB2Z938Z (zphi20q5kom8d.cloudfront.net)
 Performance Score: 57/100
 Cache Hit Ratio: 78.0%
 Potential Monthly Savings: $0.89
@@ -88,7 +88,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: PZT028QZJGA7Z (bg3rzx66jdngz.cloudfront.net)
+Distribution: WAU088EFJRIZV (n725g52io96ff.cloudfront.net)
 Performance Score: 63/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $2.98
@@ -113,7 +113,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: QKFR421TWIV85 (g9w7hu6uv2dkf.cloudfront.net)
+Distribution: PJVBLV7R9812U (m50s2rdoe29vq.cloudfront.net)
 Performance Score: 58/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.60
@@ -138,7 +138,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: WEM494NX3KS8K (m1i70l1fzvfy1.cloudfront.net)
+Distribution: BAKI4A0LDTKFD (tm3x5xi1o6afo.cloudfront.net)
 Performance Score: 68/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -162,7 +162,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: JRNPCTYI8JKPM (ij5b8ylaq4r5c.cloudfront.net)
+Distribution: CUWNGDLQAIPY8 (nr85edjzlai85.cloudfront.net)
 Performance Score: 58/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -186,7 +186,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: UTPUQRAZESA8A (a843r7pv9urym.cloudfront.net)
+Distribution: M06B770J89ARO (anfkj5r3pnt0h.cloudfront.net)
 Performance Score: 63/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $2.12
@@ -211,7 +211,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: JHVZVC46UXGDF (sjtuczeci8e4t.cloudfront.net)
+Distribution: MD3RY43QZL56M (vt22kjv9v7hx7.cloudfront.net)
 Performance Score: 68/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -219,12 +219,12 @@ Potential Monthly Savings: $0.00
 Top Issues:
 1. [HIGH] Missing Security Headers
    Current: No response headers policy configured
-2025-11-18 10:47:52,889 - INFO - Analyzing distribution: VMW7ERX3ORJ08
-2025-11-18 10:47:52,913 - INFO - Analyzing distribution: O0DOXP749WF8V
-2025-11-18 10:47:52,939 - INFO - Analyzing distribution: AHIDKOT2HDA4X
-2025-11-18 10:47:52,959 - INFO - Analyzing distribution: Y3C85FS082NJQ
-2025-11-18 10:47:52,989 - INFO - Analyzing distribution: DVUU0SLY9EUCU
-2025-11-18 10:47:53,009 - INFO - Analyzing distribution: D66H85O7B6E2G
+2025-12-19 14:48:29,827 - INFO - Analyzing distribution: L1I1EP0QC8MAO
+2025-12-19 14:48:29,847 - INFO - Analyzing distribution: NTCWMETI5ZR7O
+2025-12-19 14:48:29,868 - INFO - Analyzing distribution: NUIDR3A144N6D
+2025-12-19 14:48:29,885 - INFO - Analyzing distribution: PIBJF56E0F897
+2025-12-19 14:48:29,910 - INFO - Analyzing distribution: MFON31VU9OG7E
+2025-12-19 14:48:29,926 - INFO - Analyzing distribution: O9O5AOO6FNOD4
    Recommended: Add security headers: X-Frame-Options, CSP, HSTS
 2. [HIGH] No WAF Integration
    Current: No AWS WAF attached
@@ -241,7 +241,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: VMW7ERX3ORJ08 (g9oy4v18yxxkp.cloudfront.net)
+Distribution: L1I1EP0QC8MAO (hhhigmazde73a.cloudfront.net)
 Performance Score: 68/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -265,7 +265,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: O0DOXP749WF8V (v7ylj8zhtrux6.cloudfront.net)
+Distribution: NTCWMETI5ZR7O (idea7p8l90qf5.cloudfront.net)
 Performance Score: 63/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -289,7 +289,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: AHIDKOT2HDA4X (aicv9v4ru28h3.cloudfront.net)
+Distribution: NUIDR3A144N6D (lu0signeufxf5.cloudfront.net)
 Performance Score: 58/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -313,7 +313,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: Y3C85FS082NJQ (ftvpupwzq4893.cloudfront.net)
+Distribution: PIBJF56E0F897 (bm1e7b51mk7rn.cloudfront.net)
 Performance Score: 53/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.23
@@ -338,7 +338,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: DVUU0SLY9EUCU (k4iqxyjtkpgqb.cloudfront.net)
+Distribution: MFON31VU9OG7E (fx858omlhg1cv.cloudfront.net)
 Performance Score: 68/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -362,7 +362,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: D66H85O7B6E2G (dt47w7x714d6h.cloudfront.net)
+Distribution: O9O5AOO6FNOD4 (d4c1w30jli4ak.cloudfront.net)
 Performance Score: 68/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -386,24 +386,24 @@ Top Issues:
 ================================================================================
 
 CloudFront Optimization Summary
-2025-11-18 10:47:53,031 - INFO - JSON report saved to cloudfront_optimization.json
-2025-11-18 10:47:53,040 - INFO - HTML report saved to cache_efficiency_report.html
-2025-11-18 10:47:53,041 - INFO - CSV roadmap saved to cdn_optimization_roadmap.csv
+2025-12-19 14:48:29,945 - INFO - JSON report saved to cloudfront_optimization.json
+2025-12-19 14:48:29,957 - INFO - HTML report saved to cache_efficiency_report.html
+2025-12-19 14:48:29,958 - INFO - CSV roadmap saved to cdn_optimization_roadmap.csv
 | Distribution   | Domain                       |   Score | Cache Hit   |   Issue Count | Potential Savings   |
 |----------------|------------------------------|---------|-------------|---------------|---------------------|
-| LSG1NU0Z5LJ87  | wtfkk7j2sie8h.cloudfront.net |      68 | 92.0%       |             5 | $0.00               |
-| WKQYVMG6WFXMC  | iw2v7kdi84i25.cloudfront.net |      48 | 60.0%       |             6 | $1.25               |
-| BLDI0QH2RY0Y2  | muzjfrg0g8nxv.cloudfront.net |      57 | 78.0%       |             6 | $0.89               |
-| PZT028QZJGA7Z  | bg3rzx66jdngz.cloudfront.net |      63 | 85.0%       |             6 | $2.98               |
-| QKFR421TWIV85  | g9w7hu6uv2dkf.cloudfront.net |      58 | 85.0%       |             6 | $0.60               |
-| WEM494NX3KS8K  | m1i70l1fzvfy1.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
-| JRNPCTYI8JKPM  | ij5b8ylaq4r5c.cloudfront.net |      58 | 85.0%       |             6 | $0.00               |
-| UTPUQRAZESA8A  | a843r7pv9urym.cloudfront.net |      63 | 85.0%       |             6 | $2.12               |
-| JHVZVC46UXGDF  | sjtuczeci8e4t.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
-| VMW7ERX3ORJ08  | g9oy4v18yxxkp.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
-| O0DOXP749WF8V  | v7ylj8zhtrux6.cloudfront.net |      63 | 85.0%       |             6 | $0.00               |
-| AHIDKOT2HDA4X  | aicv9v4ru28h3.cloudfront.net |      58 | 85.0%       |             6 | $0.00               |
-| Y3C85FS082NJQ  | ftvpupwzq4893.cloudfront.net |      53 | 85.0%       |             7 | $0.23               |
-| DVUU0SLY9EUCU  | k4iqxyjtkpgqb.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
-| D66H85O7B6E2G  | dt47w7x714d6h.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
+| TEEYP1E4W2A10  | quozx10ql6hw7.cloudfront.net |      68 | 92.0%       |             5 | $0.00               |
+| HZ2HGVGOGU9S6  | r89x41is5kq54.cloudfront.net |      48 | 60.0%       |             6 | $1.25               |
+| OCFEJTB2Z938Z  | zphi20q5kom8d.cloudfront.net |      57 | 78.0%       |             6 | $0.89               |
+| WAU088EFJRIZV  | n725g52io96ff.cloudfront.net |      63 | 85.0%       |             6 | $2.98               |
+| PJVBLV7R9812U  | m50s2rdoe29vq.cloudfront.net |      58 | 85.0%       |             6 | $0.60               |
+| BAKI4A0LDTKFD  | tm3x5xi1o6afo.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
+| CUWNGDLQAIPY8  | nr85edjzlai85.cloudfront.net |      58 | 85.0%       |             6 | $0.00               |
+| M06B770J89ARO  | anfkj5r3pnt0h.cloudfront.net |      63 | 85.0%       |             6 | $2.12               |
+| MD3RY43QZL56M  | vt22kjv9v7hx7.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
+| L1I1EP0QC8MAO  | hhhigmazde73a.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
+| NTCWMETI5ZR7O  | idea7p8l90qf5.cloudfront.net |      63 | 85.0%       |             6 | $0.00               |
+| NUIDR3A144N6D  | lu0signeufxf5.cloudfront.net |      58 | 85.0%       |             6 | $0.00               |
+| PIBJF56E0F897  | bm1e7b51mk7rn.cloudfront.net |      53 | 85.0%       |             7 | $0.23               |
+| MFON31VU9OG7E  | fx858omlhg1cv.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
+| O9O5AOO6FNOD4  | d4c1w30jli4ak.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
 Analyzed 15 distributions | Avg Cache Hit: 83.3% | Total Potential Savings: $8.06
