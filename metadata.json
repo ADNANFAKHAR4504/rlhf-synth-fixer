@@ -6,9 +6,10 @@
   "po_id": "350088",
   "team": "2",
   "startedAt": "2025-11-12T12:17:57.977Z",
-  "subtask": "IaC Program Optimization",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "IaC Optimization"
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "EC2",
