@@ -14,6 +14,8 @@ This CloudFormation template deploys a serverless infrastructure that automatica
 
 ## CloudFormation Template
 
+The complete CloudFormation template includes IAM roles, Lambda function with inline code, and necessary permissions.
+
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Serverless infrastructure with Lambda function triggered by S3 events'
@@ -24,7 +26,7 @@ Parameters:
     Description: 'Name of the existing S3 bucket'
     AllowedPattern: '^[a-z0-9][a-z0-9.-]*[a-z0-9]$'
     ConstraintDescription: 'S3 bucket name must be valid'
-  
+
   CloudWatchLogGroupName:
     Type: String
     Description: 'Name of the existing CloudWatch Log Group'
@@ -33,7 +35,6 @@ Parameters:
     ConstraintDescription: 'CloudWatch Log Group name must be valid'
 
 Resources:
-  # IAM Role for Lambda function
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -63,7 +64,6 @@ Resources:
                   - logs:PutLogEvents
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CloudWatchLogGroupName}:*'
 
-  # Lambda function
   S3FileProcessorFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -80,47 +80,44 @@ Resources:
         ZipFile: |
           const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
           const { CloudWatchLogsClient, CreateLogStreamCommand, PutLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
-          
+
           const s3Client = new S3Client({});
           const cloudWatchClient = new CloudWatchLogsClient({});
-          
+
           exports.handler = async (event) => {
             console.log('Event received:', JSON.stringify(event, null, 2));
-            
+
             try {
               for (const record of event.Records) {
                 const bucket = record.s3.bucket.name;
                 const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
-                
+
                 console.log(`Processing file: ${key} from bucket: ${bucket}`);
-                
-                // Get the object from S3
+
                 const getObjectCommand = new GetObjectCommand({
                   Bucket: bucket,
                   Key: key
                 });
-                
+
                 const s3Object = await s3Client.send(getObjectCommand);
                 const fileContent = await s3Object.Body.transformToString('utf-8');
                 const fileSize = s3Object.ContentLength;
                 const lastModified = s3Object.LastModified;
-                
-                // Log details to CloudWatch
+
                 const logMessage = {
                   filename: key,
                   bucket: bucket,
                   size: fileSize,
                   lastModified: lastModified,
-                  content: fileContent.substring(0, 1000), // Log first 1000 characters
+                  content: fileContent.substring(0, 1000),
                   eventTime: record.eventTime
                 };
-                
+
                 console.log('File details:', JSON.stringify(logMessage, null, 2));
-                
-                // Write to CloudWatch Log Group
+
                 const logGroupName = process.env.LOG_GROUP_NAME;
                 const logStreamName = `s3-processor-${Date.now()}`;
-                
+
                 try {
                   const createLogStreamCommand = new CreateLogStreamCommand({
                     logGroupName: logGroupName,
@@ -128,12 +125,11 @@ Resources:
                   });
                   await cloudWatchClient.send(createLogStreamCommand);
                 } catch (error) {
-                  // Log stream might already exist, continue
                   if (error.name !== 'ResourceAlreadyExistsException') {
                     throw error;
                   }
                 }
-                
+
                 const putLogEventsCommand = new PutLogEventsCommand({
                   logGroupName: logGroupName,
                   logStreamName: logStreamName,
@@ -144,11 +140,11 @@ Resources:
                     }
                   ]
                 });
-                
+
                 await cloudWatchClient.send(putLogEventsCommand);
                 console.log(`Successfully processed and logged file: ${key}`);
               }
-              
+
               return {
                 statusCode: 200,
                 body: JSON.stringify({
@@ -156,14 +152,13 @@ Resources:
                   processedRecords: event.Records.length
                 })
               };
-              
+
             } catch (error) {
               console.error('Error processing S3 event:', error);
               throw error;
             }
           };
 
-  # Permission for S3 to invoke Lambda
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -178,18 +173,105 @@ Outputs:
     Value: !Ref S3FileProcessorFunction
     Export:
       Name: !Sub '${AWS::StackName}-LambdaFunctionName'
-  
+
   LambdaFunctionArn:
     Description: 'ARN of the Lambda function'
     Value: !GetAtt S3FileProcessorFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
-  
+
   LambdaExecutionRoleArn:
     Description: 'ARN of the Lambda execution role'
     Value: !GetAtt LambdaExecutionRole.Arn
     Export:
       Name: !Sub '${AWS::StackName}-LambdaExecutionRoleArn'
+```
+
+### Lambda Function Code
+
+The inline Lambda function uses Node.js and AWS SDK v3 for processing S3 events:
+
+```javascript
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { CloudWatchLogsClient, CreateLogStreamCommand, PutLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+
+const s3Client = new S3Client({});
+const cloudWatchClient = new CloudWatchLogsClient({});
+
+exports.handler = async (event) => {
+  console.log('Event received:', JSON.stringify(event, null, 2));
+
+  try {
+    for (const record of event.Records) {
+      const bucket = record.s3.bucket.name;
+      const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
+
+      console.log(`Processing file: ${key} from bucket: ${bucket}`);
+
+      const getObjectCommand = new GetObjectCommand({
+        Bucket: bucket,
+        Key: key
+      });
+
+      const s3Object = await s3Client.send(getObjectCommand);
+      const fileContent = await s3Object.Body.transformToString('utf-8');
+      const fileSize = s3Object.ContentLength;
+      const lastModified = s3Object.LastModified;
+
+      const logMessage = {
+        filename: key,
+        bucket: bucket,
+        size: fileSize,
+        lastModified: lastModified,
+        content: fileContent.substring(0, 1000),
+        eventTime: record.eventTime
+      };
+
+      console.log('File details:', JSON.stringify(logMessage, null, 2));
+
+      const logGroupName = process.env.LOG_GROUP_NAME;
+      const logStreamName = `s3-processor-${Date.now()}`;
+
+      try {
+        const createLogStreamCommand = new CreateLogStreamCommand({
+          logGroupName: logGroupName,
+          logStreamName: logStreamName
+        });
+        await cloudWatchClient.send(createLogStreamCommand);
+      } catch (error) {
+        if (error.name !== 'ResourceAlreadyExistsException') {
+          throw error;
+        }
+      }
+
+      const putLogEventsCommand = new PutLogEventsCommand({
+        logGroupName: logGroupName,
+        logStreamName: logStreamName,
+        logEvents: [
+          {
+            timestamp: Date.now(),
+            message: JSON.stringify(logMessage, null, 2)
+          }
+        ]
+      });
+
+      await cloudWatchClient.send(putLogEventsCommand);
+      console.log(`Successfully processed and logged file: ${key}`);
+    }
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'Successfully processed S3 event',
+        processedRecords: event.Records.length
+      })
+    };
+
+  } catch (error) {
+    console.error('Error processing S3 event:', error);
+    throw error;
+  }
+};
 ```
 
 ## Key Features
