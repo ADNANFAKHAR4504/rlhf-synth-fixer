@@ -2,7 +2,7 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "CI/CD Pipeline for educational content delivery platform with CodeCommit, CodeBuild, and CodePipeline",
   "Parameters": {
-    "EnvironmentSuffix": {
+    "Environment": {
       "Type": "String",
       "Description": "Environment suffix for resource naming (e.g., dev, test, prod)",
       "Default": "dev"
@@ -13,7 +13,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "cicd-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
+          "Fn::Sub": "cicd-artifacts-${Environment}-${AWS::AccountId}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -37,13 +37,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "cicd-artifacts-${EnvironmentSuffix}"
+              "Fn::Sub": "cicd-artifacts-${Environment}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             }
           },
           {
@@ -57,20 +57,20 @@
       "Type": "AWS::CodeCommit::Repository",
       "Properties": {
         "RepositoryName": {
-          "Fn::Sub": "education-platform-${EnvironmentSuffix}"
+          "Fn::Sub": "education-platform-${Environment}"
         },
         "RepositoryDescription": "Source code repository for educational content delivery platform",
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "education-platform-${EnvironmentSuffix}"
+              "Fn::Sub": "education-platform-${Environment}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             }
           }
         ]
@@ -80,7 +80,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/codebuild/education-platform-${EnvironmentSuffix}"
+          "Fn::Sub": "/aws/codebuild/education-platform-${Environment}"
         },
         "RetentionInDays": 7
       }
@@ -89,7 +89,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "codebuild-service-role-${EnvironmentSuffix}"
+          "Fn::Sub": "codebuild-service-role-${Environment}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -121,7 +121,7 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/education-platform-${EnvironmentSuffix}*"
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/education-platform-${Environment}*"
                     }
                   ]
                 },
@@ -168,13 +168,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "codebuild-service-role-${EnvironmentSuffix}"
+              "Fn::Sub": "codebuild-service-role-${Environment}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             }
           }
         ]
@@ -184,7 +184,7 @@
       "Type": "AWS::CodeBuild::Project",
       "Properties": {
         "Name": {
-          "Fn::Sub": "education-platform-build-${EnvironmentSuffix}"
+          "Fn::Sub": "education-platform-build-${Environment}"
         },
         "Description": "Build project for educational content delivery platform",
         "ServiceRole": {
@@ -201,7 +201,7 @@
             {
               "Name": "ENVIRONMENT",
               "Value": {
-                "Ref": "EnvironmentSuffix"
+                "Ref": "Environment"
               }
             },
             {
@@ -228,13 +228,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "education-platform-build-${EnvironmentSuffix}"
+              "Fn::Sub": "education-platform-build-${Environment}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             }
           }
         ]
@@ -244,20 +244,20 @@
       "Type": "AWS::SNS::Topic",
       "Properties": {
         "TopicName": {
-          "Fn::Sub": "cicd-pipeline-notifications-${EnvironmentSuffix}"
+          "Fn::Sub": "cicd-pipeline-notifications-${Environment}"
         },
         "DisplayName": "CI/CD Pipeline Notifications",
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "cicd-pipeline-notifications-${EnvironmentSuffix}"
+              "Fn::Sub": "cicd-pipeline-notifications-${Environment}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             }
           }
         ]
@@ -267,7 +267,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "codepipeline-service-role-${EnvironmentSuffix}"
+          "Fn::Sub": "codepipeline-service-role-${Environment}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -351,13 +351,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "codepipeline-service-role-${EnvironmentSuffix}"
+              "Fn::Sub": "codepipeline-service-role-${Environment}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             }
           }
         ]
@@ -367,7 +367,7 @@
       "Type": "AWS::CodePipeline::Pipeline",
       "Properties": {
         "Name": {
-          "Fn::Sub": "education-platform-pipeline-${EnvironmentSuffix}"
+          "Fn::Sub": "education-platform-pipeline-${Environment}"
         },
         "RoleArn": {
           "Fn::GetAtt": ["CodePipelineServiceRole", "Arn"]
@@ -451,7 +451,7 @@
                   },
                   "Extract": "true",
                   "ObjectKey": {
-                    "Fn::Sub": "deployments/${EnvironmentSuffix}"
+                    "Fn::Sub": "deployments/${Environment}"
                   }
                 },
                 "InputArtifacts": [
@@ -467,13 +467,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "education-platform-pipeline-${EnvironmentSuffix}"
+              "Fn::Sub": "education-platform-pipeline-${Environment}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             }
           }
         ]
@@ -483,7 +483,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "pipeline-event-role-${EnvironmentSuffix}"
+          "Fn::Sub": "pipeline-event-role-${Environment}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -518,13 +518,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "pipeline-event-role-${EnvironmentSuffix}"
+              "Fn::Sub": "pipeline-event-role-${Environment}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             }
           }
         ]
@@ -534,7 +534,7 @@
       "Type": "AWS::Events::Rule",
       "Properties": {
         "Name": {
-          "Fn::Sub": "pipeline-trigger-${EnvironmentSuffix}"
+          "Fn::Sub": "pipeline-trigger-${Environment}"
         },
         "Description": "Trigger pipeline on CodeCommit repository changes",
         "EventPattern": {

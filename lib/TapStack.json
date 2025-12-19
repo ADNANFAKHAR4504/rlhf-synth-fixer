@@ -2,7 +2,7 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "CI/CD Pipeline for Educational Content Delivery Platform",
   "Parameters": {
-    "EnvironmentSuffix": {
+    "Environment": {
       "Type": "String",
       "Description": "Unique suffix for resource naming to enable multiple deployments",
       "AllowedPattern": "[a-zA-Z0-9-]+",
@@ -14,7 +14,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "cicd-artifacts-${EnvironmentSuffix}"
+          "Fn::Sub": "cicd-artifacts-${Environment}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -37,7 +37,7 @@
       "Type": "AWS::CodeCommit::Repository",
       "Properties": {
         "RepositoryName": {
-          "Fn::Sub": "education-platform-${EnvironmentSuffix}"
+          "Fn::Sub": "education-platform-${Environment}"
         },
         "RepositoryDescription": "Source repository for educational content delivery platform"
       }
@@ -46,7 +46,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/codebuild/education-build-${EnvironmentSuffix}"
+          "Fn::Sub": "/aws/codebuild/education-build-${Environment}"
         },
         "RetentionInDays": 7
       }
@@ -55,7 +55,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "codebuild-service-role-${EnvironmentSuffix}"
+          "Fn::Sub": "codebuild-service-role-${Environment}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -113,7 +113,7 @@
       "Type": "AWS::CodeBuild::Project",
       "Properties": {
         "Name": {
-          "Fn::Sub": "education-build-${EnvironmentSuffix}"
+          "Fn::Sub": "education-build-${Environment}"
         },
         "ServiceRole": {
           "Fn::GetAtt": ["CodeBuildServiceRole", "Arn"]
@@ -152,7 +152,7 @@
       "Type": "AWS::SNS::Topic",
       "Properties": {
         "TopicName": {
-          "Fn::Sub": "pipeline-notifications-${EnvironmentSuffix}"
+          "Fn::Sub": "pipeline-notifications-${Environment}"
         },
         "DisplayName": "CI/CD Pipeline Notifications"
       }
@@ -161,7 +161,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "codepipeline-service-role-${EnvironmentSuffix}"
+          "Fn::Sub": "codepipeline-service-role-${Environment}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -245,7 +245,7 @@
       "Type": "AWS::CodePipeline::Pipeline",
       "Properties": {
         "Name": {
-          "Fn::Sub": "education-pipeline-${EnvironmentSuffix}"
+          "Fn::Sub": "education-pipeline-${Environment}"
         },
         "RoleArn": {
           "Fn::GetAtt": ["CodePipelineServiceRole", "Arn"]
@@ -319,7 +319,7 @@
       "Type": "AWS::Events::Rule",
       "Properties": {
         "Name": {
-          "Fn::Sub": "pipeline-event-rule-${EnvironmentSuffix}"
+          "Fn::Sub": "pipeline-event-rule-${Environment}"
         },
         "Description": "Trigger notifications on pipeline state changes",
         "EventPattern": {
