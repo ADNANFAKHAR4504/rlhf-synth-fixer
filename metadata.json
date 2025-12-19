@@ -7,9 +7,9 @@
   "team": "4",
   "provider": "localstack",
   "startedAt": "2025-10-03T09:24:14.351Z",
-  "subtask": "IaC Optimization",
+  "subtask": "IaC Program Optimization",
   "subject_labels": [
-    "IaC Program Optimization"
+    "IaC Optimization"
   ],
   "aws_services": [
     "Lambda",
@@ -19,6 +19,5 @@
     "CloudWatch",
     "CloudWatch Logs",
     "IAM"
-  ],
-  "training_quality": 8
+  ]
 }
