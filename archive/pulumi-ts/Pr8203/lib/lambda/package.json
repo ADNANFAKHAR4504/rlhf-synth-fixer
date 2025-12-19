@@ -1,0 +1,10 @@
+{
+  "name": "image-processor-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function for image processing",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.400.0",
+    "@aws-sdk/client-xray": "^3.400.0"
+  }
+}

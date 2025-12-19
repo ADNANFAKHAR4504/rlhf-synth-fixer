@@ -1,0 +1,7 @@
+name: main
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Pulumi TypeScript infrastructure for multi-region deployment
+main: bin/tap.ts
