@@ -192,51 +192,57 @@ export class TapStack extends cdk.Stack {
       },
     ]);
 
-    // Create database subnet group
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
-      vpc,
-      description: 'Subnet group for secure application database',
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-      },
-    });
+    // Create RDS database resources (conditionally for LocalStack)
+    // For LocalStack: RDS service must be explicitly enabled in SERVICES configuration
+    // Skip RDS creation if LocalStack environment doesn't have RDS service enabled
+    let database: rds.DatabaseInstance | undefined;
 
-    // Create database security group
-    const dbSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'DatabaseSecurityGroup',
-      {
+    if (!isLocalStack) {
+      // Create database subnet group
+      const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
         vpc,
-        description: 'Security group for secure application database',
-        allowAllOutbound: false,
-      }
-    );
+        description: 'Subnet group for secure application database',
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        },
+      });
 
-    // Create RDS instance with encryption
-    // For LocalStack: simplify encryption configuration
-    const database = new rds.DatabaseInstance(this, 'SecureAppDatabase', {
-      engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_8,
-      }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      vpc,
-      subnetGroup: dbSubnetGroup,
-      securityGroups: [dbSecurityGroup],
-      storageEncrypted: isLocalStack ? false : true, // LocalStack has limited encrypted storage support
-      storageEncryptionKey: isLocalStack ? undefined : kmsKey,
-      backupRetention: cdk.Duration.days(7),
-      deleteAutomatedBackups: true,
-      deletionProtection: false,
-      multiAz: false,
-      publiclyAccessible: false,
-      credentials: rds.Credentials.fromGeneratedSecret('postgres', {
-        encryptionKey: isLocalStack ? undefined : kmsKey,
-      }),
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+      // Create database security group
+      const dbSecurityGroup = new ec2.SecurityGroup(
+        this,
+        'DatabaseSecurityGroup',
+        {
+          vpc,
+          description: 'Security group for secure application database',
+          allowAllOutbound: false,
+        }
+      );
+
+      // Create RDS instance with encryption
+      database = new rds.DatabaseInstance(this, 'SecureAppDatabase', {
+        engine: rds.DatabaseInstanceEngine.postgres({
+          version: rds.PostgresEngineVersion.VER_15_8,
+        }),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        vpc,
+        subnetGroup: dbSubnetGroup,
+        securityGroups: [dbSecurityGroup],
+        storageEncrypted: true,
+        storageEncryptionKey: kmsKey,
+        backupRetention: cdk.Duration.days(7),
+        deleteAutomatedBackups: true,
+        deletionProtection: false,
+        multiAz: false,
+        publiclyAccessible: false,
+        credentials: rds.Credentials.fromGeneratedSecret('postgres', {
+          encryptionKey: kmsKey,
+        }),
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+    }
 
     // Create ALB security group
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
@@ -296,10 +302,12 @@ export class TapStack extends cdk.Stack {
       description: 'S3 bucket for web application assets',
     });
 
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-      value: database.instanceEndpoint.hostname,
-      description: 'RDS database endpoint',
-    });
+    if (database) {
+      new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+        value: database.instanceEndpoint.hostname,
+        description: 'RDS database endpoint',
+      });
+    }
 
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,

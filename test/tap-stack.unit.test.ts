@@ -509,22 +509,11 @@ describe('TapStack', () => {
       });
     });
 
-    test('should disable RDS storage encryption in LocalStack', () => {
-      // RDS storage should not be encrypted in LocalStack (limited support)
-      localStackTemplate.hasResourceProperties('AWS::RDS::DBInstance', {
-        StorageEncrypted: false,
-      });
-    });
-
-    test('should not encrypt RDS credentials with KMS in LocalStack', () => {
-      // Check that RDS secret doesn't have KMS key reference in LocalStack
-      const secrets = localStackTemplate.findResources(
-        'AWS::SecretsManager::Secret'
-      );
-      Object.values(secrets).forEach((secret: any) => {
-        // In LocalStack mode, KmsKeyId should not be set
-        expect(secret.Properties?.KmsKeyId).toBeUndefined();
-      });
+    test('should not create RDS resources in LocalStack', () => {
+      // RDS service requires explicit enablement in LocalStack SERVICES configuration
+      // To avoid deployment failures, RDS resources are not created in LocalStack mode
+      localStackTemplate.resourceCountIs('AWS::RDS::DBInstance', 0);
+      localStackTemplate.resourceCountIs('AWS::RDS::DBSubnetGroup', 0);
     });
 
     test('should not create GuardDuty detector in LocalStack', () => {
@@ -535,7 +524,7 @@ describe('TapStack', () => {
     test('should create all required outputs for LocalStack', () => {
       localStackTemplate.hasOutput('KMSKeyId', {});
       localStackTemplate.hasOutput('WebAssetsBucketName', {});
-      localStackTemplate.hasOutput('DatabaseEndpoint', {});
+      // DatabaseEndpoint is not created in LocalStack mode (RDS skipped)
       localStackTemplate.hasOutput('LoadBalancerDNS', {});
       localStackTemplate.hasOutput('VPCId', {});
       localStackTemplate.hasOutput('CloudTrailArn', {});
