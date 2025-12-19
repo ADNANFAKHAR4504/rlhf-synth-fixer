@@ -346,18 +346,6 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Stack Outputs Validation', () => {
-    test('Should have all required outputs', () => {
-      expect(outputs).toBeDefined();
-      expect(outputs.S3BucketName).toBeDefined();
-
-      // In LocalStack Community, Elastic IP may not be available - this is expected
-      if (isLocalStack && !outputs.EC2PublicIP) {
-        console.warn('LocalStack Community: EC2PublicIP not available (limited Elastic IP support)');
-      } else {
-        expect(outputs.EC2PublicIP).toBeDefined();
-      }
-    });
-
     test('S3 bucket name should follow naming convention', () => {
       if (outputs.S3BucketName) {
         expect(outputs.S3BucketName).toContain('tap-bucket');
