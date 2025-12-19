@@ -35,10 +35,30 @@ const defaultTags = {
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack('TapStack', {
+const tapStack = new TapStack('TapStack', {
   tags: defaultTags,
 });
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export stack outputs for CI/CD pipeline and external consumption
+export const environment = tapStack.environmentSuffix;
+export const regions = tapStack.regions;
+export const primaryVpcId = tapStack.regions.apply(regions =>
+  regions.length > 0 && tapStack.regionalNetworks[regions[0]]
+    ? tapStack.regionalNetworks[regions[0]].vpcId
+    : undefined
+);
+export const primarySecurityGroupId = tapStack.regions.apply(regions =>
+  regions.length > 0 && tapStack.regionalSecurity[regions[0]]
+    ? tapStack.regionalSecurity[regions[0]].webServerSgId
+    : undefined
+);
+export const primaryInstanceIds = tapStack.regions.apply(regions =>
+  regions.length > 0 && tapStack.regionalCompute[regions[0]]
+    ? tapStack.regionalCompute[regions[0]].instanceIds
+    : undefined
+);
+export const primaryDashboardName = tapStack.regions.apply(regions =>
+  regions.length > 0 && tapStack.regionalMonitoring[regions[0]]
+    ? tapStack.regionalMonitoring[regions[0]].dashboardName
+    : undefined
+);
