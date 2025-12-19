@@ -4,6 +4,11 @@ import { TapStack } from '../lib/tap-stack.mjs';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
 
+// Check if running in LocalStack (SageMaker not supported)
+const isLocalStack = process.env.CDK_LOCAL === 'true' || 
+                     process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                     process.env.LOCALSTACK_HOSTNAME !== undefined;
+
 describe('TapStack', () => {
   let app;
   let stack;
@@ -84,19 +89,29 @@ describe('TapStack', () => {
   });
 
   describe('SageMaker Resources', () => {
-    test('creates SageMaker model', () => {
-      template.resourceCountIs('AWS::SageMaker::Model', 1);
+    // SageMaker resources are conditionally created (not in LocalStack)
+    const expectedSageMakerCount = isLocalStack ? 0 : 1;
+
+    test('creates SageMaker model (when not in LocalStack)', () => {
+      const models = template.findResources('AWS::SageMaker::Model');
+      expect(Object.keys(models).length).toBe(expectedSageMakerCount);
     });
 
-    test('creates SageMaker endpoint config', () => {
-      template.resourceCountIs('AWS::SageMaker::EndpointConfig', 1);
+    test('creates SageMaker endpoint config (when not in LocalStack)', () => {
+      const configs = template.findResources('AWS::SageMaker::EndpointConfig');
+      expect(Object.keys(configs).length).toBe(expectedSageMakerCount);
     });
 
-    test('creates SageMaker endpoint', () => {
-      template.resourceCountIs('AWS::SageMaker::Endpoint', 1);
+    test('creates SageMaker endpoint (when not in LocalStack)', () => {
+      const endpoints = template.findResources('AWS::SageMaker::Endpoint');
+      expect(Object.keys(endpoints).length).toBe(expectedSageMakerCount);
     });
 
-    test('SageMaker endpoint config has data capture enabled', () => {
+    test('SageMaker endpoint config has data capture enabled (when not in LocalStack)', () => {
+      if (isLocalStack) {
+        // Skip this test in LocalStack environment
+        return;
+      }
       template.hasResourceProperties('AWS::SageMaker::EndpointConfig', {
         DataCaptureConfig: {
           EnableCapture: true,
