@@ -4,11 +4,14 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "229208",
-  "startedAt": "2025-07-29T05:27:36.221Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "rajendra-s-aws",
-  "dockerS3Location": ""
+  "team": "4",
+  "startedAt": "2025-12-19T17:17:15.357Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "EC2"
+  ]
 }
