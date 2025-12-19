@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { Tags } from 'aws-cdk-lib';
+import { Tags, DefaultStackSynthesizer } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
@@ -17,6 +17,11 @@ Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
+// Use legacy synthesizer for LocalStack Community (no ECR required)
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
+
 new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
@@ -24,4 +29,11 @@ new TapStack(app, stackName, {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
   },
+  // Use legacy synthesizer for LocalStack to avoid ECR dependency
+  synthesizer: isLocalStack
+    ? new DefaultStackSynthesizer({
+        generateBootstrapVersionRule: false,
+        bucketPrefix: '',
+      })
+    : undefined,
 });
