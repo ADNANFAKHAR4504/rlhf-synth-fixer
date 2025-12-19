@@ -112,7 +112,7 @@ class InfrastructureStack extends Stack {
                                 .cidrMask(24)
                                 .build()))
                 .natGateways(0) // No NAT gateways needed for public subnets only
-                .restrictDefaultSecurityGroup(isLocalStack ? false : true) // Disable for LocalStack (avoids custom resource)
+                .restrictDefaultSecurityGroup(!isLocalStack) // Disable for LocalStack (avoids custom resource)
                 .build();
 
         // Create security group for SSH access
