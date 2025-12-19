@@ -93,9 +93,8 @@
     "@aws-cdk/aws-ec2:requirePrivateSubnetsForEgressOnlyInternetGateway": true,
     "@aws-cdk/aws-s3:publicAccessBlockedByDefault": true,
     "@aws-cdk/aws-lambda:useCdkManagedLogGroup": true,
-    "@aws-cdk/core:newStyleStackSynthesis": true,
+    "@aws-cdk/core:newStyleStackSynthesis": false,
     "aws-cdk:enableDiffNoFail": "true"
   },
-  "toolkitStackName": "CDKToolkit",
   "requireApproval": "never"
 }
