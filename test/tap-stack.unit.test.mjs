@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.mjs';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
@@ -112,11 +112,12 @@ describe('TapStack', () => {
 
     test('IAM role has CloudWatch Agent policy', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        ManagedPolicyArns: expect.arrayContaining([
-          expect.objectContaining({
-            'Fn::Join': expect.arrayContaining([
-              expect.arrayContaining([
-                expect.stringContaining('CloudWatchAgentServerPolicy'),
+        ManagedPolicyArns: Match.arrayWith([
+          Match.objectLike({
+            'Fn::Join': Match.arrayWith([
+              Match.anyValue(),
+              Match.arrayWith([
+                Match.stringLikeRegexp('CloudWatchAgentServerPolicy'),
               ]),
             ]),
           }),
