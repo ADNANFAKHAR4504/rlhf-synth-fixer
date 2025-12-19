@@ -97,12 +97,13 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Auto Scaling', () => {
-    test('should create Application Auto Scaling targets', () => {
-      template.resourceCountIs('AWS::ApplicationAutoScaling::ScalableTarget', 2);
+    // Auto Scaling is disabled for LocalStack compatibility
+    test('should not create Application Auto Scaling targets (disabled for LocalStack)', () => {
+      template.resourceCountIs('AWS::ApplicationAutoScaling::ScalableTarget', 0);
     });
 
-    test('should create scaling policies', () => {
-      template.resourceCountIs('AWS::ApplicationAutoScaling::ScalingPolicy', 2);
+    test('should not create scaling policies (disabled for LocalStack)', () => {
+      template.resourceCountIs('AWS::ApplicationAutoScaling::ScalingPolicy', 0);
     });
   });
 
