@@ -116,27 +116,36 @@ export class TapStack extends pulumi.ComponentResource {
 
       // Skip Elastic Beanstalk on LocalStack - ListTagsForResource API not supported
       if (this.isLocalStack) {
-        console.log(` Skipping Elastic Beanstalk for ${region} (LocalStack - not fully supported)`);
-      } else {
-        console.log(` Creating Elastic Beanstalk Infrastructure for ${region}...`);
-        this.regionalElasticBeanstalk[region] = new ElasticBeanstalkInfrastructure(
-          `${name}-eb-${region}`,
-          {
-            region,
-            isPrimary,
-            environment: this.environmentSuffix,
-            environmentSuffix: this.environmentSuffix,
-            vpcId: this.regionalNetworks[region].vpcId,
-            publicSubnetIds: this.regionalNetworks[region].publicSubnetIds,
-            privateSubnetIds: this.regionalNetworks[region].privateSubnetIds,
-            albSecurityGroupId: this.regionalNetworks[region].albSecurityGroupId,
-            ebSecurityGroupId: this.regionalNetworks[region].ebSecurityGroupId,
-            ebServiceRoleArn: this.identity.ebServiceRoleArn,
-            ebInstanceProfileName: this.identity.ebInstanceProfileName,
-            tags: this.tags,
-          },
-          { parent: this, provider: this.providers[region] }
+        console.log(
+          ` Skipping Elastic Beanstalk for ${region} (LocalStack - not fully supported)`
         );
+      } else {
+        console.log(
+          ` Creating Elastic Beanstalk Infrastructure for ${region}...`
+        );
+
+        // Create regional Elastic Beanstalk
+        this.regionalElasticBeanstalk[region] =
+          new ElasticBeanstalkInfrastructure(
+            `${name}-eb-${region}`,
+            {
+              region,
+              isPrimary,
+              environment: this.environmentSuffix,
+              environmentSuffix: this.environmentSuffix,
+              vpcId: this.regionalNetworks[region].vpcId,
+              publicSubnetIds: this.regionalNetworks[region].publicSubnetIds,
+              privateSubnetIds: this.regionalNetworks[region].privateSubnetIds,
+              albSecurityGroupId:
+                this.regionalNetworks[region].albSecurityGroupId,
+              ebSecurityGroupId:
+                this.regionalNetworks[region].ebSecurityGroupId,
+              ebServiceRoleArn: this.identity.ebServiceRoleArn,
+              ebInstanceProfileName: this.identity.ebInstanceProfileName,
+              tags: this.tags,
+            },
+            { parent: this, provider: this.providers[region] }
+          );
       }
     }
 

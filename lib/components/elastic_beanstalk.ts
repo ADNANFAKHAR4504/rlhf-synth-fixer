@@ -102,20 +102,28 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
     args: ElasticBeanstalkInfrastructureArgs
   ): aws.elasticbeanstalk.ConfigurationTemplate {
     // Convert subnet arrays to comma-separated strings
-    const publicSubnetsString = pulumi.all(args.publicSubnetIds).apply(subnets => {
-      if (!subnets || subnets.length === 0) {
-        console.warn(`Warning: No public subnets available for ${this.region}`);
-        return '';
-      }
-      return subnets.join(',');
-    });
-    const privateSubnetsString = pulumi.all(args.privateSubnetIds).apply(subnets => {
-      if (!subnets || subnets.length === 0) {
-        console.warn(`Warning: No private subnets available for ${this.region}`);
-        return '';
-      }
-      return subnets.join(',');
-    });
+    const publicSubnetsString = pulumi
+      .all(args.publicSubnetIds)
+      .apply(subnets => {
+        if (!subnets || subnets.length === 0) {
+          console.warn(
+            `Warning: No public subnets available for ${this.region}`
+          );
+          return '';
+        }
+        return subnets.join(',');
+      });
+    const privateSubnetsString = pulumi
+      .all(args.privateSubnetIds)
+      .apply(subnets => {
+        if (!subnets || subnets.length === 0) {
+          console.warn(
+            `Warning: No private subnets available for ${this.region}`
+          );
+          return '';
+        }
+        return subnets.join(',');
+      });
 
     const solutionStackName = this.getSolutionStackName();
     console.log(`Using Elastic Beanstalk solution stack: ${solutionStackName}`);
