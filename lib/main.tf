@@ -1308,10 +1308,16 @@ output "ec2_role_arn" {
   value       = aws_iam_role.ec2.arn
 }
 
+# -------------------------------------------------------------------
+# LocalStack (Community) compatibility:
+# VPC Flow Logs output disabled because VPC Flow Logs resources are disabled above.
+# -------------------------------------------------------------------
+/*
 output "vpc_flow_logs_role_arn" {
   description = "VPC Flow Logs IAM role ARN"
   value       = aws_iam_role.vpc_flow_logs.arn
 }
+*/
 
 # Configuration Outputs
 output "name_prefix" {
