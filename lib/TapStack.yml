@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  TapStack — Multi-AZ VPC + EC2 (ASG) + optional RDS + CloudWatch Logs/Alarms with least-privilege IAM.
+  TapStack — Multi-AZ VPC + EC2 (ASG) + CloudWatch Logs/Alarms with least-privilege IAM.
   Includes LocalStack-safe mode via DeployTarget.
 
 Parameters:
@@ -30,6 +30,7 @@ Parameters:
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$'
     Description: Primary VPC CIDR block.
 
+  # LocalStack-safe: keep String + Split/Select
   PublicSubnetCidrs:
     Type: String
     Default: 10.0.0.0/20,10.0.16.0/20
@@ -91,60 +92,12 @@ Parameters:
       AMI ID to use for EC2 instances.
       Required for LocalStack. Optional for AWS (can be auto-resolved via SSM externally).
 
-  RdsEngine:
-    Type: String
-    Default: postgres
-    AllowedValues: [postgres, mysql]
-    Description: Database engine (AWS mode).
-
-  RdsEngineVersionPostgres:
-    Type: String
-    Default: '16.4'
-    Description: Postgres engine version (AWS mode).
-
-  RdsEngineVersionMySql:
-    Type: String
-    Default: '8.0.35'
-    Description: MySQL engine version (AWS mode).
-
-  RdsInstanceClass:
-    Type: String
-    Default: db.t4g.micro
-    AllowedPattern: '^db\.[a-z0-9]+\.[a-z0-9]+$'
-    Description: RDS instance class (AWS mode).
-
-  RdsAllocatedStorage:
-    Type: Number
-    Default: 20
-    MinValue: 20
-    MaxValue: 16384
-    Description: Allocated storage in GiB (AWS mode).
-
-  DBName:
-    Type: String
-    Default: appdb
-    AllowedPattern: '^[a-zA-Z0-9_]{1,63}$'
-    Description: Initial database name (AWS mode).
-
-  DbMasterUsername:
-    Type: String
-    Default: masteruser
-    AllowedPattern: '^[a-zA-Z0-9_]{1,16}$'
-    Description: Master username stored in Secrets Manager (AWS mode).
-
-  RetainDbSnapshotOnDelete:
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true','false']
-    Description: If 'true', deletion protection is enabled and snapshots retained on replacement (AWS mode).
-
 Mappings:
   CW:
     Defaults:
       Interval: 60
       CpuHighThreshold: 80
       MemHighThreshold: 80
-      RdsCpuHighThreshold: 80
       PeriodSecs: 300
       EvalPeriods: 1
 
@@ -155,9 +108,6 @@ Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
   EnableSns: !And [!Equals [!Ref EnableSnsForAlarms, 'true'], !Condition IsAws]
   HasAlarmEmail: !And [!Condition EnableSns, !Not [!Equals [!Ref AlarmEmail, '']]]
-
-  EngineIsPg: !Equals [!Ref RdsEngine, 'postgres']
-  RetainDbSnapshot: !Equals [!Ref RetainDbSnapshotOnDelete, 'true']
 
   HasAmiId: !Not [!Equals [!Ref AmiId, '']]
 
@@ -404,6 +354,19 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2'
           PropagateAtLaunch: true
 
+  SNSTopicAlarms:
+    Type: AWS::SNS::Topic
+    Condition: EnableSns
+    Properties: {}
+
+  SNSSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+      TopicArn: !Ref SNSTopicAlarms
+
   AlarmEc2CpuHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -426,137 +389,6 @@ Resources:
       Namespace: CWAgent
       MetricName: mem_used_percent
       Dimensions: [{ Name: AutoScalingGroupName, Value: !Ref AutoScalingGroup }]
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 80
-      ComparisonOperator: GreaterThanThreshold
-      TreatMissingData: notBreaching
-      AlarmActions: !If [EnableSns, [!Ref SNSTopicAlarms], []]
-
-  SNSTopicAlarms:
-    Type: AWS::SNS::Topic
-    Condition: EnableSns
-    Properties: {}
-
-  SNSSubscription:
-    Type: AWS::SNS::Subscription
-    Condition: HasAlarmEmail
-    Properties:
-      Protocol: email
-      Endpoint: !Ref AlarmEmail
-      TopicArn: !Ref SNSTopicAlarms
-
-  DbSecret:
-    Type: AWS::SecretsManager::Secret
-    Condition: IsAws
-    Properties:
-      Description: !Sub 'Auto-generated credentials for ${ProjectName}-${EnvironmentSuffix} RDS'
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username":"${DbMasterUsername}"}'
-        GenerateStringKey: password
-        PasswordLength: 20
-        ExcludePunctuation: true
-
-  # ✅ FIX: LocalStack secret with explicit stable Name for reliable reference
-  DbSecretLocal:
-    Type: AWS::SecretsManager::Secret
-    Condition: IsLocalStack
-    Properties:
-      Name: !Sub '${AWS::StackName}-db-secret-local'
-      Description: !Sub 'LocalStack DB credentials for ${ProjectName}-${EnvironmentSuffix}'
-      SecretString: |
-        {
-          "username": "masteruser",
-          "password": "testpassword123456"
-        }
-
-  SecurityGroupRds:
-    Type: AWS::EC2::SecurityGroup
-    Condition: IsAws
-    Properties:
-      GroupDescription: RDS private access SG
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !If [EngineIsPg, 5432, 3306]
-          ToPort:   !If [EngineIsPg, 5432, 3306]
-          SourceSecurityGroupId: !Ref SecurityGroupEc2
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-sg-rds' }]
-
-  RDSSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Condition: IsAws
-    Properties:
-      DBSubnetGroupDescription: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnet-group'
-      SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnet-group' }]
-
-  RDSParameterGroup:
-    Type: AWS::RDS::DBParameterGroup
-    Condition: IsAws
-    Properties:
-      Description: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-params'
-      Family: !If [EngineIsPg, 'postgres16', 'mysql8.0']
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-params' }]
-
-  RDSInstanceAws:
-    Type: AWS::RDS::DBInstance
-    Condition: IsAws
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
-    Properties:
-      Engine: !Ref RdsEngine
-      EngineVersion: !If [EngineIsPg, !Ref RdsEngineVersionPostgres, !Ref RdsEngineVersionMySql]
-      DBInstanceClass: !Ref RdsInstanceClass
-      AllocatedStorage: !Ref RdsAllocatedStorage
-      StorageEncrypted: true
-      PubliclyAccessible: false
-      VPCSecurityGroups: [!Ref SecurityGroupRds]
-      DBSubnetGroupName: !Ref RDSSubnetGroup
-      DBParameterGroupName: !Ref RDSParameterGroup
-      DeletionProtection: !If [RetainDbSnapshot, true, false]
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:password}}'
-      DBName: !Ref DBName
-      BackupRetentionPeriod: 7
-      MultiAZ: false
-      AutoMinorVersionUpgrade: true
-      EnableCloudwatchLogsExports: !If [EngineIsPg, ['postgresql'], ['error']]
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds'
-
-  # ✅ FIX: Use GetAtt to retrieve password from secret (LocalStack-compatible)
-  # cfn-lint doesn't support NoEcho parameters for RDS, so we suppress W2501 for LocalStack test environments
-  RDSInstanceLocal:
-    Type: AWS::RDS::DBInstance
-    Condition: IsLocalStack
-    DependsOn: DbSecretLocal
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks:
-            - W2501
-    Properties:
-      Engine: postgres
-      DBInstanceClass: db.t3.micro
-      AllocatedStorage: 20
-      PubliclyAccessible: false
-      MasterUsername: masteruser
-      # For LocalStack CI/CD compatibility: using static test password
-      # Production AWS deployments use Secrets Manager with dynamic references
-      MasterUserPassword: testpassword123456
-
-  AlarmRdsCpuHigh:
-    Type: AWS::CloudWatch::Alarm
-    Condition: IsAws
-    Properties:
-      Namespace: AWS/RDS
-      MetricName: CPUUtilization
-      Dimensions:
-        - Name: DBInstanceIdentifier
-          Value: !Ref RDSInstanceAws
       Statistic: Average
       Period: 300
       EvaluationPeriods: 1
@@ -609,13 +441,3 @@ Outputs:
   AlarmMemName:
     Description: EC2 memory alarm logical id
     Value: !Ref AlarmEc2MemoryHigh
-
-  RdsEndpoint:
-    Condition: IsAws
-    Description: RDS endpoint address
-    Value: !GetAtt RDSInstanceAws.Endpoint.Address
-
-  DbSecretArn:
-    Condition: IsAws
-    Description: DB secret ARN
-    Value: !Ref DbSecret
