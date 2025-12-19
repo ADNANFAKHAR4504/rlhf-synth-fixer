@@ -628,7 +628,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentType
 
-  # CloudWatch Alarms
+
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
