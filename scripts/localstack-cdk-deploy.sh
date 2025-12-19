@@ -116,8 +116,43 @@ fi
 
 # Bootstrap LocalStack CDK environment
 echo -e "${YELLOW}📦 Bootstrapping CDK environment in LocalStack...${NC}"
-$CDKLOCAL_PATH bootstrap aws://000000000000/us-east-1 --force 2>/dev/null || true
-echo -e "${GREEN}✅ CDK Bootstrap completed${NC}"
+
+# Clean up existing bootstrap resources to avoid conflicts
+echo -e "${BLUE}  🧹 Cleaning existing CDK bootstrap resources...${NC}"
+
+# Delete existing CDKToolkit stack if it exists
+awslocal cloudformation delete-stack --stack-name CDKToolkit 2>/dev/null || true
+sleep 2
+
+# Delete existing ECR repository if it exists (common bootstrap conflict)
+awslocal ecr delete-repository \
+    --repository-name cdk-hnb659fds-container-assets-000000000000-us-east-1 \
+    --force 2>/dev/null || true
+
+# Delete S3 buckets used by CDK bootstrap
+awslocal s3 rb s3://cdk-hnb659fds-assets-000000000000-us-east-1 --force 2>/dev/null || true
+
+echo -e "${GREEN}✅ Bootstrap resources cleaned${NC}"
+
+# Run bootstrap with proper error handling
+BOOTSTRAP_OUTPUT=$($CDKLOCAL_PATH bootstrap aws://000000000000/us-east-1 --force 2>&1)
+BOOTSTRAP_EXIT_CODE=$?
+
+if [ $BOOTSTRAP_EXIT_CODE -ne 0 ]; then
+    echo -e "${YELLOW}⚠️  Bootstrap warning (non-fatal):${NC}"
+    echo "$BOOTSTRAP_OUTPUT" | grep -i "error\|warn\|exception" | head -5 || true
+
+    # Check if bootstrap stack actually exists despite error
+    if awslocal cloudformation describe-stacks --stack-name CDKToolkit 2>/dev/null | grep -q "StackStatus"; then
+        echo -e "${GREEN}✅ CDK Bootstrap stack exists (ignoring warning)${NC}"
+    else
+        echo -e "${RED}❌ CDK Bootstrap failed${NC}"
+        echo "$BOOTSTRAP_OUTPUT"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✅ CDK Bootstrap completed${NC}"
+fi
 
 # Set stack parameters
 ENVIRONMENT_SUFFIX="${ENVIRONMENT_SUFFIX:-dev}"

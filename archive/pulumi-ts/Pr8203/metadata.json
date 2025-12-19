@@ -1,0 +1,28 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "e4v6t0t4",
+  "team": "synth",
+  "startedAt": "2025-12-16T12:36:46.253Z",
+  "subtask": "IaC Program Optimization",
+  "provider": "localstack",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "CloudWatch",
+    "IAM",
+    "X-Ray"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
