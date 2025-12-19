@@ -145,27 +145,42 @@ export class TapStack extends cdk.Stack {
 
     // Auto Scaling Group
     // LocalStack: Use PUBLIC subnets since PRIVATE_WITH_EGRESS requires NAT Gateway
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(
-      this,
-      'TapAutoScalingGroup',
-      {
-        autoScalingGroupName: `TapAutoScalingGroup-${environmentSuffix}`,
-        vpc,
-        launchTemplate,
-        minCapacity: 2,
-        maxCapacity: 6,
-        desiredCapacity: 2,
-        vpcSubnets: {
-          // LocalStack: Changed to PUBLIC since we disabled NAT Gateways
-          subnetType: isLocalStack
-            ? ec2.SubnetType.PUBLIC
-            : ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-        healthCheck: autoscaling.HealthCheck.elb({
-          grace: cdk.Duration.seconds(300),
-        }),
-      }
-    );
+    // LocalStack: Use instance-based approach instead of launch template to avoid LatestVersionNumber issues
+    const autoScalingGroup = isLocalStack
+      ? new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
+          autoScalingGroupName: `TapAutoScalingGroup-${environmentSuffix}`,
+          vpc,
+          instanceType: ec2.InstanceType.of(
+            ec2.InstanceClass.T2,
+            ec2.InstanceSize.MICRO
+          ),
+          machineImage: ec2.MachineImage.latestAmazonLinux2(),
+          securityGroup: instanceSecurityGroup,
+          userData,
+          minCapacity: 2,
+          maxCapacity: 6,
+          desiredCapacity: 2,
+          vpcSubnets: {
+            subnetType: ec2.SubnetType.PUBLIC,
+          },
+          healthCheck: autoscaling.HealthCheck.elb({
+            grace: cdk.Duration.seconds(300),
+          }),
+        })
+      : new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
+          autoScalingGroupName: `TapAutoScalingGroup-${environmentSuffix}`,
+          vpc,
+          launchTemplate,
+          minCapacity: 2,
+          maxCapacity: 6,
+          desiredCapacity: 2,
+          vpcSubnets: {
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          },
+          healthCheck: autoscaling.HealthCheck.elb({
+            grace: cdk.Duration.seconds(300),
+          }),
+        });
 
     // CPU-based scaling policy
     autoScalingGroup.scaleOnCpuUtilization('CpuScaling', {
