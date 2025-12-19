@@ -4,10 +4,22 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "291369",
-  "team": "5",
+  "team": "synth-2",
   "startedAt": "2025-08-13T09:51:07.530Z",
   "subtask": "Application Deployment",
   "provider": "localstack",
-  "subject_labels": ["Serverless Infrastructure (Functions as Code)", "Web Application Deployment"],
-  "aws_services": ["s3", "lambda", "dynamodb", "kms", "sqs", "sns", "cloudwatch", "iam"]
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "s3",
+    "lambda",
+    "dynamodb",
+    "kms",
+    "sqs",
+    "sns",
+    "cloudwatch",
+    "iam"
+  ]
 }
