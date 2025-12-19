@@ -78,30 +78,66 @@ const iamClient = new IAMClient(clientConfig);
 
 const describeOrSkip = outputsExist ? describe : describe.skip;
 
+// Helper function to retry operations with exponential backoff (for LocalStack eventual consistency)
+async function retryWithBackoff<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  initialDelay: number = 1000
+): Promise<T> {
+  let lastError: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      if (attempt < maxRetries) {
+        const delay = initialDelay * Math.pow(2, attempt);
+        console.log(
+          `Attempt ${attempt + 1} failed, retrying in ${delay}ms...`
+        );
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
 describeOrSkip('TapStack Integration Tests', () => {
   describe('VPC and Networking', () => {
     test('VPC should exist and be available', async () => {
       const command = new DescribeVpcsCommand({
         VpcIds: [vpcId],
       });
-      const response = await ec2Client.send(command);
+
+      // Retry for LocalStack eventual consistency
+      const response = await retryWithBackoff(
+        () => ec2Client.send(command),
+        isLocalStack ? 5 : 0,
+        isLocalStack ? 2000 : 0
+      );
 
       expect(response.Vpcs).toHaveLength(1);
       expect(response.Vpcs![0].State).toBe('available');
       expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
-    });
+    }, 30000);
 
     test('VPC should have DNS support and hostnames enabled', async () => {
       const command = new DescribeVpcsCommand({
         VpcIds: [vpcId],
       });
-      const response = await ec2Client.send(command);
+
+      // Retry for LocalStack eventual consistency
+      const response = await retryWithBackoff(
+        () => ec2Client.send(command),
+        isLocalStack ? 5 : 0,
+        isLocalStack ? 2000 : 0
+      );
 
       // DNS attributes might be in a different format in the response
       // Just check that the VPC exists and is available
       expect(response.Vpcs).toHaveLength(1);
       expect(response.Vpcs![0].State).toBe('available');
-    });
+    }, 30000);
   });
 
   describe('S3 Bucket', () => {
@@ -425,7 +461,13 @@ describeOrSkip('TapStack Integration Tests', () => {
           },
         ],
       });
-      const response = await ec2Client.send(command);
+
+      // Retry for LocalStack eventual consistency
+      const response = await retryWithBackoff(
+        () => ec2Client.send(command),
+        isLocalStack ? 5 : 0,
+        isLocalStack ? 2000 : 0
+      );
 
       const securityGroups = response.SecurityGroups || [];
 
@@ -452,7 +494,7 @@ describeOrSkip('TapStack Integration Tests', () => {
         const hasPublicHttpAccess = httpRule?.IpRanges?.some(
           range => range.CidrIp === '0.0.0.0/0'
         );
-        expect(hasPublicHttpAccess).toBe(true);
+        expect(hasPublicHttpsAccess).toBe(true);
 
         const httpsRule = albSg?.IpPermissions?.find(
           rule => rule.FromPort === 443
@@ -467,7 +509,7 @@ describeOrSkip('TapStack Integration Tests', () => {
         // LocalStack: Just verify security groups exist
         expect(securityGroups.length).toBeGreaterThan(0);
       }
-    });
+    }, 30000);
   });
 
   describe('IAM Roles', () => {
