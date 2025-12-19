@@ -1,0 +1,22 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "ls-Pr977",
+  "team": "synth-2",
+  "startedAt": "2025-12-19T11:27:00Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code",
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "IAM",
+    "VPC",
+    "EC2",
+    "AccessAnalyzer"
+  ]
+}
