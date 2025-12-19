@@ -6,10 +6,10 @@
   "po_id": "trainr111",
   "team": "synth",
   "startedAt": "2025-08-12T14:33:29-05:00",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Environment Migration"
   ],
   "aws_services": [
     "VPC",
