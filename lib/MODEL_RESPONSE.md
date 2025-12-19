@@ -217,27 +217,27 @@ Finally, let's create the cdk.json file:
 
 Let me review these files to make sure they meet all the requirements:
 
-1. S3 bucket for articles ✓
-   - KMS encryption ✓
-   - Metrics enabled ✓
-   - Controlled public access via CloudFront OAI ✓
+1. S3 bucket for articles 
+   - KMS encryption 
+   - Metrics enabled 
+   - Controlled public access via CloudFront OAI 
 
-2. CloudFront distribution ✓
-   - SSL configured ✓
-   - Optimized caching policy ✓
-   - Logging enabled ✓
+2. CloudFront distribution 
+   - SSL configured 
+   - Optimized caching policy 
+   - Logging enabled 
 
-3. Route 53 for DNS ✓
-   - A records for apex and www ✓
+3. Route 53 for DNS 
+   - A records for apex and www 
 
-4. CloudWatch for metrics ✓
-   - Dashboard with relevant metrics ✓
+4. CloudWatch for metrics 
+   - Dashboard with relevant metrics 
 
-5. Security considerations ✓
-   - S3 block public access ✓
-   - HTTPS enforcement ✓
-   - KMS encryption ✓
-   - Modern TLS protocol ✓
+5. Security considerations 
+   - S3 block public access 
+   - HTTPS enforcement 
+   - KMS encryption 
+   - Modern TLS protocol 
 
 This solution provides a complete CDK JavaScript implementation for the news website's content delivery infrastructure. It focuses on:
 - Low latency through CloudFront's global edge network
