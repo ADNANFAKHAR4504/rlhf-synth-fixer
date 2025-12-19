@@ -135,8 +135,12 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
-      // Just verify the output exists and has the expected format
-      expect(outputs.LoadBalancerDNS).toMatch(/.*\.elb\.amazonaws\.com$/);
+      // Verify the output exists and has the expected format
+      // LocalStack: .elb.localhost.localstack.cloud
+      // AWS: .elb.amazonaws.com
+      expect(outputs.LoadBalancerDNS).toMatch(
+        /.*\.elb\.(amazonaws\.com|localhost\.localstack\.cloud)$/
+      );
     });
   });
 });
