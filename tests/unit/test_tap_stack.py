@@ -189,7 +189,9 @@ class TestServerlessS3ProcessorApp(unittest.TestCase):
         app = ServerlessS3ProcessorApp()
 
         # The app should create stacks for dev and prod
-        stack_ids = [node.id for node in app.node.children if isinstance(node, TapStack)]
-        assert len(stack_ids) == 2, f"Expected 2 stacks but found {len(stack_ids)}"
+        stacks = [node for node in app.node.children if isinstance(node, TapStack)]
+        assert len(stacks) == 2, f"Expected 2 stacks but found {len(stacks)}"
+
+        stack_ids = [stack.node.id for stack in stacks]
         assert "TAP-S3Processor-dev" in stack_ids, "Expected dev stack"
         assert "TAP-S3Processor-prod" in stack_ids, "Expected prod stack"
