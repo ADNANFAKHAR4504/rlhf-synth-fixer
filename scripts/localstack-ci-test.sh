@@ -522,13 +522,14 @@ run_pulumi_tests() {
                 exit 1
             fi
             
-            cd "$test_dir"
+            # Run from PROJECT_ROOT
+            cd "$PROJECT_ROOT"
             
             if [ -f "go.mod" ]; then
                 go mod download
             fi
             
-            go test -v -timeout 30m ./... 2>&1
+            go test -v -timeout 30m ./tests/integration/... 2>&1
             local exit_code=$?
             if [ $exit_code -ne 0 ]; then
                 print_status $RED "❌ Go tests failed with exit code: $exit_code"
