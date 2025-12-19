@@ -44,22 +44,54 @@ import {
   SNSClient
 } from "@aws-sdk/client-sns";
 
-// --- Helper to read the CI/CD outputs file ---
-const outputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+// --- Helper to read the CI/CD outputs file --- 
+// Support multiple output locations for different CI environments (LocalStack vs AWS)
+const outputPaths = [
+  path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"),
+  path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json"),
+  path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json"),
+];
 type TfOutput<T = unknown> = { sensitive: boolean; type: unknown; value: T };
 
+// Wrapper type for flat outputs (simple key-value) vs structured outputs (TfOutput format)
+type OutputValue = TfOutput | string;
+
+function findOutputsFile(): string | null {
+  for (const p of outputPaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return null;
+}
+
 function readOutputs(): Record<string, TfOutput> {
-  if (!fs.existsSync(outputsPath)) {
+  const foundPath = findOutputsFile();
+  if (!foundPath) {
     throw new Error(
-      `Expected outputs JSON at ${outputsPath} (created by CI step "Get Deployment Outputs").`
+      `Expected outputs JSON at one of: ${outputPaths.join(", ")} (created by CI step "Get Deployment Outputs").`
     );
   }
-  const raw = fs.readFileSync(outputsPath, "utf-8");
+  const raw = fs.readFileSync(foundPath, "utf-8");
   const parsed = JSON.parse(raw);
   if (!parsed || typeof parsed !== "object") {
     throw new Error("Outputs JSON is invalid or empty.");
   }
-  return parsed;
+  // Normalize flat outputs (string values) to TfOutput format
+  const normalized: Record<string, TfOutput> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value === "string") {
+      // Flat output format: convert to TfOutput structure
+      normalized[key] = { sensitive: false, type: "string", value };
+    } else if (value && typeof value === "object" && "value" in (value as object)) {
+      // Already in TfOutput format
+      normalized[key] = value as TfOutput;
+    } else {
+      // Unknown format, wrap as-is
+      normalized[key] = { sensitive: false, type: typeof value, value };
+    }
+  }
+  return normalized;
 }
 
 function val<T = string>(obj: Record<string, TfOutput>, key: string): T {
