@@ -568,6 +568,10 @@ Exit code 0 if fixed, 1 if unable to fix, 2 if unsupported services.
 > - `localstack-create-pr.sh` - Creates PR with git worktrees for parallel safety
 > - `localstack-update-log.sh` - Updates migration log with file locking
 
+> **🏷️ Required Labels**: All PRs created by localstack-migrate automatically include:
+> - `synth-2` - Identifies PRs created by the synth-2 team/process
+> - `localstack` - Identifies PRs for LocalStack-compatible tasks
+
 ```bash
 log_header "📦 CREATING PULL REQUEST (Parallel-Safe)"
 

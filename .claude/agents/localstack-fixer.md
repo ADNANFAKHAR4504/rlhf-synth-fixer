@@ -1921,7 +1921,27 @@ With batch fix approach:
 | 3 errors     | 3 commits, 3 CI runs | 1 commit, 1 CI run | **66% faster**       |
 | Complex task | Up to 15 iterations  | Max 3 iterations   | **80% fewer cycles** |
 
+## PR Labels (Required)
+
+When creating PRs for LocalStack migrations, the following labels MUST be added:
+
+| Label       | Purpose                                           |
+| ----------- | ------------------------------------------------- |
+| `synth-2`   | Identifies PRs created by the synth-2 team/process |
+| `localstack` | Identifies PRs for LocalStack-compatible tasks    |
+
+These labels are automatically added by the `localstack-create-pr.sh` script when creating PRs via `/localstack-migrate`.
+
+**Manual PR creation** (if needed):
+```bash
+gh pr create \
+  --title "[LocalStack] ls-Pr7179 - cdk/ts" \
+  --body "LocalStack migration" \
+  --label "synth-2" \
+  --label "localstack"
+```
+
 ## Related Commands
 
-- `/localstack-migrate` - Full migration from archive to PR
+- `/localstack-migrate` - Full migration from archive to PR (automatically adds `synth-2` and `localstack` labels)
 - `/localstack-deploy-tester` - Test deployment to LocalStack
