@@ -14,33 +14,36 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') || 'dev';
 
     // LocalStack compatibility: Determine if running in LocalStack
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                         process.env.AWS_ENDPOINT_URL?.includes('localstack');
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('localstack');
 
     // Create VPC with public and private subnets (reduce complexity for LocalStack)
     const vpc = new ec2.Vpc(this, 'SecureVPC', {
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      maxAzs: isLocalStack ? 2 : 3,  // Reduce to 2 AZs for LocalStack
-      subnetConfiguration: isLocalStack ? [
-        // For LocalStack: Use only public subnets (NAT Gateway not fully supported)
-        {
-          name: 'PublicSubnet',
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-      ] : [
-        {
-          name: 'PublicSubnet',
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-        {
-          name: 'PrivateSubnet',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 24,
-        },
-      ],
-      natGateways: isLocalStack ? 0 : 3,  // No NAT gateways for LocalStack (EIP issues)
+      maxAzs: isLocalStack ? 2 : 3, // Reduce to 2 AZs for LocalStack
+      subnetConfiguration: isLocalStack
+        ? [
+            // For LocalStack: Use only public subnets (NAT Gateway not fully supported)
+            {
+              name: 'PublicSubnet',
+              subnetType: ec2.SubnetType.PUBLIC,
+              cidrMask: 24,
+            },
+          ]
+        : [
+            {
+              name: 'PublicSubnet',
+              subnetType: ec2.SubnetType.PUBLIC,
+              cidrMask: 24,
+            },
+            {
+              name: 'PrivateSubnet',
+              subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+              cidrMask: 24,
+            },
+          ],
+      natGateways: isLocalStack ? 0 : 3, // No NAT gateways for LocalStack (EIP issues)
       enableDnsHostnames: true,
       enableDnsSupport: true,
       restrictDefaultSecurityGroup: true,
@@ -291,9 +294,10 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'PrivateSubnetIds', {
-      value: vpc.privateSubnets.length > 0
-        ? vpc.privateSubnets.map(subnet => subnet.subnetId).join(',')
-        : 'none',
+      value:
+        vpc.privateSubnets.length > 0
+          ? vpc.privateSubnets.map(subnet => subnet.subnetId).join(',')
+          : 'none',
       description: 'Private Subnet IDs',
       exportName: `${this.stackName}-PrivateSubnetIds`,
     });

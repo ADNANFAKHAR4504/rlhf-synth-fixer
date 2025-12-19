@@ -129,7 +129,7 @@ describe('TapStack', () => {
 
     test('buckets have DESTROY removal policy', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
-      Object.values(buckets).forEach((bucket) => {
+      Object.values(buckets).forEach(bucket => {
         expect(bucket.DeletionPolicy).toBe('Delete');
       });
     });
@@ -279,7 +279,7 @@ describe('TapStack', () => {
           GroupDescription: 'Security group for secure EC2 instances',
         },
       });
-      Object.values(securityGroups).forEach((sg) => {
+      Object.values(securityGroups).forEach(sg => {
         expect(sg.Properties.SecurityGroupEgress.length).toBe(2);
       });
     });
