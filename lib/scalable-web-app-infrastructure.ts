@@ -89,7 +89,7 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
         description: `KMS key for Secrets Manager - ${environmentSuffix}`,
         deletionWindowInDays: 30,
         policy: pulumi
-          .all([aws.getCallerIdentity().then(i => i.accountId)])
+          .all([aws.getCallerIdentity({}, { provider }).then(i => i.accountId)])
           .apply(([accountId]) =>
             JSON.stringify({
               Version: '2012-10-17',
@@ -580,7 +580,7 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
       {
         description: 'EC2 -> CloudWatch Logs & metrics',
         policy: pulumi
-          .all([aws.getCallerIdentity().then(i => i.accountId)])
+          .all([aws.getCallerIdentity({}, { provider }).then(i => i.accountId)])
           .apply(([accountId]) =>
             JSON.stringify({
               Version: '2012-10-17',
@@ -1179,7 +1179,7 @@ EOF
         description: `KMS key for RDS encryption - ${environmentSuffix}`,
         deletionWindowInDays: 30,
         policy: pulumi
-          .all([aws.getCallerIdentity().then(i => i.accountId)])
+          .all([aws.getCallerIdentity({}, { provider }).then(i => i.accountId)])
           .apply(([accountId]) =>
             JSON.stringify({
               Version: '2012-10-17',
