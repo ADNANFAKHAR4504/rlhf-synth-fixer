@@ -37,7 +37,8 @@ export class TapStack extends cdk.Stack {
     this.rekognitionStack = new RekognitionStack(this, 'Rekognition', {
       environmentSuffix,
       imageBucket: this.storageStack.imageBucket,
-      description: 'Amazon Rekognition configuration and roles (Pro feature in LocalStack)',
+      description:
+        'Amazon Rekognition configuration and roles (Pro feature in LocalStack)',
     });
 
     // Lambda Stack - All Lambda functions

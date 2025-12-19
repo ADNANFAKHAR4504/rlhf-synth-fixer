@@ -42,7 +42,8 @@ export class LambdaStack extends cdk.NestedStack {
         REGION: cdk.Aws.REGION,
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1', // Optimize SDK v3 connections
         AWS_ENDPOINT_URL: process.env.AWS_ENDPOINT_URL || '', // LocalStack endpoint
-        LOCALSTACK_HOSTNAME: process.env.LOCALSTACK_HOSTNAME || 'localhost:4566',
+        LOCALSTACK_HOSTNAME:
+          process.env.LOCALSTACK_HOSTNAME || 'localhost:4566',
       },
       // Removed reservedConcurrentExecutions to avoid account limits
     };
