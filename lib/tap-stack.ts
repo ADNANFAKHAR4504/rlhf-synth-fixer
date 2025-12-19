@@ -7,8 +7,9 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 // Detect LocalStack environment
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566');
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -27,23 +28,26 @@ export class TapStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: !isLocalStack, // LocalStack doesn't enforce SSL
-      lifecycleRules: isLocalStack ? [] : [ // LocalStack has limited lifecycle support
-        {
-          id: 'CostOptimization',
-          enabled: true,
-          transitions: [
+      lifecycleRules: isLocalStack
+        ? []
+        : [
+            // LocalStack has limited lifecycle support
             {
-              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-              transitionAfter: cdk.Duration.days(30),
-            },
-            {
-              storageClass: s3.StorageClass.GLACIER,
-              transitionAfter: cdk.Duration.days(90),
+              id: 'CostOptimization',
+              enabled: true,
+              transitions: [
+                {
+                  storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+                  transitionAfter: cdk.Duration.days(30),
+                },
+                {
+                  storageClass: s3.StorageClass.GLACIER,
+                  transitionAfter: cdk.Duration.days(90),
+                },
+              ],
+              noncurrentVersionExpiration: cdk.Duration.days(365),
             },
           ],
-          noncurrentVersionExpiration: cdk.Duration.days(365),
-        },
-      ],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       // CRITICAL: autoDeleteObjects requires custom resource with asset publishing
       // This fails in LocalStack, so we remove it for LocalStack environments
