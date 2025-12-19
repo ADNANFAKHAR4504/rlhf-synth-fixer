@@ -158,48 +158,14 @@ export class SecureNetworkStack extends cdk.Stack {
       'Allow HTTP outbound'
     );
 
-    // VPC Lattice removed due to deployment issues - can be added later if needed
-
-    // CloudTrail removed due to permission issues - can be configured separately if needed
-    // Note: CloudTrail requires specific bucket policies and KMS key permissions
-
-    // AWS Config for compliance monitoring - commented out as there's already a Config recorder in the region
-    // Only one Config recorder is allowed per region per account
-    // If you need Config, ensure no other recorder exists or remove the existing one first
-
-    // const configBucket = new s3.Bucket(this, 'ConfigBucket', {
-    //   bucketName: `aws-config-${props.environmentName}-${this.account}-${this.region}`,
-    //   encryption: s3.BucketEncryption.KMS,
-    //   encryptionKey: kmsKey,
-    //   blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-    //   enforceSSL: true,
-    //   removalPolicy: cdk.RemovalPolicy.DESTROY,
-    // });
-
-    // const configRole = new iam.Role(this, 'ConfigRole', {
-    //   assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
-    //   managedPolicies: [
-    //     iam.ManagedPolicy.fromAwsManagedPolicyName(
-    //       'service-role/AWS_ConfigRole'
-    //     ),
-    //   ],
-    // });
-
-    // configBucket.grantWrite(configRole);
-
-    // new config.CfnConfigurationRecorder(this, 'ConfigRecorder', {
-    //   name: `config-recorder-${props.environmentName}`,
-    //   roleArn: configRole.roleArn,
-    //   recordingGroup: {
-    //     allSupported: true,
-    //     includeGlobalResourceTypes: true,
-    //   },
-    // });
-
-    // new config.CfnDeliveryChannel(this, 'ConfigDeliveryChannel', {
-    //   name: `config-delivery-${props.environmentName}`,
-    //   s3BucketName: configBucket.bucketName,
-    // });
+    // NOTE: The following features are omitted for LocalStack compatibility
+    // but can be added for production AWS deployment:
+    //
+    // 1. VPC Lattice: Service-to-service connectivity (not supported in LocalStack Community)
+    // 2. CloudTrail: API call logging (requires specific bucket policies)
+    // 3. AWS Config: Resource configuration assessment (LocalStack allows only one recorder per region)
+    //
+    // See MODEL_FAILURES.md for detailed explanations and implementation guidance.
 
     // CloudWatch Log Group for VPC Flow Logs analysis (without KMS encryption)
     new logs.LogGroup(this, 'FlowLogsAnalysis', {
