@@ -601,7 +601,7 @@ describe('TapStack - Comprehensive End-to-End Unit Tests', () => {
         'S3BucketName',
         'RDSEndpoint',
         'DBMasterSecretArn',
-        'DBMasterSecretName',
+        // 'DBMasterSecretName', // Removed from template for LocalStack compatibility
         'VPCId',
         'VPCCidr'
       ];
