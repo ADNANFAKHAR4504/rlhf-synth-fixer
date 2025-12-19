@@ -1,22 +1,21 @@
 {
   "platform": "cdk",
-  "language": "py",
-  "complexity": "hard",
-  "turn_type": "single",
-  "po_id": "291400",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": null,
+  "po_id": "trainr87",
   "team": "synth-2",
-  "startedAt": "2025-08-04T15:30:17.976Z",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "startedAt": "2025-08-12T11:54:32-05:00",
+  "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
   "subject_labels": [
-    "Cloud Environment Setup"
+    "General Infrastructure Tooling QA"
   ],
   "aws_services": [
-    "s3",
-    "lambda",
-    "dynamodb",
-    "sns",
-    "apigateway",
-    "iam"
+    "S3",
+    "IAM",
+    "Config",
+    "CloudWatch",
+    "Logs"
   ]
 }

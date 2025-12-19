@@ -9,6 +9,8 @@ from aws_cdk import (
   StackProps,
   Duration,
   RemovalPolicy,
+  CfnOutput,
+  Tags,
   aws_s3 as s3,
   aws_lambda as _lambda,
   aws_lambda_event_sources as lambda_events,
@@ -45,7 +47,8 @@ class TapStack(Stack):
       props.environment_suffix if props else None
     ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
-    tags = {"env": environment_suffix}
+    # Configuration with environment-specific settings
+    lambda_timeout = int(self.node.try_get_context('lambdaTimeout') or 30)
 
     # 1. S3 Bucket with AES-256 encryption and tagging
     bucket = s3.Bucket(
@@ -56,10 +59,7 @@ class TapStack(Stack):
       removal_policy=RemovalPolicy.DESTROY,
       auto_delete_objects=True
     )
-    for k, v in tags.items():
-      bucket.node.default_child.add_property_override(
-        "Tags", [{"Key": k, "Value": v}]
-      )
+    Tags.of(bucket).add("env", environment_suffix)
 
     # 2. DynamoDB Table for metadata
     table = dynamodb.Table(
@@ -77,10 +77,7 @@ class TapStack(Stack):
       removal_policy=RemovalPolicy.DESTROY,
       billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST
     )
-    for k, v in tags.items():
-      table.node.default_child.add_property_override(
-        "Tags", [{"Key": k, "Value": v}]
-      )
+    Tags.of(table).add("env", environment_suffix)
 
     # 3. SNS Topic for notifications
     topic = sns.Topic(
@@ -88,10 +85,7 @@ class TapStack(Stack):
       "TapNotificationTopic",
       topic_name=f"tap-notification-{environment_suffix}"
     )
-    for k, v in tags.items():
-      topic.node.default_child.add_property_override(
-        "Tags", [{"Key": k, "Value": v}]
-      )
+    Tags.of(topic).add("env", environment_suffix)
 
     # 4. Lambda Execution Role (least privilege, LocalStack-compatible)
     lambda_role = iam.Role(
@@ -122,8 +116,7 @@ class TapStack(Stack):
       resources=[topic.topic_arn]
     ))
 
-    # 5. Lambda Function
-    LAMBDA_TIMEOUT = 30
+    # 5. Lambda Function with configurable timeout
     LOG_RETENTION_DAYS = logs.RetentionDays.ONE_WEEK
 
     lambda_fn = _lambda.Function(
@@ -178,18 +171,15 @@ def lambda_handler(event, context):
         """
       ),
       role=lambda_role,
-      timeout=Duration.seconds(LAMBDA_TIMEOUT),
+      timeout=Duration.seconds(lambda_timeout),
       environment={
         "DDB_TABLE": table.table_name,
         "SNS_TOPIC": topic.topic_arn,
-        "TIMEOUT": str(LAMBDA_TIMEOUT)
+        "TIMEOUT": str(lambda_timeout)
       },
       log_retention=LOG_RETENTION_DAYS
     )
-    for k, v in tags.items():
-      lambda_fn.node.default_child.add_property_override(
-        "Tags", [{"Key": k, "Value": v}]
-      )
+    Tags.of(lambda_fn).add("env", environment_suffix)
 
     # S3 event source for Lambda
     lambda_fn.add_event_source(lambda_events.S3EventSource(
@@ -206,10 +196,43 @@ def lambda_handler(event, context):
       rest_api_name=f"tap-api-{environment_suffix}",
       deploy_options=apigw.StageOptions(stage_name=environment_suffix)
     )
-    for k, v in tags.items():
-      api.node.default_child.add_property_override(
-        "Tags", [{"Key": k, "Value": v}]
-      )
+    Tags.of(api).add("env", environment_suffix)
+
+    # CloudFormation Outputs for key resources
+    CfnOutput(
+      self,
+      "BucketName",
+      value=bucket.bucket_name,
+      description="S3 Bucket name for object uploads"
+    )
+
+    CfnOutput(
+      self,
+      "TableName",
+      value=table.table_name,
+      description="DynamoDB Table name for metadata storage"
+    )
+
+    CfnOutput(
+      self,
+      "TopicArn",
+      value=topic.topic_arn,
+      description="SNS Topic ARN for notifications"
+    )
+
+    CfnOutput(
+      self,
+      "LambdaFunctionArn",
+      value=lambda_fn.function_arn,
+      description="Lambda Function ARN for object processing"
+    )
+
+    CfnOutput(
+      self,
+      "ApiEndpoint",
+      value=api.url,
+      description="API Gateway endpoint URL"
+    )
 
     # Outputs (optional, for integration/testing)
     self.bucket = bucket
