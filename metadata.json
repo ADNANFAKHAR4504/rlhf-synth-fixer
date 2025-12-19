@@ -16,5 +16,6 @@
     "lambda",
     "dynamodb",
     "iam"
-  ]
+  ],
+  "training_quality": 9
 }
