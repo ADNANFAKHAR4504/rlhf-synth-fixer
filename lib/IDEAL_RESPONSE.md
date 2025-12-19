@@ -1,3 +1,21 @@
+# CloudFormation Template for Grade Secure Infrastructure
+
+This CloudFormation template implements a secure multi-tier AWS infrastructure with comprehensive security, monitoring, and compliance features.
+
+## Infrastructure Overview
+
+The template creates:
+- Multi-AZ VPC with public and private subnets
+- Secure RDS PostgreSQL database with encryption
+- Encrypted S3 buckets with CloudFront CDN
+- IAM roles with least privilege access
+- CloudTrail, VPC Flow Logs, and AWS Config for compliance
+- GuardDuty for threat detection
+- Lambda-based automated backups
+
+## CloudFormation Template
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: '!Ref EnvironmentSuffix-grade secure infrastructure'
 
@@ -56,7 +74,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
 
-  PublicSubnet2: 
+  PublicSubnet2:
     # ... similar config for us-east-1b
     Type: AWS::EC2::Subnet
     Properties:
@@ -95,7 +113,7 @@ Resources:
   # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
-    Properties: 
+    Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
@@ -116,7 +134,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Owner
           Value: DevOps
-  
+
   PublicRoute:
     Type: AWS::EC2::Route
     Properties:
@@ -130,7 +148,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway1
-      
+
 
   # Associate public subnets...
   # Subnet Associations
@@ -145,7 +163,7 @@ Resources:
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
-  
+
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -184,7 +202,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: 
+              Service:
                 - lambda.amazonaws.com
                 - ec2.amazonaws.com
             Action: sts:AssumeRole
@@ -268,7 +286,7 @@ Resources:
                   - delivery.logs.amazonaws.com
               StringNotLikeIfExists:
                 aws:PrincipalType: "Service"
-                
+
           # Explicitly allow access for the whitelisted IAM User
           - Effect: Allow
             Principal:
@@ -308,7 +326,7 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: s3:PutObject
-            Resource: 
+            Resource:
               - !Sub arn:aws:s3:::${EncryptedBucket}/AWSLogs/${AWS::AccountId}/*
               - !Sub arn:aws:s3:::${EncryptedBucket}/AWSConfig/${EnvironmentSuffix}/*
             Condition:
@@ -332,7 +350,7 @@ Resources:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: Private Subnets
-      SubnetIds: 
+      SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
 
@@ -365,7 +383,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Owner
           Value: DevOps
-  
+
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -404,7 +422,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Owner
           Value: DevOps
-  
+
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -494,7 +512,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Owner
           Value: DevOps
-  
+
   # AWS Config
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
@@ -504,7 +522,7 @@ Resources:
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-  
+
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
@@ -549,7 +567,7 @@ Resources:
 
   GuardDutyDetector:
     Type: AWS::GuardDuty::Detector
-    Properties: 
+    Properties:
       Enable: true
       FindingPublishingFrequency: FIFTEEN_MINUTES
 
@@ -639,7 +657,7 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: REQUIRED_TAGS
-      InputParameters: 
+      InputParameters:
         tag1Key: Environment
         tag2Key: Owner
       Scope:
@@ -701,3 +719,28 @@ Outputs:
   WebACLArn:
     Value: "N/A"
     Description: WAF WebACL ARN — update if WAF is added
+```
+
+## Deployment Instructions
+
+1. Ensure you have AWS CLI configured with appropriate credentials
+2. Update the `SSHLocation` and `WhitelistedUser` parameters as needed
+3. Deploy using AWS CloudFormation console or CLI:
+   ```bash
+   aws cloudformation create-stack \
+     --stack-name secure-infrastructure \
+     --template-body file://template.yaml \
+     --parameters ParameterKey=EnvironmentSuffix,ParameterValue=dev \
+     --capabilities CAPABILITY_IAM
+   ```
+
+## Security Features
+
+- All S3 buckets encrypted with AES256
+- RDS database encrypted at rest with automated backups
+- IAM roles follow least privilege principle
+- VPC Flow Logs enabled for network monitoring
+- CloudTrail enabled for API audit logging
+- GuardDuty enabled for threat detection
+- AWS Config for compliance monitoring
+- Required tagging enforcement for resources
