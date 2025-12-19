@@ -173,13 +173,11 @@ export class WebAppStack extends cdk.Stack {
         vpcSubnets: {
           subnetType: ec2.SubnetType.PUBLIC,
         },
+        healthCheck: autoscaling.HealthCheck.elb({
+          grace: cdk.Duration.seconds(60), // Reduced for LocalStack
+        }),
       }
     );
-
-    // Add ELB health check (using new API)
-    this.autoScalingGroup.addHealthCheck(autoscaling.HealthCheck.elb({
-      grace: cdk.Duration.seconds(60), // Reduced for LocalStack
-    }));
 
     // Application Load Balancer
     this.loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'WebAppALB', {
