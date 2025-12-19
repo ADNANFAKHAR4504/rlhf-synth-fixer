@@ -2,7 +2,7 @@
 
 I'll create a production-ready serverless image classification system using AWS CDK with TypeScript. This implementation will demonstrate enterprise-grade architecture with comprehensive security, monitoring, and scalability.
 
-## 🏗️ Architecture Overview
+##  Architecture Overview
 
 ```mermaid
 graph TB
@@ -50,31 +50,31 @@ graph TB
     NS --> CW
 ```
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 serverless-image-detector/
-├── lib/
-│   ├── constructs/
-│   │   ├── api-gateway-construct.ts
-│   │   ├── lambda-construct.ts
-│   │   ├── storage-construct.ts
-│   │   ├── monitoring-construct.ts
-│   │   └── security-construct.ts
-│   ├── lambda/
-│   │   ├── image-processor/
-│   │   ├── file-manager/
-│   │   └── notification-service/
-│   └── serverless-app-stack.ts
-├── bin/
-│   └── serverless-app.ts
-├── test/
-├── package.json
-├── tsconfig.json
-└── README.md
+ lib/
+    constructs/
+       api-gateway-construct.ts
+       lambda-construct.ts
+       storage-construct.ts
+       monitoring-construct.ts
+       security-construct.ts
+    lambda/
+       image-processor/
+       file-manager/
+       notification-service/
+    serverless-app-stack.ts
+ bin/
+    serverless-app.ts
+ test/
+ package.json
+ tsconfig.json
+ README.md
 ```
 
-## 🚀 Implementation
+##  Implementation
 
 ### 1. Main CDK App Entry Point
 

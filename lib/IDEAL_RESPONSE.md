@@ -1,4 +1,4 @@
-## 🏗️ Architecture Overview
+##  Architecture Overview
 
 ```mermaid 
 graph TB
@@ -47,32 +47,32 @@ graph TB
     API --> CW
 ```
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 serverless-image-detector/
-├── lib/
-│   ├── stacks/
-│   │   ├── api-stack.ts
-│   │   ├── lambda-stack.ts
-│   │   ├── storage-stack.ts
-│   │   ├── monitoring-stack.ts
-│   │   └── rekognition-stack.ts
-│   ├── lambdas/
-│   │   ├── image-processor/
-│   │   │   └── index.js
-│   │   ├── file-manager/
-│   │   └── notification-service/
-│   └── tap-stack.ts
-├── bin/
-│   └── tap.ts
-├── test/
-├── package.json
-├── tsconfig.json
-└── README.md
+ lib/
+    stacks/
+       api-stack.ts
+       lambda-stack.ts
+       storage-stack.ts
+       monitoring-stack.ts
+       rekognition-stack.ts
+    lambdas/
+       image-processor/
+          index.js
+       file-manager/
+       notification-service/
+    tap-stack.ts
+ bin/
+    tap.ts
+ test/
+ package.json
+ tsconfig.json
+ README.md
 ```
 
-## 🚀 Implementation
+##  Implementation
 
 ### 1. Main CDK App Entry Point
 
@@ -1280,7 +1280,7 @@ export class RekognitionStack extends cdk.NestedStack {
 
 ## Critical Issues Fixed
 
-### 1. CloudWatch Permissions Gap - RESOLVED ✅
+### 1. CloudWatch Permissions Gap - RESOLVED 
 
 **Issue**: Lambda functions couldn't publish metrics to CloudWatch due to missing environment variables.
 **Fix**: Added missing environment variables to the Lambda stack:
@@ -1290,7 +1290,7 @@ export class RekognitionStack extends cdk.NestedStack {
 - `BUCKET_NAME`: S3 bucket name for image storage
 - `TABLE_NAME`: DynamoDB table name for detection logs
 
-### 2. Image Format Validation - RESOLVED ✅
+### 2. Image Format Validation - RESOLVED 
 
 **Issue**: Core functionality was blocked by inadequate image validation.
 **Fix**: Enhanced validation in the Lambda function:
@@ -1301,7 +1301,7 @@ export class RekognitionStack extends cdk.NestedStack {
 - Removed duplicate validation code to prevent conflicts
 - Added file name validation and empty string checks
 
-### 3. SSM Parameters - CONFIRMED ✅
+### 3. SSM Parameters - CONFIRMED 
 
 **Issue**: Lambda function expected SSM parameters for Rekognition configuration.
 **Status**: SSM parameters are already properly configured in the Rekognition stack:
@@ -1310,7 +1310,7 @@ export class RekognitionStack extends cdk.NestedStack {
 - `/serverlessapp/{env}/rekognition/max-labels`
 - `/serverlessapp/{env}/rekognition/free-tier-limit`
 
-## 🚀 Deployment Instructions
+##  Deployment Instructions
 
 ### Prerequisites
 
@@ -1354,7 +1354,7 @@ The system supports multiple deployment environments through context variables:
 - Resource naming automatically includes environment suffix
 - Different configurations for each environment (retention policies, removal policies, etc.)
 
-## 📋 API Usage Guide
+##  API Usage Guide
 
 ### Authentication
 
@@ -1405,7 +1405,7 @@ curl -X GET https://your-api-gateway-url/dev/images/123e4567-e89b-12d3-a456-4266
   -H "X-API-Key: your-api-key"
 ```
 
-## 🧪 Testing Strategy
+##  Testing Strategy
 
 ### Unit Testing
 
@@ -1498,7 +1498,7 @@ npm install -g artillery
 artillery quick --count 50 --num 5 https://your-api-gateway-url/dev/images
 ```
 
-## 💰 Cost Optimization
+##  Cost Optimization
 
 ### AWS Free Tier Usage
 
@@ -1531,7 +1531,7 @@ The system is optimized for AWS Free Tier:
 4. **Log Retention**: Automated log cleanup to control storage costs
 5. **Resource Tagging**: Cost allocation tags for tracking and optimization
 
-## 🔒 Security Best Practices
+##  Security Best Practices
 
 ### Identity and Access Management (IAM)
 
@@ -1559,7 +1559,7 @@ The system is optimized for AWS Free Tier:
 - **Security Groups**: Controlled access between resources
 - **CloudTrail Integration**: API calls and resource changes are logged
 
-## 🐛 Troubleshooting Guide
+##  Troubleshooting Guide
 
 ### Common Issues and Solutions
 
@@ -1622,7 +1622,7 @@ aws logs describe-log-groups --log-group-name-prefix /aws/lambda/serverlessapp
 aws logs tail /aws/lambda/serverlessapp-image-processor-dev --follow
 ```
 
-## 🎯 Advanced Features
+##  Advanced Features
 
 ### Auto-Scaling Configuration
 
@@ -1661,7 +1661,7 @@ const businessMetricAlarm = new cloudwatch.Alarm(this, 'LowDetectionConfidence',
 });
 ```
 
-## 📈 Performance Optimization
+##  Performance Optimization
 
 ### Lambda Performance
 
@@ -1681,7 +1681,7 @@ const businessMetricAlarm = new cloudwatch.Alarm(this, 'LowDetectionConfidence',
 2. **CloudFront Distribution**: Cache static assets
 3. **S3 Request Patterns**: Optimize prefix distribution
 
-## 🎯 Advanced Features
+##  Advanced Features
 
 ### Auto-Scaling Configuration
 
@@ -1722,16 +1722,16 @@ const businessMetricAlarm = new cloudwatch.Alarm(this, 'LowDetectionConfidence',
 
 ---
 
-## 🎉 Summary
+##  Summary
 
 This implementation provides a **production-ready, scalable, and cost-effective** serverless image detection system with:
 
-✅ **Complete Infrastructure**: All AWS resources properly configured  
-✅ **Security First**: IAM roles, encryption, API authentication  
-✅ **Monitoring Ready**: CloudWatch dashboards, alarms, custom metrics  
-✅ **Cost Optimized**: Free-tier friendly with automatic scaling  
-✅ **Well Tested**: Unit and integration tests with 95%+ coverage  
-✅ **Enterprise Grade**: Error handling, logging, and observability  
-✅ **Documentation**: Comprehensive usage and troubleshooting guides  
+ **Complete Infrastructure**: All AWS resources properly configured  
+ **Security First**: IAM roles, encryption, API authentication  
+ **Monitoring Ready**: CloudWatch dashboards, alarms, custom metrics  
+ **Cost Optimized**: Free-tier friendly with automatic scaling  
+ **Well Tested**: Unit and integration tests with 95%+ coverage  
+ **Enterprise Grade**: Error handling, logging, and observability  
+ **Documentation**: Comprehensive usage and troubleshooting guides  
 
 The system successfully detects cats, dogs, and other objects in images using Amazon Rekognition, stores results in DynamoDB, and provides a RESTful API for integration with web or mobile applications.

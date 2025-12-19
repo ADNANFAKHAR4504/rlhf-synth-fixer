@@ -1,10 +1,10 @@
 # AWS CDK Serverless Infrastructure Expert
 
-## 🎯 Mission Statement
+##  Mission Statement
 
 You are an expert AWS Solutions Architect specializing in serverless architectures and Infrastructure as Code (IaC). Your mission is to design and implement a **production-ready, highly secure, and scalable serverless application** using AWS CDK with TypeScript.
 
-## 🏗️ Architecture Overview
+##  Architecture Overview
 
 Design a **Cat/Dog Image Detector with Logging System** that demonstrates real-world AI/ML processing with serverless components:
 
@@ -28,7 +28,7 @@ Create a complete image processing system that handles:
 - **Cost-optimized** serverless components
 - **Environment-specific** configuration management
 
-## 📋 Core Requirements
+##  Core Requirements
 
 ### 1. **Technology Stack & Constraints**
 
@@ -115,13 +115,13 @@ Create a complete image processing system that handles:
 
 #### **Service Integration**
 
-- **API Gateway ↔ ImageProcessor**: Image upload submission endpoint
-- **ImageProcessor ↔ Amazon Rekognition**: AI-powered image analysis
-- **ImageProcessor ↔ DynamoDB**: Detection results persistence and retrieval
-- **ImageProcessor ↔ FileManager**: Trigger file organization
-- **FileManager ↔ S3**: Image storage and file organization
-- **ImageProcessor ↔ SNS**: Notification system for uncertain classifications
-- **CloudWatch ↔ All Services**: Comprehensive monitoring and alerting
+- **API Gateway  ImageProcessor**: Image upload submission endpoint
+- **ImageProcessor  Amazon Rekognition**: AI-powered image analysis
+- **ImageProcessor  DynamoDB**: Detection results persistence and retrieval
+- **ImageProcessor  FileManager**: Trigger file organization
+- **FileManager  S3**: Image storage and file organization
+- **ImageProcessor  SNS**: Notification system for uncertain classifications
+- **CloudWatch  All Services**: Comprehensive monitoring and alerting
 
 #### **Event-Driven Architecture**
 
@@ -147,7 +147,7 @@ Create a complete image processing system that handles:
 - **Blue-Green**: Zero-downtime deployments
 - **Cleanup**: Complete resource destruction capability
 
-## 🚀 Expected Deliverables
+##  Expected Deliverables
 
 ### **Primary Output**
 
@@ -189,7 +189,7 @@ The DetectionLogs table should store records in the following format:
 }
 ```
 
-## 🔒 Security Requirements
+##  Security Requirements
 
 ### **Data Protection**
 
@@ -205,7 +205,7 @@ The DetectionLogs table should store records in the following format:
 - **WAF**: Web Application Firewall if needed
 - **DDoS Protection**: Shield Advanced considerations
 
-## 📊 Monitoring & Observability
+##  Monitoring & Observability
 
 ### **Metrics & Logging**
 
@@ -221,7 +221,7 @@ The DetectionLogs table should store records in the following format:
 - **Cost Alerts**: Budget and spending monitoring
 - **Security Alerts**: Unusual activity detection
 
-## 🎯 Success Criteria
+##  Success Criteria
 
 1. **Functional Requirements**: All specified components working together
 2. **Security Compliance**: Production-grade security implementation
@@ -232,7 +232,7 @@ The DetectionLogs table should store records in the following format:
 7. **Disaster Recovery**: Backup and recovery procedures
 8. **Monitoring**: Comprehensive observability setup
 
-## 🔧 Implementation Guidelines
+##  Implementation Guidelines
 
 ### **Workflow Design**
 
