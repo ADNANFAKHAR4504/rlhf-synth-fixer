@@ -1,0 +1,14 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "349044",
+  "team": "2",
+  "startedAt": "2025-11-27T09:30:50.068Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "provider": "localstack"
+}
