@@ -1,17 +1,17 @@
 I'll create a comprehensive AWS CDK Python infrastructure that meets all your requirements. Here's the complete solution:
 
-## 📁 Project Structure
+##  Project Structure
 
 ```bash
 project-root/
-├── tap.py            # Entry point
-├── lib/
-│   └── tapstack.py   # Main stack definition
-├── requirements.txt  # Python dependencies
-└── cdk.json         # CDK configuration
+ tap.py            # Entry point
+ lib/
+    tapstack.py   # Main stack definition
+ requirements.txt  # Python dependencies
+ cdk.json         # CDK configuration
 ```
 
-## 🚀 Implementation
+##  Implementation
 
 ### 1. **tap.py** (Entry Point)
 
@@ -408,7 +408,7 @@ constructs>=10.0.0
 }
 ```
 
-## 🚀 Deployment Instructions
+##  Deployment Instructions
 
 ### 1. **Setup Environment**
 
@@ -448,9 +448,9 @@ cdk deploy
 cdk destroy
 ```
 
-## 🏗️ Architecture Features
+##  Architecture Features
 
-### ✅ **Infrastructure Components**
+###  **Infrastructure Components**
 
 1. **Two VPCs** with non-overlapping CIDR blocks:
    - VPC1: `10.0.0.0/16`
@@ -477,21 +477,21 @@ cdk destroy
 6. **IAM Roles**:
    - EC2 instances with SSM and CloudWatch permissions
 
-### 🔒 **Security Best Practices**
+###  **Security Best Practices**
 
 - **Principle of Least Privilege**: Security groups restrict access appropriately
 - **Private Subnets**: EC2 instances in private subnets with NAT Gateway access
 - **SSH Access**: Limited to VPC CIDR blocks only
 - **IAM Roles**: Minimal required permissions
 
-### 📊 **Monitoring & Management**
+###  **Monitoring & Management**
 
 - **Health Checks**: ALB health checks for instance health
 - **Auto Scaling**: CPU-based scaling policies
 - **Tagging**: Comprehensive tagging strategy
 - **CloudFormation Outputs**: Important resource information
 
-### 🔧 **Extensibility**
+###  **Extensibility**
 
 The solution is designed to be modular and extensible:
 
@@ -500,7 +500,7 @@ The solution is designed to be modular and extensible:
 - **Additional Services**: Can integrate RDS, ElastiCache, etc.
 - **Multi-Environment**: Environment-specific configurations
 
-## 🧪 Testing
+##  Testing
 
 After deployment, test the infrastructure:
 
@@ -515,4 +515,4 @@ curl http://ALB-DNS-NAME-FROM-OUTPUT
 aws autoscaling describe-auto-scaling-groups --query 'AutoScalingGroups[*].[AutoScalingGroupName,DesiredCapacity,MinSize,MaxSize]'
 ```
 
-This infrastructure provides a robust, scalable, and secure foundation that meets all your requirements while following AWS best practices! 🚀
+This infrastructure provides a robust, scalable, and secure foundation that meets all your requirements while following AWS best practices! 
