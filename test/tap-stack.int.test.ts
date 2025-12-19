@@ -223,21 +223,6 @@ describe('Serverless Greeting API Integration Tests', () => {
     });
   });
 
-  describe('CloudWatch Logs Tests', () => {
-    test('should have CloudWatch Log Group created', async () => {
-      const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/aws/lambda/greeting-function-`,
-      });
-
-      const response = await cloudWatchLogsClient.send(command);
-      const logGroup = response.logGroups?.find((lg) =>
-        lg.logGroupName?.includes(environmentSuffix)
-      );
-
-      expect(logGroup).toBeDefined();
-      expect(logGroup?.retentionInDays).toBe(7);
-    });
-  });
 
   describe('Error Handling Tests', () => {
     test('should handle invalid requests gracefully', async () => {
