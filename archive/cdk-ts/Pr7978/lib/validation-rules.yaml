@@ -1,0 +1,63 @@
+rules:
+  - name: s3-versioning-enabled
+    severity: warning
+    category: S3
+    resourceType: AWS::S3::Bucket
+    condition:
+      property: VersioningConfiguration.Status
+      operator: equals
+      value: Enabled
+    message: S3 bucket should have versioning enabled
+    remediation: Enable versioning on the S3 bucket to protect against accidental deletion
+
+  - name: s3-public-access-blocked
+    severity: critical
+    category: S3
+    resourceType: AWS::S3::Bucket
+    condition:
+      property: PublicAccessBlockConfiguration
+      operator: exists
+    message: S3 bucket must have public access block configuration
+    remediation: Add PublicAccessBlockConfiguration to prevent public access
+
+  - name: lambda-reserved-concurrency
+    severity: info
+    category: Lambda
+    resourceType: AWS::Lambda::Function
+    condition:
+      property: ReservedConcurrentExecutions
+      operator: exists
+    message: Consider setting reserved concurrency for production Lambda functions
+    remediation: Set ReservedConcurrentExecutions to prevent function from consuming all account concurrency
+
+  - name: rds-deletion-protection
+    severity: warning
+    category: RDS
+    resourceType: AWS::RDS::DBInstance
+    condition:
+      property: DeletionProtection
+      operator: equals
+      value: true
+    message: Production RDS instances should have deletion protection enabled
+    remediation: Enable DeletionProtection to prevent accidental database deletion
+
+  - name: lambda-dlq-configured
+    severity: warning
+    category: Lambda
+    resourceType: AWS::Lambda::Function
+    condition:
+      property: DeadLetterConfig
+      operator: exists
+    message: Lambda function should have a dead letter queue configured
+    remediation: Configure a Dead Letter Queue (SQS or SNS) to capture failed invocations
+
+  - name: rds-monitoring-enabled
+    severity: info
+    category: RDS
+    resourceType: AWS::RDS::DBInstance
+    condition:
+      property: MonitoringInterval
+      operator: greaterThan
+      value: 0
+    message: Enhanced monitoring should be enabled for RDS instances
+    remediation: Set MonitoringInterval to 60 seconds or less for better insights
