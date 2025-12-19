@@ -30,6 +30,12 @@ def get_deployment_outputs():
         }
 
 
+def is_localstack():
+    """Check if tests are running against LocalStack."""
+    return os.environ.get("AWS_ENDPOINT_URL", "").find("localhost") != -1 or \
+           os.environ.get("LOCALSTACK_HOSTNAME") is not None
+
+
 @mark.describe("TapStack Integration Tests")
 class TestTapStackIntegration(unittest.TestCase):
     """Integration test cases for the deployed TapStack."""
@@ -46,15 +52,24 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertTrue(self.outputs["RdsEndpoint"])
         # Check it looks like a valid RDS endpoint
         endpoint = self.outputs["RdsEndpoint"]
-        self.assertIn(".rds.amazonaws.com", endpoint)
+        # For LocalStack, endpoint might be localhost.localstack.cloud
+        # For AWS, endpoint should have .rds.amazonaws.com
+        if is_localstack():
+            self.assertTrue("localhost" in endpoint or "localstack" in endpoint)
+        else:
+            self.assertIn(".rds.amazonaws.com", endpoint)
 
     @mark.it("validates RDS port is configured")
     def test_rds_port_configured(self):
         """Test that RDS port is correctly configured."""
         # ASSERT
         self.assertIn("RdsPort", self.outputs)
-        self.assertEqual(self.outputs["RdsPort"],
-                         "5432")  # PostgreSQL default port
+        # LocalStack may use a different port (e.g., 4510)
+        # AWS RDS uses standard PostgreSQL port 5432
+        port = self.outputs["RdsPort"]
+        self.assertTrue(port)
+        if not is_localstack():
+            self.assertEqual(port, "5432")  # PostgreSQL default port for AWS
 
     @mark.it("validates S3 backup bucket exists")
     def test_s3_backup_bucket_exists(self):
@@ -123,17 +138,22 @@ class TestRdsInfrastructureIntegration(unittest.TestCase):
     @mark.it("validates PostgreSQL configuration")
     def test_postgresql_configuration(self):
         """Test PostgreSQL-specific configuration."""
-        # Check port is PostgreSQL default
-        if "RdsPort" in self.outputs:
+        # Check port is PostgreSQL default (AWS only)
+        if "RdsPort" in self.outputs and not is_localstack():
             self.assertEqual(self.outputs["RdsPort"], "5432")
 
         # Check endpoint format
         if "RdsEndpoint" in self.outputs:
             endpoint = self.outputs["RdsEndpoint"]
             # PostgreSQL RDS endpoints follow specific pattern
-            self.assertRegex(
-                endpoint, r"[\w-]+\.[\w]+\.[a-z0-9-]+\.rds\.amazonaws\.com",
-                "RDS endpoint doesn't match expected format")
+            if is_localstack():
+                # LocalStack uses localhost-based endpoints
+                self.assertTrue("localhost" in endpoint or "localstack" in endpoint)
+            else:
+                # AWS RDS endpoints follow standard pattern
+                self.assertRegex(
+                    endpoint, r"[\w-]+\.[\w]+\.[a-z0-9-]+\.rds\.amazonaws\.com",
+                    "RDS endpoint doesn't match expected format")
 
 
 @mark.describe("Backup and Recovery Integration")
@@ -198,7 +218,12 @@ class TestSecurityIntegration(unittest.TestCase):
             endpoint = self.outputs["RdsEndpoint"]
             # RDS endpoints in private subnets still have public DNS names
             # but are not accessible from internet
-            self.assertIn(".rds.amazonaws.com", endpoint)
+            if is_localstack():
+                # LocalStack uses localhost-based endpoints
+                self.assertTrue("localhost" in endpoint or "localstack" in endpoint)
+            else:
+                # AWS RDS endpoints follow standard pattern
+                self.assertIn(".rds.amazonaws.com", endpoint)
 
             # The fact that we have an endpoint means the RDS instance
             # was successfully deployed with proper network configuration
