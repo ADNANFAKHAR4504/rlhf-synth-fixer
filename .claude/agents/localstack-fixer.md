@@ -150,7 +150,18 @@ can_modify_jest_config() {
   if [[ -f "$WORK_DIR/coverage/coverage-summary.json" ]]; then
     COVERAGE_PCT=$(jq -r '.total.lines.pct // 0' "$WORK_DIR/coverage/coverage-summary.json" 2>/dev/null)
 
-    if [[ $(echo "$COVERAGE_PCT < 80" | bc -l) -eq 1 ]]; then
+    # Cross-platform float comparison (works without bc)
+    # Uses awk as fallback if bc is not available
+    coverage_below_80() {
+      local pct="$1"
+      if command -v bc &>/dev/null; then
+        [[ $(echo "$pct < 80" | bc -l 2>/dev/null) -eq 1 ]]
+      else
+        awk -v p="$pct" 'BEGIN { exit !(p < 80) }'
+      fi
+    }
+
+    if coverage_below_80 "$COVERAGE_PCT"; then
       echo "❌ BLOCKED: Cannot modify jest.config.js - coverage too low"
       echo "   Current coverage: ${COVERAGE_PCT}%"
       echo "   Required minimum: 80%"
@@ -273,7 +284,15 @@ validate_path() {
     if [[ "$FILENAME" == "jest.config.js" ]]; then
       if [[ -f "coverage/coverage-summary.json" ]]; then
         COVERAGE=$(jq -r '.total.lines.pct // 0' "coverage/coverage-summary.json" 2>/dev/null || echo "0")
-        if [[ $(echo "$COVERAGE >= 80" | bc -l 2>/dev/null || echo "0") -eq 1 ]]; then
+        # Cross-platform float comparison (works without bc)
+        local coverage_ok=0
+        if command -v bc &>/dev/null; then
+          [[ $(echo "$COVERAGE >= 80" | bc -l 2>/dev/null) -eq 1 ]] && coverage_ok=1
+        else
+          awk -v c="$COVERAGE" 'BEGIN { exit !(c >= 80) }' && coverage_ok=1
+        fi
+
+        if [[ $coverage_ok -eq 1 ]]; then
           IS_ALLOWED=true
           echo "✅ jest.config.js modification allowed (coverage: ${COVERAGE}%)"
         else
@@ -551,6 +570,184 @@ PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 cd "$PROJECT_ROOT"
 
 # ═══════════════════════════════════════════════════════════════
+# CONFIGURATION LOADING
+# Load settings from .claude/config/localstack.yaml
+# ═══════════════════════════════════════════════════════════════
+
+CONFIG_FILE="$PROJECT_ROOT/.claude/config/localstack.yaml"
+
+# Helper function to read YAML config values (using yq if available, fallback to grep/sed)
+read_config() {
+  local key="$1"
+  local default="$2"
+
+  if command -v yq &>/dev/null; then
+    local value
+    value=$(yq -r "$key // \"$default\"" "$CONFIG_FILE" 2>/dev/null)
+    [[ "$value" == "null" ]] && value="$default"
+    echo "$value"
+  else
+    # Fallback: Use grep/sed for simple key extraction
+    echo "$default"
+  fi
+}
+
+# Load configuration from YAML
+GITHUB_REPO=$(read_config '.github.repo' 'TuringGpt/iac-test-automations')
+MAX_ITERATIONS=$(read_config '.iteration.max_fix_iterations' '10')
+MAX_CICD_ITERATIONS=$(read_config '.iteration.max_cicd_iterations' '10')
+CICD_WAIT_TIMEOUT=$(read_config '.timeouts.deployment_timeout' '900')
+POLL_INTERVAL=30
+
+echo "📋 Configuration loaded from: $CONFIG_FILE"
+echo "   Max fix iterations: $MAX_ITERATIONS"
+echo "   Max CI/CD iterations: $MAX_CICD_ITERATIONS"
+echo "   GitHub repo: $GITHUB_REPO"
+echo ""
+
+# ═══════════════════════════════════════════════════════════════
+# UTILITY FUNCTIONS
+# ═══════════════════════════════════════════════════════════════
+
+# GitHub API retry wrapper - retries transient failures
+gh_with_retry() {
+  local max_attempts=3
+  local attempt=1
+  local delay=2
+  local output
+
+  while [ $attempt -le $max_attempts ]; do
+    if output=$("$@" 2>&1); then
+      echo "$output"
+      return 0
+    fi
+
+    # Check if error is retryable (network issues, rate limits)
+    if echo "$output" | grep -qiE "timeout|connection|rate limit|502|503|504"; then
+      echo "⚠️ GitHub API attempt $attempt failed, retrying in ${delay}s..." >&2
+      sleep $delay
+      delay=$((delay * 2))
+      ((attempt++))
+    else
+      # Non-retryable error
+      echo "$output"
+      return 1
+    fi
+  done
+
+  echo "❌ GitHub API failed after $max_attempts attempts" >&2
+  echo "$output"
+  return 1
+}
+
+# Cross-platform float comparison (avoids bc dependency)
+float_gte() {
+  local val1="$1"
+  local val2="$2"
+
+  # Try bc first (most accurate)
+  if command -v bc &>/dev/null; then
+    [[ $(echo "$val1 >= $val2" | bc -l 2>/dev/null) -eq 1 ]]
+    return $?
+  fi
+
+  # Fallback to awk (always available)
+  awk -v v1="$val1" -v v2="$val2" 'BEGIN { exit !(v1 >= v2) }'
+}
+
+# Add fix to list with deduplication
+add_fix() {
+  local fix="$1"
+  local i
+
+  # Check if fix already exists in the array
+  for i in "${FIXES_TO_APPLY[@]}"; do
+    if [[ "$i" == "$fix" ]]; then
+      return 0  # Already exists, skip
+    fi
+  done
+
+  # Add the fix
+  FIXES_TO_APPLY+=("$fix")
+  echo "   📌 Queued fix: $fix"
+}
+
+# ═══════════════════════════════════════════════════════════════
+# CLEANUP HANDLER
+# Ensures resources are cleaned up on exit or error
+# ═══════════════════════════════════════════════════════════════
+
+CLEANUP_DIRS=()
+CLEANUP_WORKTREES=()
+
+cleanup_on_exit() {
+  local exit_code=$?
+
+  echo ""
+  echo "🧹 Running cleanup..."
+
+  # Clean up temporary directories
+  for dir in "${CLEANUP_DIRS[@]}"; do
+    if [[ -d "$dir" ]]; then
+      rm -rf "$dir" 2>/dev/null || true
+      echo "   Removed temp dir: $dir"
+    fi
+  done
+
+  # Clean up worktrees (only fixer worktrees, not localstack-migrate ones)
+  for wt in "${CLEANUP_WORKTREES[@]}"; do
+    if [[ -d "$wt" ]] && [[ "$wt" == *"fixer-"* ]]; then
+      cd "$PROJECT_ROOT" 2>/dev/null || true
+      git worktree remove "$wt" --force 2>/dev/null || rm -rf "$wt" 2>/dev/null || true
+      echo "   Removed worktree: $wt"
+    fi
+  done
+
+  # Prune orphaned worktrees
+  cd "$PROJECT_ROOT" 2>/dev/null || true
+  git worktree prune 2>/dev/null || true
+
+  exit $exit_code
+}
+
+# Register cleanup handler
+trap cleanup_on_exit EXIT ERR INT TERM
+
+# Helper to register directories for cleanup
+register_cleanup_dir() {
+  CLEANUP_DIRS+=("$1")
+}
+
+register_cleanup_worktree() {
+  CLEANUP_WORKTREES+=("$1")
+}
+
+# ═══════════════════════════════════════════════════════════════
+# PRE-FLIGHT CHECKS
+# Verify all required dependencies are available
+# ═══════════════════════════════════════════════════════════════
+
+preflight_checks() {
+  local missing=()
+
+  command -v jq &>/dev/null || missing+=("jq")
+  command -v git &>/dev/null || missing+=("git")
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "❌ Missing required dependencies: ${missing[*]}"
+    echo "   Please install them before running this script."
+    exit 1
+  fi
+
+  # Optional dependencies (warn but don't fail)
+  if ! command -v yq &>/dev/null; then
+    echo "⚠️ yq not found - using default configuration values"
+  fi
+}
+
+preflight_checks
+
+# ═══════════════════════════════════════════════════════════════
 # MODE DETECTION
 # If WORK_DIR is set → LOCAL MODE (from localstack-migrate)
 # If PR_NUMBER is set → PR MODE (standalone)
@@ -655,12 +852,11 @@ else
 fi
 
 # Initialize common variables
-GITHUB_REPO="TuringGpt/iac-test-automations"
-MAX_ITERATIONS=3
 ITERATION=0
 FIX_SUCCESS=false
 FIXES_APPLIED=()
 ERRORS_FOUND=()
+declare -a FIXES_TO_APPLY
 ```
 
 ### Step 2: Mode-Specific Setup
@@ -722,8 +918,8 @@ if [[ "$MODE" == "pr" ]]; then
   echo "═══════════════════════════════════════════════════"
   echo ""
 
-  # Fetch PR information
-  PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPO" --json title,headRefName,state,statusCheckRollup,number 2>/dev/null)
+  # Fetch PR information (with retry for transient failures)
+  PR_INFO=$(gh_with_retry gh pr view "$PR_NUMBER" --repo "$GITHUB_REPO" --json title,headRefName,state,statusCheckRollup,number 2>/dev/null)
 
   if [[ -z "$PR_INFO" ]] || [[ "$PR_INFO" == "null" ]]; then
     echo "❌ PR #${PR_NUMBER} not found in ${GITHUB_REPO}"
@@ -742,7 +938,7 @@ echo ""
 # Get the latest workflow run for this PR
 echo "🔍 Fetching CI/CD workflow status..."
 
-WORKFLOW_RUNS=$(gh run list --repo "$GITHUB_REPO" --branch "$PR_BRANCH" --limit 5 --json databaseId,status,conclusion,name,headSha,createdAt 2>/dev/null)
+WORKFLOW_RUNS=$(gh_with_retry gh run list --repo "$GITHUB_REPO" --branch "$PR_BRANCH" --limit 5 --json databaseId,status,conclusion,name,headSha,createdAt 2>/dev/null)
 
 if [[ -z "$WORKFLOW_RUNS" ]] || [[ "$WORKFLOW_RUNS" == "[]" ]]; then
   echo "⚠️ No workflow runs found for branch: $PR_BRANCH"
@@ -774,8 +970,8 @@ echo "🔍 ANALYZING FAILED JOBS"
 echo "═══════════════════════════════════════════════════"
 echo ""
 
-# Get all jobs from the workflow run
-JOBS=$(gh run view "$RUN_ID" --repo "$GITHUB_REPO" --json jobs 2>/dev/null | jq '.jobs // []')
+# Get all jobs from the workflow run (with retry)
+JOBS=$(gh_with_retry gh run view "$RUN_ID" --repo "$GITHUB_REPO" --json jobs 2>/dev/null | jq '.jobs // []')
 
 if [[ -z "$JOBS" ]] || [[ "$JOBS" == "[]" ]]; then
   echo "⚠️ No jobs found in workflow run $RUN_ID"
@@ -820,18 +1016,20 @@ echo ""
 
 # Create temp directory for logs
 LOG_DIR=$(mktemp -d)
+register_cleanup_dir "$LOG_DIR"  # Register for cleanup on exit
 ALL_ERRORS_FILE="$LOG_DIR/all_errors.txt"
 touch "$ALL_ERRORS_FILE"
 
 # Fetch logs for each failed job
-echo "$FAILED_JOBS" | jq -c '.[]' | while read -r job; do
+# NOTE: Using process substitution (< <(...)) instead of pipe to avoid subshell variable scope issues
+while read -r job; do
   JOB_NAME=$(echo "$job" | jq -r '.name')
   JOB_ID=$(echo "$job" | jq -r '.databaseId')
 
   echo "📥 Fetching logs for: $JOB_NAME..."
 
-  # Download job logs
-  gh run view "$RUN_ID" --repo "$GITHUB_REPO" --log --job "$JOB_ID" > "$LOG_DIR/job_${JOB_ID}.log" 2>/dev/null || true
+  # Download job logs (using gh_with_retry for transient failures)
+  gh_with_retry gh run view "$RUN_ID" --repo "$GITHUB_REPO" --log --job "$JOB_ID" > "$LOG_DIR/job_${JOB_ID}.log" 2>/dev/null || true
 
   # Extract error patterns from logs
   if [[ -f "$LOG_DIR/job_${JOB_ID}.log" ]]; then
@@ -845,7 +1043,7 @@ echo "$FAILED_JOBS" | jq -c '.[]' | while read -r job; do
   else
     echo "   ⚠️ Could not fetch logs for job $JOB_ID"
   fi
-done
+done < <(echo "$FAILED_JOBS" | jq -c '.[]')
 
 # Deduplicate and count errors
 UNIQUE_ERRORS=$(sort -u "$ALL_ERRORS_FILE" | grep -v '^$')
@@ -874,115 +1072,116 @@ echo "🔧 IDENTIFYING REQUIRED FIXES (BATCH MODE)"
 echo "═══════════════════════════════════════════════════"
 echo ""
 
-# Initialize fix arrays
-declare -a FIXES_TO_APPLY
+# Initialize fix array (if not already declared in Step 1)
+[[ -z "${FIXES_TO_APPLY+x}" ]] && declare -a FIXES_TO_APPLY
 
 # ═══════════════════════════════════════════════════════════════
 # ERROR CLASSIFICATION AND FIX MAPPING
+# Using add_fix() function to prevent duplicate fixes
 # ═══════════════════════════════════════════════════════════════
 
 # 1. METADATA VALIDATION ERRORS (CRITICAL - MUST BE FIRST)
 if echo "$UNIQUE_ERRORS" | grep -qiE "metadata.*validation|schema.*invalid|additionalProperties|metadata\.json.*failed"; then
   echo "   🔴 CRITICAL: Metadata validation failed"
-  FIXES_TO_APPLY+=("metadata_fix")
+  add_fix "metadata_fix"
 fi
 
 # Check for specific metadata field errors
 if echo "$UNIQUE_ERRORS" | grep -qiE "subtask.*invalid|invalid.*subtask|enum.*subtask"; then
   echo "   🔴 Invalid subtask value detected"
-  FIXES_TO_APPLY+=("metadata_subtask_fix")
+  add_fix "metadata_subtask_fix"
 fi
 
 if echo "$UNIQUE_ERRORS" | grep -qiE "subject_labels.*invalid|invalid.*subject_labels"; then
   echo "   🔴 Invalid subject_labels detected"
-  FIXES_TO_APPLY+=("metadata_labels_fix")
+  add_fix "metadata_labels_fix"
 fi
 
 # 2. BUILD/COMPILE ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "typescript.*error|cannot find module|compilation failed|tsc.*error"; then
   echo "   🟡 TypeScript compilation errors"
-  FIXES_TO_APPLY+=("typescript_fix")
+  add_fix "typescript_fix"
 fi
 
 if echo "$UNIQUE_ERRORS" | grep -qiE "import.*error|module.*not found|no module named"; then
   echo "   🟡 Import/module errors"
-  FIXES_TO_APPLY+=("import_fix")
+  add_fix "import_fix"
 fi
 
 # 3. LOCALSTACK ENDPOINT ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "UnrecognizedClientException|could not connect|connection refused|localhost:4566"; then
   echo "   🔴 LocalStack endpoint configuration needed"
-  FIXES_TO_APPLY+=("endpoint_config")
+  add_fix "endpoint_config"
 fi
 
 # 4. S3 PATH-STYLE ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "InvalidBucketName|bucket.*specified endpoint|path.style|virtual.*host"; then
   echo "   🔴 S3 path-style access required"
-  FIXES_TO_APPLY+=("s3_path_style")
+  add_fix "s3_path_style"
 fi
 
 # 5. IAM/POLICY ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "MalformedPolicyDocument|invalid.*principal|policy.*error|AccessDenied"; then
   echo "   🟡 IAM policy issues"
-  FIXES_TO_APPLY+=("iam_simplify")
+  add_fix "iam_simplify"
 fi
 
 # 6. RESOURCE NAMING ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "name.*too long|invalid.*name|naming.*convention|character.*invalid"; then
   echo "   🟡 Resource naming issues"
-  FIXES_TO_APPLY+=("resource_naming")
+  add_fix "resource_naming"
 fi
 
 # 7. UNSUPPORTED SERVICE ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "not supported|unsupported|not available|appsync|amplify|sagemaker|eks.*not"; then
   echo "   🟡 Unsupported service detected"
-  FIXES_TO_APPLY+=("unsupported_service")
+  add_fix "unsupported_service"
 fi
 
 # 8. DEPLOYMENT ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "deploy.*failed|stack.*failed|CREATE_FAILED|UPDATE_FAILED|rollback"; then
   echo "   🟡 Deployment failures"
-  FIXES_TO_APPLY+=("deployment_fix")
+  add_fix "deployment_fix"
 fi
 
 # 9. TEST ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "test.*failed|assertion.*failed|expect.*received|jest.*failed"; then
   echo "   🟡 Test failures"
-  FIXES_TO_APPLY+=("test_fix")
+  add_fix "test_fix"
 fi
 
 # 10. LINT ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "lint.*error|eslint|prettier|formatting"; then
   echo "   🟢 Lint/formatting issues"
-  FIXES_TO_APPLY+=("lint_fix")
+  add_fix "lint_fix"
 fi
 
 # 11. REMOVAL POLICY ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "removalPolicy|deletion.*policy|cannot.*delete"; then
   echo "   🟡 Removal policy needed"
-  FIXES_TO_APPLY+=("removal_policy")
+  add_fix "removal_policy"
 fi
 
 # 12. MISSING FILE ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "PROMPT\.md.*not found|MODEL_RESPONSE.*not found|file.*missing|not found"; then
   echo "   🔴 Missing required files"
-  FIXES_TO_APPLY+=("missing_files")
+  add_fix "missing_files"
 fi
 
 # 13. JEST CONFIG ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "jest\.config|roots.*test|test folder"; then
   echo "   🟡 Jest configuration issues"
-  FIXES_TO_APPLY+=("jest_config")
+  add_fix "jest_config"
 fi
 
 # 14. COMMIT MESSAGE ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "commitlint|commit.*message|conventional commit"; then
   echo "   🟡 Commit message format issues"
-  FIXES_TO_APPLY+=("commit_message")
+  add_fix "commit_message"
 fi
 
 echo ""
-echo "📋 Fixes to apply: ${#FIXES_TO_APPLY[@]}"
+echo "📋 Fixes to apply: ${#FIXES_TO_APPLY[@]} (deduplicated)"
 for fix in "${FIXES_TO_APPLY[@]}"; do
   echo "   - $fix"
 done
@@ -1031,6 +1230,9 @@ else
     exit 1
   fi
 
+  # Register worktree for cleanup on exit (handled by trap in Step 1)
+  register_cleanup_worktree "$WORK_DIR"
+
   echo "✅ Checked out to: $WORK_DIR"
   cd "$WORK_DIR"
 fi
@@ -1067,113 +1269,55 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
 
     # ═══════════════════════════════════════════════════════
     # METADATA FIXES (CRITICAL)
+    # Uses the centralized sanitization script to avoid code duplication
     # ═══════════════════════════════════════════════════════
     metadata_fix|metadata_subtask_fix|metadata_labels_fix)
       if [[ -f "metadata.json" ]]; then
         echo "📝 Sanitizing metadata.json..."
 
-        # Valid enum values
-        VALID_SUBTASKS='["Provisioning of Infrastructure Environments","Application Deployment","CI/CD Pipeline Integration","Failure Recovery and High Availability","Security, Compliance, and Governance","IaC Program Optimization","Infrastructure QA and Management"]'
-        VALID_LABELS='["Environment Migration","Cloud Environment Setup","Multi-Environment Consistency","Web Application Deployment","Serverless Infrastructure (Functions as Code)","CI/CD Pipeline","Failure Recovery Automation","Security Configuration as Code","IaC Diagnosis/Edits","IaC Optimization","Infrastructure Analysis/Monitoring","General Infrastructure Tooling QA"]'
-        VALID_PLATFORMS='["cdk","cdktf","cfn","tf","pulumi","analysis","cicd"]'
-        VALID_LANGUAGES='["ts","js","py","java","go","hcl","yaml","json","sh","yml"]'
-        VALID_COMPLEXITIES='["medium","hard","expert"]'
-        VALID_TURN_TYPES='["single","multi"]'
-        VALID_TEAMS='["2","3","4","5","6","synth","synth-1","synth-2","stf"]'
+        # Use the centralized sanitization script
+        SANITIZE_SCRIPT="$PROJECT_ROOT/.claude/scripts/localstack-sanitize-metadata.sh"
 
-        # Apply comprehensive metadata sanitization
-        jq --argjson valid_subtasks "$VALID_SUBTASKS" \
-           --argjson valid_labels "$VALID_LABELS" \
-           --argjson valid_platforms "$VALID_PLATFORMS" \
-           --argjson valid_languages "$VALID_LANGUAGES" \
-           --argjson valid_complexities "$VALID_COMPLEXITIES" \
-           --argjson valid_turn_types "$VALID_TURN_TYPES" \
-           --argjson valid_teams "$VALID_TEAMS" '
+        if [[ -x "$SANITIZE_SCRIPT" ]]; then
+          # Run the sanitization script
+          if "$SANITIZE_SCRIPT" "metadata.json"; then
+            echo "✅ metadata.json sanitized via script"
+            APPLIED_FIXES+=("$fix")
+          else
+            echo "⚠️ Sanitization script returned non-zero, attempting inline fix..."
+            # Fallback: minimal inline sanitization for critical fields only
+            if jq -e '.subtask' metadata.json >/dev/null 2>&1; then
+              # Ensure subtask is a string (not an array)
+              SUBTASK_TYPE=$(jq -r '.subtask | type' metadata.json 2>/dev/null)
+              if [[ "$SUBTASK_TYPE" == "array" ]]; then
+                jq '.subtask = (.subtask[0] // "Infrastructure QA and Management")' metadata.json > metadata.json.tmp
+                mv metadata.json.tmp metadata.json
+                echo "   ✅ Fixed subtask array → string"
+              fi
+            fi
+            # Ensure provider is set
+            jq '.provider = "localstack" | .team = "synth-2"' metadata.json > metadata.json.tmp
+            mv metadata.json.tmp metadata.json
+            APPLIED_FIXES+=("$fix")
+          fi
+        else
+          echo "⚠️ Sanitization script not found at: $SANITIZE_SCRIPT"
+          echo "   Attempting minimal inline sanitization..."
 
-          # Map invalid subtask to valid ones (MUST be a single string value)
-          def map_subtask:
-            if . == null then "Infrastructure QA and Management"
-            elif . == "Security and Compliance Implementation" then "Security, Compliance, and Governance"
-            elif . == "Security Configuration" then "Security, Compliance, and Governance"
-            elif . == "Database Management" then "Provisioning of Infrastructure Environments"
-            elif . == "Network Configuration" then "Provisioning of Infrastructure Environments"
-            elif . == "Monitoring Setup" then "Infrastructure QA and Management"
-            elif . == "Performance Optimization" then "IaC Program Optimization"
-            elif . == "Access Control" then "Security, Compliance, and Governance"
-            elif . == "Infrastructure Monitoring" then "Infrastructure QA and Management"
-            elif . == "Cost Optimization" then "IaC Program Optimization"
-            elif . == "Resource Provisioning" then "Provisioning of Infrastructure Environments"
-            elif . == "Deployment Automation" then "Application Deployment"
-            elif . == "Disaster Recovery" then "Failure Recovery and High Availability"
-            elif ($valid_subtasks | index(.)) then .
-            else "Infrastructure QA and Management"
-            end;
+          # Minimal inline fix: ensure critical fields
+          jq '
+            # Ensure subtask is a string
+            .subtask = (if .subtask | type == "array" then .subtask[0] // "Infrastructure QA and Management" else .subtask // "Infrastructure QA and Management" end) |
+            # Set required fields
+            .provider = "localstack" |
+            .team = "synth-2" |
+            # Remove disallowed fields
+            del(.task_id, .training_quality, .coverage, .author, .dockerS3Location, .pr_id, .original_pr_id, .localstack_migration)
+          ' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
 
-          # CRITICAL: Enforce subtask is a SINGLE string, not an array!
-          def enforce_subtask_string:
-            if type == "array" then
-              if length > 0 then .[0] | map_subtask
-              else "Infrastructure QA and Management"
-              end
-            elif type == "string" then
-              . | map_subtask
-            else
-              "Infrastructure QA and Management"
-            end;
-
-          # Map invalid subject_label to valid one
-          def map_label:
-            if . == "Security Configuration" then "Security Configuration as Code"
-            elif . == "Database Management" then "General Infrastructure Tooling QA"
-            elif . == "Network Configuration" then "Cloud Environment Setup"
-            elif . == "Access Control" then "Security Configuration as Code"
-            elif . == "Monitoring Setup" then "Infrastructure Analysis/Monitoring"
-            elif . == "Performance Optimization" then "IaC Optimization"
-            elif . == "Cost Management" then "IaC Optimization"
-            elif . == "Resource Management" then "General Infrastructure Tooling QA"
-            elif . == "Backup Configuration" then "Failure Recovery Automation"
-            elif . == "Logging Setup" then "Infrastructure Analysis/Monitoring"
-            elif . == "Container Orchestration" then "Web Application Deployment"
-            elif . == "API Management" then "Web Application Deployment"
-            elif . == "Data Pipeline" then "General Infrastructure Tooling QA"
-            elif . == "Storage Configuration" then "Cloud Environment Setup"
-            elif . == "Compute Provisioning" then "Cloud Environment Setup"
-            else .
-            end;
-
-          # Validate enums
-          def validate_platform: if ($valid_platforms | index(.)) then . else "cfn" end;
-          def validate_language: if ($valid_languages | index(.)) then . else "yaml" end;
-          def validate_complexity: if ($valid_complexities | index(.)) then . else "medium" end;
-          def validate_turn_type: if ($valid_turn_types | index(.)) then . else "single" end;
-          def validate_team: if ($valid_teams | index(.)) then . else "synth" end;
-          def validate_started_at: if . == null or . == "" then (now | todate) else . end;
-
-          # Build sanitized object with ONLY allowed fields
-          # NOTE: subtask uses enforce_subtask_string to ensure it's a single value!
-          # NOTE: team is always set to "synth-2" for LocalStack migrations
-          {
-            platform: (.platform | validate_platform),
-            language: (.language | validate_language),
-            complexity: (.complexity | validate_complexity),
-            turn_type: (.turn_type | validate_turn_type),
-            po_id: (.po_id // .task_id // "unknown"),
-            team: "synth-2",
-            startedAt: (.startedAt | validate_started_at),
-            subtask: (.subtask | enforce_subtask_string),
-            provider: "localstack",
-            subject_labels: (
-              [.subject_labels[]? | map_label]
-              | unique
-              | map(select(. as $l | $valid_labels | index($l)))
-              | if length == 0 then ["General Infrastructure Tooling QA"] else . end
-            ),
-            aws_services: (.aws_services // [])
-          }
-        ' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
-
-        echo "✅ metadata.json sanitized"
-        APPLIED_FIXES+=("$fix")
+          echo "✅ metadata.json sanitized (inline)"
+          APPLIED_FIXES+=("$fix")
+        fi
       fi
       ;;
 
@@ -1312,8 +1456,8 @@ EOF
         if [[ -f "coverage/coverage-summary.json" ]]; then
           COVERAGE_PCT=$(jq -r '.total.lines.pct // 0' "coverage/coverage-summary.json" 2>/dev/null || echo "0")
 
-          # Check if coverage is at least 80%
-          if [[ $(echo "$COVERAGE_PCT >= 80" | bc -l 2>/dev/null || echo "0") -eq 1 ]]; then
+          # Cross-platform check: coverage >= 80% (uses float_gte function defined in Step 1)
+          if float_gte "$COVERAGE_PCT" 80; then
             CAN_MODIFY_JEST=true
             echo "   ✅ Coverage check passed: ${COVERAGE_PCT}%"
           else
@@ -1503,13 +1647,13 @@ if [[ "$MODE" == "pr" ]]; then
 
   # ═══════════════════════════════════════════════════════════════
   # PRODUCTION READY LOOP - MUST iterate until ALL CI/CD jobs pass
+  # Uses values loaded from config in Step 1
   # ═══════════════════════════════════════════════════════════════
 
   CICD_ITERATION=1
-  MAX_CICD_ITERATIONS=10  # Maximum iterations to prevent infinite loops
+  # MAX_CICD_ITERATIONS and CICD_WAIT_TIMEOUT loaded from config in Step 1
   PRODUCTION_READY=false
-  CICD_WAIT_TIMEOUT=900   # 15 minutes per iteration
-  POLL_INTERVAL=30        # Poll every 30 seconds
+  EXPECTED_RUN_ID=""  # Track run ID to detect new workflow runs (race condition fix)
 
   while [ $CICD_ITERATION -le $MAX_CICD_ITERATIONS ] && [ "$PRODUCTION_READY" == "false" ]; do
     echo ""
@@ -1527,9 +1671,9 @@ if [[ "$MODE" == "pr" ]]; then
     CICD_COMPLETE=false
 
     while [ $WAIT_TIME -lt $CICD_WAIT_TIMEOUT ] && [ "$CICD_COMPLETE" == "false" ]; do
-      # Fetch latest workflow run
-      LATEST_RUN=$(gh run list --repo "$GITHUB_REPO" --branch "$PR_BRANCH" --limit 1 \
-        --json databaseId,status,conclusion 2>/dev/null | jq '.[0]' 2>/dev/null)
+      # Fetch latest workflow run (with retry for transient failures)
+      LATEST_RUN=$(gh_with_retry gh run list --repo "$GITHUB_REPO" --branch "$PR_BRANCH" --limit 1 \
+        --json databaseId,status,conclusion,createdAt 2>/dev/null | jq '.[0]' 2>/dev/null)
 
       if [[ -z "$LATEST_RUN" ]] || [[ "$LATEST_RUN" == "null" ]]; then
         echo "⚠️ Could not fetch workflow status, retrying..."
@@ -1541,12 +1685,31 @@ if [[ "$MODE" == "pr" ]]; then
       RUN_STATUS=$(echo "$LATEST_RUN" | jq -r '.status // "unknown"')
       RUN_CONCLUSION=$(echo "$LATEST_RUN" | jq -r '.conclusion // "pending"')
       RUN_ID=$(echo "$LATEST_RUN" | jq -r '.databaseId')
+      RUN_CREATED=$(echo "$LATEST_RUN" | jq -r '.createdAt // ""')
+
+      # ═══════════════════════════════════════════════════════════════
+      # RACE CONDITION FIX: Detect if a new workflow run started
+      # This can happen if someone else pushes or GitHub retriggers
+      # ═══════════════════════════════════════════════════════════════
+      if [[ -n "$EXPECTED_RUN_ID" ]] && [[ "$RUN_ID" != "$EXPECTED_RUN_ID" ]]; then
+        echo "🔄 New workflow run detected (ID: $RUN_ID, was: $EXPECTED_RUN_ID)"
+        echo "   Resetting wait timer and tracking new run..."
+        EXPECTED_RUN_ID="$RUN_ID"
+        WAIT_TIME=0
+        continue
+      fi
+
+      # Set expected run ID on first fetch
+      if [[ -z "$EXPECTED_RUN_ID" ]]; then
+        EXPECTED_RUN_ID="$RUN_ID"
+        echo "📋 Tracking workflow run ID: $RUN_ID (created: $RUN_CREATED)"
+      fi
 
       if [[ "$RUN_STATUS" == "completed" ]]; then
         CICD_COMPLETE=true
-        echo "✅ CI/CD run completed with conclusion: $RUN_CONCLUSION"
+        echo "✅ CI/CD run $RUN_ID completed with conclusion: $RUN_CONCLUSION"
       else
-        echo "⏳ CI/CD still running... Status: $RUN_STATUS (${WAIT_TIME}s / ${CICD_WAIT_TIMEOUT}s)"
+        echo "⏳ CI/CD still running... Run ID: $RUN_ID, Status: $RUN_STATUS (${WAIT_TIME}s / ${CICD_WAIT_TIMEOUT}s)"
         sleep $POLL_INTERVAL
         WAIT_TIME=$((WAIT_TIME + POLL_INTERVAL))
       fi
@@ -1575,8 +1738,8 @@ if [[ "$MODE" == "pr" ]]; then
     echo "   Analyzing failures for iteration ${CICD_ITERATION}..."
     echo ""
 
-    # Fetch failed jobs from this run
-    JOBS=$(gh run view "$RUN_ID" --repo "$GITHUB_REPO" --json jobs 2>/dev/null | jq '.jobs // []')
+    # Fetch failed jobs from this run (with retry)
+    JOBS=$(gh_with_retry gh run view "$RUN_ID" --repo "$GITHUB_REPO" --json jobs 2>/dev/null | jq '.jobs // []')
     FAILED_JOBS=$(echo "$JOBS" | jq '[.[] | select(.conclusion == "failure")]')
     FAILED_COUNT=$(echo "$FAILED_JOBS" | jq 'length')
 
@@ -1589,8 +1752,10 @@ if [[ "$MODE" == "pr" ]]; then
       echo "⚠️ No failed jobs but conclusion was: $RUN_CONCLUSION"
       if [[ "$RUN_CONCLUSION" == "cancelled" ]]; then
         echo "   Workflow was cancelled. Triggering re-run..."
-        gh run rerun "$RUN_ID" --repo "$GITHUB_REPO" 2>/dev/null || true
+        gh_with_retry gh run rerun "$RUN_ID" --repo "$GITHUB_REPO" 2>/dev/null || true
       fi
+      # Reset expected run ID for next iteration (new run will be created)
+      EXPECTED_RUN_ID=""
       CICD_ITERATION=$((CICD_ITERATION + 1))
       continue
     fi
@@ -1600,20 +1765,22 @@ if [[ "$MODE" == "pr" ]]; then
 
     # Fetch error logs from failed jobs
     LOG_DIR=$(mktemp -d)
+    register_cleanup_dir "$LOG_DIR"  # Register for cleanup on exit
     ALL_ERRORS_FILE="$LOG_DIR/all_errors.txt"
     touch "$ALL_ERRORS_FILE"
 
-    echo "$FAILED_JOBS" | jq -c '.[]' | while read -r job; do
+    # NOTE: Using process substitution (< <(...)) instead of pipe to avoid subshell variable scope issues
+    while read -r job; do
       JOB_NAME=$(echo "$job" | jq -r '.name')
       JOB_ID=$(echo "$job" | jq -r '.databaseId')
 
       echo "📥 Fetching logs for: $JOB_NAME..."
-      gh run view "$RUN_ID" --repo "$GITHUB_REPO" --log --job "$JOB_ID" > "$LOG_DIR/job_${JOB_ID}.log" 2>/dev/null || true
+      gh_with_retry gh run view "$RUN_ID" --repo "$GITHUB_REPO" --log --job "$JOB_ID" > "$LOG_DIR/job_${JOB_ID}.log" 2>/dev/null || true
 
       if [[ -f "$LOG_DIR/job_${JOB_ID}.log" ]]; then
         grep -iE "error:|Error:|ERROR|failed|Failed|FAILED|exception" "$LOG_DIR/job_${JOB_ID}.log" >> "$ALL_ERRORS_FILE" 2>/dev/null || true
       fi
-    done
+    done < <(echo "$FAILED_JOBS" | jq -c '.[]')
 
     # Parse new errors and identify additional fixes
     NEW_ERRORS=$(sort -u "$ALL_ERRORS_FILE" | grep -v '^$' | head -20)
@@ -1670,6 +1837,9 @@ Automated by localstack-fixer agent."
           echo "📤 Pushing iteration ${CICD_ITERATION} fixes..."
           git push origin "$PR_BRANCH"
           echo "✅ Pushed fixes for iteration ${CICD_ITERATION}"
+
+          # Reset expected run ID - push will trigger new workflow run
+          EXPECTED_RUN_ID=""
         else
           echo "ℹ️ No additional changes to commit"
         fi
@@ -1678,8 +1848,8 @@ Automated by localstack-fixer agent."
       fi
     fi
 
-    # Cleanup temp directory
-    rm -rf "$LOG_DIR"
+    # Cleanup temp directory (also handled by trap, but do it explicitly)
+    rm -rf "$LOG_DIR" 2>/dev/null || true
 
     CICD_ITERATION=$((CICD_ITERATION + 1))
   done
@@ -1715,21 +1885,16 @@ fi
 ```bash
 # ═══════════════════════════════════════════════════════════════
 # LOCAL MODE: Don't cleanup - localstack-migrate manages worktree
-# PR MODE: Cleanup worktree and return to project root
+# PR MODE: Cleanup is handled by the trap registered in Step 1
 # ═══════════════════════════════════════════════════════════════
 
 if [[ "$MODE" == "pr" ]]; then
   # Return to project root
   cd "$PROJECT_ROOT"
 
-  # Cleanup worktree (only in PR mode)
-  if [[ -d "$WORK_DIR" ]] && [[ "$WORK_DIR" == worktree/fixer-* ]]; then
-    echo "🧹 Cleaning up worktree..."
-    git worktree remove "$WORK_DIR" --force 2>/dev/null || rm -rf "$WORK_DIR"
-  fi
-
-  # Prune orphaned worktrees
-  git worktree prune 2>/dev/null || true
+  # Note: Worktree cleanup is handled by the cleanup_on_exit trap
+  # registered in Step 1. We just ensure we're in the right directory.
+  echo "🧹 Cleanup will be handled by exit handler..."
 fi
 
 echo ""
