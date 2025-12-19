@@ -448,6 +448,7 @@ Resources:
       DBName: securewebapp
       MasterUsername: !Ref DBUsername
       # LocalStack Community has limited Secrets Manager support - use parameter for testing
+      # cfn-lint: ignore W1011 - LocalStack compatibility requires parameter instead of dynamic reference
       MasterUserPassword: !Ref DBPassword
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
