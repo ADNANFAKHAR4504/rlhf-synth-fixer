@@ -9,8 +9,7 @@
   "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "Serverless Infrastructure (Functions as Code)",
-    "Cloud Environment Setup"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "lambda",
