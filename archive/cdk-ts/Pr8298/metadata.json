@@ -16,5 +16,11 @@
     "s3",
     "iam",
     "ec2"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
