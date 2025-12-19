@@ -15,7 +15,7 @@ const environment =
 const region = process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1';
 const account = process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID || '000000000000';
 
-new TapStack(app, `TapStack-${environment}`, {
+new TapStack(app, `TapStack${environment}`, {
   env: {
     account,
     region,
