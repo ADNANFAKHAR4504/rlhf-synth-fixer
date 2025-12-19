@@ -234,7 +234,7 @@ Affected versions: cli: ^2.0.0
 More information at: https://github.com/aws/aws-cdk/issues/34892
 
 If you don’t want to see a notice anymore, use "cdk acknowledge <id>". For example, "cdk acknowledge 34892".
-⏱ Total deployment time: 65s
+ Total deployment time: 65s
  Verifying deployment...
  Stack status: CREATE_COMPLETE
  Final Resource Summary:
