@@ -643,7 +643,7 @@ curl -X GET https://api-id.execute-api.region.amazonaws.com/test/data \
 
 ---
 
-## 🎉 **ISSUE RESOLUTION SUMMARY**
+## **ISSUE RESOLUTION SUMMARY**
 
 ### **ALL ISSUES SUCCESSFULLY RESOLVED!**
 
