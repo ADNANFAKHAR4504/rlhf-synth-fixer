@@ -1,0 +1,14 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "534311",
+  "team": "2",
+  "startedAt": "2025-11-25T14:22:16.191Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "provider": "localstack"
+}
