@@ -685,7 +685,7 @@ class DynamoDBAnalyzer:
     def _display_console_output(self):
         """Display findings in console"""
         if not self.findings:
-            print("\n✅ No optimization issues found!")
+            print("\nNo optimization issues found!")
             return
 
         # Display header

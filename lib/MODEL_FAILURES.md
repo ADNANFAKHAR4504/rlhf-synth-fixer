@@ -27,7 +27,7 @@ if os.environ.get('AWS_ENDPOINT_URL'):
 
 **Issue:** The model generated an overly simplistic console output that fails to meet professional reporting standards. Key problems:
 
-- Uses emoji characters (✅) which may not render correctly in all terminals
+- Uses emoji characters which may not render correctly in all terminals
 - Missing detailed header section
 - Lacks comprehensive table display with proper column width management
 - No detailed recommendations section organized by table
