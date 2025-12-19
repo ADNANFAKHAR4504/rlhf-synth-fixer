@@ -4,11 +4,18 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "482221",
-  "team": "2",
+  "team": "synth",
   "startedAt": "2025-11-16T09:01:54.998Z",
-  "subtask": "IaC Program Optimization",
+  "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "IaC Optimization"
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "ECS",
+    "EKS",
+    "CloudWatch",
+    "EC2",
+    "Auto Scaling"
   ],
   "provider": "localstack"
 }
