@@ -10,7 +10,7 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "training_quality": 8,
+  "provider": "localstack",
   "aws_services": [
     "CloudFormation",
     "S3",
@@ -18,9 +18,5 @@
     "IAM",
     "VPC",
     "CloudWatch"
-  ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  }
+  ]
 }
