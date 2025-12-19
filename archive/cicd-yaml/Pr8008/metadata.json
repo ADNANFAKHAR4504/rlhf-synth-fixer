@@ -1,0 +1,29 @@
+{
+  "platform": "cicd",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "v3o6j2a4",
+  "team": "synth",
+  "startedAt": "2025-12-05T20:32:17+05:30",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "AWS Config",
+    "S3",
+    "Lambda",
+    "SNS",
+    "IAM",
+    "SSM Parameter Store",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
