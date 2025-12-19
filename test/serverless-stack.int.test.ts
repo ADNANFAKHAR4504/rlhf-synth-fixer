@@ -28,10 +28,14 @@ const outputs = JSON.parse(
 
 // Configure AWS clients
 const region = 'us-east-1';
-const lambdaClient = new LambdaClient({ region });
-const s3Client = new S3Client({ region });
-const cloudWatchClient = new CloudWatchLogsClient({ region });
-const kmsClient = new KMSClient({ region });
+const endpoint = process.env.AWS_ENDPOINT_URL;
+const lambdaClient = new LambdaClient({ region, ...(endpoint && { endpoint }) });
+const s3Client = new S3Client({
+  region,
+  ...(endpoint && { endpoint, forcePathStyle: true })
+});
+const cloudWatchClient = new CloudWatchLogsClient({ region, ...(endpoint && { endpoint }) });
+const kmsClient = new KMSClient({ region, ...(endpoint && { endpoint }) });
 
 // Helper function to make HTTP requests
 function makeRequest(url: string, method: string = 'GET', data?: any): Promise<any> {

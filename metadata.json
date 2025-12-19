@@ -4,12 +4,11 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "trainr155",
-  "team": "synth",
+  "team": "synth-2",
   "startedAt": "2025-08-19T10:37:02+05:30",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
     "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
