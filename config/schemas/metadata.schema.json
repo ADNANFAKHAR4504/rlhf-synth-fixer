@@ -110,6 +110,7 @@
           "Environment Migration",
           "Cloud Environment Setup",
           "Multi-Environment Consistency",
+          "Multi-Environment Consistency and Replication",
           "Web Application Deployment",
           "Serverless Infrastructure (Functions as Code)",
           "CI/CD Pipeline",
