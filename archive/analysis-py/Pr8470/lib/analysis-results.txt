@@ -1,6 +1,6 @@
-2025-11-27 08:29:17,135 - INFO - Found credentials in environment variables.
-2025-11-27 08:29:17,211 - INFO - Starting EventBridge analysis in us-east-1
-2025-11-27 08:29:17,457 - INFO - Analysis complete
+2025-12-19 16:37:31,918 - INFO - Found credentials in environment variables.
+2025-12-19 16:37:31,997 - INFO - Starting EventBridge analysis in us-east-1
+2025-12-19 16:37:32,261 - INFO - Analysis complete
 
 ================================================================================
 EventBridge Analysis Report
