@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as http from 'http';
 import * as https from 'https';
 import {
   LambdaClient,
@@ -23,6 +24,9 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
+// LocalStack detection
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('4566');
+
 // Configure AWS clients
 const region = 'us-east-1';
 const endpoint = process.env.AWS_ENDPOINT_URL;
@@ -40,7 +44,7 @@ const cloudWatchClient = new CloudWatchLogsClient({
 });
 const kmsClient = new KMSClient({ region, ...(endpoint && { endpoint }) });
 
-// Helper function to make HTTP requests
+// Helper function to make HTTP requests (supports both http and https)
 function makeRequest(
   url: string,
   method: string = 'GET',
@@ -50,14 +54,18 @@ function makeRequest(
     const urlObj = new URL(url);
     const options = {
       hostname: urlObj.hostname,
-      path: urlObj.pathname,
+      port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+      path: urlObj.pathname + urlObj.search,
       method: method,
       headers: {
         'Content-Type': 'application/json',
       },
+      // Disable SSL verification for LocalStack
+      rejectUnauthorized: !isLocalStack,
     };
 
-    const req = https.request(options, res => {
+    const protocol = urlObj.protocol === 'https:' ? https : http;
+    const req = protocol.request(options, res => {
       let responseData = '';
       res.on('data', chunk => {
         responseData += chunk;

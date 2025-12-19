@@ -73,8 +73,8 @@ describe('TapStack Integration Tests', () => {
 
     test('Should have valid API Gateway URL', () => {
       if (isLocalStack) {
-        // LocalStack uses http://localhost:4566
-        expect(apiGatewayUrl).toMatch(/^http(s)?:\/\/(localhost|127\.0\.0\.1):[0-9]+\/restapis\/.+/);
+        // LocalStack can use either old format (http://localhost:4566/restapis/) or new format (https://xxx.execute-api.localhost.localstack.cloud:4566/)
+        expect(apiGatewayUrl).toMatch(/^http(s)?:\/\/(localhost|127\.0\.0\.1|[^/]+\.localhost\.localstack\.cloud):[0-9]+(\/restapis\/|\/)[^/]+/);
       } else {
         expect(apiGatewayUrl).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/.+\/$/);
       }
