@@ -538,36 +538,36 @@ Outputs:
 
 ## Key Security Features Implemented
 
-### 🔐 **Network Security**
+### **Network Security**
 - **VPC with public/private subnets** across multiple AZs
 - **Security groups** with minimal required access
 - **NAT Gateway** for secure outbound internet access from private subnets
 - **No direct internet access** to database subnets
 
-### 🛡️ **Data Encryption**
+### **Data Encryption**
 - **S3 buckets** with AES-256 encryption at rest
 - **RDS instance** with encryption at rest using AWS KMS
 - **EBS volumes** encrypted for EC2 instances
 
-### 👤 **IAM Security**
+### **IAM Security**
 - **IAM roles** for EC2 instances (no embedded credentials)
 - **Least privilege** access policies
 - **Instance profiles** for secure service access
 
-### 📊 **S3 Logging Configuration**
+### **S3 Logging Configuration**
 - **Versioning enabled** on logging bucket
 - **Server access logging** configured
 - **Public access blocked** on all buckets
 - **Lifecycle policies** for log retention
 
-### 🗄️ **RDS Security**
+### **RDS Security**
 - **Private subnets only** (non-publicly accessible)
 - **Encrypted storage** enabled
 - **Security group** allowing access only from web servers
 - **Automated backups** and **deletion protection**
 - **CloudWatch logs** export enabled
 
-### 📋 **Compliance Features**
+### **Compliance Features**
 - **All resources tagged** with Environment: Production
 - **CloudWatch monitoring** enabled
 - **IMDSv2 enforced** on EC2 instances
