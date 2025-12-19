@@ -78,7 +78,7 @@ class TapStack(cdk.Stack):
     self.bucket = s3.Bucket(
       self, "RequestBucket",
       removal_policy=RemovalPolicy.DESTROY,
-      auto_delete_objects=True,
+      # LOCALSTACK FIX: Removed auto_delete_objects - requires ECR (not in Community)
       versioned=False,
     )
 
