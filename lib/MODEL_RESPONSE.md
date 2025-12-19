@@ -1,3 +1,4 @@
+```hcl
 # Get current AWS region and account ID
 data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
@@ -348,4 +349,143 @@ resource "aws_api_gateway_deployment" "app_deployment" {
   }
 }
 
-# Clou
+# CloudWatch Log Group for API Gateway
+resource "aws_cloudwatch_log_group" "api_gateway_logs" {
+  name              = "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.app_api.id}/prod"
+  retention_in_days = 14
+
+  tags = {
+    Name = "ServerlessAppAPILogs"
+  }
+}
+
+# IAM Role for API Gateway CloudWatch Logs
+resource "aws_iam_role" "api_gateway_cloudwatch_role" {
+  name = "api-gateway-cloudwatch-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "apigateway.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# Attach CloudWatch logs policy to API Gateway role
+resource "aws_iam_role_policy_attachment" "api_gateway_cloudwatch" {
+  role       = aws_iam_role.api_gateway_cloudwatch_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+}
+
+# API Gateway Account settings for CloudWatch
+resource "aws_api_gateway_account" "main" {
+  cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch_role.arn
+}
+
+# API Gateway Stage with logging enabled
+resource "aws_api_gateway_stage" "prod" {
+  deployment_id = aws_api_gateway_deployment.app_deployment.id
+  rest_api_id   = aws_api_gateway_rest_api.app_api.id
+  stage_name    = "prod"
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_gateway_logs.arn
+    format = jsonencode({
+      requestId      = "$context.requestId"
+      ip             = "$context.identity.sourceIp"
+      caller         = "$context.identity.caller"
+      user           = "$context.identity.user"
+      requestTime    = "$context.requestTime"
+      httpMethod     = "$context.httpMethod"
+      resourcePath   = "$context.resourcePath"
+      status         = "$context.status"
+      protocol       = "$context.protocol"
+      responseLength = "$context.responseLength"
+    })
+  }
+
+  depends_on = [aws_api_gateway_account.main]
+
+  tags = {
+    Name = "ServerlessAppProdStage"
+  }
+}
+
+# Outputs
+output "api_gateway_url" {
+  description = "URL of the API Gateway"
+  value       = "${aws_api_gateway_deployment.app_deployment.invoke_url}"
+}
+
+output "dynamodb_table_name" {
+  description = "Name of the DynamoDB table"
+  value       = aws_dynamodb_table.app_table.name
+}
+
+output "lambda_function_name" {
+  description = "Name of the Lambda function"
+  value       = aws_lambda_function.app_function.function_name
+}
+
+output "region" {
+  description = "AWS region where resources are deployed"
+  value       = data.aws_region.current.name
+}
+```
+
+## Key Features of This Configuration:
+
+### 1. **DynamoDB Table**
+- Configured with on-demand billing mode (PAY_PER_REQUEST)
+- Uses a simple hash key structure with "id" as the primary key
+- Region-independent configuration
+
+### 2. **Lambda Function**
+- Python 3.9 runtime with a complete sample application
+- Handles GET (read items) and POST (create items) operations
+- Includes proper error handling and CORS headers
+- Environment variables for DynamoDB table name and region
+
+### 3. **API Gateway**
+- RESTful API with proxy integration
+- Handles all HTTP methods through the Lambda function
+- CORS enabled for all origins with proper preflight handling
+- CloudWatch logging enabled
+
+### 4. **IAM Roles and Permissions**
+- Separate roles for Lambda and API Gateway
+- Least-privilege access policies
+- Lambda has specific DynamoDB permissions
+- API Gateway has CloudWatch logging permissions
+
+### 5. **CloudWatch Logging**
+- Separate log groups for Lambda and API Gateway
+- 14-day retention policy
+- Structured logging for API Gateway access logs
+
+### 6. **Region Independence**
+- Uses data sources to get current region and account ID
+- No hardcoded region-specific values
+- Works in any AWS region
+
+## Usage Example:
+
+After deployment, you can test the API:
+
+```bash
+# GET request to retrieve all items
+curl https://your-api-id.execute-api.region.amazonaws.com/prod/
+
+# POST request to create a new item
+curl -X POST https://your-api-id.execute-api.region.amazonaws.com/prod/ \
+  -H "Content-Type: application/json" \
+  -d '{"id": "test-item", "name": "Test Item", "description": "This is a test"}'
+```
+
+The configuration creates a fully functional serverless application that can be deployed with a simple `terraform apply` command.
