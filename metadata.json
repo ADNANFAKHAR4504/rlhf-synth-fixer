@@ -24,6 +24,5 @@
     "Logs",
     "SSM",
     "IAM"
-  ],
-  "dockerS3Location": ""
+  ]
 }
