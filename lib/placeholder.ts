@@ -6,4 +6,3 @@
  * The actual stack implementation is in the .mjs files.
  */
 export {};
-
