@@ -20,6 +20,5 @@
     "VPC",
     "Security Groups"
   ],
-  "provider": "localstack",
-  "training_quality": 8
+  "provider": "localstack"
 }
