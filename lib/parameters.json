@@ -1,0 +1,10 @@
+[
+  {
+    "ParameterKey": "IsLocalStack",
+    "ParameterValue": "true"
+  },
+  {
+    "ParameterKey": "EnvironmentSuffix",
+    "ParameterValue": "dev"
+  }
+]

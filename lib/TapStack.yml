@@ -23,6 +23,16 @@ Parameters:
   WhitelistedUser:
     Type: String
     Default: "whitelisteduser" # Replace with actual IAM user
+  IsLocalStack:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Set to true when deploying to LocalStack (skips Pro features)'
+
+Conditions:
+  NotLocalStack: !Equals [!Ref IsLocalStack, 'false']
 
 Resources:
   # --- NETWORKING (Requirement 1,13) ---
@@ -550,7 +560,8 @@ Resources:
 
   GuardDutyDetector:
     Type: AWS::GuardDuty::Detector
-    Properties: 
+    Condition: NotLocalStack
+    Properties:
       Enable: true
       FindingPublishingFrequency: FIFTEEN_MINUTES
 
@@ -564,6 +575,7 @@ Resources:
 
   GuardDutyEventRule:
     Type: AWS::Events::Rule
+    Condition: NotLocalStack
     Properties:
       Description: "GuardDuty Findings"
       EventPattern:
