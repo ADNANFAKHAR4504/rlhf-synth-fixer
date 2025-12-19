@@ -19,35 +19,33 @@ class TestTapStack(unittest.TestCase):
         """Set up a fresh CDK app for each test"""
         self.app = cdk.App()
 
-    @mark.it("creates an S3 bucket with the correct environment suffix")
-    def test_creates_s3_bucket_with_env_suffix(self):
+    @mark.it("creates Lambda functions for the serverless platform")
+    def test_creates_lambda_functions(self):
         # ARRANGE
         env_suffix = "testenv"
         stack = TapStack(self.app, "TapStackTest",
                          TapStackProps(environment_suffix=env_suffix))
         template = Template.from_stack(stack)
 
-        # ASSERT
-        template.resource_count_is("AWS::S3::Bucket", 1)
-        template.has_resource_properties("AWS::S3::Bucket", {
-            "BucketName": f"tap-bucket-{env_suffix}"
-        })
+        # ASSERT - Should have 2 Lambda functions (Sample + Monitoring)
+        template.resource_count_is("AWS::Lambda::Function", 2)
 
-    @mark.it("defaults environment suffix to 'dev' if not provided")
-    def test_defaults_env_suffix_to_dev(self):
+    @mark.it("creates API Gateway for the serverless platform")
+    def test_creates_api_gateway(self):
         # ARRANGE
         stack = TapStack(self.app, "TapStackTestDefault")
         template = Template.from_stack(stack)
 
-        # ASSERT
-        template.resource_count_is("AWS::S3::Bucket", 1)
-        template.has_resource_properties("AWS::S3::Bucket", {
-            "BucketName": "tap-bucket-dev"
-        })
+        # ASSERT - Should have 1 REST API
+        template.resource_count_is("AWS::ApiGateway::RestApi", 1)
 
-    @mark.it("Write Unit Tests")
-    def test_write_unit_tests(self):
+    @mark.it("creates IAM roles for Lambda and API Gateway")
+    def test_creates_iam_roles(self):
         # ARRANGE
-        self.fail(
-            "Unit test for TapStack should be implemented here."
-        )
+        stack = TapStack(self.app, "TapStackTestIAM")
+        template = Template.from_stack(stack)
+
+        # ASSERT - Should have IAM roles (Lambda execution + API Gateway CloudWatch)
+        # The count may be 1 or 2 depending on API Gateway configuration
+        iam_role_count = len(template.find_resources("AWS::IAM::Role"))
+        self.assertGreaterEqual(iam_role_count, 1)
