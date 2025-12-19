@@ -14,10 +14,17 @@
   ],
   "aws_services": [
     "S3 Bucket",
-    "CloudFormation",
     "Lambda",
     "API Gateway",
     "IAM",
+    "CloudFormation",
     "CloudWatch LogGroup"
-  ]
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
 }
