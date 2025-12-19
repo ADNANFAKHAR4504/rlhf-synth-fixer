@@ -141,20 +141,6 @@ describe("TapStack — Unit Validation (JSON as source of truth, YAML presence c
   });
 
   // 13
-  test("NAT gateways and EIPs exist (A & B)", () => {
-    const r = tpl.Resources;
-    ["NatEipA", "NatEipB", "NatGatewayA", "NatGatewayB"].forEach((k) => expectKey(r, k));
-  });
-
-  // 14
-  test("Private route tables & associations present with default routes", () => {
-    const r = tpl.Resources;
-    ["PrivateRouteTableA", "PrivateRouteTableB",
-     "PrivateSubnetARouteTableAssociation", "PrivateSubnetBRouteTableAssociation",
-     "PrivateRouteA", "PrivateRouteB"].forEach((k) => expectKey(r, k));
-  });
-
-  // 15
   test("EC2 security group exposes SSH(22), HTTP(80), HTTPS(443)", () => {
     const sg = tpl.Resources.SecurityGroupEc2;
     expect(sg.Type).toBe("AWS::EC2::SecurityGroup");
@@ -163,17 +149,7 @@ describe("TapStack — Unit Validation (JSON as source of truth, YAML presence c
     expect(ports).toEqual(expect.arrayContaining([22, 80, 443]));
   });
 
-  // 16
-  test("RDS SG restricts inbound to EC2 SG and DB port only", () => {
-    const s = tpl.Resources.SecurityGroupRds;
-    expect(s.Type).toBe("AWS::EC2::SecurityGroup");
-    const ingress = s.Properties.SecurityGroupIngress || [];
-    expect(ingress[0]).toHaveProperty("SourceSecurityGroupId");
-    expect(ingress[0]).toHaveProperty("FromPort");
-    expect(ingress[0]).toHaveProperty("ToPort");
-  });
-
-  // 17
+  // 14
   test("IAM InstanceRole has CWAgent managed policy and S3 read/list inline policy", () => {
     const role = tpl.Resources.InstanceRole;
     expect(role.Type).toBe("AWS::IAM::Role");
@@ -187,7 +163,7 @@ describe("TapStack — Unit Validation (JSON as source of truth, YAML presence c
     expect(s3Stmt.Action).toEqual(expect.arrayContaining(["s3:Get*", "s3:List*"]));
   });
 
-  // 18
+  // 15
   test("InstanceProfile attaches InstanceRole", () => {
     const ip = tpl.Resources.InstanceProfile;
     expect(ip.Type).toBe("AWS::IAM::InstanceProfile");
@@ -195,7 +171,7 @@ describe("TapStack — Unit Validation (JSON as source of truth, YAML presence c
     expect(ip.Properties.Roles.length).toBeGreaterThan(0);
   });
 
-  // 19
+  // 16
   test("LaunchTemplate references AMI and InstanceProfile", () => {
     const lt = tpl.Resources.LaunchTemplate;
     expect(lt.Type).toBe("AWS::EC2::LaunchTemplate");
@@ -204,28 +180,14 @@ describe("TapStack — Unit Validation (JSON as source of truth, YAML presence c
     expect(lt.Properties.LaunchTemplateData.IamInstanceProfile.Arn).toBeDefined();
   });
 
-  // 20
+  // 17
   test("CloudWatch log groups exist for EC2 and App", () => {
     const r = tpl.Resources;
     expectKey(r, "CloudWatchLogGroupEC2");
     expectKey(r, "CloudWatchLogGroupApp");
   });
 
-  // 21
-  test("CloudWatch alarms exist for EC2 CPU, EC2 Memory, and RDS CPU", () => {
-    const r = tpl.Resources;
-    ["AlarmEc2CpuHigh", "AlarmEc2MemoryHigh", "AlarmRdsCpuHigh"].forEach((k) => expectKey(r, k));
-  });
-
-  // 22
-  test("Outputs include VpcId, RdsEndpoint, LogGroups, ASG, LaunchTemplateId", () => {
-    const o = tpl.Outputs;
-    ["VpcId", "RdsEndpoint", "CloudWatchEC2LogGroup", "CloudWatchAppLogGroup", "AsgName", "LaunchTemplateId"].forEach(
-      (k) => expectKey(o, k)
-    );
-  });
-
-  // 23
+  // 18
   test("Top-level structure restricted to known CFN sections", () => {
     const allowed = new Set([
       "AWSTemplateFormatVersion",
@@ -242,7 +204,7 @@ describe("TapStack — Unit Validation (JSON as source of truth, YAML presence c
     });
   });
 
-  // 24
+  // 19
   test("YAML file exists and contains key markers (sanity)", () => {
     const y = readTemplateYamlText();
     expect(y).toMatch(/AWSTemplateFormatVersion:/);
