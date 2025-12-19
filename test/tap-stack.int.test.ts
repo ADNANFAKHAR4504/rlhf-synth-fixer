@@ -24,7 +24,7 @@ import net from 'net';
 // Configuration - Get outputs from CloudFormation stack
 let outputs: any = {};
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || '';
-const stackName = `tap-stack-localstack${environmentSuffix}`;
+const stackName = `localstack-stack-${environmentSuffix}`;
 
 try {
   outputs = JSON.parse(
