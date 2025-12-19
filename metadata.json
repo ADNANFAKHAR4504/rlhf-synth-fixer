@@ -1,0 +1,24 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "410111",
+  "team": "4",
+  "provider": "localstack",
+  "startedAt": "2025-10-03T09:24:14.351Z",
+  "subtask": "IaC Optimization",
+  "subject_labels": [
+    "IaC Program Optimization"
+  ],
+  "aws_services": [
+    "Lambda",
+    "Step Functions",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "training_quality": 8
+}
