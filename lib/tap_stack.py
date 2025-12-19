@@ -17,7 +17,8 @@ from aws_cdk import (
     CfnOutput,
     Duration,
     StackProps,
-    RemovalPolicy
+    RemovalPolicy,
+    Fn
 )
 from constructs import Construct
 
@@ -335,33 +336,60 @@ class TapStack(Stack):
         # AWS: Use PRIVATE_WITH_EGRESS subnets (behind NAT Gateway)
         subnet_type = ec2.SubnetType.PUBLIC if is_localstack else ec2.SubnetType.PRIVATE_WITH_EGRESS
 
-        # For LocalStack, use simplified configuration without launch template
-        # to avoid LatestVersionNumber error that occurs with LaunchTemplate in LocalStack
+        # For LocalStack, use LaunchConfiguration explicitly to avoid LaunchTemplate
+        # CDK feature flag @aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig
+        # forces LaunchTemplate usage, which causes LatestVersionNumber errors in LocalStack
         if is_localstack:
-            # Create a simpler ASG configuration for LocalStack compatibility
-            # Note: We reduce capacity for LocalStack to minimize resource usage
-            asg = autoscaling.AutoScalingGroup(
-                self, name,
-                vpc=vpc,
+            # Create instance profile explicitly for CfnLaunchConfiguration
+            instance_profile = iam.CfnInstanceProfile(
+                self, f"{name}-InstanceProfile",
+                roles=[self.ec2_role.role_name]
+            )
+
+            # Explicit LaunchConfiguration for LocalStack compatibility
+            launch_config = autoscaling.CfnLaunchConfiguration(
+                self, f"{name}-LaunchConfig",
+                image_id=ec2.AmazonLinuxImage(
+                    generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2
+                ).get_image(self).image_id,
                 instance_type=ec2.InstanceType.of(
                     instance_class,
                     ec2.InstanceSize.MICRO
-                ),
-                machine_image=ec2.AmazonLinuxImage(
-                    generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2
-                ),
-                security_group=security_group,
-                user_data=user_data,
-                role=self.ec2_role,
-                min_capacity=1,  # Reduced for LocalStack
-                max_capacity=2,  # Reduced for LocalStack
-                desired_capacity=1,  # Reduced for LocalStack
-                vpc_subnets=ec2.SubnetSelection(subnet_type=subnet_type),
-                health_check=health_check,
-                # Additional LocalStack compatibility settings
-                new_instances_protected_from_scale_in=False,
-                cooldown=Duration.seconds(60)  # Reduced cooldown
+                ).to_string(),
+                security_groups=[security_group.security_group_id],
+                user_data=Fn.base64(user_data.render()),
+                iam_instance_profile=instance_profile.ref  # Use instance profile reference
             )
+
+            # Create ASG using LaunchConfiguration (not LaunchTemplate)
+            asg = autoscaling.CfnAutoScalingGroup(
+                self, name,
+                launch_configuration_name=launch_config.ref,
+                min_size="1",  # Reduced for LocalStack
+                max_size="2",  # Reduced for LocalStack
+                desired_capacity="1",  # Reduced for LocalStack
+                vpc_zone_identifier=[subnet.subnet_id for subnet in vpc.select_subnets(
+                    subnet_type=subnet_type
+                ).subnets],
+                health_check_type="EC2",
+                health_check_grace_period=300,
+                cooldown="60",  # Reduced cooldown
+                new_instances_protected_from_scale_in=False,
+                tags=[
+                    autoscaling.CfnAutoScalingGroup.TagPropertyProperty(
+                        key="Name",
+                        value=name,
+                        propagate_at_launch=True
+                    )
+                ]
+            )
+
+            # Note: We're using L1 constructs (Cfn*) which don't have the high-level
+            # methods like attach_to_application_target_group. We'll need to handle
+            # this differently below.
+            #
+            # Store a reference for the target group attachment
+            self._asg_cfn = asg  # Store for later use
         else:
             # Create launch template for AWS (not supported well in LocalStack)
             launch_template = ec2.LaunchTemplate(
@@ -407,10 +435,15 @@ class TapStack(Stack):
                 unhealthy_threshold_count=3
             )
         )
-        
+
         # Attach ASG to target group
-        asg.attach_to_application_target_group(target_group)
-        
+        if is_localstack:
+            # For LocalStack (Cfn ASG), manually set target_group_arns
+            asg.target_group_arns = [target_group.target_group_arn]
+        else:
+            # For AWS (high-level ASG), use the convenient method
+            asg.attach_to_application_target_group(target_group)
+
         # Add listener to ALB
         alb.add_listener(
             f"{name}-Listener",
@@ -418,13 +451,19 @@ class TapStack(Stack):
             protocol=elbv2.ApplicationProtocol.HTTP,
             default_target_groups=[target_group]
         )
-        
+
         # Add scaling policies
-        asg.scale_on_cpu_utilization(
-            f"{name}-CPUScaling",
-            target_utilization_percent=70,
-            cooldown=Duration.seconds(300)
-        )
+        if is_localstack:
+            # For LocalStack, skip scaling policies (Cfn ASG doesn't have this method)
+            # Scaling policies can be added with CfnScalingPolicy if needed
+            pass
+        else:
+            # For AWS, add CPU-based scaling
+            asg.scale_on_cpu_utilization(
+                f"{name}-CPUScaling",
+                target_utilization_percent=70,
+                cooldown=Duration.seconds(300)
+            )
         
         Tags.of(asg).add("Name", name)
         Tags.of(target_group).add("Name", f"{name}-TargetGroup")

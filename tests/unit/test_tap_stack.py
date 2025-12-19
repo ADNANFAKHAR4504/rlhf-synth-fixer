@@ -249,10 +249,13 @@ class TestAutoScalingGroups:
         assert len(asg_resources) == 2
 
     def test_scaling_policy(self, template):
-        """Test that CPU-based scaling policy is created."""
-        # Should have target tracking scaling policies (2 ASGs = 2 policies)
+        """Test that CPU-based scaling policy is created (AWS mode only)."""
+        # In LocalStack mode, scaling policies are skipped (Cfn ASG doesn't support scale_on_cpu_utilization)
+        # In AWS mode, should have target tracking scaling policies (2 ASGs = 2 policies)
         policies = template.find_resources("AWS::AutoScaling::ScalingPolicy")
-        assert len(policies) >= 2
+        # LocalStack mode: no policies, AWS mode: 2+ policies
+        # Just check that structure is valid
+        assert isinstance(policies, dict)
 
 
 class TestOutputs:
@@ -542,6 +545,35 @@ class TestAWSModeConfiguration:
                 "MaxSize": "6",
                 "DesiredCapacity": "2"
             })
+
+        finally:
+            lib.tap_stack._is_localstack_environment = original_is_localstack
+            reload(lib.tap_stack)
+            if original_endpoint:
+                os.environ["AWS_ENDPOINT_URL"] = original_endpoint
+
+    def test_aws_mode_scaling_policies(self):
+        """Test ASG scaling policies in AWS mode."""
+        original_endpoint = os.environ.get("AWS_ENDPOINT_URL")
+        if "AWS_ENDPOINT_URL" in os.environ:
+            del os.environ["AWS_ENDPOINT_URL"]
+
+        from importlib import reload
+        import lib.tap_stack
+
+        original_is_localstack = lib.tap_stack._is_localstack_environment
+        lib.tap_stack._is_localstack_environment = lambda: False
+        lib.tap_stack.is_localstack = False
+
+        try:
+            app = App()
+            props = TapStackProps(environment_suffix="aws-scaling-test")
+            stack = lib.tap_stack.TapStack(app, "AWSScalingStack", props=props)
+            template = assertions.Template.from_stack(stack)
+
+            # In AWS mode, should have scaling policies (2 ASGs = 2 policies)
+            policies = template.find_resources("AWS::AutoScaling::ScalingPolicy")
+            assert len(policies) >= 2
 
         finally:
             lib.tap_stack._is_localstack_environment = original_is_localstack
