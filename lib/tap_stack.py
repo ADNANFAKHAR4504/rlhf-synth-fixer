@@ -144,8 +144,8 @@ class TapStack(Stack):
                 f"serverless-processor-{self.env_suffix}-{self.account}-{self.region}"
             ),
             removal_policy=RemovalPolicy.DESTROY if is_dev else RemovalPolicy.RETAIN,
-            auto_delete_objects=True if is_dev else False,
-            versioned=True if is_prod else False,
+            auto_delete_objects=bool(is_dev),
+            versioned=bool(is_prod),
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.cmk,
