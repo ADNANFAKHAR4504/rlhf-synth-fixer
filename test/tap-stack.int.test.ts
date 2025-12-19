@@ -54,7 +54,7 @@ try {
     fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
   );
 } catch {
-  console.log('No outputs file found or invalid JSON');
+  // Outputs file not found or invalid - tests will skip gracefully
 }
 
 describe('Serverless Infrastructure Integration Tests - LocalStack', () => {
@@ -94,20 +94,18 @@ describe('Serverless Infrastructure Integration Tests - LocalStack', () => {
             })
           );
           actualApiKey = apiKeyResponse.value || '';
-          console.log('Retrieved actual API key value from LocalStack');
-        } catch (error) {
-          console.log('Could not retrieve API key value:', error);
+        } catch {
+          // Could not retrieve API key value - tests will skip gracefully
         }
       }
-    } catch (error) {
-      console.log(`Stack ${stackName} not found or not accessible:`, error);
+    } catch {
+      // Stack not found or not accessible - tests will skip gracefully
     }
   }, 60000);
 
   describe('CloudFormation Stack', () => {
     test('should exist and be in CREATE_COMPLETE state', async () => {
       if (!stackInfo) {
-        console.log('Skipping test - stack not found');
         expect(true).toBe(true);
         return;
       }
@@ -120,7 +118,6 @@ describe('Serverless Infrastructure Integration Tests - LocalStack', () => {
 
     test('should have all required outputs', async () => {
       if (!stackInfo?.Outputs) {
-        console.log('Skipping test - no stack outputs available');
         expect(true).toBe(true);
         return;
       }
@@ -136,52 +133,40 @@ describe('Serverless Infrastructure Integration Tests - LocalStack', () => {
   describe('DynamoDB Table', () => {
     test('should exist and be in ACTIVE state', async () => {
       if (!outputs.DynamoDBTableName) {
-        console.log('Skipping test - no DynamoDB table name available');
         expect(true).toBe(true);
         return;
       }
 
-      try {
-        const response = await dynamoClient.send(
-          new DescribeTableCommand({
-            TableName: outputs.DynamoDBTableName,
-          })
-        );
+      const response = await dynamoClient.send(
+        new DescribeTableCommand({
+          TableName: outputs.DynamoDBTableName,
+        })
+      );
 
-        expect(response.Table?.TableStatus).toBe('ACTIVE');
-        expect(response.Table?.KeySchema?.[0]?.AttributeName).toBe('userId');
-        expect(response.Table?.KeySchema?.[0]?.KeyType).toBe('HASH');
-      } catch (error) {
-        console.error('Error describing DynamoDB table:', error);
-        throw error;
-      }
+      expect(response.Table?.TableStatus).toBe('ACTIVE');
+      expect(response.Table?.KeySchema?.[0]?.AttributeName).toBe('userId');
+      expect(response.Table?.KeySchema?.[0]?.KeyType).toBe('HASH');
     }, 15000);
 
     test('should have PAY_PER_REQUEST billing mode', async () => {
       if (!outputs.DynamoDBTableName) {
-        console.log('Skipping test - no DynamoDB table name available');
         expect(true).toBe(true);
         return;
       }
 
-      try {
-        const response = await dynamoClient.send(
-          new DescribeTableCommand({
-            TableName: outputs.DynamoDBTableName,
-          })
-        );
+      const response = await dynamoClient.send(
+        new DescribeTableCommand({
+          TableName: outputs.DynamoDBTableName,
+        })
+      );
 
-        // LocalStack may report billing mode differently
-        const billingMode = response.Table?.BillingModeSummary?.BillingMode;
-        if (billingMode) {
-          expect(billingMode).toBe('PAY_PER_REQUEST');
-        } else {
-          // Table exists, which is sufficient for LocalStack
-          expect(response.Table?.TableName).toBe(outputs.DynamoDBTableName);
-        }
-      } catch (error) {
-        console.error('Error checking billing mode:', error);
-        throw error;
+      // LocalStack may report billing mode differently
+      const billingMode = response.Table?.BillingModeSummary?.BillingMode;
+      if (billingMode) {
+        expect(billingMode).toBe('PAY_PER_REQUEST');
+      } else {
+        // Table exists, which is sufficient for LocalStack
+        expect(response.Table?.TableName).toBe(outputs.DynamoDBTableName);
       }
     }, 15000);
   });
@@ -189,99 +174,75 @@ describe('Serverless Infrastructure Integration Tests - LocalStack', () => {
   describe('Lambda Function', () => {
     test('should exist and be configured correctly', async () => {
       if (!outputs.LambdaFunctionName) {
-        console.log('Skipping test - no Lambda function name available');
         expect(true).toBe(true);
         return;
       }
 
-      try {
-        const response = await lambdaClient.send(
-          new GetFunctionCommand({
-            FunctionName: outputs.LambdaFunctionName,
-          })
-        );
+      const response = await lambdaClient.send(
+        new GetFunctionCommand({
+          FunctionName: outputs.LambdaFunctionName,
+        })
+      );
 
-        expect(response.Configuration?.FunctionName).toBe(
-          outputs.LambdaFunctionName
-        );
-        expect(response.Configuration?.Runtime).toBe('python3.11');
-        expect(response.Configuration?.Handler).toBe('index.lambda_handler');
-        expect(
-          response.Configuration?.Environment?.Variables?.TABLE_NAME
-        ).toBe(outputs.DynamoDBTableName);
-      } catch (error) {
-        console.error('Error describing Lambda function:', error);
-        throw error;
-      }
+      expect(response.Configuration?.FunctionName).toBe(
+        outputs.LambdaFunctionName
+      );
+      expect(response.Configuration?.Runtime).toBe('python3.11');
+      expect(response.Configuration?.Handler).toBe('index.lambda_handler');
+      expect(
+        response.Configuration?.Environment?.Variables?.TABLE_NAME
+      ).toBe(outputs.DynamoDBTableName);
     }, 15000);
 
     test('should have correct state', async () => {
       if (!outputs.LambdaFunctionName) {
-        console.log('Skipping test - no Lambda function name available');
         expect(true).toBe(true);
         return;
       }
 
-      try {
-        const response = await lambdaClient.send(
-          new GetFunctionCommand({
-            FunctionName: outputs.LambdaFunctionName,
-          })
-        );
+      const response = await lambdaClient.send(
+        new GetFunctionCommand({
+          FunctionName: outputs.LambdaFunctionName,
+        })
+      );
 
-        // LocalStack Lambda state might be different from AWS
-        const state = response.Configuration?.State;
-        expect(['Active', 'Pending']).toContain(state);
-      } catch (error) {
-        console.error('Error checking Lambda state:', error);
-        throw error;
-      }
+      // LocalStack Lambda state might be different from AWS
+      const state = response.Configuration?.State;
+      expect(['Active', 'Pending']).toContain(state);
     }, 15000);
   });
 
   describe('API Gateway', () => {
     test('should exist and be configured correctly', async () => {
       if (!outputs.RestApiId) {
-        console.log('Skipping test - no REST API ID available');
         expect(true).toBe(true);
         return;
       }
 
-      try {
-        const response = await apiGatewayClient.send(
-          new GetRestApiCommand({
-            restApiId: outputs.RestApiId,
-          })
-        );
+      const response = await apiGatewayClient.send(
+        new GetRestApiCommand({
+          restApiId: outputs.RestApiId,
+        })
+      );
 
-        expect(response.name).toContain('UserDataAPI');
-        expect(response.endpointConfiguration?.types).toContain('REGIONAL');
-      } catch (error) {
-        console.error('Error describing API Gateway:', error);
-        throw error;
-      }
+      expect(response.name).toContain('UserDataAPI');
+      expect(response.endpointConfiguration?.types).toContain('REGIONAL');
     }, 15000);
 
     test('should have prod stage deployed', async () => {
       if (!outputs.RestApiId) {
-        console.log('Skipping test - no REST API ID available');
         expect(true).toBe(true);
         return;
       }
 
-      try {
-        const response = await apiGatewayClient.send(
-          new GetStageCommand({
-            restApiId: outputs.RestApiId,
-            stageName: 'prod',
-          })
-        );
+      const response = await apiGatewayClient.send(
+        new GetStageCommand({
+          restApiId: outputs.RestApiId,
+          stageName: 'prod',
+        })
+      );
 
-        expect(response.stageName).toBe('prod');
-      } catch (error) {
-        console.error('Error describing API Gateway stage:', error);
-        throw error;
-      }
+      expect(response.stageName).toBe('prod');
     }, 15000);
   });
 
@@ -300,196 +261,155 @@ describe('Serverless Infrastructure Integration Tests - LocalStack', () => {
     test('should store user data via POST endpoint', async () => {
       const apiUrl = getApiUrl();
       if (!apiUrl || !actualApiKey) {
-        console.log('Skipping test - no API URL or API key available');
         expect(true).toBe(true);
         return;
       }
 
-      try {
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': actualApiKey,
-          },
-          body: JSON.stringify({
-            userId: testUserId,
-            data: testData,
-          }),
-        });
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': actualApiKey,
+        },
+        body: JSON.stringify({
+          userId: testUserId,
+          data: testData,
+        }),
+      });
 
-        // LocalStack might return different status codes
-        if (response.status === 403) {
-          console.log('API returned 403 - API key authentication issue');
-          expect(true).toBe(true);
-          return;
-        }
-
-        expect(response.status).toBe(200);
-        const responseData = (await response.json()) as any;
-        expect(responseData.message).toContain('Data stored successfully');
-        expect(responseData.userId).toBe(testUserId);
-      } catch (error) {
-        console.error('Error testing POST endpoint:', error);
-        throw error;
+      // LocalStack might return different status codes
+      if (response.status === 403) {
+        expect(true).toBe(true);
+        return;
       }
+
+      expect(response.status).toBe(200);
+      const responseData = (await response.json()) as any;
+      expect(responseData.message).toContain('Data stored successfully');
+      expect(responseData.userId).toBe(testUserId);
     }, 30000);
 
     test('should retrieve user data via GET endpoint', async () => {
       const apiUrl = getApiUrl();
       if (!apiUrl || !actualApiKey) {
-        console.log('Skipping test - no API URL or API key available');
         expect(true).toBe(true);
         return;
       }
 
-      try {
-        const getUrl = `${apiUrl}?userId=${testUserId}`;
-        const response = await fetch(getUrl, {
-          method: 'GET',
-          headers: {
-            'x-api-key': actualApiKey,
-          },
-        });
+      const getUrl = `${apiUrl}?userId=${testUserId}`;
+      const response = await fetch(getUrl, {
+        method: 'GET',
+        headers: {
+          'x-api-key': actualApiKey,
+        },
+      });
 
-        if (response.status === 403) {
-          console.log('API returned 403 - API key authentication issue');
-          expect(true).toBe(true);
-          return;
-        }
-
-        expect(response.status).toBe(200);
-        const responseData = (await response.json()) as any;
-        expect(responseData.userId).toBe(testUserId);
-        expect(responseData.data).toEqual(testData);
-      } catch (error) {
-        console.error('Error testing GET endpoint:', error);
-        throw error;
+      if (response.status === 403) {
+        expect(true).toBe(true);
+        return;
       }
+
+      expect(response.status).toBe(200);
+      const responseData = (await response.json()) as any;
+      expect(responseData.userId).toBe(testUserId);
+      expect(responseData.data).toEqual(testData);
     }, 30000);
 
     test('should return 400 for POST request without userId', async () => {
       const apiUrl = getApiUrl();
       if (!apiUrl || !actualApiKey) {
-        console.log('Skipping test - no API URL or API key available');
         expect(true).toBe(true);
         return;
       }
 
-      try {
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': actualApiKey,
-          },
-          body: JSON.stringify({
-            data: testData,
-          }),
-        });
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': actualApiKey,
+        },
+        body: JSON.stringify({
+          data: testData,
+        }),
+      });
 
-        if (response.status === 403) {
-          console.log('API returned 403 - API key authentication issue');
-          expect(true).toBe(true);
-          return;
-        }
-
-        expect(response.status).toBe(400);
-        const responseData = (await response.json()) as any;
-        expect(responseData.error).toContain('userId is required');
-      } catch (error) {
-        console.error('Error testing POST validation:', error);
-        throw error;
+      if (response.status === 403) {
+        expect(true).toBe(true);
+        return;
       }
+
+      expect(response.status).toBe(400);
+      const responseData = (await response.json()) as any;
+      expect(responseData.error).toContain('userId is required');
     }, 30000);
 
     test('should return 400 for GET request without userId', async () => {
       const apiUrl = getApiUrl();
       if (!apiUrl || !actualApiKey) {
-        console.log('Skipping test - no API URL or API key available');
         expect(true).toBe(true);
         return;
       }
 
-      try {
-        const response = await fetch(apiUrl, {
-          method: 'GET',
-          headers: {
-            'x-api-key': actualApiKey,
-          },
-        });
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'x-api-key': actualApiKey,
+        },
+      });
 
-        if (response.status === 403) {
-          console.log('API returned 403 - API key authentication issue');
-          expect(true).toBe(true);
-          return;
-        }
-
-        expect(response.status).toBe(400);
-        const responseData = (await response.json()) as any;
-        expect(responseData.error).toContain(
-          'userId query parameter is required'
-        );
-      } catch (error) {
-        console.error('Error testing GET validation:', error);
-        throw error;
+      if (response.status === 403) {
+        expect(true).toBe(true);
+        return;
       }
+
+      expect(response.status).toBe(400);
+      const responseData = (await response.json()) as any;
+      expect(responseData.error).toContain(
+        'userId query parameter is required'
+      );
     }, 30000);
 
     test('should return 404 for non-existent user', async () => {
       const apiUrl = getApiUrl();
       if (!apiUrl || !actualApiKey) {
-        console.log('Skipping test - no API URL or API key available');
         expect(true).toBe(true);
         return;
       }
 
-      try {
-        const nonExistentUserId = 'non-existent-user-' + Date.now();
-        const getUrl = `${apiUrl}?userId=${nonExistentUserId}`;
-        const response = await fetch(getUrl, {
-          method: 'GET',
-          headers: {
-            'x-api-key': actualApiKey,
-          },
-        });
+      const nonExistentUserId = 'non-existent-user-' + Date.now();
+      const getUrl = `${apiUrl}?userId=${nonExistentUserId}`;
+      const response = await fetch(getUrl, {
+        method: 'GET',
+        headers: {
+          'x-api-key': actualApiKey,
+        },
+      });
 
-        if (response.status === 403) {
-          console.log('API returned 403 - API key authentication issue');
-          expect(true).toBe(true);
-          return;
-        }
-
-        expect(response.status).toBe(404);
-        const responseData = (await response.json()) as any;
-        expect(responseData.error).toContain('User not found');
-      } catch (error) {
-        console.error('Error testing 404 response:', error);
-        throw error;
+      if (response.status === 403) {
+        expect(true).toBe(true);
+        return;
       }
+
+      expect(response.status).toBe(404);
+      const responseData = (await response.json()) as any;
+      expect(responseData.error).toContain('User not found');
     }, 30000);
 
     test('should return 403 for requests without API key', async () => {
       const apiUrl = getApiUrl();
       if (!apiUrl) {
-        console.log('Skipping test - no API URL available');
         expect(true).toBe(true);
         return;
       }
 
-      try {
-        const response = await fetch(apiUrl, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-        expect(response.status).toBe(403);
-      } catch (error) {
-        console.error('Error testing API key requirement:', error);
-        throw error;
-      }
+      expect(response.status).toBe(403);
     }, 30000);
   });
 
@@ -502,7 +422,6 @@ describe('Serverless Infrastructure Integration Tests - LocalStack', () => {
         outputs.RestApiId;
 
       if (!hasOutputs) {
-        console.log('Skipping test - outputs not available');
         expect(true).toBe(true);
         return;
       }

@@ -427,7 +427,6 @@ Integration tests prepared for:
 
 The Lambda function includes:
 
-```python
 import json
 import boto3
 import logging
@@ -501,7 +500,6 @@ def lambda_handler(event, context):
             'statusCode': 500,
             'body': json.dumps({'error': 'Internal server error'})
         }
-```
 
 ## API Usage Examples
 
