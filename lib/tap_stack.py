@@ -117,7 +117,11 @@ class TapStack(Stack):
     ))
 
     # 5. Lambda Function with configurable timeout
-    LOG_RETENTION_DAYS = logs.RetentionDays.ONE_WEEK
+    # For LocalStack: disable log_retention to avoid ECR dependency (Pro-only service)
+    # Check if deploying to LocalStack by looking for AWS_ENDPOINT_URL env var
+    import os as _os
+    is_localstack = _os.getenv('AWS_ENDPOINT_URL') or _os.getenv('provider') == 'localstack'
+    LOG_RETENTION_DAYS = None if is_localstack else logs.RetentionDays.ONE_WEEK
 
     lambda_fn = _lambda.Function(
       self,
@@ -177,7 +181,7 @@ def lambda_handler(event, context):
         "SNS_TOPIC": topic.topic_arn,
         "TIMEOUT": str(lambda_timeout)
       },
-      log_retention=LOG_RETENTION_DAYS
+      **({"log_retention": LOG_RETENTION_DAYS} if LOG_RETENTION_DAYS else {})
     )
     Tags.of(lambda_fn).add("env", environment_suffix)
 
