@@ -20,5 +20,6 @@
     "CloudWatch",
     "EventBridge",
     "IAM"
-  ]
+  ],
+  "training_quality": 8
 }
