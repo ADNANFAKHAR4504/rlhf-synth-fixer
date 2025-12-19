@@ -1,6 +1,6 @@
 ---
 
-We need a comprehensive security and compliance audit on all of our S3 buckets in the `us-east-1` AWS region for SOC2 and GDPR. Please create a Python 3.12 CLI script (`analyze_s3_security.py`), using **Boto3** and structured like an enterprise audit tool.
+We need a comprehensive security and compliance audit on all of our S3 buckets in the `us-east-1` AWS region for SOC2 and GDPR. Please create a Python 3.12 CLI script (`analyse.py`), using **Boto3** and structured like an enterprise audit tool.
 
 **What we need audited:**
 
@@ -52,8 +52,8 @@ We need a comprehensive security and compliance audit on all of our S3 buckets i
 - May also use Jinja2 or Plotly for HTML visualization if needed
 
 **Format:**  
-- Provide the main script as `analyze_s3_security.py` (Python code block)  
-- Provide tests as `test_analyze_s3_security.py` (Python code block)  
+- Provide the main script as `analyse.py` (Python code block)  
+- Provide tests as `test_analyse.py` (Python code block)  
 - Provide the Jinja2/HTML template inline or in a separate block.
 
 _No requirements, exclusions, or output details should be omitted or changed in the implementation – deliverables must match this prompt exactly._
