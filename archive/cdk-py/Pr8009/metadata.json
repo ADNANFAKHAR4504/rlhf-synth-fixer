@@ -23,5 +23,11 @@
   "training_quality": 9,
   "test_coverage": 100,
   "deployment_status": "blocked_infra_issue",
-  "deployment_blocker": "CDK IAM role missing - environment bootstrap issue"
+  "deployment_blocker": "CDK IAM role missing - environment bootstrap issue",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
