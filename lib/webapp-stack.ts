@@ -144,29 +144,21 @@ export class WebAppStack extends cdk.Stack {
       ],
     });
 
-    // Launch Template for Auto Scaling Group
-    const launchTemplate = new ec2.LaunchTemplate(
-      this,
-      'WebServerLaunchTemplate',
-      {
-        instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.T3,
-          ec2.InstanceSize.MEDIUM
-        ),
-        machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-        securityGroup: webServerSecurityGroup,
-        userData,
-        role: ec2Role,
-      }
-    );
-
-    // Auto Scaling Group
+    // Auto Scaling Group (without LaunchTemplate for LocalStack compatibility)
+    // LaunchTemplate.LatestVersionNumber is not properly supported in LocalStack
     this.autoScalingGroup = new autoscaling.AutoScalingGroup(
       this,
       'WebServerASG',
       {
         vpc: this.vpc,
-        launchTemplate,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MEDIUM
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2023(),
+        securityGroups: [webServerSecurityGroup],
+        userData,
+        role: ec2Role,
         minCapacity: 2,
         maxCapacity: 6,
         desiredCapacity: 2,
