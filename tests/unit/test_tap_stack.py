@@ -65,8 +65,8 @@ class TestS3Bucket:
             },
         )
 
-    def test_s3_bucket_has_auto_delete_objects(self, stack):
-        """Verify bucket has auto_delete_objects enabled"""
+    def test_s3_bucket_exists_in_stack(self, stack):
+        """Verify bucket attribute is accessible in stack"""
         assert hasattr(stack, "bucket")
         assert stack.bucket is not None
 
