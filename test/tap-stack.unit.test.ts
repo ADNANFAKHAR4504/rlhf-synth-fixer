@@ -227,14 +227,8 @@ describe('TapStack Tests', () => {
     let template: Template;
 
     beforeEach(() => {
-      // Simulate LocalStack environment
+      // Simulate LocalStack environment BEFORE importing/creating stack
       process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
-      app = new cdk.App();
-      stack = new TapStack(app, 'TestTapStack-localstack', {
-        environmentSuffix: 'dev',
-        config: testConfigs.dev,
-      });
-      template = Template.fromStack(stack);
     });
 
     afterEach(() => {
@@ -242,6 +236,14 @@ describe('TapStack Tests', () => {
     });
 
     test('uses simplified bucket names for LocalStack', () => {
+      // Create stack within test to ensure env var is read at evaluation time
+      app = new cdk.App();
+      stack = new TapStack(app, 'TestTapStack-localstack', {
+        environmentSuffix: 'dev',
+        config: testConfigs.dev,
+      });
+      template = Template.fromStack(stack);
+
       const buckets = template.findResources('AWS::S3::Bucket');
       const bucketNames = Object.values(buckets).map((b: any) =>
         JSON.stringify(b.Properties.BucketName)
@@ -255,6 +257,14 @@ describe('TapStack Tests', () => {
     });
 
     test('VPC does not restrict default security group in LocalStack', () => {
+      // Create stack within test to ensure env var is read at evaluation time
+      app = new cdk.App();
+      stack = new TapStack(app, 'TestTapStack-localstack-vpc', {
+        environmentSuffix: 'dev',
+        config: testConfigs.dev,
+      });
+      template = Template.fromStack(stack);
+
       // When isLocalStack is true, restrictDefaultSecurityGroup should be false
       // This is a synthesized property, so we verify VPC is created
       template.hasResourceProperties('AWS::EC2::VPC', {
@@ -308,11 +318,19 @@ describe('TapStack Tests', () => {
       const template = Template.fromStack(stack);
 
       // Custom AMI is specified in production config
+      // Note: MachineImage.genericLinux creates a mapping, so ImageId is an object
       template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
         LaunchTemplateData: Match.objectLike({
-          ImageId: 'ami-0abcdef1234567890',
+          ImageId: Match.anyValue(), // Accept any value (could be string or object with Fn::FindInMap)
         }),
       });
+
+      // Verify the mapping exists for the custom AMI
+      const mappings = template.findMappings('*');
+      const hasMappingWithAmi = Object.values(mappings).some((mapping: any) => {
+        return JSON.stringify(mapping).includes('ami-0abcdef1234567890');
+      });
+      expect(hasMappingWithAmi).toBeTruthy();
     });
   });
 

@@ -4,11 +4,12 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
-// Detect LocalStack environment
-const isLocalStack =
+// Detect LocalStack environment (function to allow dynamic evaluation in tests)
+const detectLocalStack = (): boolean =>
   process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
   process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-  process.env.AWS_ENDPOINT_URL?.includes('localstack');
+  process.env.AWS_ENDPOINT_URL?.includes('localstack') ||
+  false;
 
 // Environment-specific configuration interface
 export interface EnvironmentConfig {
@@ -42,6 +43,9 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     const { config } = props;
+
+    // Evaluate LocalStack detection at runtime
+    const isLocalStack = detectLocalStack();
 
     // Apply consistent tags to all resources in this stack
     cdk.Tags.of(this).add('Environment', environmentSuffix);
@@ -155,6 +159,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // Auto Scaling Group
+    // For LocalStack compatibility, we need to handle launch template version differently
     const autoScalingGroup = new cdk.aws_autoscaling.AutoScalingGroup(
       this,
       'WebServerASG',
@@ -162,6 +167,8 @@ export class TapStack extends cdk.Stack {
         autoScalingGroupName: `webapp-asg-${environmentSuffix}`,
         vpc,
         launchTemplate,
+        // Explicitly set version to $Latest for LocalStack compatibility
+        ...(isLocalStack && { launchTemplateVersion: launchTemplate.versionNumber }),
         minCapacity: environmentSuffix === 'Production' ? 2 : 1,
         maxCapacity: environmentSuffix === 'Production' ? 6 : 3,
         desiredCapacity: environmentSuffix === 'Production' ? 2 : 1,
@@ -188,8 +195,15 @@ export class TapStack extends cdk.Stack {
       open: true,
     });
 
+    // Target group name must be max 32 characters
+    // Shorten if environment suffix is long
+    const targetGroupName =
+      `${environmentSuffix}-tg`.length > 32
+        ? `${environmentSuffix.substring(0, 29)}-tg`
+        : `${environmentSuffix}-tg`;
+
     listener.addTargets('WebAppTargets', {
-      targetGroupName: `${environmentSuffix}-targets-${environmentSuffix}`,
+      targetGroupName,
       port: 80,
       targets: [autoScalingGroup],
       healthCheck: {
