@@ -1,0 +1,27 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "4403",
+  "team": "5",
+  "startedAt": "2025-10-14T15:09:33.196Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "Route 53",
+    "EventBridge",
+    "CloudWatch Synthetics",
+    "WAF",
+    "QuickSight",
+    "IAM",
+    "KMS"
+  ],
+  "provider": "localstack"
+}
