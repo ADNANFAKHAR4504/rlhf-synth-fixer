@@ -1,18 +1,18 @@
-🏗️ AWS CDK Python Infrastructure Creation Prompt
-📁 Folder Structure
+ AWS CDK Python Infrastructure Creation Prompt
+ Folder Structure
 Your project folder structure:
 
 bash
 Copy
 Edit
 project-root/
-├── tap.py            # Entry point (like app.py)
-└── lib/
-    └── tapstack.py   # Main stack definition
-🌐 Environment Overview
+ tap.py            # Entry point (like app.py)
+ lib/
+     tapstack.py   # Main stack definition
+ Environment Overview
 Using AWS CDK with Python, build a robust infrastructure that adheres to the following requirements and constraints:
 
-✅ Infrastructure Requirements
+ Infrastructure Requirements
 Region: Deploy all resources in us-west-2 (Oregon).
 
 VPCs:
@@ -61,7 +61,7 @@ Easy addition of more VPCs
 
 Future integration with additional services
 
-⚙️ Constraints
+ Constraints
 Cloud Provider: AWS only
 
 Region: us-west-2
@@ -82,7 +82,7 @@ HTTP/HTTPS for public access
 
 SSH only for internal/private access
 
-📝 Expected Output
+ Expected Output
 A Python script using AWS CDK that:
 
 Provisions all described infrastructure
@@ -93,5 +93,5 @@ Validates all services function with the configured rules and constraints
 
 CDK project should be structured using best practices (construct separation, tagging, environment scoping).
 
-🧭 Proposed Use Case Statement
+ Proposed Use Case Statement
 Design and deploy a high-availability, scalable AWS cloud environment using AWS CDK in Python, focusing on infrastructure provisioning across multiple AZs within the US West (Oregon) region, while ensuring security, extensibility, and operational visibility.
