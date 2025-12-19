@@ -58,13 +58,15 @@ if docker ps -a | grep -q localstack; then
     docker rm localstack 2>/dev/null || true
 fi
 
-# LocalStack enables all services by default when SERVICES is not set
-# Only set SERVICES if explicitly provided via environment variable
+# LocalStack Pro requires explicit SERVICES configuration
+# Set default services to commonly used AWS services for IaC testing
 if [ -n "$LOCALSTACK_SERVICES" ]; then
     SERVICES="$LOCALSTACK_SERVICES"
     echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
 else
-    echo -e "${BLUE}📋 All LocalStack services enabled (default)${NC}"
+    # Default service list for LocalStack Pro - includes all community + commonly used Pro services
+    SERVICES="s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,ecr,rds,ecs,vpc,elasticloadbalancing,route53,acm"
+    echo -e "${BLUE}📋 Services enabled: ${SERVICES}${NC}"
 fi
 
 # Check for LocalStack API Key
