@@ -1,21 +1,21 @@
-2025-11-18 12:50:37,065 - botocore.credentials - INFO - Found credentials in environment variables.
-2025-11-18 12:50:37,112 - botocore.configprovider - INFO - Found endpoint for ecs via: environment_global.
-2025-11-18 12:50:37,120 - botocore.configprovider - INFO - Found endpoint for eks via: environment_global.
-2025-11-18 12:50:37,227 - botocore.configprovider - INFO - Found endpoint for ec2 via: environment_global.
-2025-11-18 12:50:37,234 - botocore.configprovider - INFO - Found endpoint for cloudwatch via: environment_global.
-2025-11-18 12:50:37,242 - botocore.configprovider - INFO - Found endpoint for autoscaling via: environment_global.
-2025-11-18 12:50:37,246 - botocore.configprovider - INFO - Found endpoint for application-autoscaling via: environment_global.
-2025-11-18 12:50:37,248 - __main__ - INFO - Starting container resource analysis...
-2025-11-18 12:50:37,561 - __main__ - INFO - Saved findings to container_optimization.json
-2025-11-18 12:50:37,563 - __main__ - INFO - Saved rightsizing plan to rightsizing_plan.csv
-2025-11-18 12:50:37,585 - __main__ - WARNING - No utilization data to visualize
-2025-11-18 12:50:37,918 - __main__ - INFO - Analysis complete!
+2025-12-19 14:25:13,868 - botocore.credentials - INFO - Found credentials in environment variables.
+2025-12-19 14:25:13,917 - botocore.configprovider - INFO - Found endpoint for ecs via: environment_global.
+2025-12-19 14:25:13,986 - botocore.configprovider - INFO - Found endpoint for eks via: environment_global.
+2025-12-19 14:25:14,052 - botocore.configprovider - INFO - Found endpoint for ec2 via: environment_global.
+2025-12-19 14:25:14,059 - botocore.configprovider - INFO - Found endpoint for cloudwatch via: environment_global.
+2025-12-19 14:25:14,067 - botocore.configprovider - INFO - Found endpoint for autoscaling via: environment_global.
+2025-12-19 14:25:14,072 - botocore.configprovider - INFO - Found endpoint for application-autoscaling via: environment_global.
+2025-12-19 14:25:14,074 - __main__ - INFO - Starting container resource analysis...
+2025-12-19 14:25:14,449 - __main__ - INFO - Saved findings to container_optimization.json
+2025-12-19 14:25:14,452 - __main__ - INFO - Saved rightsizing plan to rightsizing_plan.csv
+2025-12-19 14:25:14,476 - __main__ - WARNING - No utilization data to visualize
+2025-12-19 14:25:14,811 - __main__ - INFO - Analysis complete!
 
 ================================================================================
 CONTAINER RESOURCE OPTIMIZATION ANALYSIS RESULTS
 ================================================================================
 
-Analysis Duration: 0.3 seconds
+Analysis Duration: 0.4 seconds
 Analysis Period: Last 14 days
 Region: us-east-1
 
