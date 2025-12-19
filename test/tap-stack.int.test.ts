@@ -12,13 +12,17 @@ import {
 } from "@aws-sdk/client-ec2";
 
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || "dev";
-const STACK_NAME = `TapStack${ENVIRONMENT_SUFFIX}`;
 
 // LocalStack configuration
 const isLocalStack =
   process.env.AWS_ENDPOINT_URL?.includes("localhost") ||
   process.env.AWS_ENDPOINT_URL?.includes("4566");
 const endpoint = process.env.AWS_ENDPOINT_URL || "http://localhost:4566";
+
+// Use different stack names for LocalStack vs AWS
+// LocalStack uses "tap-stack-localstack" (see scripts/localstack-cloudformation-deploy.sh)
+// AWS uses "TapStack${ENVIRONMENT_SUFFIX}"
+const STACK_NAME = isLocalStack ? "tap-stack-localstack" : `TapStack${ENVIRONMENT_SUFFIX}`;
 
 let cfnClient: CloudFormationClient;
 let ec2Client: EC2Client;
