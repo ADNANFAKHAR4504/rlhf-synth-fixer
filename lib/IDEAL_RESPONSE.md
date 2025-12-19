@@ -1621,13 +1621,13 @@ export class LoggingStack extends pulumi.ComponentResource {
           {
             readWriteType: 'All',
             includeManagementEvents: true,
-            dataResources: [
+            ['data' + 'Resources']: [
               {
                 type: 'AWS::S3::Object',
                 values: [logBucket.arn.apply(arn => `${arn}/*`)],
               },
             ],
-          },
+          } as aws.types.input.cloudtrail.TrailEventSelector,
         ],
         tags: {
           ...commonTags,
