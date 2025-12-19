@@ -65,8 +65,8 @@ if [ -n "$LOCALSTACK_SERVICES" ]; then
     echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
 else
     # Default service list for LocalStack Community Edition
-    # Including ECR for CDK bootstrap and EC2 for compute resources
-    SERVICES="s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs,ecr"
+    # Including ECR for CDK bootstrap, SSM for parameter store, and EC2 for compute resources
+    SERVICES="s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs,ecr,ssm"
     echo -e "${BLUE}📋 Services to enable (default): ${SERVICES}${NC}"
 fi
 
