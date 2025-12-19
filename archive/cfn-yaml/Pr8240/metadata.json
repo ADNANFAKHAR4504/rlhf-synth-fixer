@@ -1,0 +1,30 @@
+{
+  "po_id": "trainr934",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "subtask": "Security, Compliance, and Governance",
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "S3",
+    "RDS",
+    "IAM",
+    "SNS",
+    "CloudWatch Logs"
+  ],
+  "startedAt": "2025-12-17T09:51:39+00:00",
+  "turn_type": "single",
+  "team": "synth",
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "adnan-turing",
+  "dockerS3Location": ""
+}

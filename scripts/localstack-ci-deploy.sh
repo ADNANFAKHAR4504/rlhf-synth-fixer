@@ -129,6 +129,7 @@ install_dependencies() {
 }
 
 # Function to save deployment outputs
+# Fails if no outputs are saved (output_count = 0)
 save_outputs() {
     local output_json=$1
     
@@ -136,7 +137,152 @@ save_outputs() {
     echo "$output_json" > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
     
     local output_count=$(echo "$output_json" | jq 'keys | length' 2>/dev/null || echo "0")
+    
+    if [ "$output_count" -eq 0 ]; then
+        print_status $RED "❌ No deployment outputs found!"
+        print_status $RED "❌ Deployment must produce at least one output"
+        exit 1
+    fi
+    
     print_status $GREEN "✅ Saved $output_count outputs to cfn-outputs/flat-outputs.json"
+}
+
+# Function to describe CDK/CloudFormation deployment failure
+describe_cfn_failure() {
+    local stack_name=$1
+    
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_status $RED "📋 DEPLOYMENT FAILURE DETAILS"
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Get failed events
+    print_status $YELLOW "🔍 Failed Resources:"
+    awslocal cloudformation describe-stack-events --stack-name "$stack_name" \
+        --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED` || ResourceStatus==`DELETE_FAILED`].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]' \
+        --output table 2>/dev/null || echo "   No failed events found"
+    echo ""
+    
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# Function to describe Terraform deployment failure
+describe_terraform_failure() {
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_status $RED "📋 DEPLOYMENT FAILURE DETAILS"
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Show resources that were successfully created
+    print_status $YELLOW "🔍 Resources Successfully Created:"
+    local state_list
+    state_list=$(tflocal state list 2>/dev/null)
+    if [ -n "$state_list" ]; then
+        echo "$state_list" | sed 's/^/   ✅ /'
+    else
+        print_status $BLUE "   No resources in state (deployment failed before creating any resources)"
+    fi
+    echo ""
+    
+    # Show plan file if it exists (shows what was attempted)
+    if [ -f "tfplan" ]; then
+        print_status $YELLOW "🔍 Planned Changes (from tfplan):"
+        tflocal show tfplan -no-color 2>/dev/null | grep -E "(will be created|will be destroyed|must be replaced|Error)" | head -20 | sed 's/^/   /' || echo "   Unable to read plan file"
+        echo ""
+    fi
+    
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# Function to describe Pulumi deployment failure
+describe_pulumi_failure() {
+    local stack_name=$1
+    
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_status $RED "📋 DEPLOYMENT FAILURE DETAILS"
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Show resources that failed to create (no ID means creation failed)
+    print_status $YELLOW "🔍 Resources That Failed to Create:"
+    local failed_resources
+    failed_resources=$(pulumi stack export 2>/dev/null | jq -r '.deployment.resources[] | select(.custom == true) | select(.type | startswith("pulumi:providers") | not) | select(.id == null or .id == "") | "   Type: \(.type)\n   URN: \(.urn)\n"' 2>/dev/null)
+    
+    if [ -n "$failed_resources" ]; then
+        echo "$failed_resources"
+    else
+        print_status $BLUE "   No resources found in failed state (check error output above)"
+    fi
+    echo ""
+    
+    # Show stack summary
+    print_status $YELLOW "🔍 Stack Summary:"
+    pulumi stack --show-urns 2>/dev/null | head -20 || echo "   Unable to show stack summary"
+    echo ""
+    
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# Function to describe CDKTF deployment failure  
+describe_cdktf_failure() {
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_status $RED "📋 DEPLOYMENT FAILURE DETAILS"
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Check if synthesis succeeded
+    if [ ! -d "cdktf.out/stacks" ]; then
+        print_status $YELLOW "🔍 Synthesis Status:"
+        print_status $RED "   ❌ Synthesis failed - cdktf.out/stacks directory not found"
+        echo ""
+        print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        return
+    fi
+    
+    # Show synthesized stacks
+    print_status $YELLOW "🔍 Synthesized Stacks:"
+    local stack_count=0
+    for stack_dir in cdktf.out/stacks/*/; do
+        if [ -d "$stack_dir" ]; then
+            stack_count=$((stack_count + 1))
+            print_status $BLUE "   Stack $stack_count: $(basename $stack_dir)"
+        fi
+    done
+    if [ $stack_count -eq 0 ]; then
+        echo "   No stacks found"
+    fi
+    echo ""
+    
+    # Show terraform state and errors for each stack
+    print_status $YELLOW "🔍 Stack Deployment Status:"
+    for stack_dir in cdktf.out/stacks/*/; do
+        if [ -d "$stack_dir" ]; then
+            local stack_name=$(basename "$stack_dir")
+            print_status $BLUE "   ── Stack: $stack_name ──"
+            
+            cd "$stack_dir" 2>/dev/null || continue
+            
+            # Check if terraform was initialized
+            if [ -f ".terraform/terraform.tfstate" ] || [ -f "terraform.tfstate" ]; then
+                # Show resources in state
+                print_status $CYAN "   Resources in state:"
+                terraform state list 2>/dev/null | sed 's/^/      /' || echo "      No resources in state"
+                
+                # Check for failed resources (those with errors)
+                print_status $CYAN "   Failed resources:"
+                terraform state list 2>/dev/null | while read resource; do
+                    terraform state show "$resource" 2>/dev/null | grep -q "Error:" && echo "      ❌ $resource" || true
+                done || echo "      (Unable to check for errors)"
+            else
+                print_status $YELLOW "      ⚠️  Terraform not initialized or no state found"
+            fi
+            
+            cd - > /dev/null 2>&1
+            echo ""
+        fi
+    done
+    
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
 # Function to deploy based on platform
@@ -254,6 +400,8 @@ deploy_cdk() {
         local exit_code=$?
         if [ $exit_code -ne 0 ]; then
             print_status $RED "❌ CDK deployment failed with exit code: $exit_code"
+            echo ""
+            describe_cfn_failure "TapStack${env_suffix}"
             exit $exit_code
         fi
     fi
@@ -329,6 +477,8 @@ deploy_cdktf() {
     
     if [ $exit_code -ne 0 ]; then
         print_status $RED "❌ CDKTF deployment failed with exit code: $exit_code"
+        echo ""
+        describe_cdktf_failure
         exit $exit_code
     fi
 
@@ -411,14 +561,9 @@ deploy_cloudformation() {
     local exit_code=$?
     
     if [ $exit_code -ne 0 ]; then
-        print_status $YELLOW "⚠️ Deployment encountered issues, checking stack events..."
-        aws cloudformation describe-stack-events \
-            --stack-name "$stack_name" \
-            --endpoint-url "$AWS_ENDPOINT_URL" \
-            --region "$AWS_DEFAULT_REGION" \
-            --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
-            --output table 2>/dev/null || true
         print_status $RED "❌ CloudFormation deployment failed with exit code: $exit_code"
+        echo ""
+        describe_cfn_failure "$stack_name"
         exit $exit_code
     fi
 
@@ -466,19 +611,61 @@ deploy_terraform() {
 
     # Initialize Terraform
     print_status $YELLOW "🔧 Initializing Terraform..."
-    tflocal init 2>&1
+    
+    # Check if backend is configured - if S3 backend, create bucket first and configure for LocalStack
+    if grep -q 'backend "s3"' *.tf 2>/dev/null; then
+        local state_bucket="terraform-state-${ENVIRONMENT_SUFFIX:-dev}"
+        print_status $YELLOW "   📦 Detected S3 backend, configuring for LocalStack..."
+        
+        # Create the bucket FIRST before init
+        print_status $BLUE "   Creating S3 state bucket: $state_bucket"
+        awslocal s3 mb "s3://$state_bucket" 2>/dev/null || {
+            # Bucket might already exist, check if it's accessible
+            if ! awslocal s3 ls "s3://$state_bucket" > /dev/null 2>&1; then
+                print_status $YELLOW "   ⚠️  Bucket may already exist, continuing..."
+            fi
+        }
+        
+        # Wait a moment for bucket to be fully available
+        sleep 2
+        
+        # Initialize with LocalStack S3 backend configuration
+        tflocal init -input=false -reconfigure \
+            -backend-config="bucket=$state_bucket" \
+            -backend-config="key=terraform.tfstate" \
+            -backend-config="region=${AWS_DEFAULT_REGION}" \
+            -backend-config="endpoint=${AWS_ENDPOINT_URL}" \
+            -backend-config="skip_credentials_validation=true" \
+            -backend-config="skip_metadata_api_check=true" \
+            -backend-config="force_path_style=true" 2>&1 || {
+            print_status $YELLOW "   ⚠️  Initial init failed, retrying..."
+            sleep 2
+            tflocal init -input=false -reconfigure \
+                -backend-config="bucket=$state_bucket" \
+                -backend-config="key=terraform.tfstate" \
+                -backend-config="region=${AWS_DEFAULT_REGION}" \
+                -backend-config="endpoint=${AWS_ENDPOINT_URL}" \
+                -backend-config="skip_credentials_validation=true" \
+                -backend-config="skip_metadata_api_check=true" \
+                -backend-config="force_path_style=true" 2>&1
+        }
+    else
+        tflocal init -input=false -reconfigure 2>&1
+    fi
 
-    # Plan
+    # Plan (disable interactive prompts)
     print_status $YELLOW "📋 Planning deployment..."
-    tflocal plan -out=tfplan 2>&1
+    tflocal plan -input=false -out=tfplan 2>&1
 
-    # Apply
+    # Apply (disable interactive prompts)
     print_status $YELLOW "🚀 Applying changes..."
-    tflocal apply -auto-approve tfplan 2>&1
+    tflocal apply -input=false -auto-approve tfplan 2>&1
     local exit_code=$?
     
     if [ $exit_code -ne 0 ]; then
         print_status $RED "❌ Terraform deployment failed with exit code: $exit_code"
+        echo ""
+        describe_terraform_failure
         exit $exit_code
     fi
 
@@ -585,6 +772,8 @@ deploy_pulumi() {
 
     if [ $exit_code -ne 0 ]; then
         print_status $RED "❌ Pulumi deployment failed with exit code: $exit_code"
+        echo ""
+        describe_pulumi_failure "$stack_name"
         exit $exit_code
     fi
 

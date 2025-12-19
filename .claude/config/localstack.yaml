@@ -6,9 +6,11 @@
 # ITERATION SETTINGS
 # ═══════════════════════════════════════════════════════════════
 iteration:
-  max_fix_iterations: 3 # Maximum fix iterations (reduced due to batch approach)
-  max_deployment_attempts: 2 # Maximum deployment attempts per iteration
+  max_fix_iterations: 10 # Maximum fix iterations (increased to ensure production ready)
+  max_cicd_iterations: 10 # Maximum CI/CD monitoring iterations after PR push
+  max_deployment_attempts: 3 # Maximum deployment attempts per iteration
   use_batch_fix: true # Enable batch fix approach (apply ALL fixes before re-deploy)
+  continue_until_production_ready: true # MUST iterate until all CI/CD jobs pass
 
 # ═══════════════════════════════════════════════════════════════
 # TIMEOUT SETTINGS (in seconds)
@@ -255,9 +257,13 @@ platforms:
 
 # ═══════════════════════════════════════════════════════════════
 # GITHUB SETTINGS
+# These settings are used by the modular scripts in .claude/scripts/:
+#   - localstack-common.sh (loads GITHUB_REPO from here)
+#   - localstack-fetch-github.sh (fetches PRs from this repo)
+#   - localstack-create-pr.sh (creates PRs in this repo)
 # ═══════════════════════════════════════════════════════════════
 github:
-  repo: 'TuringGpt/iac-test-automations'
+  repo: 'TuringGpt/iac-test-automations' # Central config - used by all scripts
   fetch_method: 'api' # api, clone, or checkout
   api_timeout: 30 # GitHub API timeout
   clone_depth: 1 # Shallow clone depth

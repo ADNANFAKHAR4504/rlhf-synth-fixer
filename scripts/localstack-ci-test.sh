@@ -318,7 +318,8 @@ run_cdk_tests() {
             fi
             ;;
         *)
-            print_status $YELLOW "⚠️  Unknown language for CDK/CDKTF: $language"
+            print_status $RED "❌ Unknown language for CDK/CDKTF: $language"
+            exit 1
             ;;
     esac
 
@@ -373,7 +374,8 @@ run_cfn_tests() {
             exit $exit_code
         fi
     else
-        print_status $YELLOW "⚠️  No test runner found for CloudFormation"
+        print_status $RED "❌ No test runner found for CloudFormation"
+        exit 1
     fi
 
     echo ""
@@ -389,10 +391,12 @@ run_terraform_tests() {
     print_status $MAGENTA "🧪 Running Terraform integration tests..."
     echo ""
 
-    cd "$test_dir"
+    local test_runner_found=false
 
-    # Check for Go-based Terratest
-    if [ -f "go.mod" ]; then
+    # Check for Go-based Terratest in test directory
+    if [ -f "$test_dir/go.mod" ]; then
+        test_runner_found=true
+        cd "$test_dir"
         print_status $YELLOW "📦 Installing Go test dependencies..."
         go mod download
         
@@ -403,7 +407,10 @@ run_terraform_tests() {
             print_status $RED "❌ Terratest failed with exit code: $exit_code"
             exit $exit_code
         fi
-    elif [ -f "test.sh" ]; then
+    # Check for custom test script in test directory
+    elif [ -f "$test_dir/test.sh" ]; then
+        test_runner_found=true
+        cd "$test_dir"
         print_status $YELLOW "🧪 Running custom test script..."
         bash test.sh 2>&1
         local exit_code=$?
@@ -411,7 +418,37 @@ run_terraform_tests() {
             print_status $RED "❌ Test script failed with exit code: $exit_code"
             exit $exit_code
         fi
-    elif [ -f "package.json" ]; then
+    # Check for package.json in project root (TypeScript/JavaScript tests)
+    elif [ -f "$PROJECT_ROOT/package.json" ]; then
+        test_runner_found=true
+        cd "$PROJECT_ROOT"
+        print_status $YELLOW "📦 Installing dependencies..."
+        npm install --silent
+        
+        # Check for integration test files
+        local int_tests=$(find "$test_dir" -name "*.int.test.ts" -o -name "*.int.test.js" 2>/dev/null | head -1)
+        
+        if [ -n "$int_tests" ]; then
+            print_status $YELLOW "🧪 Running Jest integration tests..."
+            npm run test:integration -- --verbose --forceExit 2>&1
+            local exit_code=$?
+            if [ $exit_code -ne 0 ]; then
+                print_status $RED "❌ Integration tests failed with exit code: $exit_code"
+                exit $exit_code
+            fi
+        else
+            print_status $YELLOW "🧪 Running npm test..."
+            npm test 2>&1
+            local exit_code=$?
+            if [ $exit_code -ne 0 ]; then
+                print_status $RED "❌ Tests failed with exit code: $exit_code"
+                exit $exit_code
+            fi
+        fi
+    # Check for package.json in test directory
+    elif [ -f "$test_dir/package.json" ]; then
+        test_runner_found=true
+        cd "$test_dir"
         print_status $YELLOW "📦 Installing dependencies..."
         npm install --silent
         
@@ -422,8 +459,13 @@ run_terraform_tests() {
             print_status $RED "❌ Tests failed with exit code: $exit_code"
             exit $exit_code
         fi
-    else
-        print_status $YELLOW "⚠️  No test runner found in test directory"
+    fi
+
+    # Fail if no test runner was found
+    if [ "$test_runner_found" = false ]; then
+        print_status $RED "❌ No test runner found for Terraform"
+        print_status $YELLOW "💡 Expected: go.mod (Terratest), test.sh, or package.json"
+        exit 1
     fi
 
     echo ""
@@ -473,13 +515,21 @@ run_pulumi_tests() {
             ;;
         "go")
             print_status $YELLOW "🧪 Running Go tests..."
-            cd "$test_dir"
+            
+            # Check for Go test files in tests/integration/
+            if ! find "$test_dir/integration" -name "*_test.go" 2>/dev/null | grep -q .; then
+                print_status $RED "❌ No Go test files found in tests/integration/"
+                exit 1
+            fi
+            
+            # Run from PROJECT_ROOT
+            cd "$PROJECT_ROOT"
             
             if [ -f "go.mod" ]; then
                 go mod download
             fi
             
-            go test -v -timeout 30m 2>&1
+            go test -v -timeout 30m ./tests/integration/... 2>&1
             local exit_code=$?
             if [ $exit_code -ne 0 ]; then
                 print_status $RED "❌ Go tests failed with exit code: $exit_code"
@@ -488,6 +538,13 @@ run_pulumi_tests() {
             ;;
         "java")
             print_status $YELLOW "🧪 Running Java tests..."
+            
+            # Check for Java test files in tests/integration/
+            if ! find "$test_dir/integration" -name "*Test.java" -o -name "*Tests.java" 2>/dev/null | grep -q .; then
+                print_status $RED "❌ No Java test files found in tests/integration/"
+                exit 1
+            fi
+            
             cd "$PROJECT_ROOT"
             
             if [ -f "pom.xml" ]; then
@@ -504,10 +561,14 @@ run_pulumi_tests() {
                     print_status $RED "❌ Gradle tests failed with exit code: $exit_code"
                     exit $exit_code
                 fi
+            else
+                print_status $RED "❌ No Java build file (pom.xml or build.gradle) found"
+                exit 1
             fi
             ;;
         *)
-            print_status $YELLOW "⚠️  Unknown language for Pulumi: $language"
+            print_status $RED "❌ Unknown language for Pulumi: $language"
+            exit 1
             ;;
     esac
 
@@ -600,7 +661,8 @@ run_generic_tests() {
                     exit $exit_code
                 fi
             else
-                print_status $YELLOW "⚠️  No test runner found for language: $language"
+                print_status $RED "❌ No test runner found for language: $language"
+                exit 1
             fi
             ;;
     esac
@@ -627,7 +689,6 @@ main() {
     print_status $GREEN "✅ Detected platform: $platform"
     print_status $GREEN "✅ Detected language: $language"
     echo ""
-
     # Run tests and capture exit code
     if ! run_tests "$platform" "$language"; then
         echo ""

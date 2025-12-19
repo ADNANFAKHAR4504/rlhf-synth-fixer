@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr959",
+  "team": "synth",
+  "startedAt": "2025-08-22T16:32:15+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon DynamoDB",
+    "Amazon S3",
+    "Amazon API Gateway",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "AWS CloudFormation"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "adnan-turing",
+  "dockerS3Location": ""
+}
