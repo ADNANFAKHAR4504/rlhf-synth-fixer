@@ -9,18 +9,35 @@ import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
 
 // Configuration
 const region = process.env.AWS_REGION || 'us-east-1';
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr176';
-const stackName = `TapStack${environmentSuffix}`;
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr8217';
+const stackName = `localstack-stack-${environmentSuffix}`;
+
+// LocalStack configuration
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('4566');
+const endpointUrl = process.env.AWS_ENDPOINT_URL || undefined;
+
+// Client configuration with LocalStack support
+const clientConfig: any = {
+  region,
+  ...(isLocalStack && endpointUrl ? {
+    endpoint: endpointUrl,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: 'test',
+      secretAccessKey: 'test'
+    }
+  } : {})
+};
 
 // Initialize AWS SDK clients
-const cfn = new CloudFormationClient({ region });
-const ec2 = new EC2Client({ region });
-const s3 = new S3Client({ region });
-const iam = new IAMClient({ region });
-const lambda = new LambdaClient({ region });
-const secrets = new SecretsManagerClient({ region });
-const sns = new SNSClient({ region });
-const cloudtrail = new CloudTrailClient({ region });
+const cfn = new CloudFormationClient(clientConfig);
+const ec2 = new EC2Client(clientConfig);
+const s3 = new S3Client(clientConfig);
+const iam = new IAMClient(clientConfig);
+const lambda = new LambdaClient(clientConfig);
+const secrets = new SecretsManagerClient(clientConfig);
+const sns = new SNSClient(clientConfig);
+const cloudtrail = new CloudTrailClient(clientConfig);
 
 // Global variables to store live AWS data
 let outputs: Record<string, string> = {};
