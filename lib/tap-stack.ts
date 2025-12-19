@@ -6,7 +6,6 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as kms from 'aws-cdk-lib/aws-kms';
 
@@ -102,7 +101,6 @@ exports.handler = async (event) => {
       environment: { TABLE_NAME: dynamoTable.tableName },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
-      logRetention: logs.RetentionDays.ONE_WEEK,
     });
 
     // Create additional Lambda functions similarly (read, update, delete, maintenance)
@@ -115,7 +113,6 @@ exports.handler = async (event) => {
       environment: { TABLE_NAME: dynamoTable.tableName },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
-      logRetention: logs.RetentionDays.ONE_WEEK,
     });
 
     const updateItemFunction = new lambda.Function(this, 'UpdateItemFunction', {
@@ -127,7 +124,6 @@ exports.handler = async (event) => {
       environment: { TABLE_NAME: dynamoTable.tableName },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
-      logRetention: logs.RetentionDays.ONE_WEEK,
     });
 
     const deleteItemFunction = new lambda.Function(this, 'DeleteItemFunction', {
@@ -139,7 +135,6 @@ exports.handler = async (event) => {
       environment: { TABLE_NAME: dynamoTable.tableName },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
-      logRetention: logs.RetentionDays.ONE_WEEK,
     });
 
     const scheduledFunction = new lambda.Function(
@@ -154,7 +149,6 @@ exports.handler = async (event) => {
         environment: { TABLE_NAME: dynamoTable.tableName },
         timeout: cdk.Duration.minutes(5),
         memorySize: 512,
-        logRetention: logs.RetentionDays.ONE_WEEK,
       }
     );
 
