@@ -94,7 +94,8 @@
     "@aws-cdk/aws-s3:publicAccessBlockedByDefault": true,
     "@aws-cdk/aws-lambda:useCdkManagedLogGroup": true,
     "@aws-cdk/core:newStyleStackSynthesis": false,
-    "aws-cdk:enableDiffNoFail": "true"
+    "aws-cdk:enableDiffNoFail": "true",
+    "@aws-cdk/core:bootstrapQualifier": "localstack"
   },
   "requireApproval": "never"
 }
