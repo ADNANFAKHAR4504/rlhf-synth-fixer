@@ -367,12 +367,14 @@ deploy_cdk() {
     print_status $BLUE "   LocalStack Community Edition can deploy without full CDK Toolkit"
 
     # Deploy based on language
-    print_status $YELLOW "🚀 Deploying stacks..."
-    
+    # Use --method=direct to skip asset publishing (avoids need for S3 asset bucket)
+    print_status $YELLOW "🚀 Deploying stacks (using direct method to skip asset publishing)..."
+
     case "$language" in
         "ts"|"js")
             cdklocal deploy --all --require-approval never \
                 -c environmentSuffix="$env_suffix" \
+                --method=direct \
                 --no-rollback \
                 --verbose 2>&1
             local exit_code=$?
@@ -380,6 +382,7 @@ deploy_cdk() {
         "py"|"python")
             cdklocal deploy --all --require-approval never \
                 -c environmentSuffix="$env_suffix" \
+                --method=direct \
                 --no-rollback \
                 --verbose 2>&1
             local exit_code=$?
@@ -387,6 +390,7 @@ deploy_cdk() {
         "go")
             cdklocal deploy --all --require-approval never \
                 -c environmentSuffix="$env_suffix" \
+                --method=direct \
                 --no-rollback \
                 --verbose 2>&1
             local exit_code=$?
@@ -394,6 +398,7 @@ deploy_cdk() {
         "java")
             cdklocal deploy --all --require-approval never \
                 -c environmentSuffix="$env_suffix" \
+                --method=direct \
                 --no-rollback \
                 --verbose 2>&1
             local exit_code=$?
@@ -408,6 +413,7 @@ deploy_cdk() {
         print_status $YELLOW "⚠️  Initial deployment failed, retrying..."
         cdklocal deploy --all --require-approval never \
             -c environmentSuffix="$env_suffix" \
+            --method=direct \
             --force \
             --no-rollback \
             --verbose 2>&1
