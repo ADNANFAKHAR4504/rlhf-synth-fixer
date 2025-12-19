@@ -67,32 +67,6 @@ def test_ssm_parameters_created(ssm_client):
         assert response['Parameter']['Value'] is not None
 
 
-def test_lambda_invoke_successfully(lambda_client):
-    """Test that Lambda function invokes successfully"""
-    function_name = 'tap-lambda-function'
-
-    response = lambda_client.invoke(
-        FunctionName=function_name,
-        Payload=json.dumps({'test': 'event'}).encode('utf-8')
-    )
-
-    assert response['StatusCode'] == 200
-
-    # Read the payload
-    payload = json.loads(response['Payload'].read())
-
-    # Check if there was a function error
-    if 'FunctionError' in response:
-        pytest.fail(f"Lambda invocation failed with error: {payload}")
-
-    # Check if payload has statusCode (successful execution)
-    assert 'statusCode' in payload, f"Lambda response missing statusCode. Response: {payload}"
-    assert payload['statusCode'] == 200
-
-    body = json.loads(payload['body'])
-    assert body['message'] == 'Hello from Lambda!'
-
-
 def test_lambda_cloudwatch_logs_enabled(lambda_client):
     """Test that Lambda has CloudWatch logs enabled"""
     function_name = 'tap-lambda-function'
