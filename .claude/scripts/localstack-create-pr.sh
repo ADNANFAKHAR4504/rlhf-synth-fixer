@@ -291,17 +291,13 @@ This PR will be processed by the CI/CD pipeline which will:
 *This PR was automatically created by the \`/localstack-migrate\` command.*
 *The PR pipeline will handle deployment and testing.*"
 
-# Create the PR with required labels (synth-2, localstack, platform, language)
+# Create the PR
 PR_RESULT=$(gh pr create \
   --repo "$GITHUB_REPO" \
   --title "$PR_TITLE" \
   --body "$PR_BODY" \
   --base main \
   --head "$NEW_BRANCH" \
-  --label "synth-2" \
-  --label "localstack" \
-  --label "$PLATFORM" \
-  --label "$LANGUAGE" \
   2>&1) || {
   log_error "Failed to create Pull Request"
   echo "  Error: $PR_RESULT"
@@ -313,25 +309,6 @@ NEW_PR_URL="$PR_RESULT"
 NEW_PR_NUMBER=$(echo "$NEW_PR_URL" | grep -oE '[0-9]+$' || echo "")
 
 log_success "Pull Request created!"
-
-# ═══════════════════════════════════════════════════════════════════════════
-# ASSIGN CURRENT GITHUB USER TO PR
-# ═══════════════════════════════════════════════════════════════════════════
-
-log_section "Assigning PR to Current User"
-
-# Get current GitHub user
-CURRENT_USER=$(gh api user --jq '.login' 2>/dev/null || echo "")
-
-if [ -n "$CURRENT_USER" ] && [ -n "$NEW_PR_NUMBER" ]; then
-  if gh pr edit "$NEW_PR_NUMBER" --repo "$GITHUB_REPO" --add-assignee "$CURRENT_USER" 2>/dev/null; then
-    log_success "Assigned PR to @$CURRENT_USER"
-  else
-    log_warn "Could not assign PR to @$CURRENT_USER (non-fatal)"
-  fi
-else
-  log_warn "Could not determine current GitHub user for assignment"
-fi
 
 # ═══════════════════════════════════════════════════════════════════════════
 # RETURN TO PROJECT ROOT
