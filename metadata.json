@@ -3,7 +3,7 @@
   "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
-  "team": "synth",
+  "team": "synth-2",
   "startedAt": "2025-12-03T00:00:00-08:00",
   "subtask": "IaC Program Optimization",
   "subject_labels": [
