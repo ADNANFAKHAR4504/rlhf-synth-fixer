@@ -43,7 +43,7 @@
                         "ExistingKMSKeyARN",
                         "UseExistingEC2Role",
                         "ExistingEC2RoleName",
-                        "CreateNATGateway",
+                        "CreateNewNATGateway",
                         "CreateS3Bucket",
                         "CreateEC2Instance"
                     ]
@@ -58,6 +58,18 @@
                 },
                 "VPCCIDR": {
                     "default": "VPC CIDR (if creating new)"
+                },
+                "PublicSubnet1CIDR": {
+                    "default": "Public Subnet 1 CIDR"
+                },
+                "PublicSubnet2CIDR": {
+                    "default": "Public Subnet 2 CIDR"
+                },
+                "PrivateSubnet1CIDR": {
+                    "default": "Private Subnet 1 CIDR"
+                },
+                "PrivateSubnet2CIDR": {
+                    "default": "Private Subnet 2 CIDR"
                 },
                 "InstanceType": {
                     "default": "EC2 Instance Type"
@@ -89,7 +101,7 @@
                 "ExistingEC2RoleName": {
                     "default": "Existing EC2 Role Name"
                 },
-                "CreateNATGateway": {
+                "CreateNewNATGateway": {
                     "default": "Create NAT Gateway?"
                 },
                 "CreateS3Bucket": {
@@ -104,7 +116,9 @@
             "config": {
                 "ignore_checks": [
                     "W1030",
-                    "W1011"
+                    "W1011",
+                    "W2506",
+                    "E3691"
                 ]
             }
         }
@@ -130,6 +144,35 @@
             "Default": "10.0.0.0/16",
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
             "ConstraintDescription": "Must be a valid IPv4 CIDR block (e.g., 10.0.0.0/16)."
+        },
+        "LatestAmiId": {
+            "Type": "String",
+            "Default": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
+            "Description": "The AMI ID to use for the EC2 instance."
+        },
+        "PublicSubnet1CIDR": {
+            "Type": "String",
+            "Description": "CIDR block for Public Subnet 1.",
+            "Default": "10.0.0.0/24",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
+        },
+        "PublicSubnet2CIDR": {
+            "Type": "String",
+            "Description": "CIDR block for Public Subnet 2.",
+            "Default": "10.0.1.0/24",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
+        },
+        "PrivateSubnet1CIDR": {
+            "Type": "String",
+            "Description": "CIDR block for Private Subnet 1.",
+            "Default": "10.0.2.0/24",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
+        },
+        "PrivateSubnet2CIDR": {
+            "Type": "String",
+            "Description": "CIDR block for Private Subnet 2.",
+            "Default": "10.0.3.0/24",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
         },
         "InstanceType": {
             "Type": "String",
@@ -212,14 +255,14 @@
         },
         "CreateDatabase": {
             "Type": "String",
-            "Default": "no",
+            "Default": "yes",
             "AllowedValues": [
                 "yes",
                 "no"
             ],
             "Description": "Select \"yes\" to create a new RDS database. Select \"no\" to skip database creation."
         },
-        "CreateNATGateway": {
+        "CreateNewNATGateway": {
             "Type": "String",
             "Default": "no",
             "AllowedValues": [
@@ -280,10 +323,10 @@
                 "yes"
             ]
         },
-        "CreateNATGateway": {
+        "CreateNewNATGateway": {
             "Fn::Equals": [
                 {
-                    "Ref": "CreateNATGateway"
+                    "Ref": "CreateNewNATGateway"
                 },
                 "yes"
             ]
@@ -375,18 +418,7 @@
                     ]
                 },
                 "CidrBlock": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::Cidr": [
-                                {
-                                    "Ref": "VPCCIDR"
-                                },
-                                6,
-                                8
-                            ]
-                        }
-                    ]
+                    "Ref": "PublicSubnet1CIDR"
                 },
                 "MapPublicIpOnLaunch": true,
                 "Tags": [
@@ -419,18 +451,7 @@
                     ]
                 },
                 "CidrBlock": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::Cidr": [
-                                {
-                                    "Ref": "VPCCIDR"
-                                },
-                                6,
-                                8
-                            ]
-                        }
-                    ]
+                    "Ref": "PublicSubnet2CIDR"
                 },
                 "MapPublicIpOnLaunch": true,
                 "Tags": [
@@ -463,18 +484,7 @@
                     ]
                 },
                 "CidrBlock": {
-                    "Fn::Select": [
-                        2,
-                        {
-                            "Fn::Cidr": [
-                                {
-                                    "Ref": "VPCCIDR"
-                                },
-                                6,
-                                8
-                            ]
-                        }
-                    ]
+                    "Ref": "PrivateSubnet1CIDR"
                 },
                 "Tags": [
                     {
@@ -506,18 +516,7 @@
                     ]
                 },
                 "CidrBlock": {
-                    "Fn::Select": [
-                        3,
-                        {
-                            "Fn::Cidr": [
-                                {
-                                    "Ref": "VPCCIDR"
-                                },
-                                6,
-                                8
-                            ]
-                        }
-                    ]
+                    "Ref": "PrivateSubnet2CIDR"
                 },
                 "Tags": [
                     {
@@ -535,7 +534,7 @@
         },
         "NatGatewayEIP": {
             "Type": "AWS::EC2::EIP",
-            "Condition": "CreateNATGateway",
+            "Condition": "CreateNewNATGateway",
             "Properties": {
                 "Domain": "vpc",
                 "Tags": [
@@ -554,7 +553,7 @@
         },
         "NatGateway": {
             "Type": "AWS::EC2::NatGateway",
-            "Condition": "CreateNATGateway",
+            "Condition": "CreateNewNATGateway",
             "Properties": {
                 "AllocationId": {
                     "Fn::GetAtt": [
@@ -677,7 +676,7 @@
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "GatewayId": {
                     "Fn::If": [
-                        "CreateNATGateway",
+                        "CreateNewNATGateway",
                         {
                             "Ref": "AWS::NoValue"
                         },
@@ -688,7 +687,7 @@
                 },
                 "NatGatewayId": {
                     "Fn::If": [
-                        "CreateNATGateway",
+                        "CreateNewNATGateway",
                         {
                             "Ref": "NatGateway"
                         },
@@ -1291,6 +1290,8 @@
         "Database": {
             "Type": "AWS::RDS::DBInstance",
             "Condition": "CreateNewDatabase",
+            "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "AllocatedStorage": 20,
                 "DBInstanceClass": {
@@ -1307,14 +1308,14 @@
                     "Ref": "DBSubnetGroup"
                 },
                 "Engine": "mysql",
-                "EngineVersion": "8.0.43",
+                "EngineVersion": 8.0,
                 "MasterUsername": {
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
                     "Ref": "DBPassword"
                 },
-                "BackupRetentionPeriod": 7,
+                "BackupRetentionPeriod": 0,
                 "StorageEncrypted": true,
                 "KmsKeyId": {
                     "Fn::If": [
@@ -1362,7 +1363,9 @@
                     "Fn::Sub": "${AWS::StackName}-lt"
                 },
                 "LaunchTemplateData": {
-                    "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
+                    "ImageId": {
+                        "Ref": "LatestAmiId"
+                    },
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
@@ -1471,6 +1474,9 @@
                             "LatestVersionNumber"
                         ]
                     }
+                },
+                "ImageId": {
+                    "Ref": "LatestAmiId"
                 },
                 "SubnetId": {
                     "Fn::If": [

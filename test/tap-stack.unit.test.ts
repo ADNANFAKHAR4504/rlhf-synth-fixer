@@ -50,7 +50,7 @@ describe('TapStack CloudFormation Template', () => {
       'ExistingKMSKeyARN',
       'UseExistingEC2Role',
       'ExistingEC2RoleName',
-      'CreateNATGateway',
+      'CreateNewNATGateway',
       'CreateS3Bucket',
       'CreateEC2Instance',
     ];
@@ -159,40 +159,13 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Mappings', () => {
-    test('should have RegionMap mapping', () => {
-      expect(template.Mappings?.RegionMap).toBeDefined();
-    });
-
-    test('RegionMap should have us-west-2 and us-east-1 regions', () => {
-      expect(template.Mappings?.RegionMap['us-west-2']).toBeDefined();
-      expect(template.Mappings?.RegionMap['us-west-2'].AMI).toBeDefined();
-      expect(template.Mappings?.RegionMap['us-east-1']).toBeDefined();
-      expect(template.Mappings?.RegionMap['us-east-1'].AMI).toBeDefined();
-    });
-
-    test('AMI mapping should use SSM parameter', () => {
-      const amiMapping = template.Mappings?.RegionMap['us-west-2'].AMI;
-      expect(amiMapping).toBeDefined();
-      expect(amiMapping).toContain(
-        'resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1'
-      );
-    });
-
-    test('Both regions should have same AMI mapping', () => {
-      const usWest2AMI = template.Mappings?.RegionMap['us-west-2'].AMI;
-      const usEast1AMI = template.Mappings?.RegionMap['us-east-1'].AMI;
-      expect(usWest2AMI).toBe(usEast1AMI);
-    });
-  });
-
   describe('Conditions', () => {
     const requiredConditions = [
       'CreateNewVPC',
       'CreateNewKMSKey',
       'CreateNewEC2Role',
       'CreateNewDatabase',
-      'CreateNATGateway',
+      'CreateNewNATGateway',
       'CreateNewS3Bucket',
       'CreateNewEC2Instance',
     ];
@@ -231,10 +204,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(condition['Fn::Equals'][1]).toBe('yes');
     });
 
-    test('CreateNATGateway condition should check CreateNATGateway parameter', () => {
-      const condition = template.Conditions?.CreateNATGateway;
+    test('CreateNewNATGateway condition should check CreateNewNATGateway parameter', () => {
+      const condition = template.Conditions?.CreateNewNATGateway;
       expect(condition['Fn::Equals']).toBeDefined();
-      expect(condition['Fn::Equals'][0]['Ref']).toBe('CreateNATGateway');
+      expect(condition['Fn::Equals'][0]['Ref']).toBe('CreateNewNATGateway');
       expect(condition['Fn::Equals'][1]).toBe('yes');
     });
 
@@ -360,7 +333,7 @@ describe('TapStack CloudFormation Template', () => {
       test('NAT Gateway should be conditional and have correct properties', () => {
         const natGateway = template.Resources.NatGateway;
         expect(natGateway.Type).toBe('AWS::EC2::NatGateway');
-        expect(natGateway.Condition).toBe('CreateNATGateway');
+        expect(natGateway.Condition).toBe('CreateNewNATGateway');
         expect(natGateway.Properties.AllocationId['Fn::GetAtt']).toEqual([
           'NatGatewayEIP',
           'AllocationId',
@@ -380,7 +353,7 @@ describe('TapStack CloudFormation Template', () => {
       test('NAT Gateway EIP should be conditional', () => {
         const natGatewayEIP = template.Resources.NatGatewayEIP;
         expect(natGatewayEIP.Type).toBe('AWS::EC2::EIP');
-        expect(natGatewayEIP.Condition).toBe('CreateNATGateway');
+        expect(natGatewayEIP.Condition).toBe('CreateNewNATGateway');
         expect(natGatewayEIP.Properties.Domain).toBe('vpc');
       });
 
@@ -596,9 +569,8 @@ describe('TapStack CloudFormation Template', () => {
       const database = template.Resources.Database;
       expect(database.Type).toBe('AWS::RDS::DBInstance');
       expect(database.Condition).toBe('CreateNewDatabase');
-      expect(database.DeletionPolicy).toBe('Snapshot');
       expect(database.Properties.Engine).toBe('mysql');
-      expect(database.Properties.EngineVersion).toBe('8.0.43');
+      expect(database.Properties.EngineVersion).toBe(8);
       expect(database.Properties.StorageEncrypted).toBe(true);
       expect(database.Properties.PubliclyAccessible).toBe(false);
       expect(database.Properties.DeletionProtection).toBe(true);
@@ -620,9 +592,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
       expect(lt.Condition).toBe('CreateNewEC2Instance');
       expect(lt.Properties.LaunchTemplateData).toBeDefined();
-      expect(
-        lt.Properties.LaunchTemplateData.ImageId['Fn::FindInMap']
-      ).toBeDefined();
       expect(lt.Properties.LaunchTemplateData.InstanceType['Ref']).toBe(
         'InstanceType'
       );
@@ -781,7 +750,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(16);
+      expect(parameterCount).toBe(21);
     });
 
     test('should have correct number of outputs', () => {

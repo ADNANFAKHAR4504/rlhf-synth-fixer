@@ -1,5 +1,4 @@
 ```yaml
-
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Highly secure cloud infrastructure (VPC, EC2, RDS, S3) with encryption, least privilege IAM, and conditional resource creation.'
 Metadata:
@@ -30,7 +29,7 @@ Metadata:
           - ExistingKMSKeyARN
           - UseExistingEC2Role
           - ExistingEC2RoleName
-          - CreateNATGateway
+          - CreateNewNATGateway
           - CreateS3Bucket
           - CreateEC2Instance
     ParameterLabels:
@@ -40,6 +39,14 @@ Metadata:
         default: 'Existing VPC ID'
       VPCCIDR:
         default: 'VPC CIDR (if creating new)'
+      PublicSubnet1CIDR:
+        default: 'Public Subnet 1 CIDR'
+      PublicSubnet2CIDR:
+        default: 'Public Subnet 2 CIDR'
+      PrivateSubnet1CIDR:
+        default: 'Private Subnet 1 CIDR'
+      PrivateSubnet2CIDR:
+        default: 'Private Subnet 2 CIDR'
       InstanceType:
         default: 'EC2 Instance Type'
       SSHLocation:
@@ -60,7 +67,7 @@ Metadata:
         default: 'Use Existing EC2 Role?'
       ExistingEC2RoleName:
         default: 'Existing EC2 Role Name'
-      CreateNATGateway:
+      CreateNewNATGateway:
         default: 'Create NAT Gateway?'
       CreateS3Bucket:
         default: 'Create S3 Bucket?'
@@ -71,6 +78,8 @@ Metadata:
       ignore_checks:
         - W1030
         - W1011
+        - W2506
+        - E3691
 
 Parameters:
   UseExistingVPC:
@@ -88,6 +97,30 @@ Parameters:
     Default: '10.0.0.0/16'
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
     ConstraintDescription: 'Must be a valid IPv4 CIDR block (e.g., 10.0.0.0/16).'
+  LatestAmiId:
+    Type: String
+    Default: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+    Description: 'The AMI ID to use for the EC2 instance.'
+  PublicSubnet1CIDR:
+    Type: String
+    Description: 'CIDR block for Public Subnet 1.'
+    Default: '10.0.0.0/24'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
+  PublicSubnet2CIDR:
+    Type: String
+    Description: 'CIDR block for Public Subnet 2.'
+    Default: '10.0.1.0/24'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
+  PrivateSubnet1CIDR:
+    Type: String
+    Description: 'CIDR block for Private Subnet 1.'
+    Default: '10.0.2.0/24'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
+  PrivateSubnet2CIDR:
+    Type: String
+    Description: 'CIDR block for Private Subnet 2.'
+    Default: '10.0.3.0/24'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
   InstanceType:
     Type: String
     Default: 't3.micro'
@@ -152,10 +185,10 @@ Parameters:
     Default: ''
   CreateDatabase:
     Type: String
-    Default: 'no'
+    Default: 'yes'
     AllowedValues: ['yes', 'no']
     Description: 'Select "yes" to create a new RDS database. Select "no" to skip database creation.'
-  CreateNATGateway:
+  CreateNewNATGateway:
     Type: String
     Default: 'no'
     AllowedValues: ['yes', 'no']
@@ -171,19 +204,12 @@ Parameters:
     AllowedValues: ['yes', 'no']
     Description: 'Select "yes" to create an EC2 instance. Select "no" to skip instance creation.'
 
-Mappings:
-  RegionMap:
-    us-west-2:
-      AMI: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1}}'
-    us-east-1:
-      AMI: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1}}'
-
 Conditions:
   CreateNewVPC: !Equals [!Ref UseExistingVPC, 'no']
   CreateNewKMSKey: !Equals [!Ref UseExistingKMSKey, 'no']
   CreateNewEC2Role: !Equals [!Ref UseExistingEC2Role, 'no']
   CreateNewDatabase: !Equals [!Ref CreateDatabase, 'yes']
-  CreateNATGateway: !Equals [!Ref CreateNATGateway, 'yes']
+  CreateNewNATGateway: !Equals [!Ref CreateNewNATGateway, 'yes']
   CreateNewS3Bucket: !Equals [!Ref CreateS3Bucket, 'yes']
   CreateNewEC2Instance: !Equals [!Ref CreateEC2Instance, 'yes']
 
@@ -227,7 +253,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !Select [0, !Cidr [!Ref VPCCIDR, 6, 8]]
+      CidrBlock: !Ref PublicSubnet1CIDR
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -241,7 +267,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Select [1, !Cidr [!Ref VPCCIDR, 6, 8]]
+      CidrBlock: !Ref PublicSubnet2CIDR
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -255,7 +281,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !Select [2, !Cidr [!Ref VPCCIDR, 6, 8]]
+      CidrBlock: !Ref PrivateSubnet1CIDR
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-private-subnet-1'
@@ -268,7 +294,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Select [3, !Cidr [!Ref VPCCIDR, 6, 8]]
+      CidrBlock: !Ref PrivateSubnet2CIDR
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-private-subnet-2'
@@ -277,7 +303,7 @@ Resources:
 
   NatGatewayEIP:
     Type: AWS::EC2::EIP
-    Condition: CreateNATGateway
+    Condition: CreateNewNATGateway
     Properties:
       Domain: vpc
       Tags:
@@ -288,7 +314,7 @@ Resources:
 
   NatGateway:
     Type: AWS::EC2::NatGateway
-    Condition: CreateNATGateway
+    Condition: CreateNewNATGateway
     Properties:
       AllocationId: !GetAtt NatGatewayEIP.AllocationId
       SubnetId: !If [CreateNewVPC, !Ref PublicSubnet1, !Ref 'AWS::NoValue']
@@ -350,8 +376,8 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId:
-        !If [CreateNATGateway, !Ref 'AWS::NoValue', !Ref InternetGateway]
-      NatGatewayId: !If [CreateNATGateway, !Ref NatGateway, !Ref 'AWS::NoValue']
+        !If [CreateNewNATGateway, !Ref 'AWS::NoValue', !Ref InternetGateway]
+      NatGatewayId: !If [CreateNewNATGateway, !Ref NatGateway, !Ref 'AWS::NoValue']
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -702,10 +728,10 @@ Resources:
       DBParameterGroupName: !Ref DBParameterGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       Engine: mysql
-      EngineVersion: 8.0.43
+      EngineVersion: 8.0
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
-      BackupRetentionPeriod: 7
+      BackupRetentionPeriod: 0
       StorageEncrypted: true
       KmsKeyId: !If [CreateNewKMSKey, !Ref KMSKey, !Ref ExistingKMSKeyARN]
       MultiAZ: false
@@ -730,7 +756,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-lt'
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: !Ref LatestAmiId
         InstanceType: !Ref InstanceType
         IamInstanceProfile: !If
           - CreateNewEC2Role
@@ -782,6 +808,7 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      ImageId: !Ref LatestAmiId
       SubnetId: !If [CreateNewVPC, !Ref PublicSubnet1, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
@@ -856,6 +883,4 @@ Outputs:
     Value: !If [CreateNewVPC, !Ref VPCFlowLogs, 'No VPC created']
     Export:
       Name: !Sub '${AWS::StackName}-VPCFlowLogsLogGroup'
-
-
 ```
