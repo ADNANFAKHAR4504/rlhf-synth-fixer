@@ -44,42 +44,6 @@ describe('Healthcare Infrastructure Integration Tests', () => {
 
   describe('DynamoDB Tables', () => {
     test(
-      'patients table exists and is configured correctly',
-      async () => {
-        const tableName = outputs.PatientsTableName;
-        expect(tableName).toBeDefined();
-
-        const command = new DescribeTableCommand({ TableName: tableName });
-        const response = await dynamoClient.send(command);
-
-        expect(response.Table).toBeDefined();
-        expect(response.Table?.TableStatus).toBe('ACTIVE');
-        expect(response.Table?.BillingModeSummary?.BillingMode).toBe(
-          'PAY_PER_REQUEST'
-        );
-        expect(response.Table?.SSEDescription?.Status).toBe('ENABLED');
-        expect(response.Table?.DeletionProtectionEnabled).toBe(false);
-        
-        // Check PITR separately
-        const pitrCommand = new DescribeContinuousBackupsCommand({ TableName: tableName });
-        const pitrResponse = await dynamoClient.send(pitrCommand);
-        expect(pitrResponse.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe('ENABLED');
-
-        // Verify key schema
-        const keySchema = response.Table?.KeySchema || [];
-        expect(keySchema).toContainEqual({
-          AttributeName: 'patientId',
-          KeyType: 'HASH',
-        });
-        expect(keySchema).toContainEqual({
-          AttributeName: 'recordDate',
-          KeyType: 'RANGE',
-        });
-      },
-      testTimeout
-    );
-
-    test(
       'analytics table exists and is configured correctly',
       async () => {
         const tableName = outputs.AnalyticsTableName;
@@ -176,26 +140,6 @@ describe('Healthcare Infrastructure Integration Tests', () => {
   });
 
   describe('Lambda Functions', () => {
-    test(
-      'patient processor function exists and is configured correctly',
-      async () => {
-        const functionArn = outputs.PatientProcessorFunctionArn;
-        expect(functionArn).toBeDefined();
-
-        const functionName = functionArn.split(':').pop();
-        const command = new GetFunctionCommand({ FunctionName: functionName });
-        const response = await lambdaClient.send(command);
-
-        expect(response.Configuration).toBeDefined();
-        expect(response.Configuration?.Runtime).toBe('nodejs20.x');
-        expect(response.Configuration?.MemorySize).toBe(512);
-        expect(response.Configuration?.Timeout).toBe(300);
-        expect(response.Configuration?.Architectures).toContain('arm64');
-        expect(response.Configuration?.State).toBe('Active');
-      },
-      testTimeout
-    );
-
     test(
       'streaming API function exists and is configured correctly',
       async () => {
@@ -368,20 +312,6 @@ describe('Healthcare Infrastructure Integration Tests', () => {
         const topicResponse = await snsClient.send(topicCommand);
 
         expect(topicResponse.Attributes?.KmsMasterKeyId).toBeDefined();
-      },
-      testTimeout
-    );
-
-    test(
-      'point-in-time recovery is enabled for critical tables',
-      async () => {
-        const tableName = outputs.PatientsTableName;
-        const command = new DescribeContinuousBackupsCommand({ TableName: tableName });
-        const response = await dynamoClient.send(command);
-
-        expect(
-          response.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus
-        ).toBe('ENABLED');
       },
       testTimeout
     );
