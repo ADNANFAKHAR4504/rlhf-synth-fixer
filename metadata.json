@@ -9,11 +9,8 @@
   "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
     "Serverless Infrastructure (Functions as Code)",
-    "Web Application Deployment",
-    "Security Configuration as Code",
-    "Infrastructure Analysis/Monitoring"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "AWS::S3::Bucket",
