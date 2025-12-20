@@ -11,6 +11,7 @@
       "dev": {
         "environment": "dev",
         "existingVpcId": "vpc-12345678",
+        "vpcCidrBlock": "10.0.0.0/16",
         "existingS3Bucket": "iac-rlhf-bucket-dev",
         "sshCidrBlock": "10.0.0.0/16",
         "trustedOutboundCidrs": ["10.0.0.0/8", "172.16.0.0/12"],
@@ -23,6 +24,7 @@
       "prod": {
         "environment": "prod",
         "existingVpcId": "vpc-87654321",
+        "vpcCidrBlock": "10.0.0.0/16",
         "existingS3Bucket": "iac-rlhf-bucket-prod",
         "sshCidrBlock": "10.0.0.0/16",
         "trustedOutboundCidrs": ["10.0.0.0/8", "172.16.0.0/12"],

@@ -2,11 +2,12 @@ import { App, Stack } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.mjs';
 
-// Mock config - use specific CIDRs (NOT 0.0.0.0/0)
+// Mock config - includes ALL required fields
 const mockConfig = {
   dev: {
     environment: 'dev',
     existingVpcId: 'vpc-12345678',
+    vpcCidrBlock: '10.0.0.0/16',
     existingS3Bucket: 'int-test-bucket',
     sshCidrBlock: '10.0.0.0/16',
     trustedOutboundCidrs: ['10.0.0.0/8', '172.16.0.0/12'],
