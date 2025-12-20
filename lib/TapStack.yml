@@ -481,6 +481,7 @@ Resources:
   # RDS Subnet Group (private subnets only)
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    Condition: IsNotLocalStack
     Properties:
       DBSubnetGroupName: !Sub '${Environment}-dbsubnet-main-${EnvironmentSuffix}'
       DBSubnetGroupDescription: Subnet group for RDS database
@@ -517,6 +518,7 @@ Resources:
   # RDS Database (private, encrypted)
   RDSDatabase:
     Type: AWS::RDS::DBInstance
+    Condition: IsNotLocalStack
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
@@ -550,6 +552,7 @@ Resources:
   # CloudTrail for global auditing
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: IsNotLocalStack
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${Environment}-audit-${EnvironmentSuffix}'
       RetentionInDays: 90
@@ -557,12 +560,14 @@ Resources:
 
   CloudTrailLogStream:
     Type: AWS::Logs::LogStream
+    Condition: IsNotLocalStack
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       LogStreamName: !Sub '${Environment}-cloudtrail-stream-${EnvironmentSuffix}'
 
   CloudTrailRole:
     Type: AWS::IAM::Role
+    Condition: IsNotLocalStack
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -583,6 +588,7 @@ Resources:
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: IsNotLocalStack
     Properties:
       TrailName: !Sub '${Environment}-cloudtrail-global-${EnvironmentSuffix}'
       S3BucketName: !Ref CloudTrailBucket
@@ -605,6 +611,7 @@ Resources:
   # S3 Bucket for CloudTrail logs
   CloudTrailBucket:
     Type: AWS::S3::Bucket
+    Condition: IsNotLocalStack
     Properties:
       BucketName: !Sub '${Environment}-s3-cloudtrail-${AWS::AccountId}-${EnvironmentSuffix}'
       BucketEncryption:
@@ -627,6 +634,7 @@ Resources:
 
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: IsNotLocalStack
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
@@ -755,6 +763,7 @@ Resources:
 
 Conditions:
   IsProd: !Equals [!Ref Environment, prod]
+  IsNotLocalStack: !Not [!Equals [!Ref 'AWS::AccountId', '000000000000']]
 
 Outputs:
   VPCId:
@@ -771,7 +780,10 @@ Outputs:
 
   DatabaseEndpoint:
     Description: RDS Database endpoint
-    Value: !GetAtt RDSDatabase.Endpoint.Address
+    Value: !If
+      - IsNotLocalStack
+      - !GetAtt RDSDatabase.Endpoint.Address
+      - Not available in LocalStack
     Export:
       Name: !Sub '${Environment}-rds-endpoint'
 
