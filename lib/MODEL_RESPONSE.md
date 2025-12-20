@@ -846,10 +846,10 @@ app.synth()
 
 ## Key Features Implemented:
 
-### ✅ **High Availability**
+### **High Availability**
 - Multi-AZ VPC with 3 availability zones
 - RDS Multi-AZ deployment
 - ECS Fargate with auto-scaling across AZs
 - Application Load Balancer with health checks
 
-### ✅ **IAM Roles & Security**
+### **IAM Roles & Security**
