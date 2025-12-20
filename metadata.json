@@ -1,15 +1,26 @@
 {
-  "platform": "cdk",
-  "language": "java",
-  "complexity": "expert",
-  "turn_type": "single",
-  "po_id": "4187",
-  "team": "stf",
-  "startedAt": "2025-10-24T13:46:33.105Z",
-  "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [
-    "Cloud Environment Setup"
+  "project_name": "iac-test-automations",
+  "description": "Infrastructure as Code test automation project",
+  "aws_services": [
+    "Lambda",
+    "S3",
+    "CloudFormation",
+    "SageMaker",
+    "CloudWatch"
   ],
-  "aws_services": "Aurora, DynamoDB, ElastiCache, S3, CloudFront, SageMaker, API Gateway, Lambda, KMS, IAM, SNS, VPC, CloudWatch, Application Load Balancer, Auto Scaling",
-  "provider": "localstack"
+  "iac_tools": [
+    "AWS CDK",
+    "Terraform",
+    "Pulumi"
+  ],
+  "programming_languages": [
+    "TypeScript",
+    "Python",
+    "Go"
+  ],
+  "deployment_environments": [
+    "dev",
+    "staging",
+    "prod"
+  ]
 }
