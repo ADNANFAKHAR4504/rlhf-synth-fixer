@@ -17,7 +17,7 @@ Parameters:
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
-  
+
   ProjectName:
     Type: String
     Default: 'cloud-env'
@@ -25,14 +25,10 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9-]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
 
-Mappings:
-  AMIMap:
-    us-east-1:
-      # Standard Ubuntu 20.04 LTS AMI for us-east-1
-      # LocalStack will accept any AMI ID format
-      AMI: ami-0c55b159cbfafe1f0
-    us-west-2:
-      AMI: ami-0c55b159cbfafe1f0
+  InstanceAMI:
+    Type: AWS::EC2::Image::Id
+    Default: 'ami-0c55b159cbfafe1f0'
+    Description: 'AMI ID for EC2 instance (LocalStack will mock this)'
 
 Resources:
   # VPC Configuration
@@ -66,7 +62,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: '10.0.1.0/24'
       MapPublicIpOnLaunch: true
       Tags:
@@ -78,7 +74,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: '10.0.2.0/24'
       MapPublicIpOnLaunch: true
       Tags:
@@ -191,12 +187,13 @@ Resources:
           Value: !Sub 'eip-webserver-${ProjectName}-${EnvironmentSuffix}'
 
   # EC2 Instance for Web Server
-  # Note: For LocalStack compatibility, using AMI from Mappings
-  # LocalStack will accept this and create a mock EC2 instance
+  # Note: LocalStack doesn't validate AMI IDs - this is a placeholder
+  # Any AMI ID format will be accepted by LocalStack
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [AMIMap, !Ref 'AWS::Region', AMI]
+      # Using parameter reference to avoid LocalStack parsing issues
+      ImageId: !Ref InstanceAMI
       InstanceType: t2.micro
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
