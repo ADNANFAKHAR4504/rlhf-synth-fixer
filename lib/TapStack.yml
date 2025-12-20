@@ -25,6 +25,15 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9-]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
 
+Mappings:
+  AMIMap:
+    us-east-1:
+      # Standard Ubuntu 20.04 LTS AMI for us-east-1
+      # LocalStack will accept any AMI ID format
+      AMI: ami-0c55b159cbfafe1f0
+    us-west-2:
+      AMI: ami-0c55b159cbfafe1f0
+
 Resources:
   # VPC Configuration
   VPC:
@@ -182,10 +191,12 @@ Resources:
           Value: !Sub 'eip-webserver-${ProjectName}-${EnvironmentSuffix}'
 
   # EC2 Instance for Web Server
+  # Note: For LocalStack compatibility, using AMI from Mappings
+  # LocalStack will accept this and create a mock EC2 instance
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0c55b159cbfafe1f0
+      ImageId: !FindInMap [AMIMap, !Ref 'AWS::Region', AMI]
       InstanceType: t2.micro
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
@@ -204,13 +215,16 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'instance-webserver-${ProjectName}-${EnvironmentSuffix}'
+    Metadata:
+      # LocalStack compatibility: This resource may have limited functionality
+      LocalStackCompatibility: MockInstance
 
   # Associate Elastic IP with Web Server Instance
   WebServerEIPAssociation:
     Type: AWS::EC2::EIPAssociation
     Properties:
       InstanceId: !Ref WebServerInstance
-      EIP: !Ref WebServerElasticIP
+      AllocationId: !GetAtt WebServerElasticIP.AllocationId
 
 Outputs:
   VPCId:
