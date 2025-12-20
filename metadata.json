@@ -19,6 +19,5 @@
     "S3",
     "API Gateway"
   ],
-  "provider": "localstack",
-  "training_quality": 8
+  "provider": "localstack"
 }
