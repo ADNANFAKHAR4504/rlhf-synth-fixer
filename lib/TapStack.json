@@ -575,7 +575,7 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "tapstack-${EnvironmentSuffix}-central-logging-${AWS::AccountId}"
+                    "Fn::Sub": "${AWS::StackName}-central-logging-${AWS::AccountId}"
                 },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
@@ -629,7 +629,7 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "tapstack-${EnvironmentSuffix}-secure-data-${AWS::AccountId}"
+                    "Fn::Sub": "${AWS::StackName}-secure-data-${AWS::AccountId}"
                 },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
@@ -748,6 +748,34 @@
                 ]
             }
         },
+        "DBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Condition": "IsNotLocalStack",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-db-secret-${EnvironmentSuffix}"
+                },
+                "Description": "RDS database credentials managed by Secrets Manager",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "SecureOps"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
         "SecureRDSInstance": {
             "Type": "AWS::RDS::DBInstance",
             "Condition": "IsNotLocalStack",
@@ -764,8 +792,12 @@
                 "EngineVersion": {
                     "Ref": "DBEngineVersion"
                 },
-                "MasterUsername": "dbadmin",
-                "MasterUserPassword": "SecureP@ssw0rd123!",
+                "MasterUsername": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+                },
                 "AllocatedStorage": 20,
                 "MaxAllocatedStorage": 100,
                 "StorageEncrypted": true,

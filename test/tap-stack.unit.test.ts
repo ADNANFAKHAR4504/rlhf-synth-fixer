@@ -327,7 +327,7 @@ describe('TapStack CloudFormation Template', () => {
       const properties = bucket.Properties;
       
       expect(properties.BucketName).toEqual({
-        'Fn::Sub': 'tapstack-${EnvironmentSuffix}-central-logging-${AWS::AccountId}'
+        'Fn::Sub': '${AWS::StackName}-central-logging-${AWS::AccountId}'
       });
       expect(properties.PublicAccessBlockConfiguration).toBeDefined();
       expect(properties.VersioningConfiguration).toBeDefined();
@@ -347,7 +347,7 @@ describe('TapStack CloudFormation Template', () => {
       const properties = bucket.Properties;
       
       expect(properties.BucketName).toEqual({
-        'Fn::Sub': 'tapstack-${EnvironmentSuffix}-secure-data-${AWS::AccountId}'
+        'Fn::Sub': '${AWS::StackName}-secure-data-${AWS::AccountId}'
       });
       expect(properties.VersioningConfiguration.Status).toBe('Enabled');
     });
@@ -416,18 +416,27 @@ describe('TapStack CloudFormation Template', () => {
       expect(properties.MaxAllocatedStorage).toBe(100);
     });
 
-    test('SecureRDSInstance should have valid credentials configuration', () => {
+    test('SecureRDSInstance should use Secrets Manager for credentials', () => {
       const rds = template.Resources.SecureRDSInstance;
       const properties = rds.Properties;
       
-      // Accept either Secrets Manager reference (for AWS) or hardcoded values (for LocalStack)
-      const isSecretsManager = typeof properties.MasterUsername === 'object' && 
-                               properties.MasterUsername['Fn::Sub'];
-      const isHardcoded = typeof properties.MasterUsername === 'string';
-      
-      expect(isSecretsManager || isHardcoded).toBe(true);
+      // RDS uses Secrets Manager dynamic references for secure credential management
       expect(properties.MasterUsername).toBeDefined();
       expect(properties.MasterUserPassword).toBeDefined();
+      
+      // Verify Secrets Manager reference format
+      const usernameRef = properties.MasterUsername['Fn::Sub'];
+      const passwordRef = properties.MasterUserPassword['Fn::Sub'];
+      
+      expect(usernameRef).toContain('secretsmanager');
+      expect(passwordRef).toContain('secretsmanager');
+    });
+
+    test('should have DBSecret resource for RDS credentials', () => {
+      const secret = template.Resources.DBSecret;
+      expect(secret).toBeDefined();
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(secret.Condition).toBe('IsNotLocalStack');
     });
 
     test('SecureRDSInstance should have log exports enabled', () => {

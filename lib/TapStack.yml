@@ -411,7 +411,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub 'tapstack-${EnvironmentSuffix}-central-logging-${AWS::AccountId}'
+      BucketName: !Sub '${AWS::StackName}-central-logging-${AWS::AccountId}'
       # Deny all public access
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -446,7 +446,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub 'tapstack-${EnvironmentSuffix}-secure-data-${AWS::AccountId}'
+      BucketName: !Sub '${AWS::StackName}-secure-data-${AWS::AccountId}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -517,6 +517,24 @@ Resources:
         - Key: Project
           Value: SecureOps
 
+  # Secrets Manager Secret for RDS credentials
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: IsNotLocalStack
+    Properties:
+      Name: !Sub '${AWS::StackName}-db-secret-${EnvironmentSuffix}'
+      Description: 'RDS database credentials managed by Secrets Manager'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Project
+          Value: SecureOps
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
   # RDS Instance with encryption and logging
   SecureRDSInstance:
     Type: AWS::RDS::DBInstance
@@ -528,8 +546,8 @@ Resources:
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
       EngineVersion: !Ref DBEngineVersion
-      MasterUsername: 'dbadmin'  # Hardcoded for LocalStack compatibility
-      MasterUserPassword: 'SecureP@ssw0rd123!'  # Hardcoded for LocalStack compatibility
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
       AllocatedStorage: 20
       MaxAllocatedStorage: 100
       # Encryption at rest using KMS CMK

@@ -354,7 +354,7 @@ Resources:
           # Allow access for other authorized principals
           - Sid: 'AllowAuthorizedAccess'
             Effect: Allow
-            Principal:a
+            Principal:
               AWS: !GetAtt AppServerRole.Arn
             Action:
               - s3:GetObject
