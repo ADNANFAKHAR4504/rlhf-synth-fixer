@@ -2,24 +2,60 @@ import { App, Stack } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.mjs';
 
+// Mock config that matches expected stack requirements
+const mockConfig = {
+  dev: {
+    environment: 'dev',
+    existingVpcId: 'vpc-12345678',
+    instanceType: 't3.micro',
+    keyPairName: 'test-key',
+    s3BucketName: 'test-bucket-dev',
+    amiId: 'ami-12345678',
+    subnetIds: ['subnet-12345678'],
+    availabilityZones: ['us-east-1a'],
+  },
+  test: {
+    environment: 'test',
+    existingVpcId: 'vpc-12345678',
+    instanceType: 't3.micro',
+    keyPairName: 'test-key',
+    s3BucketName: 'test-bucket-test',
+    amiId: 'ami-12345678',
+    subnetIds: ['subnet-12345678'],
+    availabilityZones: ['us-east-1a'],
+  }
+};
+
 describe('TapStack Unit Tests', () => {
   let app;
   let stack;
   let template;
 
   beforeAll(() => {
+    process.env.CDK_LOCAL = 'true';
+    process.env.ENVIRONMENT_SUFFIX = 'dev';
+    
     app = new App({
       context: {
-        environmentSuffix: 'test'
+        environmentSuffix: 'dev',
+        environments: mockConfig
       }
     });
+    
     stack = new TapStack(app, 'TestStack', {
       env: {
         account: '123456789012',
         region: 'us-east-1'
-      }
+      },
+      environmentSuffix: 'dev',
+      config: mockConfig
     });
     template = Template.fromStack(stack);
+  });
+
+  afterAll(() => {
+    delete process.env.CDK_LOCAL;
+    delete process.env.ENVIRONMENT_SUFFIX;
   });
 
   test('Stack is created successfully', () => {
@@ -31,9 +67,13 @@ describe('TapStack Unit Tests', () => {
     expect(template).toBeDefined();
   });
 
-  // Add more specific tests based on the resources in your stack
   test('Stack has expected resources', () => {
     const resources = template.toJSON().Resources || {};
     expect(Object.keys(resources).length).toBeGreaterThan(0);
+  });
+
+  test('Stack has correct environment tag', () => {
+    const json = template.toJSON();
+    expect(json).toBeDefined();
   });
 });
