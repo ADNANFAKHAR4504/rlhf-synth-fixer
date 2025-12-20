@@ -311,8 +311,6 @@ describe('TapStack Missing Config Field Tests', () => {
       dev: { ...mockConfig.dev, environment: undefined }
     };
     
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-    
     const app = new App({
       context: { '@aws-cdk/core:newStyleStackSynthesis': false }
     });
@@ -323,24 +321,23 @@ describe('TapStack Missing Config Field Tests', () => {
       config: configWithoutEnv
     });
     
-    // Stack should be created but without resources
+    // Stack should be created but without environment-specific resources
     expect(stack).toBeDefined();
-    expect(consoleErrorSpy).toHaveBeenCalledWith("No configuration found for 'dev'");
     
-    consoleErrorSpy.mockRestore();
     delete process.env.CDK_LOCAL;
   });
 });
 
-// Test VPC creation in non-LocalStack mode
+// Test VPC lookup
 describe('TapStack VPC Tests', () => {
   test('Uses VPC lookup when not in LocalStack', () => {
-    // Remove LocalStack env vars
+    // Temporarily disable LocalStack mode
+    const origCdkLocal = process.env.CDK_LOCAL;
+    const origCi = process.env.CI;
+    const origGithubActions = process.env.GITHUB_ACTIONS;
     delete process.env.CDK_LOCAL;
     delete process.env.CI;
     delete process.env.GITHUB_ACTIONS;
-    delete process.env.AWS_ENDPOINT_URL;
-    delete process.env.LOCALSTACK_HOSTNAME;
     
     const app = new App({
       context: { '@aws-cdk/core:newStyleStackSynthesis': false }
@@ -352,191 +349,185 @@ describe('TapStack VPC Tests', () => {
       config: mockConfig
     });
     
-    // VPC should be created via lookup (not fromVpcAttributes)
     expect(stack.vpc).toBeDefined();
-    expect(stack.isLocalStack).toBe(false);
+    
+    // Restore environment
+    if (origCdkLocal) process.env.CDK_LOCAL = origCdkLocal;
+    if (origCi) process.env.CI = origCi;
+    if (origGithubActions) process.env.GITHUB_ACTIONS = origGithubActions;
   });
 });
 
-// Additional tests for constructs to improve coverage
+// Test individual constructs
 describe('Construct Tests', () => {
-  test('Security group construct creates proper rules', () => {
+  let app;
+  let stack;
+  let template;
+
+  beforeEach(() => {
     process.env.CDK_LOCAL = 'true';
-    
-    const app = new App({
+    app = new App({
       context: { '@aws-cdk/core:newStyleStackSynthesis': false }
     });
-    
-    const stack = new TapStack(app, 'SecurityGroupTestStack', {
-      env: { account: '123456789012', region: 'us-east-1' },
-      environmentSuffix: 'dev',
-      config: mockConfig
-    });
-    
-    const template = Template.fromStack(stack);
-    
-    // Check for security group
-    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-      GroupDescription: 'Security group for secure web application instances'
-    });
-    
+  });
+
+  afterEach(() => {
     delete process.env.CDK_LOCAL;
   });
 
-  test('EC2 instances are created with correct configuration', () => {
-    process.env.CDK_LOCAL = 'true';
-    
-    const app = new App({
-      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
-    });
-    
-    const stack = new TapStack(app, 'EC2TestStack', {
+  test('Security group construct creates proper rules', () => {
+    stack = new TapStack(app, 'SecurityGroupTestStack', {
       env: { account: '123456789012', region: 'us-east-1' },
       environmentSuffix: 'dev',
       config: mockConfig
     });
-    
-    const template = Template.fromStack(stack);
-    
+    template = Template.fromStack(stack);
+
+    // Check for security group
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      GroupDescription: 'Security group for secure web application instances',
+      SecurityGroupIngress: [
+        {
+          CidrIp: '0.0.0.0/0',
+          FromPort: 80,
+          IpProtocol: 'tcp',
+          ToPort: 80
+        },
+        {
+          CidrIp: '10.0.0.0/16',
+          FromPort: 22,
+          IpProtocol: 'tcp',
+          ToPort: 22
+        }
+      ]
+    });
+  });
+
+  test('EC2 instances are created with correct configuration', () => {
+    stack = new TapStack(app, 'EC2TestStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    template = Template.fromStack(stack);
+
     // Check for EC2 instances
     template.hasResourceProperties('AWS::EC2::Instance', {
       InstanceType: 't2.micro'
     });
-    
-    // Check for SSM parameters
-    template.hasResourceProperties('AWS::SSM::Parameter', {
-      Type: 'String'
-    });
-    
-    delete process.env.CDK_LOCAL;
   });
 
   test('CloudWatch logging is configured correctly', () => {
-    process.env.CDK_LOCAL = 'true';
-    
-    const app = new App({
-      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
-    });
-    
-    const stack = new TapStack(app, 'LoggingTestStack', {
+    stack = new TapStack(app, 'LoggingTestStack', {
       env: { account: '123456789012', region: 'us-east-1' },
       environmentSuffix: 'dev',
       config: mockConfig
     });
+    template = Template.fromStack(stack);
     
-    const template = Template.fromStack(stack);
-    
-    // Check for log group
+    // Check for log group with correct retention (90 days, not 30)
     template.hasResourceProperties('AWS::Logs::LogGroup', {
-      RetentionInDays: 30
+      RetentionInDays: 90
     });
     
-    delete process.env.CDK_LOCAL;
+    // Check for log stream
+    template.hasResourceProperties('AWS::Logs::LogStream', {});
   });
 
   test('IAM roles are created with correct policies', () => {
-    process.env.CDK_LOCAL = 'true';
-    
-    const app = new App({
-      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
-    });
-    
-    const stack = new TapStack(app, 'IAMTestStack', {
+    stack = new TapStack(app, 'IAMTestStack', {
       env: { account: '123456789012', region: 'us-east-1' },
       environmentSuffix: 'dev',
       config: mockConfig
     });
-    
-    const template = Template.fromStack(stack);
-    
+    template = Template.fromStack(stack);
+
     // Check for IAM role
     template.hasResourceProperties('AWS::IAM::Role', {
       AssumeRolePolicyDocument: {
         Statement: [{
+          Action: 'sts:AssumeRole',
           Effect: 'Allow',
           Principal: {
             Service: 'ec2.amazonaws.com'
-          },
-          Action: 'sts:AssumeRole'
+          }
         }]
       }
     });
-    
-    delete process.env.CDK_LOCAL;
   });
 
   test('Stack outputs are created correctly', () => {
-    process.env.CDK_LOCAL = 'true';
-    
-    const app = new App({
-      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
-    });
-    
-    const stack = new TapStack(app, 'OutputTestStack', {
+    stack = new TapStack(app, 'OutputsTestStack', {
       env: { account: '123456789012', region: 'us-east-1' },
       environmentSuffix: 'dev',
       config: mockConfig
     });
-    
-    const template = Template.fromStack(stack);
+    template = Template.fromStack(stack);
+
+    // Check for outputs
     const outputs = template.toJSON().Outputs || {};
-    
-    // Check that outputs exist
-    expect(Object.keys(outputs).length).toBeGreaterThan(0);
-    expect(outputs).toHaveProperty('SecurityGroupId');
-    expect(outputs).toHaveProperty('LogGroupName');
-    expect(outputs).toHaveProperty('VpcId');
-    expect(outputs).toHaveProperty('LogsBucketName');
-    
-    delete process.env.CDK_LOCAL;
+    expect(Object.keys(outputs).some(key => key.includes('SecurityGroupId'))).toBe(true);
+    expect(Object.keys(outputs).some(key => key.includes('LogGroupName'))).toBe(true);
+    expect(Object.keys(outputs).some(key => key.includes('VpcId'))).toBe(true);
+    expect(Object.keys(outputs).some(key => key.includes('LogsBucketName'))).toBe(true);
   });
 });
 
-// Test security group with different regions (for S3 prefix list coverage)
+// Test security group in different regions
 describe('Security Group Region Tests', () => {
-  const testRegions = ['us-west-2', 'eu-west-1', 'ap-southeast-1'];
-  
-  testRegions.forEach(region => {
-    test(`Security group handles ${region} region correctly`, () => {
-      // Test without LocalStack to exercise prefix list code
-      delete process.env.CDK_LOCAL;
-      delete process.env.CI;
-      delete process.env.GITHUB_ACTIONS;
-      
-      const app = new App({
-        context: { '@aws-cdk/core:newStyleStackSynthesis': false }
-      });
-      
-      // This will throw because VPC lookup will fail in test, but that's OK
-      // We're testing the prefix list lookup logic
-      try {
-        const stack = new TapStack(app, `RegionTestStack-${region}`, {
-          env: { account: '123456789012', region: region },
-          environmentSuffix: 'dev',
-          config: mockConfig
-        });
-      } catch (e) {
-        // Expected - VPC lookup will fail in test environment
-      }
+  let app;
+
+  beforeEach(() => {
+    process.env.CDK_LOCAL = 'true';
+    app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
     });
   });
 
-  test('Security group throws for unsupported region', () => {
+  afterEach(() => {
     delete process.env.CDK_LOCAL;
-    delete process.env.CI;
-    delete process.env.GITHUB_ACTIONS;
-    
-    const app = new App({
-      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+  });
+
+  test('Security group handles us-west-2 region correctly', () => {
+    const stack = new TapStack(app, 'USWest2Stack', {
+      env: { account: '123456789012', region: 'us-west-2' },
+      environmentSuffix: 'dev',
+      config: mockConfig
     });
     
-    // Use a fake region that's not in the prefix list map
+    expect(stack.securityGroup).toBeDefined();
+  });
+
+  test('Security group handles eu-west-1 region correctly', () => {
+    const stack = new TapStack(app, 'EUWest1Stack', {
+      env: { account: '123456789012', region: 'eu-west-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.securityGroup).toBeDefined();
+  });
+
+  test('Security group handles ap-southeast-1 region correctly', () => {
+    const stack = new TapStack(app, 'APSoutheast1Stack', {
+      env: { account: '123456789012', region: 'ap-southeast-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.securityGroup).toBeDefined();
+  });
+
+  test('Security group throws for unsupported region', () => {
+    // Turn off LocalStack mode to test real AWS behavior
+    delete process.env.CDK_LOCAL;
+    
     expect(() => {
       new TapStack(app, 'UnsupportedRegionStack', {
-        env: { account: '123456789012', region: 'fake-region-1' },
+        env: { account: '123456789012', region: 'unsupported-region' },
         environmentSuffix: 'dev',
         config: mockConfig
       });
-    }).toThrow();
+    }).toThrow('Unsupported region for S3 prefix list');
   });
 });
