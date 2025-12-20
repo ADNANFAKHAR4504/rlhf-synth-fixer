@@ -164,6 +164,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // Launch Template with encrypted EBS volumes
+    // LocalStack has limited EC2 support - simplify for LocalStack
     const launchTemplate = new ec2.LaunchTemplate(
       this,
       'SecureLaunchTemplate',
@@ -176,62 +177,75 @@ export class TapStack extends cdk.Stack {
         securityGroup: webSecurityGroup,
         role: ec2Role,
         userData: ec2.UserData.forLinux(),
-        blockDevices: [
-          {
-            deviceName: '/dev/xvda',
-            volume: ec2.BlockDeviceVolume.ebs(20, {
-              encrypted: true,
-              kmsKey: encryptionKey,
-              deleteOnTermination: true,
-              volumeType: ec2.EbsDeviceVolumeType.GP3,
-            }),
-          },
-        ],
+        blockDevices: isLocalStack
+          ? [
+              {
+                deviceName: '/dev/xvda',
+                volume: ec2.BlockDeviceVolume.ebs(20, {
+                  encrypted: true,
+                  deleteOnTermination: true,
+                  volumeType: ec2.EbsDeviceVolumeType.GP3,
+                }),
+              },
+            ]
+          : [
+              {
+                deviceName: '/dev/xvda',
+                volume: ec2.BlockDeviceVolume.ebs(20, {
+                  encrypted: true,
+                  kmsKey: encryptionKey,
+                  deleteOnTermination: true,
+                  volumeType: ec2.EbsDeviceVolumeType.GP3,
+                }),
+              },
+            ],
       }
     );
 
-    // RDS Subnet Group for private subnets only
-    // In LocalStack, we use the PrivateSubnet name but they're actually PUBLIC type
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
-      description: 'Subnet group for RDS instances in private subnets',
-      vpc: vpc,
-      vpcSubnets: isLocalStack
-        ? {
-            subnetGroupName: 'PrivateSubnet',
-          }
-        : {
-            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          },
-    });
+    // RDS Subnet Group and Database - only deploy on real AWS (not supported in LocalStack Community)
+    // LocalStack Community Edition does not support RDS
+    let database: rds.DatabaseInstance | undefined;
+    let dbSubnetGroup: rds.SubnetGroup | undefined;
 
-    // RDS instance in private subnets with encryption
-    const database = new rds.DatabaseInstance(this, 'SecureDatabase', {
-      engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0,
-      }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      credentials: rds.Credentials.fromGeneratedSecret('admin', {
-        secretName: `rds-credentials-${environmentSuffix}`,
-        excludeCharacters: '"@/\\',
-      }),
-      vpc: vpc,
-      subnetGroup: dbSubnetGroup,
-      securityGroups: [rdsSecurityGroup],
-      storageEncrypted: true,
-      storageEncryptionKey: encryptionKey,
-      backupRetention: cdk.Duration.days(7),
-      deleteAutomatedBackups: true,
-      deletionProtection: false,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      allocatedStorage: 20,
-      maxAllocatedStorage: 100,
-      monitoringInterval: cdk.Duration.seconds(60),
-      enablePerformanceInsights: false, // Performance Insights not supported for t3.micro
-      cloudwatchLogsExports: ['error', 'general', 'slowquery'],
-    });
+    if (!isLocalStack) {
+      // RDS Subnet Group for private subnets only
+      dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
+        description: 'Subnet group for RDS instances in private subnets',
+        vpc: vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      });
+
+      // RDS instance in private subnets with encryption
+      database = new rds.DatabaseInstance(this, 'SecureDatabase', {
+        engine: rds.DatabaseInstanceEngine.mysql({
+          version: rds.MysqlEngineVersion.VER_8_0,
+        }),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        credentials: rds.Credentials.fromGeneratedSecret('admin', {
+          secretName: `rds-credentials-${environmentSuffix}`,
+          excludeCharacters: '"@/\\',
+        }),
+        vpc: vpc,
+        subnetGroup: dbSubnetGroup,
+        securityGroups: [rdsSecurityGroup],
+        storageEncrypted: true,
+        storageEncryptionKey: encryptionKey,
+        backupRetention: cdk.Duration.days(7),
+        deleteAutomatedBackups: true,
+        deletionProtection: false,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        allocatedStorage: 20,
+        maxAllocatedStorage: 100,
+        monitoringInterval: cdk.Duration.seconds(60),
+        enablePerformanceInsights: false, // Performance Insights not supported for t3.micro
+        cloudwatchLogsExports: ['error', 'general', 'slowquery'],
+      });
+    }
 
     // IAM Role for Lambda functions if needed
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
@@ -280,11 +294,14 @@ export class TapStack extends cdk.Stack {
       exportName: `LogsBucket-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-      value: database.instanceEndpoint.hostname,
-      description: 'RDS Database Endpoint',
-      exportName: `DatabaseEndpoint-${environmentSuffix}`,
-    });
+    // Only output database endpoint if RDS was deployed (not on LocalStack)
+    if (database) {
+      new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+        value: database.instanceEndpoint.hostname,
+        description: 'RDS Database Endpoint',
+        exportName: `DatabaseEndpoint-${environmentSuffix}`,
+      });
+    }
 
     new cdk.CfnOutput(this, 'KMSKeyId', {
       value: encryptionKey.keyId,

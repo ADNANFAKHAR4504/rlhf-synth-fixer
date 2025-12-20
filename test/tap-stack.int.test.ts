@@ -203,13 +203,14 @@ describe('AWS Infrastructure Integration Tests', () => {
         const response = await ec2Client.send(command);
 
         // Skip if resources were cleaned up
-        if (!response.SecurityGroups || response.SecurityGroups.length < 4) {
+        const minSgs = isLocalStack ? 3 : 4; // LocalStack: default + web + ssh (no RDS)
+        if (!response.SecurityGroups || response.SecurityGroups.length < minSgs) {
           console.log('Skipping security group test - resources cleaned up in LocalStack');
           return;
         }
 
-        // Should have at least 4 SGs (default + web + ssh + rds)
-        expect(response.SecurityGroups!.length).toBeGreaterThanOrEqual(4);
+        // Should have at least 3 SGs on LocalStack (default + web + ssh), 4 on AWS (+ rds)
+        expect(response.SecurityGroups!.length).toBeGreaterThanOrEqual(minSgs);
 
         // Check for web security group
         const webSg = response.SecurityGroups!.find(sg =>
@@ -223,11 +224,13 @@ describe('AWS Infrastructure Integration Tests', () => {
         );
         expect(sshSg).toBeDefined();
 
-        // Check for RDS security group
-        const rdsSg = response.SecurityGroups!.find(sg =>
-          sg.GroupName?.includes('RDSSecurityGroup')
-        );
-        expect(rdsSg).toBeDefined();
+        // Check for RDS security group (only on real AWS, not LocalStack)
+        if (!isLocalStack) {
+          const rdsSg = response.SecurityGroups!.find(sg =>
+            sg.GroupName?.includes('RDSSecurityGroup')
+          );
+          expect(rdsSg).toBeDefined();
+        }
       });
     });
   });
@@ -314,14 +317,14 @@ describe('AWS Infrastructure Integration Tests', () => {
 
   describe('RDS Database', () => {
     test('RDS instance is deployed and available', async () => {
-      const dbEndpoint = outputs.DatabaseEndpoint;
-      expect(dbEndpoint).toBeDefined();
-
-      // Skip detailed RDS tests if endpoint is "unknown" (LocalStack limitation)
-      if (dbEndpoint === 'unknown') {
-        console.log('Skipping RDS detailed test - endpoint not available in LocalStack');
+      // RDS is not supported in LocalStack Community Edition - skip these tests
+      if (isLocalStack) {
+        console.log('Skipping RDS tests - RDS not supported in LocalStack Community Edition');
         return;
       }
+
+      const dbEndpoint = outputs.DatabaseEndpoint;
+      expect(dbEndpoint).toBeDefined();
 
       // Extract instance identifier from endpoint
       const instanceId = dbEndpoint.split('.')[0];
@@ -342,13 +345,13 @@ describe('AWS Infrastructure Integration Tests', () => {
     });
 
     test('RDS instance is in private subnets', async () => {
-      const dbEndpoint = outputs.DatabaseEndpoint;
-
-      // Skip if endpoint is "unknown" (LocalStack limitation)
-      if (dbEndpoint === 'unknown') {
-        console.log('Skipping RDS private subnet test - endpoint not available in LocalStack');
+      // RDS is not supported in LocalStack Community Edition - skip these tests
+      if (isLocalStack) {
+        console.log('Skipping RDS private subnet test - RDS not supported in LocalStack Community Edition');
         return;
       }
+
+      const dbEndpoint = outputs.DatabaseEndpoint;
 
       const instanceId = dbEndpoint.split('.')[0];
 
