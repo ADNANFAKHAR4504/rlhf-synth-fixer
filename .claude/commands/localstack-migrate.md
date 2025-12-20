@@ -29,15 +29,15 @@ See `.claude/config/localstack.yaml` for full configuration options.
 
 This command uses modular shell scripts in `.claude/scripts/` for better maintainability:
 
-| Script                            | Description                                      |
-| --------------------------------- | ------------------------------------------------ |
-| `localstack-common.sh`            | Common functions, config loading, error handling |
-| `localstack-init.sh`              | Environment validation and initialization        |
-| `localstack-select-task.sh`       | Task selection logic                             |
-| `localstack-fetch-github.sh`      | Fetch tasks from GitHub PRs                      |
-| `localstack-sanitize-metadata.sh` | Sanitize metadata.json for schema compliance     |
-| `localstack-create-pr.sh`         | Create GitHub PR with migrated code              |
-| `localstack-update-log.sh`        | Update migration log with file locking           |
+| Script                            | Description                                                           |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `localstack-common.sh`            | Common functions, config loading, error handling                      |
+| `localstack-init.sh`              | Environment validation and initialization                             |
+| `localstack-select-task.sh`       | Task selection logic                                                  |
+| `localstack-fetch-github.sh`      | Fetch tasks from GitHub PRs                                           |
+| `localstack-sanitize-metadata.sh` | Sanitize metadata.json for schema compliance (sets team to `synth-2`) |
+| `localstack-create-pr.sh`         | Create GitHub PR with migrated code                                   |
+| `localstack-update-log.sh`        | Update migration log with file locking                                |
 
 All scripts use `set -euo pipefail` for strict error handling and trap handlers for cleanup.
 
@@ -348,17 +348,32 @@ fi
 
 ### Step 6: Setup Working Directory
 
+> **Note**: This step uses the shared worktree setup pattern for consistency and parallel execution safety.
+
 ```bash
 echo "═══════════════════════════════════════════════════"
 echo "📁 SETTING UP WORKING DIRECTORY"
 echo "═══════════════════════════════════════════════════"
 echo ""
 
-WORK_DIR="worktree/localstack-${PR_ID}"
+WORK_DIR="$PROJECT_ROOT/worktree/localstack-${PR_ID}"
+
+# ═══════════════════════════════════════════════════════════════
+# WORKTREE SETUP - Use shared patterns for consistency
+# For localstack-migrate, we use a work directory (not git worktree)
+# because we're copying files from archive, not checking out a branch
+# ═══════════════════════════════════════════════════════════════
 
 # Clean existing work directory
 if [ -d "$WORK_DIR" ]; then
   echo "🧹 Cleaning existing work directory..."
+
+  # If it's a git worktree, remove it properly
+  if git worktree list 2>/dev/null | grep -q "$WORK_DIR"; then
+    cd "$PROJECT_ROOT"
+    git worktree remove "$WORK_DIR" --force 2>/dev/null || true
+  fi
+
   rm -rf "$WORK_DIR"
 fi
 
@@ -371,16 +386,35 @@ echo "📋 Copied task files"
 
 # Copy project-level files needed for deployment
 for file in package.json tsconfig.json jest.config.js babel.config.js; do
-  if [ -f "$file" ] && [ ! -f "$WORK_DIR/$file" ]; then
-    cp "$file" "$WORK_DIR/" 2>/dev/null || true
+  if [ -f "$PROJECT_ROOT/$file" ] && [ ! -f "$WORK_DIR/$file" ]; then
+    cp "$PROJECT_ROOT/$file" "$WORK_DIR/" 2>/dev/null || true
   fi
 done
 
-# Copy scripts directory (needed for deployment)
+# Copy scripts directory (needed for deployment) - but NOT .claude/scripts
 mkdir -p "$WORK_DIR/scripts"
-cp scripts/localstack-*.sh "$WORK_DIR/scripts/" 2>/dev/null || true
+for script in "$PROJECT_ROOT/scripts/localstack-"*.sh; do
+  [ -f "$script" ] && cp "$script" "$WORK_DIR/scripts/" 2>/dev/null || true
+done
 
-echo "✅ Working directory ready"
+# Verify the work directory structure
+echo ""
+echo "🔍 Verifying work directory..."
+if [ -f "$WORK_DIR/metadata.json" ]; then
+  echo "   ✅ metadata.json found"
+else
+  echo "   ❌ metadata.json missing!"
+  exit 1
+fi
+
+if [ -d "$WORK_DIR/lib" ]; then
+  echo "   ✅ lib/ directory found"
+else
+  echo "   ⚠️ lib/ directory missing (may be expected for some platforms)"
+fi
+
+echo ""
+echo "✅ Working directory ready: $WORK_DIR"
 echo ""
 ```
 
@@ -567,6 +601,13 @@ Exit code 0 if fixed, 1 if unable to fix, 2 if unsupported services.
 > - `localstack-sanitize-metadata.sh` - Sanitizes metadata.json for schema compliance
 > - `localstack-create-pr.sh` - Creates PR with git worktrees for parallel safety
 > - `localstack-update-log.sh` - Updates migration log with file locking
+
+> **🏷️ Required Labels**: All PRs created by localstack-migrate automatically include:
+>
+> - `synth-2` - Identifies PRs created by the synth-2 team/process
+> - `localstack` - Identifies PRs for LocalStack-compatible tasks
+> - `<platform>` - Platform type from metadata.json (e.g., `cdk`, `cfn`, `tf`, `pulumi`)
+> - `<language>` - Language from metadata.json (e.g., `ts`, `py`, `go`, `java`)
 
 ```bash
 log_header "📦 CREATING PULL REQUEST (Parallel-Safe)"

@@ -1,0 +1,40 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291622_ls",
+  "team": "2",
+  "startedAt": "2025-08-19T17:33:35.297Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "AWS::S3::Bucket",
+    "AWS::Lambda::Function",
+    "AWS::IAM::Role",
+    "AWS::ApiGateway::RestApi",
+    "AWS::ApiGateway::Resource",
+    "AWS::ApiGateway::Method",
+    "AWS::ApiGateway::Deployment",
+    "AWS::ApiGateway::DomainName",
+    "AWS::ApiGateway::BasePathMapping",
+    "AWS::Route53::HostedZone",
+    "AWS::Route53::RecordSet",
+    "AWS::CertificateManager::Certificate",
+    "AWS::Events::Rule",
+    "AWS::SNS::Topic",
+    "AWS::CloudWatch::Alarm",
+    "AWS::Lambda::Permission"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
+}
