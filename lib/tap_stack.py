@@ -457,7 +457,7 @@ class TapStack(ComponentResource):
             engine_version="8.0",
             instance_class=cfg["db_class"],
             db_subnet_group_name=rds_subnet_group.name,
-            name=f"{env}db",
+            db_name=f"{env}db",
             username=f"{env}_admin",
             password=db_password.result,  # Pulumi will treat as secret
             publicly_accessible=False,
