@@ -610,7 +610,7 @@ Resources:
         - !Ref PrivateSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref AppLaunchTemplate
-        Version: !GetAtt AppLaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: !Ref AsgMinSize
       DesiredCapacity: !Ref AsgDesiredCapacity
       MaxSize: !Ref AsgMaxSize
