@@ -125,8 +125,10 @@ Parameters:
 
 Mappings:
   RegionMap:
+    us-east-1:
+      AMI: ami-0c55b159cbfafe1d0
     us-west-2:
-      AMI: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+      AMI: ami-0c55b159cbfafe1d0
 
 Conditions:
   CreateBastionCond: !Equals [ !Ref CreateBastion, "true" ]
@@ -455,9 +457,7 @@ Resources:
     Properties:
       InstanceType: t3.micro
       KeyName: !Ref KeyName
-      ImageId: !Sub
-        - '{{resolve:ssm:${AmiMap}:1}}'
-        - AmiMap: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
       NetworkInterfaces:
         - AssociatePublicIpAddress: true
           DeviceIndex: 0
@@ -528,9 +528,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub "${AWS::StackName}-lt"
       LaunchTemplateData:
-        ImageId: !Sub
-          - '{{resolve:ssm:${AmiMap}:1}}'
-          - AmiMap: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+        ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
         InstanceType: !Ref InstanceType
         IamInstanceProfile:
           Name: !Ref Ec2InstanceProfile
@@ -633,7 +631,7 @@ Resources:
         - !Ref PrivateSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref AppLaunchTemplate
-        Version: !GetAtt AppLaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: !Ref AsgMinSize
       DesiredCapacity: !Ref AsgDesiredCapacity
       MaxSize: !Ref AsgMaxSize
