@@ -274,9 +274,9 @@ export class TapStack extends cdk.Stack {
           minSize: '1',
           maxSize: '3',
           desiredCapacity: '2',
-          vpcZoneIdentifier: vpc
-            .selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS })
-            .subnetIds,
+          vpcZoneIdentifier: vpc.selectSubnets({
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          }).subnetIds,
           launchTemplate: {
             launchTemplateId: launchTemplate.launchTemplateId,
             version: '$Latest', // Use $Latest instead of LatestVersionNumber
