@@ -457,14 +457,14 @@ describe('AWS Infrastructure Integration Tests', () => {
 
   describe('Resource Connectivity', () => {
     test('Database endpoint is reachable from within VPC', async () => {
-      const dbEndpoint = outputs.DatabaseEndpoint;
-      expect(dbEndpoint).toBeDefined();
-
-      // Skip endpoint format validation if deployed to LocalStack (endpoint may be "unknown")
-      if (dbEndpoint === 'unknown') {
-        console.log('Skipping endpoint format validation - deployed to LocalStack');
+      // RDS is not deployed on LocalStack - skip this test
+      if (isLocalStack) {
+        console.log('Skipping database endpoint test - RDS not deployed on LocalStack');
         return;
       }
+
+      const dbEndpoint = outputs.DatabaseEndpoint;
+      expect(dbEndpoint).toBeDefined();
 
       // Verify endpoint format for AWS
       expect(dbEndpoint).toMatch(/.*\.rds\.amazonaws\.com$/);
@@ -473,7 +473,12 @@ describe('AWS Infrastructure Integration Tests', () => {
     test('All required outputs are present', () => {
       expect(outputs.VPCId).toBeDefined();
       expect(outputs.LogsBucketName).toBeDefined();
-      expect(outputs.DatabaseEndpoint).toBeDefined();
+
+      // DatabaseEndpoint is only present when RDS is deployed (not on LocalStack)
+      if (!isLocalStack) {
+        expect(outputs.DatabaseEndpoint).toBeDefined();
+      }
+
       expect(outputs.KMSKeyId).toBeDefined();
       expect(outputs.LaunchTemplateId).toBeDefined();
       expect(outputs.InstanceProfileArn).toBeDefined();
