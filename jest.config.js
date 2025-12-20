@@ -42,10 +42,10 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 50, // Reduced for LocalStack: Application Insights conditionally disabled (Pro feature)
+      branches: 50, // Reduced for LocalStack: defensive conditional (database.secret?.secretArn || fallback) can't be fully tested without mocking
       functions: 72, // Reduced for LocalStack: some functions not called due to architectural constraints
-      lines: 90, // Reduced for LocalStack: Application Insights section not executed (lines 302-365)
-      statements: 90, // Reduced for LocalStack: Application Insights section not executed (Pro feature)
+      lines: 95, // Reduced for LocalStack: private subnet code paths not executed (empty array operations)
+      statements: 95, // Reduced for LocalStack: PRIVATE_ISOLATED architecture (empty array operations)
     },
   },
   testTimeout: 60000,
