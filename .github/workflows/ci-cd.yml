@@ -1610,12 +1610,50 @@ jobs:
           echo "---- full needs json ----"
           echo '${{ toJson(needs) }}'
 
+  claude-review-ideal-response:
+    runs-on: ubuntu-24.04
+    name: 'Claude Review: IDEAL_RESPONSE Code Validation'
+    needs: [detect-metadata, cleanup, claude-code-action]
+    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.claude-code-action.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+
+      - name: Install jq for metadata parsing
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Prepare Claude prompt for IDEAL_RESPONSE validation
+        id: prepare-ideal-response-prompt
+        run: |
+          PROMPT=$(cat .claude/prompts/claude-ideal-response-review.md)
+          {
+            echo 'CLAUDE_IDEAL_RESPONSE_PROMPT<<PROMPT_EOF'
+            echo "$PROMPT"
+            echo 'PROMPT_EOF'
+          } >> $GITHUB_ENV
+
+      - name: Run Claude IDEAL_RESPONSE Code Validation
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_tools: 'Bash,Read,Grep,Glob'
+          trigger_phrase: ''
+          custom_instructions: '${{ env.CLAUDE_IDEAL_RESPONSE_PROMPT }}'
+
   archive-folders:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, cleanup, claude-code-action]
+    needs: [detect-metadata, cleanup, claude-code-action, claude-review-ideal-response]
     environment: stage
-    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.claude-code-action.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.claude-code-action.result == 'success' && needs.claude-review-ideal-response.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
 
