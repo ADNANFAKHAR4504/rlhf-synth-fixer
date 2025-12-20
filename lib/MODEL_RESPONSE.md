@@ -499,25 +499,24 @@ class SecureInfrastructureStack extends Stack {
         );
     }
 }
-```
 
 ## Key Security Features Implemented
 
-### 🔐 **Data Encryption (KMS)**
+### **Data Encryption (KMS)**
 
 - **Three separate KMS keys** for different services (main, S3, RDS)
 - **Automatic key rotation** enabled
 - **Fine-grained key policies** for each service
 - **Encryption at rest** for all data stores
 
-### 👤 **Fine-Grained IAM Policies**
+### **Fine-Grained IAM Policies**
 
 - **Principle of least privilege** applied throughout
 - **Service-specific roles** with minimal required permissions
 - **Inline policies** for granular control
 - **No wildcard permissions** except where absolutely necessary
 
-### 📊 **Comprehensive Logging**
+### **Comprehensive Logging**
 
 - **CloudTrail** for API call logging with encryption
 - **CloudWatch Log Groups** for all services with retention policies
@@ -525,7 +524,7 @@ class SecureInfrastructureStack extends Stack {
 - **RDS performance insights** and query logging
 - **Lambda function logging** with encrypted log groups
 
-### 🌐 **Network Isolation**
+### **Network Isolation**
 
 - **Three-tier VPC architecture**:
   - **Public subnets**: For load balancers and NAT gateways
@@ -534,7 +533,7 @@ class SecureInfrastructureStack extends Stack {
 - **Security groups** with specific ingress/egress rules
 - **No default allow-all** rules
 
-### 🛡️ **Additional Security Measures**
+### **Additional Security Measures**
 
 - **S3 bucket** with public access blocked and SSL enforcement
 - **RDS encryption** with performance insights
@@ -543,3 +542,4 @@ class SecureInfrastructureStack extends Stack {
 - **Backup and versioning** enabled where applicable
 
 This infrastructure follows AWS Well-Architected Framework security pillar principles and can be deployed directly using `cdk deploy` after setting up the CDK environment.
+```
