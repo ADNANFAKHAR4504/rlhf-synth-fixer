@@ -238,16 +238,12 @@ EOF`,
 
     if (!isLocalStack) {
       // Security Group for RDS
-      dbSecurityGroup = new ec2.SecurityGroup(
-        this,
-        'DatabaseSecurityGroup',
-        {
-          vpc,
-          securityGroupName: `database-sg-${environmentSuffix}`,
-          description: 'Security group for RDS database',
-          allowAllOutbound: false,
-        }
-      );
+      dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
+        vpc,
+        securityGroupName: `database-sg-${environmentSuffix}`,
+        description: 'Security group for RDS database',
+        allowAllOutbound: false,
+      });
 
       dbSecurityGroup.addIngressRule(
         ec2.Peer.securityGroupId(webServerSg.securityGroupId),
