@@ -714,33 +714,33 @@ Outputs:
 
 ## Key Security Features Implemented:
 
-### 🔐 **Encryption & Key Management**
+### **Encryption & Key Management**
 
 - **KMS Key**: Central encryption key for all data at rest
 - **S3 Encryption**: AES-256 encryption enabled on all buckets
 - **RDS Encryption**: Database encrypted using KMS key
 - **CloudTrail Encryption**: Audit logs encrypted
 
-### 🛡️ **Network Security**
+### **Network Security**
 
 - **VPC Isolation**: Separate public/private subnets
 - **Security Groups**: Restrictive rules with least privilege
 - **HTTPS Only**: Web traffic restricted to port 443 from specific CIDR
 - **No Public RDS**: Database in private subnets only
 
-### 👤 **IAM & Access Control**
+### **IAM & Access Control**
 
 - **MFA Enforcement**: Policy requiring MFA for all users
 - **Least Privilege**: Minimal permissions for EC2 role
 - **Role-Based Access**: Separate roles for different functions
 
-### 📊 **Monitoring & Auditing**
+### **Monitoring & Auditing**
 
 - **Global CloudTrail**: Multi-region API call logging
 - **S3 Access Logging**: Detailed bucket access logs
 - **CloudWatch Integration**: Comprehensive monitoring setup
 
-### 🏗️ **Infrastructure Best Practices**
+### **Infrastructure Best Practices**
 
 - **Resource Naming**: Consistent `<environment>-<service>-<function>` pattern
 - **Comprehensive Tagging**: Environment, Owner, Project tags on all resources
