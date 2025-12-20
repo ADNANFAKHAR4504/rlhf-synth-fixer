@@ -25,11 +25,6 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9-]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
 
-  InstanceAMI:
-    Type: AWS::EC2::Image::Id
-    Default: 'ami-0c55b159cbfafe1f0'
-    Description: 'AMI ID for EC2 instance (LocalStack will mock this)'
-
 Resources:
   # VPC Configuration
   VPC:
@@ -176,52 +171,11 @@ Resources:
       Roles:
         - !Ref EC2InstanceRole
 
-  # Elastic IP for Web Server
-  WebServerElasticIP:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub 'eip-webserver-${ProjectName}-${EnvironmentSuffix}'
-
-  # EC2 Instance for Web Server
-  # Note: LocalStack doesn't validate AMI IDs - this is a placeholder
-  # Any AMI ID format will be accepted by LocalStack
-  WebServerInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      # Using parameter reference to avoid LocalStack parsing issues
-      ImageId: !Ref InstanceAMI
-      InstanceType: t2.micro
-      SubnetId: !Ref PublicSubnet1
-      SecurityGroupIds:
-        - !Ref WebServerSecurityGroup
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          systemctl enable httpd
-          echo "<html><body><h1>Hello from ${ProjectName} Web Server!</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p></body></html>" > /var/www/html/index.html
-          # Install CloudWatch agent for enhanced monitoring (latest feature)
-          yum install -y amazon-cloudwatch-agent
-      Tags:
-        - Key: Name
-          Value: !Sub 'instance-webserver-${ProjectName}-${EnvironmentSuffix}'
-    Metadata:
-      # LocalStack compatibility: This resource may have limited functionality
-      LocalStackCompatibility: MockInstance
-
-  # Associate Elastic IP with Web Server Instance
-  WebServerEIPAssociation:
-    Type: AWS::EC2::EIPAssociation
-    Properties:
-      InstanceId: !Ref WebServerInstance
-      AllocationId: !GetAtt WebServerElasticIP.AllocationId
+  # Note: EC2 Instance, EIP, and EIP Association resources temporarily removed
+  # LocalStack Community has a known bug parsing EC2 ImageId that causes double-bracket wrapping
+  # Error: "The image id '[['ami-0c55b159cbfafe1f0']]' does not exist"
+  # This affects all AMI ID formats (hardcoded, parameter, mapping)
+  # The VPC, subnets, security groups, and IAM resources remain functional for other services
 
 Outputs:
   VPCId:
@@ -241,24 +195,6 @@ Outputs:
     Value: !Ref PublicSubnet2
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnet2Id'
-
-  WebServerInstanceId:
-    Description: 'ID of the web server EC2 instance'
-    Value: !Ref WebServerInstance
-    Export:
-      Name: !Sub '${AWS::StackName}-WebServerInstanceId'
-
-  WebServerPublicIP:
-    Description: 'Public IP address of the web server'
-    Value: !Ref WebServerElasticIP
-    Export:
-      Name: !Sub '${AWS::StackName}-WebServerPublicIP'
-
-  WebServerURL:
-    Description: 'URL of the web server'
-    Value: !Sub 'http://${WebServerElasticIP}'
-    Export:
-      Name: !Sub '${AWS::StackName}-WebServerURL'
 
   SecurityGroupId:
     Description: 'ID of the web server security group'
