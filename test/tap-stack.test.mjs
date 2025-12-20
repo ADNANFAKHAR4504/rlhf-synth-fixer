@@ -6,6 +6,8 @@ describe('TapStack', () => {
   let app;
   let stack;
   let template;
+  // Check if we're in LocalStack mode at module load time
+  const isLocalStack = process.env.AWS_ENDPOINT_URL !== undefined;
 
   beforeEach(() => {
     app = new App();
@@ -17,8 +19,10 @@ describe('TapStack', () => {
   });
 
   test('Stack creates S3 bucket with encryption', () => {
-    // Stack creates 2 buckets in non-LocalStack mode: websiteBucket and logBucket (for CloudFront logs)
-    template.resourceCountIs('AWS::S3::Bucket', 2);
+    // In non-LocalStack mode: 2 buckets (websiteBucket + logBucket for CloudFront logs)
+    // In LocalStack mode: 1 bucket (only websiteBucket, no CloudFront)
+    const expectedBucketCount = isLocalStack ? 1 : 2;
+    template.resourceCountIs('AWS::S3::Bucket', expectedBucketCount);
     template.hasResourceProperties('AWS::S3::Bucket', {
       BucketEncryption: {
         ServerSideEncryptionConfiguration: [{
