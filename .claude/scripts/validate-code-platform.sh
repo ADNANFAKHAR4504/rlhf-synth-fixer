@@ -125,11 +125,8 @@ fi
 DETECTED_LANGUAGE="unknown"
 
 # Check programming languages first (they take precedence over JSON/YAML)
-# Check for JavaScript (must be before Java to avoid false positive with ```javascript)
-if grep -qE '```javascript|```js|import.*from|export.*from|module\.exports|require\(.*\)|\.mjs|\.js' lib/IDEAL_RESPONSE.md; then
-    DETECTED_LANGUAGE="js"
-# Check for Java (use word boundary to avoid matching ```javascript)
-elif grep -qE '```java\b|package app|package com|import java\.|public class |\.java' lib/IDEAL_RESPONSE.md; then
+# Check for Java
+if grep -qE '```java|package app|package com|import java\.|public class |\.java' lib/IDEAL_RESPONSE.md; then
     DETECTED_LANGUAGE="java"
 # Check for TypeScript
 elif grep -qE '```typescript|```ts|import.*from|interface |\.ts' lib/IDEAL_RESPONSE.md; then
