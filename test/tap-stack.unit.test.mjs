@@ -1,6 +1,8 @@
 import { App, Stack } from 'aws-cdk-lib';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.mjs';
+import { SecurityGroupConstruct } from '../lib/constructs/security-group.mjs';
 
 // Mock config - includes ALL required fields
 const mockConfig = {
@@ -345,5 +347,174 @@ describe('TapStack Missing Config Field Tests', () => {
     }).toThrow("No environment field found in configuration for 'dev'");
     
     delete process.env.CDK_LOCAL;
+  });
+});
+
+// Test SecurityGroupConstruct directly for non-LocalStack path (VPC Endpoints)
+describe('SecurityGroupConstruct Direct Tests', () => {
+  test('Creates security group with VPC endpoints in non-LocalStack mode', () => {
+    // Clear LocalStack env vars
+    delete process.env.CDK_LOCAL;
+    delete process.env.CI;
+    delete process.env.GITHUB_ACTIONS;
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    const stack = new Stack(app, 'SecurityGroupTestStack', {
+      env: { account: '123456789012', region: 'us-east-1' }
+    });
+    
+    // Create a real VPC with subnets for endpoint creation
+    const vpc = new ec2.Vpc(stack, 'TestVpc', {
+      maxAzs: 2,
+      subnetConfiguration: [
+        {
+          name: 'Private',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          cidrMask: 24
+        },
+        {
+          name: 'Public',
+          subnetType: ec2.SubnetType.PUBLIC,
+          cidrMask: 24
+        }
+      ]
+    });
+    
+    // Create SecurityGroupConstruct with isLocalStack = false
+    const sgConstruct = new SecurityGroupConstruct(stack, 'TestSecurityGroup', {
+      vpc: vpc,
+      sshCidrBlock: '10.0.0.0/16',
+      trustedOutboundCidrs: ['10.0.0.0/8', '172.16.0.0/12'],
+      isLocalStack: false
+    });
+    
+    expect(sgConstruct.securityGroup).toBeDefined();
+    
+    const template = Template.fromStack(stack);
+    
+    // Verify security group is created
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      GroupDescription: 'Security group for secure web application instances'
+    });
+    
+    // Verify VPC endpoints are created (CloudWatch, Logs, Events)
+    template.resourceCountIs('AWS::EC2::VPCEndpoint', 3);
+    
+    // Restore env vars
+    process.env.CDK_LOCAL = 'true';
+  });
+
+  test('Creates security group without VPC endpoints in LocalStack mode', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    const stack = new Stack(app, 'LocalStackSecurityGroupTestStack', {
+      env: { account: '123456789012', region: 'us-east-1' }
+    });
+    
+    // Create VPC
+    const vpc = new ec2.Vpc(stack, 'TestVpc', {
+      maxAzs: 1
+    });
+    
+    // Create SecurityGroupConstruct with isLocalStack = true
+    const sgConstruct = new SecurityGroupConstruct(stack, 'TestSecurityGroup', {
+      vpc: vpc,
+      sshCidrBlock: '10.0.0.0/16',
+      trustedOutboundCidrs: ['10.0.0.0/8'],
+      isLocalStack: true
+    });
+    
+    expect(sgConstruct.securityGroup).toBeDefined();
+    
+    const template = Template.fromStack(stack);
+    
+    // Verify security group is created
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      GroupDescription: 'Security group for secure web application instances'
+    });
+    
+    // Verify NO VPC endpoints in LocalStack mode
+    template.resourceCountIs('AWS::EC2::VPCEndpoint', 0);
+    
+    delete process.env.CDK_LOCAL;
+  });
+
+  test('Throws error for unsupported region in S3 prefix list', () => {
+    delete process.env.CDK_LOCAL;
+    delete process.env.CI;
+    delete process.env.GITHUB_ACTIONS;
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    // Use an unsupported region
+    const stack = new Stack(app, 'UnsupportedRegionStack', {
+      env: { account: '123456789012', region: 'unsupported-region-1' }
+    });
+    
+    const vpc = new ec2.Vpc(stack, 'TestVpc', {
+      maxAzs: 1,
+      subnetConfiguration: [
+        { name: 'Private', subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, cidrMask: 24 },
+        { name: 'Public', subnetType: ec2.SubnetType.PUBLIC, cidrMask: 24 }
+      ]
+    });
+    
+    expect(() => {
+      new SecurityGroupConstruct(stack, 'TestSecurityGroup', {
+        vpc: vpc,
+        sshCidrBlock: '10.0.0.0/16',
+        trustedOutboundCidrs: ['10.0.0.0/8'],
+        isLocalStack: false
+      });
+    }).toThrow('Unsupported region for S3 prefix list');
+    
+    process.env.CDK_LOCAL = 'true';
+  });
+
+  test('Supports multiple AWS regions for S3 prefix list', () => {
+    delete process.env.CDK_LOCAL;
+    delete process.env.CI;
+    delete process.env.GITHUB_ACTIONS;
+    
+    const regions = ['us-west-2', 'eu-west-1', 'ap-southeast-1', 'ap-northeast-1'];
+    
+    regions.forEach((region, index) => {
+      const app = new App({
+        context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+      });
+      
+      const stack = new Stack(app, `RegionTestStack${index}`, {
+        env: { account: '123456789012', region: region }
+      });
+      
+      const vpc = new ec2.Vpc(stack, 'TestVpc', {
+        maxAzs: 2,
+        subnetConfiguration: [
+          { name: 'Private', subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, cidrMask: 24 },
+          { name: 'Public', subnetType: ec2.SubnetType.PUBLIC, cidrMask: 24 }
+        ]
+      });
+      
+      // Should not throw for supported regions
+      const sgConstruct = new SecurityGroupConstruct(stack, 'TestSecurityGroup', {
+        vpc: vpc,
+        sshCidrBlock: '10.0.0.0/16',
+        trustedOutboundCidrs: ['10.0.0.0/8'],
+        isLocalStack: false
+      });
+      
+      expect(sgConstruct.securityGroup).toBeDefined();
+    });
+    
+    process.env.CDK_LOCAL = 'true';
   });
 });
