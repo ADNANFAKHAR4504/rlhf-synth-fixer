@@ -1,6 +1,6 @@
 {
   "platform": "cdk",
-  "language": "js",
+  "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "291553",
