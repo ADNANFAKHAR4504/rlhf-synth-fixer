@@ -333,10 +333,12 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(response.status).toBe(200);
       expect(response.data).toHaveProperty('xrayTracingGroup');
 
-      // X-Ray may return 'not-available' for LocalStack
-      if (xrayTracingGroup !== 'not-available') {
+      // X-Ray may return 'not-available' for LocalStack (when output not exported)
+      // Or it might be undefined if the output doesn't exist
+      if (xrayTracingGroup && xrayTracingGroup !== 'not-available') {
         expect(response.data.xrayTracingGroup).toBe(xrayTracingGroup);
       } else {
+        // For LocalStack or when X-Ray is not available, expect 'not-available'
         expect(response.data.xrayTracingGroup).toBe('not-available');
       }
 
