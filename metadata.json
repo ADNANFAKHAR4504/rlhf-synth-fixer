@@ -17,6 +17,7 @@
     "VPC",
     "ELB",
     "AutoScaling",
+    "RDS",
     "SSM"
   ]
 }

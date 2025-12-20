@@ -263,16 +263,19 @@ export class TapStack extends cdk.Stack {
       defaultTargetGroups: [targetGroup],
     });
 
-    // RDS Subnet Group
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'TapDbSubnetGroup', {
-      subnetGroupName: `tapdbsubnetgroup-${environmentSuffix}`,
-      vpc,
-      description: 'Subnet group for RDS MySQL database',
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-      },
-    });
+    // RDS Subnet Group (only create for AWS, not LocalStack)
+    // LocalStack Community edition does not support RDS
+    if (!isLocalStack) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const dbSubnetGroup = new rds.SubnetGroup(this, 'TapDbSubnetGroup', {
+        subnetGroupName: `tapdbsubnetgroup-${environmentSuffix}`,
+        vpc,
+        description: 'Subnet group for RDS MySQL database',
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        },
+      });
+    }
 
     // SSM Parameter to simulate database endpoint for testing
     // Due to AWS quota limits, we'll create an SSM parameter instead of RDS
