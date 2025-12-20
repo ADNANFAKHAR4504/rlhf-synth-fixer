@@ -142,6 +142,9 @@ describe('TapStack CloudFormation Template', () => {
         expect(bucket.Type).toBe('AWS::S3::Bucket');
         
         const props = bucket.Properties;
+        // Verify bucket name uses ${AWS::StackName} for uniqueness
+        expect(props.BucketName['Fn::Sub']).toContain('${AWS::StackName}');
+        
         expect(props.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
         expect(props.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
         expect(props.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
@@ -156,6 +159,9 @@ describe('TapStack CloudFormation Template', () => {
         expect(bucket.Type).toBe('AWS::S3::Bucket');
         
         const props = bucket.Properties;
+        // Verify bucket name uses ${AWS::StackName} for uniqueness
+        expect(props.BucketName['Fn::Sub']).toContain('${AWS::StackName}');
+        
         expect(props.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
         expect(props.VersioningConfiguration.Status).toBe('Enabled');
         
@@ -167,6 +173,13 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     describe('RDS Resources', () => {
+      test('should have DBSecret for secure credential management', () => {
+        const secret = template.Resources.DBSecret;
+        expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+        expect(secret.Condition).toBe('IsNotLocalStack');
+        expect(secret.Properties.GenerateSecretString).toBeDefined();
+      });
+
       test('should have RDS instance with correct security configuration', () => {
         const rds = template.Resources.SecureRDSInstance;
         expect(rds.Type).toBe('AWS::RDS::DBInstance');
@@ -178,6 +191,10 @@ describe('TapStack CloudFormation Template', () => {
         expect(props.PubliclyAccessible).toBe(false);
         expect(props.DeletionProtection).toBe(false);
         expect(props.MultiAZ).toBe(false);
+        
+        // Verify Secrets Manager is used for credentials
+        expect(props.MasterUsername['Fn::Sub']).toContain('secretsmanager');
+        expect(props.MasterUserPassword['Fn::Sub']).toContain('secretsmanager');
         
         expect(props.EnableCloudwatchLogsExports).toEqual([
           'audit',
