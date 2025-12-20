@@ -1,0 +1,25 @@
+{
+  "provider": "localstack",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291385",
+  "team": "synth-2",
+  "startedAt": "2025-08-16T08:06:01.491Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ELB",
+    "AutoScaling",
+    "CloudWatch",
+    "SNS",
+    "SecretsManager",
+    "IAM"
+  ]
+}
