@@ -340,7 +340,7 @@ export class TapStack extends cdk.Stack {
         vpc,
         port: 8080,
         protocol: elbv2.ApplicationProtocol.HTTP,
-        targets: [autoScalingGroup],
+        targets: isLocalStack ? [] : [autoScalingGroup],
         healthCheck: {
           path: '/health',
         },
