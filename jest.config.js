@@ -44,8 +44,8 @@ module.exports = {
     global: {
       branches: 50, // Reduced for LocalStack: defensive conditional (database.secret?.secretArn || fallback) can't be fully tested without mocking
       functions: 72, // Reduced for LocalStack: some functions not called due to architectural constraints
-      lines: 85, // Reduced for LocalStack: VPC Endpoints and prefix list code skipped in CI/LocalStack mode
-      statements: 85, // Reduced for LocalStack: security-group.mjs VPC Endpoint code not executed in test mode
+      lines: 95, // Reduced for LocalStack: private subnet code paths not executed (empty array operations)
+      statements: 95, // Reduced for LocalStack: PRIVATE_ISOLATED architecture (empty array operations)
     },
   },
   testTimeout: 60000,
