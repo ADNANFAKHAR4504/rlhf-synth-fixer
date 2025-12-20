@@ -20,9 +20,13 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('S3 Bucket', () => {
+    const isLocalStack = process.env.AWS_ENDPOINT_URL !== undefined;
+    
     test('should create S3 bucket', () => {
-      // Stack creates 2 buckets: websiteBucket and logBucket (for CloudFront logs)
-      template.resourceCountIs('AWS::S3::Bucket', 2);
+      // In non-LocalStack mode: 2 buckets (websiteBucket + logBucket for CloudFront logs)
+      // In LocalStack mode: 1 bucket (only websiteBucket, no CloudFront)
+      const expectedBucketCount = isLocalStack ? 1 : 2;
+      template.resourceCountIs('AWS::S3::Bucket', expectedBucketCount);
     });
 
     test('should have bucket encryption configured', () => {

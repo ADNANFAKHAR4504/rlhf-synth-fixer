@@ -17,7 +17,8 @@ describe('TapStack', () => {
   });
 
   test('Stack creates S3 bucket with encryption', () => {
-    template.resourceCountIs('AWS::S3::Bucket', 1);
+    // Stack creates 2 buckets in non-LocalStack mode: websiteBucket and logBucket (for CloudFront logs)
+    template.resourceCountIs('AWS::S3::Bucket', 2);
     template.hasResourceProperties('AWS::S3::Bucket', {
       BucketEncryption: {
         ServerSideEncryptionConfiguration: [{
@@ -71,9 +72,12 @@ describe('TapStack', () => {
     const prodTemplate = Template.fromStack(prodStack);
     
     prodTemplate.resourceCountIs('AWS::CloudFront::Distribution', 1);
+    // ViewerProtocolPolicy is on DefaultCacheBehavior, not DistributionConfig root
     prodTemplate.hasResourceProperties('AWS::CloudFront::Distribution', {
       DistributionConfig: {
-        ViewerProtocolPolicy: 'redirect-to-https'
+        DefaultCacheBehavior: {
+          ViewerProtocolPolicy: 'redirect-to-https'
+        }
       }
     });
   });
