@@ -1,0 +1,656 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  tap_stack.yml - Production-ready VPC with 2 AZs, public/private subnets, per-AZ NAT Gateways,
+  ALB + ASG of EC2 instances in private subnets, IAM roles limited to SSM parameter read,
+  and SSM parameter handling. Tags: Environment=Production. Always uses SSM for AMI ID.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: "Network" }
+        Parameters: [VpcCidr, PublicSubnet1Cidr, PublicSubnet2Cidr, PrivateSubnet1Cidr, PrivateSubnet2Cidr]
+      - Label: { default: "Compute & Access" }
+        Parameters: [KeyName, CreateBastion, SSHCidr, InstanceType]
+      - Label: { default: "AutoScaling" }
+        Parameters: [AsgMinSize, AsgDesiredCapacity, AsgMaxSize, AppPort]
+      - Label: { default: "Secrets (SSM)" }
+        Parameters: [CreateAppSecret, AppSecretParameterName, AppSecretValue]
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: Production
+    Description: "Environment tag value."
+
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: "VPC CIDR block."
+
+  PublicSubnet1Cidr:
+    Type: String
+    Default: 10.0.0.0/24
+  PublicSubnet2Cidr:
+    Type: String
+    Default: 10.0.1.0/24
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: 10.0.2.0/24
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: 10.0.3.0/24
+
+  KeyName:
+    Type: String
+    Default: ""
+    Description: >
+      Name of an existing EC2 KeyPair to enable SSH access to bastion or EC2 instances.
+      If creating a bastion (CreateBastion = true), this parameter must be provided.
+
+  CreateBastion:
+    Type: String
+    AllowedValues: [ true, false ]
+    Default: false
+    Description: Create a public bastion host to access private instances.
+
+  SSHCidr:
+    Type: String
+    Description: "CIDR range allowed to SSH to the bastion (example: 203.0.113.0/32)."
+    Default: 203.0.113.0/32
+
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t3.micro
+      - t3.small
+      - t2.small
+    Description: EC2 instance type for application instances.
+
+  AsgMinSize:
+    Type: Number
+    Default: 1
+  AsgDesiredCapacity:
+    Type: Number
+    Default: 1
+  AsgMaxSize:
+    Type: Number
+    Default: 2
+
+  AppPort:
+    Type: Number
+    Default: 80
+    Description: Application listening port (ALB -> instances).
+
+  CreateAppSecret:
+    Type: String
+    AllowedValues: [ true, false ]
+    Default: true
+    Description: >
+      If true, creates an SSM String parameter (unencrypted) at AppSecretParameterName using AppSecretValue.
+      If false, assumes the parameter exists (preferably as SecureString or KMS-encrypted String for security).
+
+  AppSecretParameterName:
+    Type: String
+    Default: /tap/app/secret
+    Description: "SSM parameter name for the application secret (e.g., /tap/app/secret)."
+
+  AppSecretValue:
+    Type: String
+    NoEcho: true
+    Default: "default-secret-value"
+    Description: "Value used to create the SSM parameter when CreateAppSecret=true. NoEcho=true prevents showing it in console."
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    us-west-2:
+      AMI: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+Conditions:
+  CreateBastionCond: !Equals [ !Ref CreateBastion, "true" ]
+  CreateAppSecretCond: !Equals [ !Ref CreateAppSecret, "true" ]
+  HasKeyName: !Not [ !Equals [ !Ref KeyName, "" ] ]
+
+Outputs:
+  VPCId:
+    Description: VPC Id
+    Value: !Ref VPC
+  PublicSubnetIds:
+    Description: Public subnet IDs (list)
+    Value: !Join [ ",", [ !Ref PublicSubnet1, !Ref PublicSubnet2 ] ]
+  PrivateSubnetIds:
+    Description: Private subnet IDs (list)
+    Value: !Join [ ",", [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ] ]
+  BastionPublicIP:
+    Description: Elastic IP of bastion (if created)
+    Value: !If [ CreateBastionCond, !Ref BastionEIPAddress, "none" ]
+  AlbDNSName:
+    Description: ALB DNS name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+  AlbArn:
+    Description: ALB ARN
+    Value: !Ref ApplicationLoadBalancer
+  AsgName:
+    Description: AutoScaling Group name
+    Value: !Ref AppAutoScalingGroup
+  Ec2InstanceRole:
+    Description: IAM Role for EC2 Instances
+    Value: !Ref Ec2InstanceRole
+  Ec2InstanceProfile:
+    Description: Instance profile for EC2
+    Value: !Ref Ec2InstanceProfile
+  SecurityGroupIds:
+    Description: ALB and App EC2 Security Group IDs (comma-separated, Bastion SG included if created)
+    Value: !If
+      - CreateBastionCond
+      - !Join [ ",", [ !Ref AlbSecurityGroup, !Ref AppSecurityGroup, !Ref BastionSecurityGroup ] ]
+      - !Join [ ",", [ !Ref AlbSecurityGroup, !Ref AppSecurityGroup ] ]
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-vpc"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-igw"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  VpcInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  AZ1:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/tap/placeholder/az1-${AWS::StackName}"
+      Type: String
+      Value: !Select [ 0, !GetAZs "" ]
+      Tags:
+        Environment: !Ref EnvironmentName
+
+  AZ2:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/tap/placeholder/az2-${AWS::StackName}"
+      Type: String
+      Value: !Select [ 1, !GetAZs "" ]
+      Tags:
+        Environment: !Ref EnvironmentName
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-public-1"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: !Select [ 1, !GetAZs "" ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-public-2"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-private-1"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !Select [ 1, !GetAZs "" ]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-private-2"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-public-rt"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcInternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-private-rt-1"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-private-rt-2"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  NatEIP1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-nat-eip-1"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  NatEIP2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-nat-eip-2"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP1.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-natgw-1"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP2.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-natgw-2"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB security group - allows HTTP from internet
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-alb-sg"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  BastionSecurityGroup:
+    Condition: CreateBastionCond
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bastion SG - allows SSH from SSHCidr only
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHCidr
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-bastion-sg"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: App EC2 SG - allows app port from ALB and SSH from bastion SG only
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref AppPort
+          ToPort: !Ref AppPort
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+        - !If
+          - CreateBastionCond
+          - IpProtocol: tcp
+            FromPort: 22
+            ToPort: 22
+            SourceSecurityGroupId: !Ref BastionSecurityGroup
+          - !Ref "AWS::NoValue"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-app-sg"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  BastionInstance:
+    Condition: CreateBastionCond
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      KeyName: !Ref KeyName
+      ImageId: !Sub
+        - '{{resolve:ssm:${AmiMap}:1}}'
+        - AmiMap: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          SubnetId: !Ref PublicSubnet1
+          GroupSet:
+            - !Ref BastionSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-bastion"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  BastionEIPAddress:
+    Condition: CreateBastionCond
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref BastionInstance
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-bastion-eip"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  Ec2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: SSMParameterReadPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${AppSecretParameterName}"
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource:
+                  - !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/ssm"
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-ec2-role"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  Ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref Ec2InstanceRole
+      Path: /
+
+  AppLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "${AWS::StackName}-lt"
+      LaunchTemplateData:
+        ImageId: !Sub
+          - '{{resolve:ssm:${AmiMap}:1}}'
+          - AmiMap: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile:
+          Name: !Ref Ec2InstanceProfile
+        SecurityGroupIds:
+          - !Ref AppSecurityGroup
+        KeyName: !If [ HasKeyName, !Ref KeyName, !Ref "AWS::NoValue" ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            yum update -y
+            # Log to CloudWatch for debugging
+            exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+            echo "Starting UserData script for ${AWS::StackName}"
+            # Retrieve application secret from SSM parameter using AWS CLI
+            # Try with decryption first, fall back to non-encrypted if needed
+            secret=$(aws ssm get-parameter --name "${AppSecretParameterName}" --with-decryption --query Parameter.Value --output text 2>/dev/null || \
+                     aws ssm get-parameter --name "${AppSecretParameterName}" --query Parameter.Value --output text)
+            if [ -z "$secret" ]; then
+                echo "Error: Failed to retrieve SSM parameter ${AppSecretParameterName}" >&2
+                exit 1
+            fi
+            echo "Successfully retrieved SSM parameter ${AppSecretParameterName}"
+            # Write secret to file for the application
+            echo "$secret" > /etc/app_secret
+            chmod 600 /etc/app_secret
+            # Start a simple HTTP server (example) binding to AppPort so ALB healthchecks pass
+            yum install -y python3
+            cat <<'EOF' > /usr/local/bin/simple_app.py
+            import http.server, socketserver
+            port = int("${AppPort}")
+            class Handler(http.server.SimpleHTTPRequestHandler):
+                def do_GET(self):
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b"ok")
+            with socketserver.TCPServer(("", port), Handler) as httpd:
+                httpd.serve_forever()
+            EOF
+            chmod +x /usr/local/bin/simple_app.py
+            nohup python3 /usr/local/bin/simple_app.py &
+            echo "UserData script completed successfully"
+
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Environment
+                Value: !Ref EnvironmentName
+              - Key: Name
+                Value: !Sub "${EnvironmentName}-app-instance"
+
+  ApplicationTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Port: !Ref AppPort
+      Protocol: HTTP
+      TargetType: instance
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: !Ref AppPort
+      HealthCheckPath: /
+      Matcher:
+        HttpCode: 200
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-tg"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${EnvironmentName}-alb"
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-alb"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  AlbListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ApplicationTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  AppAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AppLaunchTemplate
+        Version: !GetAtt AppLaunchTemplate.LatestVersionNumber
+      MinSize: !Ref AsgMinSize
+      DesiredCapacity: !Ref AsgDesiredCapacity
+      MaxSize: !Ref AsgMaxSize
+      TargetGroupARNs:
+        - !Ref ApplicationTargetGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-asg"
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentName
+          PropagateAtLaunch: true
+
+  AppSecretSSMParameter:
+    Condition: CreateAppSecretCond
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Ref AppSecretParameterName
+      Type: String
+      Value: !Ref AppSecretValue
+      Tags:
+        Name: !Sub "${EnvironmentName}-app-secret"
+        Environment: !Ref EnvironmentName
+
+Rules:
+  KeyNameProvided:
+    Assertions:
+      - Assert: !Not
+          - !And
+            - !Equals [ !Ref CreateBastion, "true" ]
+            - !Equals [ !Ref KeyName, "" ]
+        AssertDescription: "When CreateBastion=true, KeyName must be provided."
+  AppSecretValueProvided:
+    Assertions:
+      - Assert: !Not
+          - !And
+            - !Equals [ !Ref CreateAppSecret, "true" ]
+            - !Equals [ !Ref AppSecretValue, "" ]
+        AssertDescription: "When CreateAppSecret=true, AppSecretValue must be provided to avoid storing an empty parameter."
