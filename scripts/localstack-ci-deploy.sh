@@ -332,7 +332,7 @@ cleanup_failed_stacks() {
 
     # Find all stacks in failed states
     local failed_stacks=$(awslocal cloudformation list-stacks \
-        --stack-status-filter DELETE_FAILED ROLLBACK_FAILED CREATE_FAILED UPDATE_ROLLBACK_FAILED \
+        --stack-status-filter DELETE_FAILED ROLLBACK_FAILED CREATE_FAILED UPDATE_ROLLBACK_FAILED ROLLBACK_COMPLETE \
         --query 'StackSummaries[].StackName' \
         --output json 2>/dev/null | jq -r '.[]' 2>/dev/null | grep -i "$stack_pattern" || echo "")
 

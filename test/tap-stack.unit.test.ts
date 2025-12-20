@@ -14,27 +14,29 @@ describe('TapStack', () => {
   describe('Stack Creation', () => {
     test('creates stack with default environment suffix', () => {
       stack = new TapStack(app, 'TestStack');
-      
+
       // TapStack itself should be a stack
       expect(stack).toBeInstanceOf(cdk.Stack);
-      
-      // Check that the stack has a WebApplication nested stack
-      const children = stack.node.children;
-      const webAppStack = children.find(child => child.node.id === 'WebApplication');
-      expect(webAppStack).toBeDefined();
+
+      // TapStack now contains all resources directly (flattened architecture)
+      expect(stack.vpc).toBeDefined();
+      expect(stack.loadBalancer).toBeDefined();
+      expect(stack.autoScalingGroup).toBeDefined();
+      expect(stack.database).toBeDefined();
     });
 
     test('creates stack with provided environment suffix', () => {
       const customSuffix = 'production';
       stack = new TapStack(app, 'TestStack', { environmentSuffix: customSuffix });
-      
+
       // TapStack itself should be a stack
       expect(stack).toBeInstanceOf(cdk.Stack);
-      
-      // Check that the stack has a WebApplication nested stack
-      const children = stack.node.children;
-      const webAppStack = children.find(child => child.node.id === 'WebApplication');
-      expect(webAppStack).toBeDefined();
+
+      // TapStack now contains all resources directly
+      expect(stack.vpc).toBeDefined();
+      expect(stack.loadBalancer).toBeDefined();
+      expect(stack.autoScalingGroup).toBeDefined();
+      expect(stack.database).toBeDefined();
     });
 
     test('passes environment suffix from context', () => {
@@ -42,69 +44,62 @@ describe('TapStack', () => {
         context: { environmentSuffix: 'contextSuffix' }
       });
       stack = new TapStack(app, 'TestStack');
-      
+
       // TapStack itself should be a stack
       expect(stack).toBeInstanceOf(cdk.Stack);
-      
-      // Check that the stack has a WebApplication nested stack
-      const children = stack.node.children;
-      const webAppStack = children.find(child => child.node.id === 'WebApplication');
-      expect(webAppStack).toBeDefined();
+
+      // TapStack now contains all resources directly
+      expect(stack.vpc).toBeDefined();
+      expect(stack.loadBalancer).toBeDefined();
+      expect(stack.autoScalingGroup).toBeDefined();
+      expect(stack.database).toBeDefined();
     });
 
-    test('sets correct description for WebApplication stack', () => {
+    test('creates VPC with correct configuration', () => {
       stack = new TapStack(app, 'TestStack', { environmentSuffix: 'test' });
-      
-      // Find the WebApplication nested stack
-      const children = stack.node.children;
-      const webAppStack = children.find(child => child.node.id === 'WebApplication');
-      expect(webAppStack).toBeDefined();
-      
-      // Check the description
-      if (webAppStack && 'description' in webAppStack) {
-        expect((webAppStack as any).description).toBe('Web Application Infrastructure - test');
-      }
+      template = Template.fromStack(stack);
+
+      // VPC should exist with correct configuration
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+      });
     });
   });
 
   describe('Stack Properties', () => {
-    test('passes environment properties to nested stack', () => {
+    test('passes environment properties to stack', () => {
       const env = { account: '123456789012', region: 'us-west-2' };
       stack = new TapStack(app, 'TestStack', { env, environmentSuffix: 'staging' });
-      
-      // Check that the stack has a WebApplication nested stack
-      const children = stack.node.children;
-      const webAppStack = children.find(child => child.node.id === 'WebApplication');
-      expect(webAppStack).toBeDefined();
-      
-      // Check environment is passed
-      if (webAppStack && 'env' in webAppStack) {
-        expect((webAppStack as any).env).toBeDefined();
-      }
+
+      // Stack should have environment properties
+      expect(stack).toBeInstanceOf(cdk.Stack);
+      expect(stack.vpc).toBeDefined();
     });
 
     test('handles undefined props gracefully', () => {
       stack = new TapStack(app, 'TestStack', undefined);
-      
+
       // Should still create stack with defaults
       expect(stack).toBeInstanceOf(cdk.Stack);
-      
-      // Check that the stack has a WebApplication nested stack
-      const children = stack.node.children;
-      const webAppStack = children.find(child => child.node.id === 'WebApplication');
-      expect(webAppStack).toBeDefined();
+
+      // All resources should be created with defaults
+      expect(stack.vpc).toBeDefined();
+      expect(stack.loadBalancer).toBeDefined();
+      expect(stack.autoScalingGroup).toBeDefined();
+      expect(stack.database).toBeDefined();
     });
   });
 
-  describe('WebApplication Stack Integration', () => {
-    test('creates WebApplication nested stack', () => {
+  describe('Resource Integration', () => {
+    test('creates all required infrastructure resources', () => {
       stack = new TapStack(app, 'TestStack');
-      
-      // Check that the stack has a WebApplication nested stack
-      const children = stack.node.children;
-      const webAppStack = children.find(child => child.node.id === 'WebApplication');
-      expect(webAppStack).toBeDefined();
-      expect(webAppStack?.constructor.name).toBe('WebAppStack');
+      template = Template.fromStack(stack);
+
+      // All resources should be in the TapStack (flattened architecture)
+      template.resourceCountIs('AWS::EC2::VPC', 1);
+      template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
+      template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
+      template.resourceCountIs('AWS::RDS::DBInstance', 1);
     });
   });
 
