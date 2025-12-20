@@ -54,7 +54,8 @@ const outputs = JSON.parse(
 const AWS_ENDPOINT = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
 const AWS_REGION = process.env.AWS_REGION || 'us-west-2';
 const isLocalStack = AWS_ENDPOINT.includes('localhost');
-const stackName = isLocalStack ? 'tap-stack-localstack' : `TapStack${process.env.ENVIRONMENT_SUFFIX || 'dev'}`;
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const stackName = isLocalStack ? `localstack-stack-${environmentSuffix}` : `TapStack${environmentSuffix}`;
 
 // Extract outputs for testing
 const VPC_ID = outputs[`${stackName}-VPC-ID`] || outputs['VPCId'];
