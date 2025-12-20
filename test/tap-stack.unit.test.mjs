@@ -2,14 +2,16 @@ import { App, Stack } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.mjs';
 
-// Mock config that matches expected stack requirements
+// Mock config that matches ACTUAL stack requirements
 const mockConfig = {
   dev: {
     environment: 'dev',
     existingVpcId: 'vpc-12345678',
+    existingS3Bucket: 'test-bucket-dev',
+    sshCidrBlock: '10.0.0.0/16',
+    trustedOutboundCidrs: ['0.0.0.0/0'],
     instanceType: 't3.micro',
     keyPairName: 'test-key',
-    s3BucketName: 'test-bucket-dev',
     amiId: 'ami-12345678',
     subnetIds: ['subnet-12345678'],
     availabilityZones: ['us-east-1a'],
@@ -17,9 +19,11 @@ const mockConfig = {
   test: {
     environment: 'test',
     existingVpcId: 'vpc-12345678',
+    existingS3Bucket: 'test-bucket-test',
+    sshCidrBlock: '10.0.0.0/16',
+    trustedOutboundCidrs: ['0.0.0.0/0'],
     instanceType: 't3.micro',
     keyPairName: 'test-key',
-    s3BucketName: 'test-bucket-test',
     amiId: 'ami-12345678',
     subnetIds: ['subnet-12345678'],
     availabilityZones: ['us-east-1a'],
@@ -38,7 +42,8 @@ describe('TapStack Unit Tests', () => {
     app = new App({
       context: {
         environmentSuffix: 'dev',
-        environments: mockConfig
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
       }
     });
     
