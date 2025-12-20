@@ -1,4 +1,4 @@
-```
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, highly available AWS infrastructure for web application with VPC, subnets, ALB, EC2, and S3 in us-west-2'
 
