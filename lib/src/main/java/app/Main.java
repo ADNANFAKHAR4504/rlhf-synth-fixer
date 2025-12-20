@@ -4,25 +4,53 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
-import software.amazon.awscdk.services.ec2.*;
-import software.amazon.awscdk.services.iam.*;
-import software.amazon.awscdk.services.kms.*;
-import software.amazon.awscdk.services.lambda.*;
+import software.amazon.awscdk.services.ec2.InstanceClass;
+import software.amazon.awscdk.services.ec2.InstanceSize;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetSelection;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.iam.AccountRootPrincipal;
+import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.PolicyDocument;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.kms.Key;
+import software.amazon.awscdk.services.lambda.Code;
+import software.amazon.awscdk.services.lambda.Function;
 import software.amazon.awscdk.services.lambda.Runtime;
-import software.amazon.awscdk.services.logs.*;
-import software.amazon.awscdk.services.s3.*;
-import software.amazon.awscdk.services.cloudtrail.*;
-import software.amazon.awscdk.services.rds.*;
+import software.amazon.awscdk.services.logs.LogGroup;
+import software.amazon.awscdk.services.logs.RetentionDays;
+import software.amazon.awscdk.services.s3.BlockPublicAccess;
+import software.amazon.awscdk.services.s3.Bucket;
+import software.amazon.awscdk.services.s3.BucketEncryption;
+import software.amazon.awscdk.services.s3.LifecycleRule;
+import software.amazon.awscdk.services.s3.StorageClass;
+import software.amazon.awscdk.services.s3.Transition;
+import software.amazon.awscdk.services.cloudtrail.Trail;
+import software.amazon.awscdk.services.rds.DatabaseInstance;
+import software.amazon.awscdk.services.rds.DatabaseInstanceEngine;
+import software.amazon.awscdk.services.rds.MysqlEngineVersion;
+import software.amazon.awscdk.services.rds.MySqlInstanceEngineProps;
+import software.amazon.awscdk.services.rds.ParameterGroup;
+import software.amazon.awscdk.services.rds.SubnetGroup;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.RemovalPolicy;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-public class Main {
+public final class Main {
+    private Main() {
+    }
+
     public static void main(final String[] args) {
         App app = new App();
 
@@ -59,7 +87,7 @@ class TapStack extends Stack {
     private final String uniqueId;
     private final String timestamp;
 
-    public TapStack(final App scope, final String id, final StackProps props) {
+    TapStack(final App scope, final String id, final StackProps props) {
         super(scope, id, props);
 
         Object envSuffixObj = this.getNode().tryGetContext("environmentSuffix");
@@ -261,7 +289,7 @@ class TapStack extends Stack {
                 .build();
     }
     
-    private Bucket createSecureS3Bucket(Key s3KmsKey) {
+    private Bucket createSecureS3Bucket(final Key s3KmsKey) {
         // Create CloudWatch Log Group for S3 access logs
         LogGroup s3LogGroup = LogGroup.Builder.create(this, "S3AccessLogGroup" + uniqueId)
                 .logGroupName("/aws/s3/access-logs-" + uniqueId)
@@ -336,7 +364,7 @@ class TapStack extends Stack {
         return secureS3Bucket;
     }
     
-    private void createCloudTrail(Bucket s3Bucket, Key kmsKey) {
+    private void createCloudTrail(final Bucket s3Bucket, final Key kmsKey) {
         // Create CloudWatch Log Group for CloudTrail
         LogGroup cloudTrailLogGroup = LogGroup.Builder.create(this, "CloudTrailLogGroup" + uniqueId)
                 .logGroupName("/aws/cloudtrail/secure-infrastructure-" + uniqueId)
@@ -382,7 +410,7 @@ class TapStack extends Stack {
                 .build();
     }
     
-    private Function createSecureLambdaFunction(Vpc vpc, Key kmsKey, Bucket s3Bucket) {
+    private Function createSecureLambdaFunction(final Vpc vpc, final Key kmsKey, final Bucket s3Bucket) {
         // Create CloudWatch Log Group for Lambda
         LogGroup lambdaLogGroup = LogGroup.Builder.create(this, "LambdaLogGroup" + uniqueId)
                 .logGroupName("/aws/lambda/secure-function-" + uniqueId)
@@ -452,33 +480,33 @@ class TapStack extends Stack {
                 .runtime(Runtime.PYTHON_3_9)
                 .handler("index.handler")
                 .code(Code.fromInline(
-                        "import json\n" +
-                        "import boto3\n" +
-                        "import logging\n" +
-                        "import os\n" +
-                        "\n" +
-                        "logger = logging.getLogger()\n" +
-                        "logger.setLevel(logging.INFO)\n" +
-                        "\n" +
-                        "def handler(event, context):\n" +
-                        "    logger.info(f'Processing secure request: {json.dumps(event)}')\n" +
-                        "    \n" +
-                        "    # Get environment variables\n" +
-                        "    bucket_name = os.environ.get('S3_BUCKET_NAME')\n" +
-                        "    kms_key_id = os.environ.get('KMS_KEY_ID')\n" +
-                        "    \n" +
-                        "    # Example secure processing\n" +
-                        "    response = {\n" +
-                        "        'statusCode': 200,\n" +
-                        "        'body': json.dumps({\n" +
-                        "            'message': 'Processed securely',\n" +
-                        "            'bucket': bucket_name,\n" +
-                        "            'kms_key': kms_key_id,\n" +
-                        "            'input': event\n" +
-                        "        })\n" +
-                        "    }\n" +
-                        "    \n" +
-                        "    return response\n"
+                        "import json\n"
+                        + "import boto3\n"
+                        + "import logging\n"
+                        + "import os\n"
+                        + "\n"
+                        + "logger = logging.getLogger()\n"
+                        + "logger.setLevel(logging.INFO)\n"
+                        + "\n"
+                        + "def handler(event, context):\n"
+                        + "    logger.info(f'Processing secure request: {json.dumps(event)}')\n"
+                        + "    \n"
+                        + "    # Get environment variables\n"
+                        + "    bucket_name = os.environ.get('S3_BUCKET_NAME')\n"
+                        + "    kms_key_id = os.environ.get('KMS_KEY_ID')\n"
+                        + "    \n"
+                        + "    # Example secure processing\n"
+                        + "    response = {\n"
+                        + "        'statusCode': 200,\n"
+                        + "        'body': json.dumps({\n"
+                        + "            'message': 'Processed securely',\n"
+                        + "            'bucket': bucket_name,\n"
+                        + "            'kms_key': kms_key_id,\n"
+                        + "            'input': event\n"
+                        + "        })\n"
+                        + "    }\n"
+                        + "    \n"
+                        + "    return response\n"
                 ))
                 .role(lambdaRole)
                 .vpc(vpc)
@@ -497,7 +525,7 @@ class TapStack extends Stack {
                 .build();
     }
     
-    private void createSecureRdsInstance(Vpc vpc, Key rdsKmsKey, Key mainKmsKey) {
+    private void createSecureRdsInstance(final Vpc vpc, final Key rdsKmsKey, final Key mainKmsKey) {
         // Create security group for RDS
         SecurityGroup rdsSecurityGroup = SecurityGroup.Builder.create(this, "RDSSecurityGroup" + uniqueId)
                 .securityGroupName("RDSSecurityGroup-" + uniqueId)
@@ -572,7 +600,7 @@ class TapStack extends Stack {
                 .build();
     }
     
-    private void createSecurityGroups(Vpc vpc) {
+    private void createSecurityGroups(final Vpc vpc) {
         // Web tier security group
         SecurityGroup webSecurityGroup = SecurityGroup.Builder.create(this, "WebSecurityGroup" + uniqueId)
                 .securityGroupName("WebSecurityGroup-" + uniqueId)
