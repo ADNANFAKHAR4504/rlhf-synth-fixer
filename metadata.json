@@ -1,26 +1,12 @@
 {
-  "project_name": "iac-test-automations",
-  "description": "Infrastructure as Code test automation project",
-  "aws_services": [
-    "Lambda",
-    "S3",
-    "CloudFormation",
-    "SageMaker",
-    "CloudWatch"
-  ],
-  "iac_tools": [
-    "AWS CDK",
-    "Terraform",
-    "Pulumi"
-  ],
-  "programming_languages": [
-    "TypeScript",
-    "Python",
-    "Go"
-  ],
-  "deployment_environments": [
-    "dev",
-    "staging",
-    "prod"
-  ]
+  "platform": "AWS",
+  "language": "typescript",
+  "complexity": "medium",
+  "turn_type": "implementation",
+  "po_id": "PO-001",
+  "team": "infrastructure",
+  "startedAt": "2024-12-20T00:00:00Z",
+  "subtask": "cdk-infrastructure",
+  "provider": "aws",
+  "subject_labels": ["Infrastructure", "CDK", "AWS"]
 }
