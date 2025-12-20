@@ -310,13 +310,14 @@ public class MainIntegrationTest {
         if (!deploymentOutputs.isEmpty()) {
             try {
                 // Get VPC ID from outputs
-                String vpcId = null;
+                String vpcIdTemp = null;
                 for (String key : deploymentOutputs.keySet()) {
                     if (key.startsWith("VPCID")) {
-                        vpcId = (String) deploymentOutputs.get(key);
+                        vpcIdTemp = (String) deploymentOutputs.get(key);
                         break;
                     }
                 }
+                final String vpcId = vpcIdTemp;
 
                 if (vpcId != null) {
                     // Describe instances in the VPC
