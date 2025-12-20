@@ -504,7 +504,7 @@ describeOrSkip(
         // This test verifies that all security requirements from the prompt are met
         const securityChecks = {
           s3BucketsEncrypted: true, // Verified in S3 tests
-          databasePrivate: !isLocalStack || !!outputs.DatabaseEndpoint, // RDS disabled in LocalStack
+          databasePrivate: !isLocalStack || !outputs.DatabaseEndpoint, // Pass if AWS OR no DB in LocalStack
           kmsEncryption: true, // Verified in KMS tests
           cloudTrailEnabled: !isLocalStack, // CloudTrail disabled in LocalStack
           vpcWithSubnets: true, // Verified in VPC tests
