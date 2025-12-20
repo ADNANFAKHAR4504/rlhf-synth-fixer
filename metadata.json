@@ -20,5 +20,6 @@
     "KMS",
     "S3"
   ],
-  "startedAt": "2025-08-08T16:38:51.045Z"
+  "startedAt": "2025-08-08T16:38:51.045Z",
+  "training_quality": 9
 }
