@@ -204,7 +204,8 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('RDS Database', () => {
-    test('RDS instance is created with correct properties', () => {
+    test('RDS instance is created with correct properties (AWS mode)', () => {
+      // In test mode (non-LocalStack), RDS should be created
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         DBInstanceIdentifier: `migration-database-${environmentSuffix}`,
         Engine: 'mysql',
@@ -245,6 +246,34 @@ describe('TapStack Unit Tests', () => {
         'AWS::SecretsManager::SecretTargetAttachment',
         1
       );
+    });
+
+    test('RDS resources NOT created in LocalStack mode', () => {
+      // Test with LocalStack detection (AWS_ENDPOINT_URL set)
+      const originalEnv = process.env.AWS_ENDPOINT_URL;
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStackLocalStack', {
+        environmentSuffix: 'pr8504', // pr prefix indicates LocalStack in CI
+      });
+      const testTemplate = Template.fromStack(testStack);
+
+      // Verify RDS resources are NOT created in LocalStack mode
+      testTemplate.resourceCountIs('AWS::RDS::DBInstance', 0);
+      testTemplate.resourceCountIs('AWS::RDS::DBSubnetGroup', 0);
+      testTemplate.resourceCountIs('AWS::SecretsManager::Secret', 0);
+      testTemplate.resourceCountIs('AWS::SecretsManager::SecretTargetAttachment', 0);
+
+      // Verify web server security group is still created
+      testTemplate.resourceCountIs('AWS::EC2::SecurityGroup', 1); // Only web server SG
+
+      // Restore original environment
+      if (originalEnv) {
+        process.env.AWS_ENDPOINT_URL = originalEnv;
+      } else {
+        delete process.env.AWS_ENDPOINT_URL;
+      }
     });
   });
 
@@ -400,7 +429,8 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('Database endpoint output is created', () => {
+    test('Database endpoint output is created (AWS mode only)', () => {
+      // In AWS mode (test environment), RDS outputs should exist
       template.hasOutput('DatabaseEndpoint', {
         Description: 'RDS database endpoint',
       });
@@ -412,10 +442,39 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('Database credentials secret output is created', () => {
+    test('Database credentials secret output is created (AWS mode only)', () => {
+      // In AWS mode (test environment), RDS outputs should exist
       template.hasOutput('DatabaseCredentialsSecret', {
         Description: 'AWS Secrets Manager secret name for database credentials',
       });
+    });
+
+    test('RDS outputs NOT created in LocalStack mode', () => {
+      // Test with LocalStack detection
+      const originalEnv = process.env.AWS_ENDPOINT_URL;
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStackLocalStackOutputs', {
+        environmentSuffix: 'pr8504',
+      });
+      const testTemplate = Template.fromStack(testStack);
+      const outputs = testTemplate.toJSON().Outputs || {};
+
+      // Verify RDS outputs are NOT present in LocalStack mode
+      expect(outputs.DatabaseEndpoint).toBeUndefined();
+      expect(outputs.DatabaseCredentialsSecret).toBeUndefined();
+
+      // Verify other outputs still exist
+      expect(outputs.VpcId).toBeDefined();
+      expect(outputs.LogsBucketName).toBeDefined();
+
+      // Restore original environment
+      if (originalEnv) {
+        process.env.AWS_ENDPOINT_URL = originalEnv;
+      } else {
+        delete process.env.AWS_ENDPOINT_URL;
+      }
     });
 
     test('Session Manager log group output is created', () => {

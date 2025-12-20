@@ -27,6 +27,12 @@ export class TapStack extends cdk.Stack {
     // Application Insights is a Pro/Enterprise feature in LocalStack
     const enableApplicationInsights = props?.enableApplicationInsights ?? false;
 
+    // LocalStack detection - check early to determine resource creation
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+      props?.environmentSuffix?.startsWith('pr'); // CI uses pr prefix
+
     // Create VPC with CIDR 10.0.0.0/16
     // Note: NAT Gateway support in LocalStack Community is limited
     // Using PRIVATE_ISOLATED instead of PRIVATE_WITH_EGRESS to avoid NAT Gateway requirement
@@ -224,73 +230,76 @@ EOF`,
       },
     });
 
-    // Security Group for RDS
-    const dbSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'DatabaseSecurityGroup',
-      {
+    // RDS resources are only created for AWS, not LocalStack Community
+    // LocalStack Community does not support RDS service in CI environment
+    let database: rds.DatabaseInstance | undefined;
+    let dbSecurityGroup: ec2.SecurityGroup | undefined;
+    let dbSubnetGroup: rds.SubnetGroup | undefined;
+
+    if (!isLocalStack) {
+      // Security Group for RDS
+      dbSecurityGroup = new ec2.SecurityGroup(
+        this,
+        'DatabaseSecurityGroup',
+        {
+          vpc,
+          securityGroupName: `database-sg-${environmentSuffix}`,
+          description: 'Security group for RDS database',
+          allowAllOutbound: false,
+        }
+      );
+
+      dbSecurityGroup.addIngressRule(
+        ec2.Peer.securityGroupId(webServerSg.securityGroupId),
+        ec2.Port.tcp(3306),
+        'Allow MySQL access from web server'
+      );
+
+      // RDS Subnet Group
+      dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
         vpc,
-        securityGroupName: `database-sg-${environmentSuffix}`,
-        description: 'Security group for RDS database',
-        allowAllOutbound: false,
-      }
-    );
+        subnetGroupName: `database-subnet-group-${environmentSuffix}`,
+        description: 'Subnet group for RDS database',
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED, // Updated for LocalStack compatibility
+        },
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
 
-    dbSecurityGroup.addIngressRule(
-      ec2.Peer.securityGroupId(webServerSg.securityGroupId),
-      ec2.Port.tcp(3306),
-      'Allow MySQL access from web server'
-    );
-
-    // RDS Subnet Group
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
-      vpc,
-      subnetGroupName: `database-subnet-group-${environmentSuffix}`,
-      description: 'Subnet group for RDS database',
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED, // Updated for LocalStack compatibility
-      },
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    // RDS Instance in private subnet with automated backups
-    const database = new rds.DatabaseInstance(this, 'MigrationDatabase', {
-      instanceIdentifier: `migration-database-${environmentSuffix}`,
-      engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_37,
-      }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      vpc,
-      subnetGroup: dbSubnetGroup,
-      securityGroups: [dbSecurityGroup],
-      databaseName: 'migrationdb',
-      credentials: rds.Credentials.fromGeneratedSecret('dbadmin', {
-        secretName: `migration-db-credentials-${environmentSuffix}`,
-      }),
-      backupRetention: cdk.Duration.days(7),
-      deleteAutomatedBackups: true,
-      deletionProtection: false,
-      multiAz: false,
-      publiclyAccessible: false,
-      storageEncrypted: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      // Enhanced monitoring may not be fully supported in LocalStack Community
-      monitoringInterval: cdk.Duration.seconds(0), // Disable enhanced monitoring for LocalStack
-      // Performance Insights not supported for t3.micro instances
-      enablePerformanceInsights: false,
-    });
+      // RDS Instance in private subnet with automated backups
+      database = new rds.DatabaseInstance(this, 'MigrationDatabase', {
+        instanceIdentifier: `migration-database-${environmentSuffix}`,
+        engine: rds.DatabaseInstanceEngine.mysql({
+          version: rds.MysqlEngineVersion.VER_8_0_37,
+        }),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        vpc,
+        subnetGroup: dbSubnetGroup,
+        securityGroups: [dbSecurityGroup],
+        databaseName: 'migrationdb',
+        credentials: rds.Credentials.fromGeneratedSecret('dbadmin', {
+          secretName: `migration-db-credentials-${environmentSuffix}`,
+        }),
+        backupRetention: cdk.Duration.days(7),
+        deleteAutomatedBackups: true,
+        deletionProtection: false,
+        multiAz: false,
+        publiclyAccessible: false,
+        storageEncrypted: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        // Enhanced monitoring may not be fully supported in LocalStack Community
+        monitoringInterval: cdk.Duration.seconds(0), // Disable enhanced monitoring for LocalStack
+        // Performance Insights not supported for t3.micro instances
+        enablePerformanceInsights: false,
+      });
+    }
 
     // S3 Bucket for application logs with blocked public access
     // Note: autoDeleteObjects requires Lambda custom resource which needs ECR (LocalStack Pro)
     // For LocalStack Community, we use removalPolicy.DESTROY without autoDeleteObjects
-    const isLocalStack =
-      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-      process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-      props?.environmentSuffix?.startsWith('pr'); // CI uses pr prefix
-
     const logsBucket = new s3.Bucket(this, 'ApplicationLogsBucket', {
       bucketName: `migration-app-logs-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -392,19 +401,22 @@ EOF`,
       description: 'Public IP address of the web server',
     });
 
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-      value: database.instanceEndpoint.hostname,
-      description: 'RDS database endpoint',
-    });
+    // RDS outputs only for AWS (not LocalStack)
+    if (!isLocalStack && database) {
+      new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+        value: database.instanceEndpoint.hostname,
+        description: 'RDS database endpoint',
+      });
+
+      new cdk.CfnOutput(this, 'DatabaseCredentialsSecret', {
+        value: database.secret?.secretName || 'N/A',
+        description: 'AWS Secrets Manager secret name for database credentials',
+      });
+    }
 
     new cdk.CfnOutput(this, 'LogsBucketName', {
       value: logsBucket.bucketName,
       description: 'S3 bucket name for application logs',
-    });
-
-    new cdk.CfnOutput(this, 'DatabaseCredentialsSecret', {
-      value: database.secret?.secretName || 'N/A',
-      description: 'AWS Secrets Manager secret name for database credentials',
     });
 
     new cdk.CfnOutput(this, 'SessionManagerLogGroupName', {
