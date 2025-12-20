@@ -207,3 +207,124 @@ describe('TapStack Error Handling Tests', () => {
     delete process.env.CDK_LOCAL;
   });
 });
+
+// Test missing required config fields
+describe('TapStack Missing Config Field Tests', () => {
+  test('Throws error when prod config is missing', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    const configWithoutProd = {
+      dev: { ...mockConfig.dev }
+    };
+    
+    const app = new App({
+      context: {
+        environmentSuffix: 'prod',
+        environments: configWithoutProd,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    expect(() => {
+      new TapStack(app, 'NoProdConfigStack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+        environmentSuffix: 'prod',
+        config: configWithoutProd
+      });
+    }).toThrow("No configuration found for 'prod'");
+    
+    delete process.env.CDK_LOCAL;
+  });
+
+  test('Throws error when dev fallback is also missing', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    const emptyConfig = {};
+    
+    const app = new App({
+      context: {
+        environmentSuffix: 'qa',
+        environments: emptyConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    expect(() => {
+      new TapStack(app, 'NoDevFallbackStack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+        environmentSuffix: 'qa',
+        config: emptyConfig
+      });
+    }).toThrow("even 'dev' is missing");
+    
+    delete process.env.CDK_LOCAL;
+  });
+
+  test('Throws error when VPC ID is missing', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    const configWithoutVpc = {
+      dev: { ...mockConfig.dev, existingVpcId: null }
+    };
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    expect(() => {
+      new TapStack(app, 'NoVpcStack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+        environmentSuffix: 'dev',
+        config: configWithoutVpc
+      });
+    }).toThrow('VPC ID must be provided');
+    
+    delete process.env.CDK_LOCAL;
+  });
+
+  test('Throws error when S3 bucket is missing', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    const configWithoutS3 = {
+      dev: { ...mockConfig.dev, existingS3Bucket: null }
+    };
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    expect(() => {
+      new TapStack(app, 'NoS3Stack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+        environmentSuffix: 'dev',
+        config: configWithoutS3
+      });
+    }).toThrow('S3 bucket must be provided');
+    
+    delete process.env.CDK_LOCAL;
+  });
+
+  test('Handles missing environment in config gracefully', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    const configWithoutEnv = {
+      dev: { ...mockConfig.dev, environment: null }
+    };
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    // Should not throw but also not create resources
+    const stack = new TapStack(app, 'NoEnvStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: configWithoutEnv
+    });
+    
+    expect(stack).toBeDefined();
+    expect(stack.vpc).toBeUndefined(); // Resources shouldn't be created
+    
+    delete process.env.CDK_LOCAL;
+  });
+});
