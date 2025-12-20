@@ -7,104 +7,10 @@ describe('TapStack Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    // Create a mock template structure for testing since parsing CloudFormation YAML is complex
-    template = {
-      AWSTemplateFormatVersion: '2010-09-09',
-      Description: 'Serverless infrastructure with Lambda function triggered by S3 events',
-      Parameters: {
-                    S3BucketName: {
-              Type: 'String',
-              Description: 'Name of the existing S3 bucket',
-              Default: 'iac-291198',
-              AllowedPattern: '^[a-z0-9][a-z0-9.-]*[a-z0-9]$',
-              ConstraintDescription: 'S3 bucket name must be valid'
-            },
-        CloudWatchLogGroupName: { 
-          Type: 'String',
-          Description: 'Name of the existing CloudWatch Log Group',
-          Default: 'iac-291198',
-          AllowedPattern: '^[a-zA-Z0-9_/.-]+$',
-          ConstraintDescription: 'CloudWatch Log Group name must be valid'
-        }
-      },
-      Resources: {
-        LambdaExecutionRole: { 
-          Type: 'AWS::IAM::Role',
-          Properties: {
-            AssumeRolePolicyDocument: {
-              Version: '2012-10-17',
-              Statement: [{
-                Effect: 'Allow',
-                Principal: { Service: 'lambda.amazonaws.com' },
-                Action: 'sts:AssumeRole'
-              }]
-            },
-            ManagedPolicyArns: ['arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'],
-            Policies: [{
-              PolicyName: 'S3AndCloudWatchAccess',
-              PolicyDocument: {
-                Version: '2012-10-17',
-                Statement: [
-                  {
-                    Effect: 'Allow',
-                    Action: ['s3:GetObject', 's3:PutObject'],
-                    Resource: 'arn:aws:s3:::S3BucketName/*'
-                  },
-                  {
-                    Effect: 'Allow',
-                    Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-                    Resource: 'CloudWatchLogGroupName:*'
-                  }
-                ]
-              }
-            }]
-          }
-        },
-        S3FileProcessorFunction: { 
-          Type: 'AWS::Lambda::Function',
-          Properties: {
-            Runtime: 'nodejs22.x',
-            Handler: 'index.handler',
-            Timeout: 30,
-            MemorySize: 128,
-            Environment: {
-              Variables: {
-                LOG_GROUP_NAME: 'CloudWatchLogGroupName'
-              }
-            },
-            Code: {
-              ZipFile: 'console.log("Lambda function code");'
-            },
-            Role: 'LambdaExecutionRole.Arn'
-          }
-        },
-        LambdaInvokePermission: { 
-          Type: 'AWS::Lambda::Permission',
-          Properties: {
-            Action: 'lambda:InvokeFunction',
-            Principal: 's3.amazonaws.com',
-            SourceArn: 'arn:aws:s3:::S3BucketName'
-          }
-        }
-      },
-      Outputs: {
-        LambdaFunctionName: { 
-          Description: 'Name of the Lambda function',
-          Value: 'S3FileProcessorFunction',
-          Export: { Name: 'S3FileProcessorFunctionName' }
-        },
-        LambdaFunctionArn: { 
-          Description: 'ARN of the Lambda function',
-          Value: 'S3FileProcessorFunction.Arn',
-          Export: { Name: 'S3FileProcessorFunctionArn' }
-        },
-        LambdaExecutionRoleArn: { 
-          Description: 'ARN of the Lambda execution role',
-          Value: 'LambdaExecutionRole.Arn',
-          Export: { Name: 'LambdaExecutionRoleArn' }
-        }
-      }
-    };
+    // Read the actual CloudFormation JSON template to ensure tests match real structure
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    template = JSON.parse(templateContent);
   });
 
   describe('Template Structure', () => {
@@ -192,25 +98,25 @@ describe('TapStack Unit Tests', () => {
     test('should have S3 and CloudWatch access policy', () => {
       const role = template.Resources.LambdaExecutionRole;
       const policies = role.Properties.Policies;
-      
+
       expect(policies).toHaveLength(1);
       expect(policies[0].PolicyName).toBe('S3AndCloudWatchAccess');
-      
+
       const policyDoc = policies[0].PolicyDocument;
       expect(policyDoc.Version).toBe('2012-10-17');
       expect(policyDoc.Statement).toHaveLength(2);
-      
-      // Check S3 permissions
+
+      // Check S3 permissions - should match actual template (GetObject and GetObjectVersion, NOT PutObject)
       const s3Statement = policyDoc.Statement[0];
       expect(s3Statement.Effect).toBe('Allow');
-      expect(s3Statement.Action).toContain('s3:GetObject');
-      expect(s3Statement.Action).toContain('s3:PutObject');
-      
+      expect(s3Statement.Action).toEqual(['s3:GetObject', 's3:GetObjectVersion']);
+      expect(s3Statement.Resource).toEqual({ 'Fn::Sub': 'arn:aws:s3:::${S3BucketName}/*' });
+
       // Check CloudWatch permissions
       const cloudWatchStatement = policyDoc.Statement[1];
       expect(cloudWatchStatement.Effect).toBe('Allow');
-      expect(cloudWatchStatement.Action).toContain('logs:CreateLogStream');
-      expect(cloudWatchStatement.Action).toContain('logs:PutLogEvents');
+      expect(cloudWatchStatement.Action).toEqual(['logs:CreateLogStream', 'logs:PutLogEvents']);
+      expect(cloudWatchStatement.Resource).toEqual({ 'Fn::Sub': 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CloudWatchLogGroupName}:*' });
     });
   });
 
@@ -218,9 +124,25 @@ describe('TapStack Unit Tests', () => {
     test('should have correct runtime and handler', () => {
       const lambda = template.Resources.S3FileProcessorFunction;
       const props = lambda.Properties;
-      
+
       expect(props.Runtime).toBe('nodejs22.x');
       expect(props.Handler).toBe('index.handler');
+    });
+
+    test('should use a supported Node.js runtime version', () => {
+      const lambda = template.Resources.S3FileProcessorFunction;
+      const runtime = lambda.Properties.Runtime;
+
+      // Validate runtime is nodejs and version number
+      expect(runtime).toMatch(/^nodejs\d+\.x$/);
+
+      // Extract version number and validate it's reasonable (>= 18)
+      const versionMatch = runtime.match(/nodejs(\d+)\.x/);
+      expect(versionMatch).not.toBeNull();
+      if (versionMatch) {
+        const version = parseInt(versionMatch[1], 10);
+        expect(version).toBeGreaterThanOrEqual(18);
+      }
     });
 
     test('should have correct timeout and memory settings', () => {
@@ -234,8 +156,10 @@ describe('TapStack Unit Tests', () => {
     test('should have environment variables', () => {
       const lambda = template.Resources.S3FileProcessorFunction;
       const envVars = lambda.Properties.Environment.Variables;
-      
+
       expect(envVars.LOG_GROUP_NAME).toBeDefined();
+      // Should reference the CloudWatchLogGroupName parameter
+      expect(envVars.LOG_GROUP_NAME).toEqual({ 'Ref': 'CloudWatchLogGroupName' });
     });
 
     test('should have inline code', () => {
@@ -250,9 +174,10 @@ describe('TapStack Unit Tests', () => {
     test('should reference the execution role', () => {
       const lambda = template.Resources.S3FileProcessorFunction;
       const roleRef = lambda.Properties.Role;
-      
+
       expect(roleRef).toBeDefined();
-      expect(roleRef).toContain('LambdaExecutionRole');
+      // Should use Fn::GetAtt intrinsic function to reference the role ARN
+      expect(roleRef).toEqual({ 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] });
     });
   });
 
@@ -260,10 +185,14 @@ describe('TapStack Unit Tests', () => {
     test('should allow S3 to invoke Lambda', () => {
       const permission = template.Resources.LambdaInvokePermission;
       const props = permission.Properties;
-      
+
       expect(props.Action).toBe('lambda:InvokeFunction');
       expect(props.Principal).toBe('s3.amazonaws.com');
       expect(props.SourceArn).toBeDefined();
+      // Should reference the S3 bucket parameter
+      expect(props.SourceArn).toEqual({ 'Fn::Sub': 'arn:aws:s3:::${S3BucketName}' });
+      // Should reference the Lambda function
+      expect(props.FunctionName).toEqual({ 'Ref': 'S3FileProcessorFunction' });
     });
   });
 
@@ -278,23 +207,23 @@ describe('TapStack Unit Tests', () => {
   describe('Outputs', () => {
     test('should export Lambda function name', () => {
       const output = template.Outputs.LambdaFunctionName;
-      expect(output.Description).toBeDefined();
-      expect(output.Value).toBeDefined();
-      expect(output.Export.Name).toBeDefined();
+      expect(output.Description).toBe('Name of the Lambda function');
+      expect(output.Value).toEqual({ 'Ref': 'S3FileProcessorFunction' });
+      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-LambdaFunctionName' });
     });
 
     test('should export Lambda function ARN', () => {
       const output = template.Outputs.LambdaFunctionArn;
-      expect(output.Description).toBeDefined();
-      expect(output.Value).toBeDefined();
-      expect(output.Export.Name).toBeDefined();
+      expect(output.Description).toBe('ARN of the Lambda function');
+      expect(output.Value).toEqual({ 'Fn::GetAtt': ['S3FileProcessorFunction', 'Arn'] });
+      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-LambdaFunctionArn' });
     });
 
     test('should export Lambda execution role ARN', () => {
       const output = template.Outputs.LambdaExecutionRoleArn;
-      expect(output.Description).toBeDefined();
-      expect(output.Value).toBeDefined();
-      expect(output.Export.Name).toBeDefined();
+      expect(output.Description).toBe('ARN of the Lambda execution role');
+      expect(output.Value).toEqual({ 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] });
+      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-LambdaExecutionRoleArn' });
     });
   });
 
