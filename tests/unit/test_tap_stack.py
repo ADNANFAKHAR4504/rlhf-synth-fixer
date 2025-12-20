@@ -1,8 +1,16 @@
 # tests/unit/test_tap_stack.py
+import os
+
 import pulumi
 import pytest
 from pulumi.runtime import mocks
 from pulumi.runtime import test as pulumi_test
+
+
+def is_localstack() -> bool:
+    """Check if running in LocalStack environment."""
+    endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
+    return "localhost" in endpoint or "localstack" in endpoint
 
 # ------------------------------------------------------------------------------
 # 1) Set mocks BEFORE importing any Pulumi program code
@@ -78,7 +86,9 @@ def test_constructs_dev_core_resources():
     assert getattr(s, "vpc", None) is not None
     assert getattr(s, "alb", None) is not None
     assert getattr(s, "asg", None) is not None
-    assert getattr(s, "rds", None) is not None
+    # RDS is skipped in LocalStack environment
+    if not is_localstack():
+        assert getattr(s, "rds", None) is not None
     assert getattr(s, "sns_topic", None) is not None
 
 
@@ -88,7 +98,9 @@ def test_constructs_prod_core_resources():
     assert getattr(s, "vpc", None) is not None
     assert getattr(s, "alb", None) is not None
     assert getattr(s, "asg", None) is not None
-    assert getattr(s, "rds", None) is not None
+    # RDS is skipped in LocalStack environment
+    if not is_localstack():
+        assert getattr(s, "rds", None) is not None
     assert getattr(s, "sns_topic", None) is not None
 
 
