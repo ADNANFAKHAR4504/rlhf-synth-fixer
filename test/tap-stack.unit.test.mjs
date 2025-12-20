@@ -21,7 +21,8 @@ describe('TapStack Unit Tests', () => {
 
   describe('S3 Bucket', () => {
     test('should create S3 bucket', () => {
-      template.resourceCountIs('AWS::S3::Bucket', Match.anyValue());
+      // Stack creates 2 buckets: websiteBucket and logBucket (for CloudFront logs)
+      template.resourceCountIs('AWS::S3::Bucket', 2);
     });
 
     test('should have bucket encryption configured', () => {
@@ -57,9 +58,12 @@ describe('TapStack Unit Tests', () => {
 
     test('should have SSL configured when not in LocalStack', () => {
       if (!isLocalStack) {
+        // Verify distribution has HTTPS redirect configured in default behavior
         template.hasResourceProperties('AWS::CloudFront::Distribution', {
           DistributionConfig: Match.objectLike({
-            ViewerCertificate: Match.anyValue(),
+            DefaultCacheBehavior: Match.objectLike({
+              ViewerProtocolPolicy: 'redirect-to-https',
+            }),
           }),
         });
       } else {
