@@ -1,0 +1,26 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "292045-cdk-java",
+  "team": "5",
+  "startedAt": "2025-08-26T18:10:33.335Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "CloudWatchLogs",
+    "Lambda",
+    "RDS"
+  ]
+}
