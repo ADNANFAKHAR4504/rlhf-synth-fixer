@@ -356,14 +356,12 @@ deploy_cdk() {
 
     # Deploy based on language
     print_status $YELLOW "🚀 Deploying stacks..."
-
+    
     case "$language" in
         "ts"|"js")
             cdklocal deploy --all --require-approval never \
                 -c environmentSuffix="$env_suffix" \
                 --no-rollback \
-                --no-asset-metadata \
-                --no-path-metadata \
                 --verbose 2>&1
             local exit_code=$?
             ;;
@@ -371,8 +369,6 @@ deploy_cdk() {
             cdklocal deploy --all --require-approval never \
                 -c environmentSuffix="$env_suffix" \
                 --no-rollback \
-                --no-asset-metadata \
-                --no-path-metadata \
                 --verbose 2>&1
             local exit_code=$?
             ;;
@@ -380,8 +376,6 @@ deploy_cdk() {
             cdklocal deploy --all --require-approval never \
                 -c environmentSuffix="$env_suffix" \
                 --no-rollback \
-                --no-asset-metadata \
-                --no-path-metadata \
                 --verbose 2>&1
             local exit_code=$?
             ;;
@@ -389,8 +383,6 @@ deploy_cdk() {
             cdklocal deploy --all --require-approval never \
                 -c environmentSuffix="$env_suffix" \
                 --no-rollback \
-                --no-asset-metadata \
-                --no-path-metadata \
                 --verbose 2>&1
             local exit_code=$?
             ;;
@@ -406,8 +398,6 @@ deploy_cdk() {
             -c environmentSuffix="$env_suffix" \
             --force \
             --no-rollback \
-            --no-asset-metadata \
-            --no-path-metadata \
             --verbose 2>&1
         local exit_code=$?
         if [ $exit_code -ne 0 ]; then
