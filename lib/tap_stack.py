@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -70,6 +71,12 @@ import pulumi
 import pulumi_aws as aws
 import pulumi_random as random
 from pulumi import ComponentResource, Output, ResourceOptions
+
+# Detect LocalStack environment (RDS service not available in LocalStack CI)
+def is_localstack() -> bool:
+    """Check if running in LocalStack environment."""
+    endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
+    return "localhost" in endpoint or "localstack" in endpoint
 
 # =============================================================================
 # CONSTANTS & ENV MATRIX
@@ -440,60 +447,63 @@ class TapStack(ComponentResource):
 
         # ---------------------------------------------------------------------
         # 4) RDS (Multi-AZ), SubnetGroup, Encryption, Backups
+        # Skip RDS in LocalStack (service not enabled in CI)
         # ---------------------------------------------------------------------
-        rds_subnet_group = aws.rds.SubnetGroup(
-            f"{env}-rds-subnets",
-            subnet_ids=[s.id for s in self.private_subnets],
-            tags=tags,
-            opts=ResourceOptions(parent=self),
-        )
+        self.rds = None  # Initialize to None for LocalStack
+        if not is_localstack():
+            rds_subnet_group = aws.rds.SubnetGroup(
+                f"{env}-rds-subnets",
+                subnet_ids=[s.id for s in self.private_subnets],
+                tags=tags,
+                opts=ResourceOptions(parent=self),
+            )
 
-        self.rds = aws.rds.Instance(
-            f"{env}-rds",
-            identifier=f"{env}-db",
-            allocated_storage=cfg["db_storage_gb"],
-            storage_type="gp2",
-            engine="mysql",
-            engine_version="8.0",
-            instance_class=cfg["db_class"],
-            db_subnet_group_name=rds_subnet_group.name,
-            db_name=f"{env}db",
-            username=f"{env}_admin",
-            password=db_password.result,  # Pulumi will treat as secret
-            publicly_accessible=False,
-            multi_az=True,  # HA requirement
-            storage_encrypted=True,
-            # Note: Deletion is allowed in Dev and not in Prod MOD!
-            deletion_protection=cfg["rds_deletion_protection"],
-            # True for dev, False for prod
-            skip_final_snapshot=not cfg["rds_deletion_protection"],
-            final_snapshot_identifier=(
-                f"{env}-rds-final-snapshot" if cfg["rds_deletion_protection"] else None
-            ),
-            backup_retention_period=7,
-            backup_window=cfg["rds_backup_window"],
-            maintenance_window=cfg["rds_maintenance_window"],
-            vpc_security_group_ids=[rds_sg.id],
-            tags=tags,
-            opts=ResourceOptions(parent=self),
-        )
+            self.rds = aws.rds.Instance(
+                f"{env}-rds",
+                identifier=f"{env}-db",
+                allocated_storage=cfg["db_storage_gb"],
+                storage_type="gp2",
+                engine="mysql",
+                engine_version="8.0",
+                instance_class=cfg["db_class"],
+                db_subnet_group_name=rds_subnet_group.name,
+                db_name=f"{env}db",
+                username=f"{env}_admin",
+                password=db_password.result,  # Pulumi will treat as secret
+                publicly_accessible=False,
+                multi_az=True,  # HA requirement
+                storage_encrypted=True,
+                # Note: Deletion is allowed in Dev and not in Prod MOD!
+                deletion_protection=cfg["rds_deletion_protection"],
+                # True for dev, False for prod
+                skip_final_snapshot=not cfg["rds_deletion_protection"],
+                final_snapshot_identifier=(
+                    f"{env}-rds-final-snapshot" if cfg["rds_deletion_protection"] else None
+                ),
+                backup_retention_period=7,
+                backup_window=cfg["rds_backup_window"],
+                maintenance_window=cfg["rds_maintenance_window"],
+                vpc_security_group_ids=[rds_sg.id],
+                tags=tags,
+                opts=ResourceOptions(parent=self),
+            )
 
-        # Update DB secret with the actual endpoint after RDS is ready
-        aws.secretsmanager.SecretVersion(
-            f"{env}-db-secret-final",
-            secret_id=self.db_secret.id,
-            secret_string=Output.all(self.rds.endpoint, db_password.result).apply(
-                lambda args: json.dumps({
-                    "username": f"{env}_admin",
-                    "password": args[1],
-                    "engine": "mysql",
-                    "host": args[0],
-                    "port": 3306,
-                    "dbname": f"{env}_db",
-                })
-            ),
-            opts=ResourceOptions(parent=self.db_secret, depends_on=[self.rds]),
-        )
+            # Update DB secret with the actual endpoint after RDS is ready
+            aws.secretsmanager.SecretVersion(
+                f"{env}-db-secret-final",
+                secret_id=self.db_secret.id,
+                secret_string=Output.all(self.rds.endpoint, db_password.result).apply(
+                    lambda args: json.dumps({
+                        "username": f"{env}_admin",
+                        "password": args[1],
+                        "engine": "mysql",
+                        "host": args[0],
+                        "port": 3306,
+                        "dbname": f"{env}_db",
+                    })
+                ),
+                opts=ResourceOptions(parent=self.db_secret, depends_on=[self.rds]),
+            )
 
         # ---------------------------------------------------------------------
         # 5) IAM (Least Privilege) for EC2
@@ -837,23 +847,25 @@ systemctl restart httpd
             opts=ResourceOptions(parent=self),
         )
 
-        # RDS CPU high -> notify
-        self.rds_cpu_high = aws.cloudwatch.MetricAlarm(
-            f"{env}-rds-cpu-high",
-            name=f"{self.env}-rds-cpu-high",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=2,
-            metric_name="CPUUtilization",
-            namespace="AWS/RDS",
-            period=300,
-            statistic="Average",
-            threshold=80,
-            alarm_description=f"{env} RDS CPU high",
-            alarm_actions=[self.sns_topic.arn],
-            dimensions={"DBInstanceIdentifier": self.rds.id},
-            tags=tags,
-            opts=ResourceOptions(parent=self),
-        )
+        # RDS CPU high -> notify (skip in LocalStack)
+        self.rds_cpu_high = None
+        if self.rds is not None:
+            self.rds_cpu_high = aws.cloudwatch.MetricAlarm(
+                f"{env}-rds-cpu-high",
+                name=f"{self.env}-rds-cpu-high",
+                comparison_operator="GreaterThanThreshold",
+                evaluation_periods=2,
+                metric_name="CPUUtilization",
+                namespace="AWS/RDS",
+                period=300,
+                statistic="Average",
+                threshold=80,
+                alarm_description=f"{env} RDS CPU high",
+                alarm_actions=[self.sns_topic.arn],
+                dimensions={"DBInstanceIdentifier": self.rds.id},
+                tags=tags,
+                opts=ResourceOptions(parent=self),
+            )
 
         # ---------------------------------------------------------------------
         # 10) EXPORTS + SELF ATTRIBUTES FOR TESTS
@@ -869,7 +881,8 @@ systemctl restart httpd
         pulumi.export("alb_url", alb_url)
         pulumi.export("environment_endpoint", env_ep)
         pulumi.export("health_endpoint", health_ep)
-        pulumi.export("rds_endpoint", self.rds.endpoint)
+        if self.rds is not None:
+            pulumi.export("rds_endpoint", self.rds.endpoint)
         pulumi.export("sns_topic_arn", self.sns_topic.arn)
         pulumi.export("db_credentials_secret_arn", self.db_secret.arn)
         pulumi.export("app_config_secret_arn", self.app_config_secret.arn)
@@ -884,7 +897,8 @@ systemctl restart httpd
         pulumi.export(f"{env}_alb_url", alb_url)
         pulumi.export(f"{env}_environment_endpoint", env_ep)
         pulumi.export(f"{env}_health_endpoint", health_ep)
-        pulumi.export(f"{env}_rds_endpoint", self.rds.endpoint)
+        if self.rds is not None:
+            pulumi.export(f"{env}_rds_endpoint", self.rds.endpoint)
         pulumi.export(f"{env}_sns_topic_arn", self.sns_topic.arn)
         pulumi.export(f"{env}_db_credentials_secret_arn", self.db_secret.arn)
         pulumi.export(
@@ -898,15 +912,17 @@ systemctl restart httpd
         self.health_endpoint = health_ep
 
         # Register outputs to close the component
-        self.register_outputs({
+        outputs = {
             "alb_dns": alb_dns,
             "alb_url": alb_url,
             "environment_endpoint": env_ep,
             "health_endpoint": health_ep,
-            "rds_endpoint": self.rds.endpoint,
             "sns_topic_arn": self.sns_topic.arn,
             "db_credentials_secret_arn": self.db_secret.arn,
             "app_config_secret_arn": self.app_config_secret.arn,
             "launch_template_id": self.launch_template.id,
             "target_group_arn": self.target_group.arn,
-        })
+        }
+        if self.rds is not None:
+            outputs["rds_endpoint"] = self.rds.endpoint
+        self.register_outputs(outputs)
