@@ -469,7 +469,7 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
+      LaunchTemplateName: !Sub '${AWS::StackName}-LT'
       LaunchTemplateData:
         ImageId: !Ref AmiId
         InstanceType: !Ref InstanceType
@@ -662,7 +662,7 @@ Resources:
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-ALB'
+      Name: !Sub '${AWS::StackName}-LB'
       Scheme: internet-facing
       Subnets:
         - !Ref PublicSubnet1
@@ -680,7 +680,7 @@ Resources:
           Value: 'false'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-ALB'
+          Value: !Sub '${AWS::StackName}-LB'
         - Key: Environment
           Value: !Ref Environment
 
@@ -688,7 +688,7 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-TargetGroup'
+      Name: !Sub '${AWS::StackName}-TG'
       Protocol: HTTP
       Port: 80
       VpcId: !Ref VPC
@@ -704,7 +704,7 @@ Resources:
           Value: 'false'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-TargetGroup'
+          Value: !Sub '${AWS::StackName}-TG'
         - Key: Environment
           Value: !Ref Environment
 

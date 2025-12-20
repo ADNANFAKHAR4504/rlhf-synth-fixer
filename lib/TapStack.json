@@ -884,7 +884,7 @@
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
                 "LaunchTemplateName": {
-                    "Fn::Sub": "${AWS::StackName}-LaunchTemplate"
+                    "Fn::Sub": "${AWS::StackName}-LT"
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
@@ -1184,7 +1184,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-ALB"
+                    "Fn::Sub": "${AWS::StackName}-LB"
                 },
                 "Scheme": "internet-facing",
                 "Subnets": [
@@ -1238,7 +1238,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-ALB"
+                            "Fn::Sub": "${AWS::StackName}-LB"
                         }
                     },
                     {
@@ -1254,7 +1254,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-TargetGroup"
+                    "Fn::Sub": "${AWS::StackName}-TG"
                 },
                 "Protocol": "HTTP",
                 "Port": 80,
@@ -1280,7 +1280,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-TargetGroup"
+                            "Fn::Sub": "${AWS::StackName}-TG"
                         }
                     },
                     {
