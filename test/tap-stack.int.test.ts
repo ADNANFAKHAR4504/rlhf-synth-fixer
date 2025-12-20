@@ -512,6 +512,13 @@ describeOrSkip(
           s3TransferAcceleration: !isLocalStack, // Not supported in LocalStack
         };
 
+        // Debug: Print all check results
+        Object.entries(securityChecks).forEach(([key, value]) => {
+          if (value !== true) {
+            console.log(`Security check failed: ${key} = ${value}`);
+          }
+        });
+
         Object.values(securityChecks).forEach(check => {
           expect(check).toBe(true);
         });
