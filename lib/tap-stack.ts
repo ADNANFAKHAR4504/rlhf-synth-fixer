@@ -215,38 +215,39 @@ export class TapStack extends cdk.Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    // Cognito User Pool for API authentication
-    const userPool = new cognito.UserPool(this, 'ApiUserPool', {
-      userPoolName: `${props.environment}-api-user-pool`,
-      selfSignUpEnabled: false,
-      signInAliases: {
-        email: true,
-      },
-      passwordPolicy: {
-        minLength: 12,
-        requireLowercase: true,
-        requireUppercase: true,
-        requireDigits: true,
-        requireSymbols: true,
-      },
-      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      removalPolicy: RemovalPolicy.DESTROY,
-    });
+    // Cognito User Pool for API authentication (AWS only - not in LocalStack Community)
+    const userPool = isLocalStack
+      ? undefined
+      : new cognito.UserPool(this, 'ApiUserPool', {
+          userPoolName: `${props.environment}-api-user-pool`,
+          selfSignUpEnabled: false,
+          signInAliases: {
+            email: true,
+          },
+          passwordPolicy: {
+            minLength: 12,
+            requireLowercase: true,
+            requireUppercase: true,
+            requireDigits: true,
+            requireSymbols: true,
+          },
+          accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+          removalPolicy: RemovalPolicy.DESTROY,
+        });
 
-    // Create user pool client for API authentication
-    const userPoolClient = new cognito.UserPoolClient(
-      this,
-      'ApiUserPoolClient',
-      {
-        userPool,
-        userPoolClientName: `${props.environment}-api-client`,
-        generateSecret: false,
-        authFlows: {
-          userPassword: true,
-          userSrp: true,
-        },
-      }
-    );
+    // Create user pool client for API authentication (AWS only)
+    const userPoolClient =
+      isLocalStack || !userPool
+        ? undefined
+        : new cognito.UserPoolClient(this, 'ApiUserPoolClient', {
+            userPool,
+            userPoolClientName: `${props.environment}-api-client`,
+            generateSecret: false,
+            authFlows: {
+              userPassword: true,
+              userSrp: true,
+            },
+          });
 
     // API Gateway with security features
     new logs.LogGroup(this, 'ApiGatewayLogGroup', {
@@ -286,12 +287,13 @@ export class TapStack extends cdk.Stack {
     });
 
     // Cognito Authorizer (conditional for LocalStack compatibility)
-    const cognitoAuthorizer = isLocalStack
-      ? undefined
-      : new apigateway.CognitoUserPoolsAuthorizer(this, 'CognitoAuthorizer', {
-          cognitoUserPools: [userPool],
-          authorizerName: `${props.environment}-cognito-authorizer`,
-        });
+    const cognitoAuthorizer =
+      isLocalStack || !userPool
+        ? undefined
+        : new apigateway.CognitoUserPoolsAuthorizer(this, 'CognitoAuthorizer', {
+            cognitoUserPools: [userPool],
+            authorizerName: `${props.environment}-cognito-authorizer`,
+          });
 
     // API Key for additional security layer
     const apiKey = new apigateway.ApiKey(this, 'ApiKey', {
@@ -572,16 +574,21 @@ export class TapStack extends cdk.Stack {
       exportName: `${id}-LambdaFunctionArn`,
     });
 
-    new cdk.CfnOutput(this, 'UserPoolId', {
-      value: userPool.userPoolId,
-      description: 'Cognito User Pool ID',
-      exportName: `${id}-UserPoolId`,
-    });
+    // Cognito outputs (AWS only)
+    if (userPool) {
+      new cdk.CfnOutput(this, 'UserPoolId', {
+        value: userPool.userPoolId,
+        description: 'Cognito User Pool ID',
+        exportName: `${id}-UserPoolId`,
+      });
+    }
 
-    new cdk.CfnOutput(this, 'UserPoolClientId', {
-      value: userPoolClient.userPoolClientId,
-      description: 'Cognito User Pool Client ID',
-      exportName: `${id}-UserPoolClientId`,
-    });
+    if (userPoolClient) {
+      new cdk.CfnOutput(this, 'UserPoolClientId', {
+        value: userPoolClient.userPoolClientId,
+        description: 'Cognito User Pool Client ID',
+        exportName: `${id}-UserPoolClientId`,
+      });
+    }
   }
 }
