@@ -1,21 +1,18 @@
 {
-  "project_id": "iac-cdk-deployment-error",
-  "turn_id": "turn-001",
-  "project_name": "IAC CDK Deployment Error Fix",
-  "description": "Fix deployment errors in CDK infrastructure code",
-  "difficulty": "intermediate",
-  "platform": "aws_cdk",
-  "language": "typescript",
-  "turn_type": "debugging",
-  "team": "infrastructure",
-  "subtask": "debugging",
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "iac-cdk-deployment-error-001",
+  "team": "synth",
+  "startedAt": "2025-12-20T16:48:53.818Z",
+  "subtask": "IaC Diagnosis/Edits",
+  "provider": "localstack",
   "subject_labels": [
     "Infrastructure Analysis/Monitoring",
-    "CI/CD Pipeline",
-    "AWS CDK"
+    "CI/CD Pipeline"
   ],
   "aws_services": [
-    "AWS CDK",
     "CloudFormation",
     "IAM",
     "Lambda",
