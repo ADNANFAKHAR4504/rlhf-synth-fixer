@@ -6,8 +6,8 @@
   "difficulty": "intermediate",
   "platform": "aws_cdk",
   "language": "typescript",
-  "turn_type": "debugging",
-  "team": "infrastructure",
+  "turn_type": "single",
+  "team": "synth",
   "subtask": "debugging",
   "subject_labels": [
     "Infrastructure Analysis/Monitoring",
@@ -20,5 +20,7 @@
     "IAM",
     "Lambda",
     "S3"
-  ]
+  ],
+  "provider": "localstack",
+  "complexity": "medium"
 }
