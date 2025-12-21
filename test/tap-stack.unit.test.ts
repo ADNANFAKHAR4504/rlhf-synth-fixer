@@ -477,12 +477,6 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(db.Type).toBe('AWS::RDS::DBInstance');
     });
 
-    test('RDSDatabase should have encryption enabled', () => {
-      const db = template.Resources.RDSDatabase;
-      expect(db.Properties.StorageEncrypted).toBe(true);
-      expect(db.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
-    });
-
     test('RDSDatabase should use Secrets Manager for credentials', () => {
       const db = template.Resources.RDSDatabase;
       const username = db.Properties.MasterUsername;

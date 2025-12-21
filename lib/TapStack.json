@@ -1256,9 +1256,6 @@
                 "MaxAllocatedStorage": 100,
                 "StorageType": "gp3",
                 "StorageEncrypted": true,
-                "KmsKeyId": {
-                    "Ref": "KMSKey"
-                },
                 "MasterUsername": {
                     "Fn::Sub": "{{resolve:secretsmanager:${EnvironmentName}-database-credentials:SecretString:username}}"
                 },

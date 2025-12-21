@@ -856,7 +856,6 @@ Resources:
       MaxAllocatedStorage: 100  # Auto-scaling storage
       StorageType: gp3
       StorageEncrypted: true
-      KmsKeyId: !Ref KMSKey
       MasterUsername: !Sub '{{resolve:secretsmanager:${EnvironmentName}-database-credentials:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${EnvironmentName}-database-credentials:SecretString:password}}'
       VPCSecurityGroups:
