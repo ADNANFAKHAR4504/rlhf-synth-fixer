@@ -6,13 +6,20 @@ import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
   readonly isLocalStack?: boolean;
+  readonly environmentSuffix?: string;
 }
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps = {}) {
     super(scope, id, props);
 
-    const { environmentSuffix = 'dev', ...restProps } = props;
+    const { environmentSuffix = 'dev', isLocalStack: propsIsLocalStack, ...restProps } = props;
+
+    // Detect LocalStack environment
+    const isLocalStack = propsIsLocalStack ?? 
+      (process.env.CDK_LOCAL === 'true' || 
+       process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+       process.env.LOCALSTACK_HOSTNAME !== undefined);
 
     // S3 Bucket for storing application data
     const bucket = new s3.Bucket(this, 'TapBucket', {
