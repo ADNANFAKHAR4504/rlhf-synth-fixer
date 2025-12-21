@@ -57,7 +57,7 @@ describe('TapStack Unit Tests', () => {
 
   test('Stack has Lambda function', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
-      Runtime: 'nodejs18.x'
+      Runtime: 'nodejs20.x'
     });
   });
 
