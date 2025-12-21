@@ -55,13 +55,25 @@ describe('Live AWS Infrastructure Integration Tests', () => {
 
   // Read the CI/CD outputs file once before running tests
   beforeAll(() => {
-    const outputPath = path.resolve(
-      process.cwd(),
-      'cfn-outputs/all-outputs.json'
-    );
-    if (!fs.existsSync(outputPath)) {
+    // Try multiple possible output file locations
+    const possiblePaths = [
+      'cfn-outputs/flat-outputs.json',
+      'cfn-outputs/all-outputs.json',
+      'cdk-outputs/flat-outputs.json',
+    ];
+
+    let outputPath = '';
+    for (const p of possiblePaths) {
+      const fullPath = path.resolve(process.cwd(), p);
+      if (fs.existsSync(fullPath)) {
+        outputPath = fullPath;
+        break;
+      }
+    }
+
+    if (!outputPath) {
       throw new Error(
-        `Output file not found at ${outputPath}. Run the deployment pipeline first.`
+        `Output file not found. Tried: ${possiblePaths.join(', ')}. Run the deployment pipeline first.`
       );
     }
     const rawJson = fs.readFileSync(outputPath, 'utf-8');
