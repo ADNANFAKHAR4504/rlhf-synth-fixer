@@ -52,7 +52,7 @@ Parameters:
   AMIOverride:
     Description: Override AMI ID for LocalStack compatibility (leave blank to use RegionMap)
     Type: String
-    Default: "ami-07b643b5e45e"
+    Default: "ami-0b5eea76982371e91"
 
   EnableRDS:
     Description: Enable RDS database (set to false for LocalStack)
@@ -82,12 +82,21 @@ Parameters:
       - "false"
     Description: "Set to true to enable CloudTrail, false to skip it."
 
+  EnableCloudFront:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Set to true to enable CloudFront, false to skip it for LocalStack."
+
 Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
   CreateDetector: !Equals [!Ref CreateGuardDuty, "true"]
   CreateCloudTrail: !Equals [!Ref EnableCloudTrail, "true"]
   UseAMIOverride: !Not [!Equals [!Ref AMIOverride, ""]]
   CreateRDS: !Equals [!Ref EnableRDS, "true"]
+  CreateCloudFront: !Equals [!Ref EnableCloudFront, "true"]
 
 Mappings:
   RegionMap:
@@ -374,6 +383,7 @@ Resources:
 
   CloudFrontLogsBucket:
     Type: AWS::S3::Bucket
+    Condition: CreateCloudFront
     Properties:
       BucketName: !Sub '${ProjectName}-${Environment}-cf-logs-${AWS::AccountId}'
       BucketEncryption:
@@ -677,6 +687,7 @@ Resources:
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
+    Condition: CreateCloudFront
     Properties:
       DistributionConfig:
         Origins:
@@ -799,6 +810,7 @@ Outputs:
       Name: !Sub '${ProjectName}-${Environment}-alb-dns'
 
   CloudFrontDomainName:
+    Condition: CreateCloudFront
     Description: CloudFront Distribution Domain Name
     Value: !GetAtt CloudFrontDistribution.DomainName
     Export:
