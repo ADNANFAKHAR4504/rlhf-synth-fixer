@@ -13,8 +13,8 @@ try {
   console.warn('CFN outputs not found, using environment variables for configuration');
 }
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// Get environment suffix from CloudFormation outputs (if available) or environment variable
+const environmentSuffix = outputs.EnvironmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // AWS clients
 const sns = new AWS.SNS({ region: process.env.AWS_REGION || 'us-east-1' });
