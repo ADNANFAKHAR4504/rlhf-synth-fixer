@@ -13,7 +13,7 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps = {}) {
     super(scope, id, props);
 
-    const { isLocalStack: propsIsLocalStack } = props;
+    const { isLocalStack: propsIsLocalStack, environmentSuffix } = props;
 
     // Detect LocalStack environment
     const isLocalStack =
@@ -47,7 +47,8 @@ export class TapStack extends cdk.Stack {
             statusCode: 200,
             body: JSON.stringify({
               message: 'Processing completed successfully',
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
+              environmentSuffix: '${environmentSuffix || 'dev'}'
             })
           };
         };
@@ -55,6 +56,7 @@ export class TapStack extends cdk.Stack {
       environment: {
         BUCKET_NAME: bucket.bucketName,
         IS_LOCALSTACK: isLocalStack.toString(),
+        ENVIRONMENT_SUFFIX: environmentSuffix || 'dev',
       },
     });
 
@@ -85,6 +87,11 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'RoleArn', {
       value: tapRole.roleArn,
       description: 'ARN of the TAP IAM role',
+    });
+
+    new cdk.CfnOutput(this, 'EnvironmentSuffix', {
+      value: environmentSuffix || 'dev',
+      description: 'Environment suffix used for this stack',
     });
   }
 }
