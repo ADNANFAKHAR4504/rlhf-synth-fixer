@@ -1,6 +1,12 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.mjs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Handle import.meta.url for Jest compatibility
+const __filename = fileURLToPath(new URL(import.meta.url));
+const __dirname = path.dirname(__filename);
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
 
@@ -252,83 +258,95 @@ describe('TapStack', () => {
   });
 
   describe('VPC Configuration', () => {
-    test('does not create VPC in LocalStack environment', () => {
-      // Create a new stack with LocalStack environment
-      const localStackApp = new cdk.App();
+    test('creates VPC when not in LocalStack', () => {
+      // Reset environment for this test
+      const originalEndpoint = process.env.AWS_ENDPOINT_URL;
+      delete process.env.AWS_ENDPOINT_URL;
+      
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestTapStackWithVpc', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix: 'test-vpc',
+        isPrimary: true,
+      });
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.resourceCountIs('AWS::EC2::VPC', 1);
+      
+      // Restore environment
+      if (originalEndpoint) {
+        process.env.AWS_ENDPOINT_URL = originalEndpoint;
+      }
+    });
+
+    test('skips VPC creation in LocalStack', () => {
+      // Set LocalStack environment for this test
+      const originalEndpoint = process.env.AWS_ENDPOINT_URL;
       process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
       
-      const localStackStack = new TapStack(localStackApp, 'LocalStackTapStack', {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestTapStackLocalStack', {
         env: {
           account: '123456789012',
           region: 'us-east-1',
         },
-        environmentSuffix: 'localstack',
+        environmentSuffix: 'test-localstack',
         isPrimary: true,
       });
+      const testTemplate = Template.fromStack(testStack);
       
-      const localStackTemplate = Template.fromStack(localStackStack);
+      testTemplate.resourceCountIs('AWS::EC2::VPC', 0);
       
-      // Should not create VPC resources
-      const vpcs = localStackTemplate.findResources('AWS::EC2::VPC');
-      expect(Object.keys(vpcs).length).toBe(0);
-      
-      // Clean up environment variable
-      delete process.env.AWS_ENDPOINT_URL;
-    });
-
-    test('creates VPC in non-LocalStack environment', () => {
-      // Ensure AWS_ENDPOINT_URL is not set
-      delete process.env.AWS_ENDPOINT_URL;
-      
-      const normalApp = new cdk.App();
-      const normalStack = new TapStack(normalApp, 'NormalTapStack', {
-        env: {
-          account: '123456789012',
-          region: 'us-east-1',
-        },
-        environmentSuffix: 'normal',
-        isPrimary: true,
-      });
-      
-      const normalTemplate = Template.fromStack(normalStack);
-      
-      // Should create VPC resources
-      normalTemplate.resourceCountIs('AWS::EC2::VPC', 1);
-    });
-  });
-
-  describe('Stack Outputs', () => {
-    test('creates all required stack outputs', () => {
-      template.hasOutput('ApiEndpoint', {});
-      template.hasOutput('ApiId', {});
-      template.hasOutput('TableName', {});
-      template.hasOutput('AssetBucketName', {});
-      template.hasOutput('BackupBucketName', {});
-      template.hasOutput('EventBusName', {});
-      template.hasOutput('LambdaFunctionName', {});
+      // Restore environment
+      if (originalEndpoint) {
+        process.env.AWS_ENDPOINT_URL = originalEndpoint;
+      } else {
+        delete process.env.AWS_ENDPOINT_URL;
+      }
     });
   });
 
   describe('Secondary Stack Configuration', () => {
-    test('does not create cross-region forwarding rule for non-primary stack', () => {
-      const secondaryApp = new cdk.App();
-      const secondaryStack = new TapStack(secondaryApp, 'SecondaryTapStack', {
+    test('secondary stack does not create cross-region rules', () => {
+      const testApp = new cdk.App();
+      const secondaryStack = new TapStack(testApp, 'TestTapStackSecondary', {
         env: {
           account: '123456789012',
           region: 'us-west-2',
         },
-        environmentSuffix: 'secondary',
+        environmentSuffix: 'test-secondary',
         isPrimary: false,
       });
-      
       const secondaryTemplate = Template.fromStack(secondaryStack);
       
-      // Should not have the cross-region forwarding rule
+      // Should not have cross-region forwarding rule
       const rules = secondaryTemplate.findResources('AWS::Events::Rule');
       const crossRegionRules = Object.values(rules).filter(rule => 
         rule.Properties?.EventPattern?.source?.includes('global-api.events')
       );
       expect(crossRegionRules.length).toBe(0);
+    });
+  });
+
+  describe('Stack Outputs', () => {
+    test('creates all required outputs', () => {
+      const outputs = template.findOutputs('*');
+      const requiredOutputs = [
+        'ApiEndpoint',
+        'ApiId', 
+        'TableName',
+        'AssetBucketName',
+        'BackupBucketName',
+        'EventBusName',
+        'LambdaFunctionName'
+      ];
+      
+      requiredOutputs.forEach(outputName => {
+        expect(outputs).toHaveProperty(outputName);
+      });
     });
   });
 });
