@@ -70,7 +70,7 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
           new DescribeStacksCommand({ StackName: stackName })
         );
         if (stackResponse.Stacks && stackResponse.Stacks[0]?.Outputs) {
-          // Merge CloudFormation outputs (prioritize over file outputs)
+          // Merge CloudFormation outputs 
           stackResponse.Stacks[0].Outputs.forEach(output => {
             if (output.OutputKey && output.OutputValue) {
               outputs[output.OutputKey] = output.OutputValue;
