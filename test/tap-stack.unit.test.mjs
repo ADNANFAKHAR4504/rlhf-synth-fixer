@@ -12,8 +12,13 @@ describe('TapStack', () => {
   let app;
   let stack;
   let template;
+  let originalEndpoint;
 
   beforeEach(() => {
+    // Save and unset AWS_ENDPOINT_URL for non-LocalStack tests
+    originalEndpoint = process.env.AWS_ENDPOINT_URL;
+    delete process.env.AWS_ENDPOINT_URL;
+
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', {
       env: {
@@ -24,6 +29,13 @@ describe('TapStack', () => {
       isPrimary: true,
     });
     template = Template.fromStack(stack);
+  });
+
+  afterEach(() => {
+    // Restore original AWS_ENDPOINT_URL
+    if (originalEndpoint) {
+      process.env.AWS_ENDPOINT_URL = originalEndpoint;
+    }
   });
 
   describe('KMS Encryption', () => {
@@ -63,7 +75,6 @@ describe('TapStack', () => {
 
     test('does not create VPC in LocalStack environment', () => {
       // Set LocalStack environment
-      const originalEndpoint = process.env.AWS_ENDPOINT_URL;
       process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
 
       const localStackApp = new cdk.App();
@@ -79,13 +90,6 @@ describe('TapStack', () => {
 
       const vpcs = localStackTemplate.findResources('AWS::EC2::VPC');
       expect(Object.keys(vpcs).length).toBe(0);
-
-      // Restore original environment
-      if (originalEndpoint) {
-        process.env.AWS_ENDPOINT_URL = originalEndpoint;
-      } else {
-        delete process.env.AWS_ENDPOINT_URL;
-      }
     });
   });
 
@@ -300,7 +304,6 @@ describe('TapStack', () => {
     });
 
     test('Lambda function does not have VPC in LocalStack', () => {
-      const originalEndpoint = process.env.AWS_ENDPOINT_URL;
       process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
 
       const localStackApp = new cdk.App();
@@ -317,13 +320,6 @@ describe('TapStack', () => {
       const functions = localStackTemplate.findResources('AWS::Lambda::Function');
       const functionResource = Object.values(functions)[0];
       expect(functionResource.Properties.VpcConfig).toBeUndefined();
-
-      // Restore original environment
-      if (originalEndpoint) {
-        process.env.AWS_ENDPOINT_URL = originalEndpoint;
-      } else {
-        delete process.env.AWS_ENDPOINT_URL;
-      }
     });
   });
 
@@ -487,7 +483,6 @@ describe('TapStack', () => {
     });
 
     test('does not create synthetics canary in LocalStack environment', () => {
-      const originalEndpoint = process.env.AWS_ENDPOINT_URL;
       process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
 
       const localStackApp = new cdk.App();
@@ -503,13 +498,6 @@ describe('TapStack', () => {
 
       const canaries = localStackTemplate.findResources('AWS::Synthetics::Canary');
       expect(Object.keys(canaries).length).toBe(0);
-
-      // Restore original environment
-      if (originalEndpoint) {
-        process.env.AWS_ENDPOINT_URL = originalEndpoint;
-      } else {
-        delete process.env.AWS_ENDPOINT_URL;
-      }
     });
   });
 
@@ -632,7 +620,6 @@ describe('TapStack', () => {
     });
 
     test('handles LocalStack environment correctly', () => {
-      const originalEndpoint = process.env.AWS_ENDPOINT_URL;
       process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
 
       const localStackApp = new cdk.App();
@@ -656,13 +643,6 @@ describe('TapStack', () => {
       localStackTemplate.resourceCountIs('AWS::DynamoDB::Table', 1);
       localStackTemplate.resourceCountIs('AWS::S3::Bucket', 2);
       localStackTemplate.resourceCountIs('AWS::Lambda::Function', 1);
-
-      // Restore original environment
-      if (originalEndpoint) {
-        process.env.AWS_ENDPOINT_URL = originalEndpoint;
-      } else {
-        delete process.env.AWS_ENDPOINT_URL;
-      }
     });
   });
 });
