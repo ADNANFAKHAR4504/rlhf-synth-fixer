@@ -1,127 +1,69 @@
-# TAP Stack - VPC Infrastructure (LocalStack Compatible)
+# News Website Content Delivery Infrastructure
 
 ## Overview
 
-This CloudFormation template deploys a complete VPC infrastructure optimized for LocalStack compatibility. The stack includes:
+This CDK JavaScript implementation deploys a complete content delivery infrastructure for a news website serving 10,000+ daily readers globally. The stack provides:
 
-- VPC with DNS support and hostnames enabled
-- Public subnet with internet access
-- Private subnet for internal resources
-- Internet Gateway
-- Route tables with proper routing
-- Security group for VPC resources
+- S3 bucket for storing news articles with KMS encryption
+- CloudFront distribution for global content delivery with low latency
+- CloudWatch dashboard for monitoring delivery metrics and access patterns
+- IAM policies for controlled access
+- Encryption at rest using KMS with key rotation
 
 ## Architecture
 
-```
-┌───────────────────────────────────────────────────┐
-│                VPC (10.0.0.0/16)                  │
-│                                                   │
-│  ┌────────────────┐      ┌────────────────┐      │
-│  │ Public Subnet  │      │ Private Subnet │      │
-│  │ (10.0.1.0/24)  │      │ (10.0.2.0/24)  │      │
-│  │                │      │                │      │
-│  └────────┬───────┘      └────────┬───────┘      │
-│           │                       │              │
-│           ▼                       ▼              │
-│  ┌────────────────┐      ┌────────────────┐      │
-│  │ Public Route   │      │ Private Route  │      │
-│  │ Table          │      │ Table          │      │
-│  └────────┬───────┘      └────────────────┘      │
-│           │                                       │
-└───────────┼───────────────────────────────────────┘
-            ▼
-   ┌────────────────┐
-   │ Internet       │
-   │ Gateway        │
-   └────────────────┘
-```
+The infrastructure follows AWS best practices for content delivery:
+
+1. **Content Storage**: S3 bucket with versioning, lifecycle rules, and KMS encryption
+2. **Global Delivery**: CloudFront distribution with Origin Access Control (OAC)
+3. **Security**: HTTPS enforcement, modern TLS (v1.2+), and least-privilege IAM policies
+4. **Monitoring**: CloudWatch dashboard with metrics for requests, errors, and bandwidth
+5. **Cost Optimization**: Lifecycle rules for old versions, Price Class 100 for CloudFront
 
 ## LocalStack Compatibility
 
-This deployment has been optimized for LocalStack by removing components that have known bugs:
+This implementation is optimized for LocalStack deployment:
 
-- **EC2 Instances**: Removed due to a CloudFormation bug that incorrectly wraps AMI IDs in double brackets `[['ami-xxx']]`
-- **NAT Gateway**: Removed due to AllocationID handling issues in LocalStack CloudFormation
-
-The core VPC infrastructure (VPC, Subnets, Internet Gateway, Route Tables, Security Groups) deploys successfully and is fully functional for testing networking scenarios.
+- **Conditional CloudFront**: CloudFront resources are only created when not running in LocalStack
+- **Environment Detection**: Automatic detection via `AWS_ENDPOINT_URL` environment variable
+- **Simplified Setup**: No custom domains or Route 53 required for testing
+- **Environment Suffixes**: All resources include environment suffix for multi-environment deployments
 
 ## Deployment
 
 ### Prerequisites
+- Node.js 18+
+- AWS CDK CLI: `npm install -g aws-cdk`
 
-- AWS CLI configured or LocalStack running
-- Node.js and npm installed
-
-### Deploy to LocalStack
-
+### LocalStack Deployment
 ```bash
-# Install dependencies
-npm install
-
-# Build the project
-npm run build
-
-# Deploy to LocalStack
-npm run localstack:deploy
-
-# Run integration tests
-npm run localstack:test
+export AWS_ENDPOINT_URL="http://localhost:4566"
+cdk deploy --context environmentSuffix=dev
 ```
 
-### Deploy to AWS
-
+### AWS Deployment
 ```bash
-# Install dependencies
-npm install
-
-# Build the project
-npm run build
-
-# Deploy to AWS
-npm run deploy
-
-# Run integration tests
-npm run test
+cdk deploy --context environmentSuffix=prod
 ```
 
 ## Stack Outputs
 
-The stack exports the following outputs:
+- **WebsiteBucketName**: S3 bucket name for uploading content
+- **DistributionId**: CloudFront distribution ID
+- **DistributionDomainName**: CloudFront URL for accessing content
+- **KMSKeyId**: KMS key ID for encryption
 
-- `VPCId` - ID of the created VPC
-- `PublicSubnetId` - ID of the public subnet
-- `PrivateSubnetId` - ID of the private subnet
-- `SecurityGroupId` - ID of the default security group
-- `InternetGatewayId` - ID of the Internet Gateway
+## Monitoring
 
-## Parameters
+The CloudWatch dashboard includes:
+- CloudFront request counts
+- Error rates with alarms (threshold: 5%)
+- Data transfer metrics
+- S3 bucket request metrics
 
-The template accepts the following parameters:
+## Security Features
 
-- `EnvironmentSuffix` - Environment suffix for resource naming (default: dev)
-- `VpcCidrBlock` - CIDR block for the VPC (default: 10.0.0.0/16)
-- `PublicSubnetCidrBlock` - CIDR block for the public subnet (default: 10.0.1.0/24)
-- `PrivateSubnetCidrBlock` - CIDR block for the private subnet (default: 10.0.2.0/24)
-
-## Testing
-
-Integration tests verify:
-
-- Stack deployment completes successfully
-- VPC is available
-- Public and private subnets are available
-- Internet Gateway is attached to VPC
-- Route tables exist and public route has IGW route
-- Security group is attached to VPC
-
-## Future Enhancements
-
-When LocalStack fixes the known CloudFormation bugs, the following components can be added back:
-
-- **EC2 Instances**: For compute resources in public and private subnets
-- **NAT Gateway**: For private subnet internet access via network address translation
-
-## License
-
-This project is part of the TAP Stack infrastructure automation.
+- **Encryption**: KMS encryption for S3 with automatic key rotation
+- **Access Control**: CloudFront OAC with S3 bucket policy (no public access)
+- **HTTPS Only**: Automatic redirect to HTTPS, TLS 1.2+ required
+- **Least Privilege**: IAM policies scoped to specific resources
