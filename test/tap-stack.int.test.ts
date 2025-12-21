@@ -56,38 +56,60 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
   const createdKeys: string[] = [];
 
   beforeAll(async () => {
-    // Load outputs from CloudFormation
     const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-    let stackName = outputs.StackName || `localstack-stack-${envSuffix}`;
+    const possibleStackNames = [
+      outputs.StackName,
+      `localstack-stack-${envSuffix}`,
+      'tap-stack-localstack',
+    ].filter(Boolean);
     
-    try {
-      const stackResponse = await cfnClient.send(
-        new DescribeStacksCommand({ StackName: stackName })
-      );
-      if (stackResponse.Stacks && stackResponse.Stacks[0].Outputs) {
-        stackResponse.Stacks[0].Outputs.forEach(output => {
-          if (output.OutputKey && output.OutputValue) {
-            outputs[output.OutputKey] = output.OutputValue;
-          }
-        });
+    let stackFound = false;
+    for (const stackName of possibleStackNames) {
+      try {
+        const stackResponse = await cfnClient.send(
+          new DescribeStacksCommand({ StackName: stackName })
+        );
+        if (stackResponse.Stacks && stackResponse.Stacks[0]?.Outputs) {
+          // Merge CloudFormation outputs (prioritize over file outputs)
+          stackResponse.Stacks[0].Outputs.forEach(output => {
+            if (output.OutputKey && output.OutputValue) {
+              outputs[output.OutputKey] = output.OutputValue;
+            }
+          });
+          outputs.StackName = stackName;
+          stackFound = true;
+          break;
+        }
+      } catch (error: any) {
+        // Try next stack name
+        continue;
       }
-    } catch (error: any) {
-      // Try with constructed name if file stack name failed
-      if (outputs.StackName && stackName !== `localstack-stack-${envSuffix}`) {
-        stackName = `localstack-stack-${envSuffix}`;
+    }
+    
+    if (!stackFound) {
+      console.warn('⚠️ Could not find CloudFormation stack, using file outputs only');
+    }
+    
+    // Retry querying outputs if critical outputs are missing (stack might still be creating)
+    if (!outputs.S3BucketName || !outputs.SNSTopicArn) {
+      console.log('⚠️ Critical outputs missing, retrying CloudFormation query...');
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+      
+      for (const stackName of possibleStackNames) {
         try {
           const stackResponse = await cfnClient.send(
             new DescribeStacksCommand({ StackName: stackName })
           );
-          if (stackResponse.Stacks && stackResponse.Stacks[0].Outputs) {
+          if (stackResponse.Stacks && stackResponse.Stacks[0]?.Outputs) {
             stackResponse.Stacks[0].Outputs.forEach(output => {
               if (output.OutputKey && output.OutputValue) {
                 outputs[output.OutputKey] = output.OutputValue;
               }
             });
+            break;
           }
-        } catch (error2: any) {
-          // Continue with file outputs only
+        } catch (error: any) {
+          continue;
         }
       }
     }
