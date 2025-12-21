@@ -2,7 +2,6 @@ import { App, Stack } from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.mjs';
-import { SecurityGroupConstruct } from '../lib/constructs/security-group.mjs';
 
 // Mock config - includes ALL required fields
 const mockConfig = {
@@ -168,6 +167,9 @@ describe('TapStack Fallback Tests', () => {
     process.env.CDK_LOCAL = 'true';
     process.env.ENVIRONMENT_SUFFIX = 'unknown';
     
+    // Mock console.info to avoid output during tests
+    const consoleSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+    
     const app = new App({
       context: {
         environmentSuffix: 'unknown',
@@ -184,6 +186,8 @@ describe('TapStack Fallback Tests', () => {
     
     // Should fall back to dev
     expect(stack.config.environment).toBe('dev');
+    
+    consoleSpy.mockRestore();
   });
 
   test('Uses qa environment when available', () => {
@@ -254,5 +258,217 @@ describe('TapStack Config Loading Tests', () => {
     
     expect(stack.config).toBeDefined();
     expect(stack.config.environment).toBe('dev');
+  });
+
+  test('Throws error when no configuration found', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    expect(() => {
+      new TapStack(app, 'NoConfigStack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+        environmentSuffix: 'dev'
+      });
+    }).toThrow("No configuration found in 'props' or cdk.json context");
+  });
+
+  test('Throws error when environment field missing', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    const badConfig = {
+      dev: {
+        // Missing environment field
+        existingVpcId: 'vpc-12345678',
+        existingS3Bucket: 'test-bucket'
+      }
+    };
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    expect(() => {
+      new TapStack(app, 'BadConfigStack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+        environmentSuffix: 'dev',
+        config: badConfig
+      });
+    }).toThrow("No environment field found in configuration for 'dev'");
+  });
+
+  test('Throws error for prod with no config', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    const emptyConfig = {};
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    expect(() => {
+      new TapStack(app, 'ProdNoConfigStack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+        environmentSuffix: 'prod',
+        config: emptyConfig
+      });
+    }).toThrow("No configuration found for 'prod'.");
+  });
+
+  test('Throws error when VPC ID not provided', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    const configWithoutVpc = {
+      dev: {
+        environment: 'dev',
+        // Missing existingVpcId
+        existingS3Bucket: 'test-bucket'
+      }
+    };
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    expect(() => {
+      new TapStack(app, 'NoVpcStack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+        environmentSuffix: 'dev',
+        config: configWithoutVpc
+      });
+    }).toThrow('VPC ID must be provided');
+  });
+
+  test('Throws error when S3 bucket not provided', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    const configWithoutS3 = {
+      dev: {
+        environment: 'dev',
+        existingVpcId: 'vpc-12345678',
+        // Missing existingS3Bucket
+      }
+    };
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    expect(() => {
+      new TapStack(app, 'NoS3Stack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+        environmentSuffix: 'dev',
+        config: configWithoutS3
+      });
+    }).toThrow('S3 bucket must be provided');
+  });
+});
+
+// Test isLocalStack detection
+describe('TapStack LocalStack Detection Tests', () => {
+  beforeEach(() => {
+    cleanEnvironment();
+  });
+
+  afterEach(() => {
+    cleanEnvironment();
+  });
+
+  test('Detects LocalStack with CDK_LOCAL=true', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    const stack = new TapStack(app, 'LocalStackCDKStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(true);
+  });
+
+  test('Detects LocalStack with CI=true', () => {
+    process.env.CI = 'true';
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    const stack = new TapStack(app, 'LocalStackCIStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(true);
+  });
+
+  test('Detects LocalStack with GITHUB_ACTIONS=true', () => {
+    process.env.GITHUB_ACTIONS = 'true';
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    const stack = new TapStack(app, 'LocalStackGHStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(true);
+  });
+
+  test('Detects LocalStack with AWS_ENDPOINT_URL containing localhost', () => {
+    process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    const stack = new TapStack(app, 'LocalStackEndpointStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(true);
+  });
+
+  test('Detects LocalStack with LOCALSTACK_HOSTNAME set', () => {
+    process.env.LOCALSTACK_HOSTNAME = 'localhost';
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    const stack = new TapStack(app, 'LocalStackHostnameStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(true);
+  });
+
+  test('Does not detect LocalStack when no indicators present', () => {
+    // Clean environment - no LocalStack indicators
+    
+    const app = new App({
+      context: { '@aws-cdk/core:newStyleStackSynthesis': false }
+    });
+    
+    const stack = new TapStack(app, 'NotLocalStackStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(false);
   });
 });
