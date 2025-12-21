@@ -2339,7 +2339,7 @@
                     ],
                     "UserData": {
                         "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\n# Update system\nyum update -y\n\n# Install required packages\nyum install -y httpd mysql jq aws-cli\n\n# Start and enable Apache\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create health check endpoint\necho \"OK\" > /var/www/html/health\n\n# Configure Apache for the application\ncat > /var/www/html/index.html <<EOF\n<!DOCTYPE html>\n<html>\n<head>\n    <title>${EnvironmentName} - E-commerce Platform</title>\n</head>\n<body>\n    <h1>Welcome to ${EnvironmentName} Environment</h1>\n    <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\n    <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>\n</body>\n</html>\nEOF\n\n# Install and configure CloudWatch agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF\n{\n  \"agent\": {\n    \"metrics_collection_interval\": 60,\n    \"run_as_user\": \"root\"\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"${EnvironmentName}-apache-access\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"retention_in_days\": 30\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"${EnvironmentName}-apache-error\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"retention_in_days\": 30\n          },\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"${EnvironmentName}-system\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"retention_in_days\": 7\n          }\n        ]\n      }\n    }\n  },\n  \"metrics\": {\n    \"namespace\": \"${EnvironmentName}/Application\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          {\n            \"name\": \"cpu_usage_idle\",\n            \"rename\": \"CPU_USAGE_IDLE\",\n            \"unit\": \"Percent\"\n          },\n          \"cpu_usage_iowait\"\n        ],\n        \"metrics_collection_interval\": 60,\n        \"totalcpu\": false\n      },\n      \"disk\": {\n        \"measurement\": [\n          {\n            \"name\": \"used_percent\",\n            \"rename\": \"DISK_USED_PERCENT\",\n            \"unit\": \"Percent\"\n          },\n          \"disk_free\"\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\n          \"*\"\n        ]\n      },\n      \"mem\": {\n        \"measurement\": [\n          {\n            \"name\": \"mem_used_percent\",\n            \"rename\": \"MEM_USED_PERCENT\",\n            \"unit\": \"Percent\"\n          },\n          \"mem_available\"\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"netstat\": {\n        \"measurement\": [\n          {\n            \"name\": \"tcp_established\",\n            \"rename\": \"TCP_ESTABLISHED\",\n            \"unit\": \"Count\"\n          },\n          {\n            \"name\": \"tcp_time_wait\",\n            \"rename\": \"TCP_TIME_WAIT\",\n            \"unit\": \"Count\"\n          }\n        ],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n    -a fetch-config \\\n    -m ec2 \\\n    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \\\n    -s\n\n# Secrets Manager retrieval commented out - LocalStack does not support RDS MasterUserSecret\n# DB_SECRET_ARN=\"${DBPasswordSecret}\"\n# DB_SECRET=$(aws secretsmanager get-secret-value --secret-id $DB_SECRET_ARN --region ${AWS::Region} --query SecretString --output text)\n# DB_PASSWORD=$(echo $DB_SECRET | jq -r .password)\nDB_PASSWORD=\"localstack-placeholder\"\n\n# Configure application environment variables\ncat > /etc/environment <<EOF\nDB_HOST=\"${RDSDatabase.Endpoint.Address}\"\nDB_NAME=\"${DBName}\"\nDB_USER=\"${DBUsername}\"\nDB_PASSWORD=$DB_PASSWORD\nS3_BUCKET=\"${StaticContentBucket}\"\nENVIRONMENT=\"${EnvironmentName}\"\nREGION=\"${AWS::Region}\"\nEOF\n\n# Signal success to CloudFormation\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}\n"
+                            "Fn::Sub": "#!/bin/bash\n# Update system\nyum update -y\n\n# Install required packages\nyum install -y httpd mysql jq aws-cli\n\n# Start and enable Apache\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create health check endpoint\necho \"OK\" > /var/www/html/health\n\n# Configure Apache for the application\ncat > /var/www/html/index.html <<EOF\n<!DOCTYPE html>\n<html>\n<head>\n    <title>${EnvironmentName} - E-commerce Platform</title>\n</head>\n<body>\n    <h1>Welcome to ${EnvironmentName} Environment</h1>\n    <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\n    <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>\n</body>\n</html>\nEOF\n\n# Install and configure CloudWatch agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF\n{\n  \"agent\": {\n    \"metrics_collection_interval\": 60,\n    \"run_as_user\": \"root\"\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"${EnvironmentName}-apache-access\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"retention_in_days\": 30\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"${EnvironmentName}-apache-error\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"retention_in_days\": 30\n          },\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"${EnvironmentName}-system\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"retention_in_days\": 7\n          }\n        ]\n      }\n    }\n  },\n  \"metrics\": {\n    \"namespace\": \"${EnvironmentName}/Application\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          {\n            \"name\": \"cpu_usage_idle\",\n            \"rename\": \"CPU_USAGE_IDLE\",\n            \"unit\": \"Percent\"\n          },\n          \"cpu_usage_iowait\"\n        ],\n        \"metrics_collection_interval\": 60,\n        \"totalcpu\": false\n      },\n      \"disk\": {\n        \"measurement\": [\n          {\n            \"name\": \"used_percent\",\n            \"rename\": \"DISK_USED_PERCENT\",\n            \"unit\": \"Percent\"\n          },\n          \"disk_free\"\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\n          \"*\"\n        ]\n      },\n      \"mem\": {\n        \"measurement\": [\n          {\n            \"name\": \"mem_used_percent\",\n            \"rename\": \"MEM_USED_PERCENT\",\n            \"unit\": \"Percent\"\n          },\n          \"mem_available\"\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"netstat\": {\n        \"measurement\": [\n          {\n            \"name\": \"tcp_established\",\n            \"rename\": \"TCP_ESTABLISHED\",\n            \"unit\": \"Count\"\n          },\n          {\n            \"name\": \"tcp_time_wait\",\n            \"rename\": \"TCP_TIME_WAIT\",\n            \"unit\": \"Count\"\n          }\n        ],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n    -a fetch-config \\\n    -m ec2 \\\n    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \\\n    -s\n\n# Secrets Manager retrieval commented out - LocalStack does not support RDS MasterUserSecret\n# DB_SECRET_ARN=\"${RDSDatabase.MasterUserSecret.SecretArn}\"\n# DB_SECRET=$(aws secretsmanager get-secret-value --secret-id $DB_SECRET_ARN --region ${AWS::Region} --query SecretString --output text)\n# DB_PASSWORD=$(echo $DB_SECRET | jq -r .password)\nDB_PASSWORD=\"localstack-placeholder\"\n\n# Configure application environment variables\ncat > /etc/environment <<EOF\nDB_HOST=\"${RDSDatabase.Endpoint.Address}\"\nDB_NAME=\"${DBName}\"\nDB_USER=\"${DBUsername}\"\nDB_PASSWORD=$DB_PASSWORD\nS3_BUCKET=\"${StaticContentBucket}\"\nENVIRONMENT=\"${EnvironmentName}\"\nREGION=\"${AWS::Region}\"\nEOF\n\n# Signal success to CloudFormation\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}\n"
                         }
                     }
                 }
@@ -2692,27 +2692,8 @@
                 ]
             }
         },
-        "DBPasswordSecret": {
-            "Type": "AWS::SecretsManager::Secret",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}/rds/db-password"
-                },
-                "Description": "RDS database master password",
-                "GenerateSecretString": {
-                    "SecretStringTemplate": {
-                        "Fn::Sub": "{\"username\": \"${DBUsername}\"}"
-                    },
-                    "GenerateStringKey": "password",
-                    "PasswordLength": 32,
-                    "ExcludeCharacters": "\"@/\\",
-                    "ExcludePunctuation": false
-                }
-            }
-        },
         "RDSDatabase": {
             "Type": "AWS::RDS::DBInstance",
-            "DependsOn": "DBPasswordSecret",
             "Properties": {
                 "DBName": {
                     "Ref": "DBName"
@@ -2730,9 +2711,7 @@
                 "MasterUsername": {
                     "Ref": "DBUsername"
                 },
-                "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${EnvironmentName}/rds/db-password:SecretString:password}}"
-                },
+                "ManageMasterUserPassword": true,
                 "VPCSecurityGroups": [
                     {
                         "Ref": "DatabaseSecurityGroup"
@@ -2744,9 +2723,40 @@
                 "BackupRetentionPeriod": 7,
                 "PreferredBackupWindow": "03:00-04:00",
                 "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-                "MultiAZ": false,
+                "MultiAZ": {
+                    "Fn::If": [
+                        "IsProduction",
+                        true,
+                        false
+                    ]
+                },
+                "EnableCloudwatchLogsExports": [
+                    "error",
+                    "general",
+                    "slowquery"
+                ],
                 "CopyTagsToSnapshot": true,
-                "MonitoringInterval": 0,
+                "MonitoringInterval": {
+                    "Fn::If": [
+                        "UseDetailedMonitoring",
+                        60,
+                        0
+                    ]
+                },
+                "MonitoringRoleArn": {
+                    "Fn::If": [
+                        "UseDetailedMonitoring",
+                        {
+                            "Fn::GetAtt": [
+                                "RDSEnhancedMonitoringRole",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Name",
