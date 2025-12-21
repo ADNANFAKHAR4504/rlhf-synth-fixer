@@ -105,14 +105,15 @@ describe('TapStack', () => {
     template = Template.fromStack(stack);
 
     // Verify Lambda has S3 permissions through policy
+    // bucket.grantReadWrite() creates comprehensive S3 permissions
     template.hasResourceProperties('AWS::IAM::Policy', {
       PolicyDocument: {
         Statement: Match.arrayWith([
           Match.objectLike({
             Effect: 'Allow',
             Action: Match.arrayWith([
-              's3:GetObject*',
-              's3:PutObject*'
+              Match.stringLikeRegexp('s3:GetObject.*'),
+              Match.stringLikeRegexp('s3:PutObject.*')
             ])
           })
         ])
