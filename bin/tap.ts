@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { TapStack } from '../lib/TapStack';
+import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
 
@@ -9,12 +9,13 @@ const app = new cdk.App();
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 
 // Detect LocalStack environment
-const isLocalStack = process.env.CDK_LOCAL === 'true' || 
+const isLocalStack = process.env.CDK_LOCAL === 'true' ||
                      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
                      process.env.LOCALSTACK_HOSTNAME !== undefined;
 
-new TapStack(app, `TapStack${environmentSuffix}`, {
+new TapStack(app, 'TapStack', {
   isLocalStack,
+  environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT || '000000000000',
     region: process.env.CDK_DEFAULT_REGION || 'us-east-1',

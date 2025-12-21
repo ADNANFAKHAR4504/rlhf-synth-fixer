@@ -14,7 +14,7 @@ const isLocalStack =
   process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
   process.env.LOCALSTACK_HOSTNAME !== undefined;
 
-new TapStack(app, `TapStack${environmentSuffix}`, {
+new TapStack(app, 'TapStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID,
     region: process.env.CDK_DEFAULT_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1',
