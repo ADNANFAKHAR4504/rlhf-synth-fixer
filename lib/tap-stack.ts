@@ -16,8 +16,12 @@ export class TapStack extends cdk.Stack {
 
     // S3 Bucket for storing application data
     const bucket = new s3.Bucket(this, 'TapBucket', {
-      bucketName: isLocalStack ? undefined : `tap-bucket-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
-      removalPolicy: isLocalStack ? cdk.RemovalPolicy.DESTROY : cdk.RemovalPolicy.RETAIN,
+      bucketName: isLocalStack
+        ? undefined
+        : `tap-bucket-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      removalPolicy: isLocalStack
+        ? cdk.RemovalPolicy.DESTROY
+        : cdk.RemovalPolicy.RETAIN,
       autoDeleteObjects: isLocalStack,
       versioned: !isLocalStack,
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -53,7 +57,9 @@ export class TapStack extends cdk.Stack {
     const tapRole = new iam.Role(this, 'TapRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
     });
 
