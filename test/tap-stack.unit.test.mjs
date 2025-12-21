@@ -429,6 +429,7 @@ describe('TapStack Missing Config Field Tests', () => {
         existingVpcId: undefined
       }
     };
+    delete configWithoutVpc.dev.existingVpcId;
     
     const app = new App({
       context: {
@@ -456,6 +457,7 @@ describe('TapStack Missing Config Field Tests', () => {
         existingS3Bucket: undefined
       }
     };
+    delete configWithoutS3.dev.existingS3Bucket;
     
     const app = new App({
       context: {
@@ -483,6 +485,7 @@ describe('TapStack Missing Config Field Tests', () => {
         environment: undefined
       }
     };
+    delete configWithoutEnv.dev.environment;
     
     const app = new App({
       context: {
@@ -801,5 +804,96 @@ describe('SecurityGroupConstruct Direct Tests', () => {
       
       expect(sgConstruct.securityGroup).toBeDefined();
     });
+  });
+});
+
+// Additional test for setupVpc non-LocalStack path
+describe('TapStack VPC Setup Tests', () => {
+  beforeEach(() => {
+    cleanEnvironment();
+  });
+
+  afterEach(() => {
+    cleanEnvironment();
+  });
+
+  test('Uses fromLookup in non-LocalStack mode', () => {
+    // Mock ec2.Vpc.fromLookup to test the non-LocalStack path
+    const fromLookupSpy = jest.spyOn(ec2.Vpc, 'fromLookup').mockImplementation((scope, id, props) => {
+      return {
+        vpcId: props.vpcId,
+        vpcCidrBlock: '10.0.0.0/16',
+        availabilityZones: ['us-east-1a'],
+        privateSubnets: [],
+        publicSubnets: []
+      } as any;
+    });
+
+    const app = new App({
+      context: {
+        environmentSuffix: 'dev',
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'VpcLookupStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    // Verify fromLookup was called
+    expect(fromLookupSpy).toHaveBeenCalledWith(
+      stack,
+      'TestStack-VPC',
+      expect.objectContaining({
+        vpcId: 'vpc-12345678'
+      })
+    );
+    
+    fromLookupSpy.mockRestore();
+  });
+
+  test('Uses fromVpcAttributes in LocalStack mode', () => {
+    process.env.CDK_LOCAL = 'true';
+    
+    // Mock ec2.Vpc.fromVpcAttributes to test the LocalStack path
+    const fromVpcAttributesSpy = jest.spyOn(ec2.Vpc, 'fromVpcAttributes').mockImplementation((scope, id, props) => {
+      return {
+        vpcId: props.vpcId,
+        vpcCidrBlock: props.vpcCidrBlock,
+        availabilityZones: props.availabilityZones,
+        privateSubnets: [],
+        publicSubnets: []
+      } as any;
+    });
+
+    const app = new App({
+      context: {
+        environmentSuffix: 'dev',
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'VpcAttributesStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    // Verify fromVpcAttributes was called
+    expect(fromVpcAttributesSpy).toHaveBeenCalledWith(
+      stack,
+      'TestStack-VPC',
+      expect.objectContaining({
+        vpcId: 'vpc-12345678',
+        vpcCidrBlock: '10.0.0.0/16',
+        availabilityZones: ['us-east-1a']
+      })
+    );
+    
+    fromVpcAttributesSpy.mockRestore();
   });
 });
