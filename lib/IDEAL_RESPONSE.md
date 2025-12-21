@@ -44,11 +44,15 @@ class TapStack extends Stack {
   constructor(scope, id, props) {
     super(scope, id, props);
 
-    const environmentSuffix = props?.environmentSuffix || this.node.tryGetContext('environmentSuffix') || 'dev';
+    const isLocalStack = process.env.CDK_LOCAL === 'true' ||
+                         process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                         process.env.LOCALSTACK_HOSTNAME !== undefined;
+
+    const environmentSuffix = props?.environmentSuffix || this.node.tryGetContext('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
     const vpc = new ec2.Vpc(this, 'BookingVpc', {
       maxAzs: 2,
-      natGateways: 1,
+      natGateways: isLocalStack ? 0 : 1,
       removalPolicy: RemovalPolicy.DESTROY
     });
 
@@ -70,18 +74,26 @@ class TapStack extends Stack {
       'Allow Lambda to Redis'
     );
 
-    const redisSubnetGroup = new elasticache.CfnSubnetGroup(this, 'RedisSubnetGroup', {
-      description: 'Subnet group for Redis cluster',
-      subnetIds: vpc.privateSubnets.map(subnet => subnet.subnetId)
-    });
+    let redisEndpoint = 'localhost';
+    let redisPort = '6379';
 
-    const redisCluster = new elasticache.CfnCacheCluster(this, 'BookingRedis', {
-      cacheNodeType: 'cache.t3.micro',
-      engine: 'redis',
-      numCacheNodes: 1,
-      cacheSubnetGroupName: redisSubnetGroup.ref,
-      vpcSecurityGroupIds: [redisSecurityGroup.securityGroupId]
-    });
+    if (!isLocalStack) {
+      const redisSubnetGroup = new elasticache.CfnSubnetGroup(this, 'RedisSubnetGroup', {
+        description: 'Subnet group for Redis cluster',
+        subnetIds: vpc.privateSubnets.map(subnet => subnet.subnetId)
+      });
+
+      const redisCluster = new elasticache.CfnCacheCluster(this, 'BookingRedis', {
+        cacheNodeType: 'cache.t3.micro',
+        engine: 'redis',
+        numCacheNodes: 1,
+        cacheSubnetGroupName: redisSubnetGroup.ref,
+        vpcSecurityGroupIds: [redisSecurityGroup.securityGroupId]
+      });
+
+      redisEndpoint = redisCluster.attrRedisEndpointAddress;
+      redisPort = redisCluster.attrRedisEndpointPort;
+    }
 
     const bookingTable = new dynamodb.Table(this, 'BookingTable', {
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
@@ -121,109 +133,7 @@ class TapStack extends Stack {
     const searchFunction = new lambda.Function(this, 'SearchFunction', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
-      code: lambda.Code.fromInline(`
-const { DynamoDBClient, QueryCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
-const { EventBridgeClient, PutEventsCommand } = require('@aws-sdk/client-eventbridge');
-const { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
-const { createClient } = require('redis');
-
-const dynamodb = new DynamoDBClient({});
-const eventbridge = new EventBridgeClient({});
-const cloudwatch = new CloudWatchClient({});
-
-let redisClient = null;
-
-async function getRedisClient() {
-  if (!redisClient) {
-    redisClient = createClient({
-      socket: {
-        host: process.env.REDIS_ENDPOINT,
-        port: parseInt(process.env.REDIS_PORT)
-      }
-    });
-    await redisClient.connect();
-  }
-  return redisClient;
-}
-
-exports.handler = async (event) => {
-  const startTime = Date.now();
-  try {
-    const queryParams = event.queryStringParameters || {};
-    const searchKey = queryParams.searchKey || 'default';
-    const cacheKey = \`search:\${searchKey}\`;
-    
-    const redis = await getRedisClient();
-    const cached = await redis.get(cacheKey);
-    
-    if (cached) {
-      await cloudwatch.send(new PutMetricDataCommand({
-        Namespace: 'BookingPlatform',
-        MetricData: [{ MetricName: 'CacheHit', Value: 1, Unit: 'Count' }]
-      }));
-      
-      await eventbridge.send(new PutEventsCommand({
-        Entries: [{
-          Source: 'booking.platform',
-          DetailType: 'search.completed',
-          Detail: JSON.stringify({ searchKey, cached: true }),
-          EventBusName: process.env.EVENT_BUS_NAME
-        }]
-      }));
-      
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ results: JSON.parse(cached), cached: true })
-      };
-    }
-    
-    await cloudwatch.send(new PutMetricDataCommand({
-      Namespace: 'BookingPlatform',
-      MetricData: [{ MetricName: 'CacheMiss', Value: 1, Unit: 'Count' }]
-    }));
-    
-    const result = await dynamodb.send(new QueryCommand({
-      TableName: process.env.BOOKING_TABLE,
-      IndexName: 'searchIndex',
-      KeyConditionExpression: 'searchKey = :sk',
-      ExpressionAttributeValues: { ':sk': { S: searchKey } },
-      Limit: 50
-    }));
-    
-    const results = result.Items || [];
-    await redis.setEx(cacheKey, parseInt(process.env.CACHE_TTL), JSON.stringify(results));
-    
-    const latency = Date.now() - startTime;
-    await cloudwatch.send(new PutMetricDataCommand({
-      Namespace: 'BookingPlatform',
-      MetricData: [{ MetricName: 'Latency', Value: latency, Unit: 'Milliseconds' }]
-    }));
-    
-    await eventbridge.send(new PutEventsCommand({
-      Entries: [{
-        Source: 'booking.platform',
-        DetailType: 'search.completed',
-        Detail: JSON.stringify({ searchKey, cached: false, count: results.length }),
-        EventBusName: process.env.EVENT_BUS_NAME
-      }]
-    }));
-    
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ results, cached: false })
-    };
-  } catch (error) {
-    console.error('Error:', error);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: error.message })
-    };
-  }
-};
-      `),
+      code: lambda.Code.fromAsset('lib/lambda/search.zip'),
       memorySize: 1024,
       timeout: Duration.seconds(30),
       tracing: lambda.Tracing.ACTIVE,
@@ -232,8 +142,8 @@ exports.handler = async (event) => {
       role: lambdaExecutionRole,
       environment: {
         BOOKING_TABLE: bookingTable.tableName,
-        REDIS_ENDPOINT: redisCluster.attrRedisEndpointAddress,
-        REDIS_PORT: redisCluster.attrRedisEndpointPort,
+        REDIS_ENDPOINT: redisEndpoint,
+        REDIS_PORT: redisPort,
         EVENT_BUS_NAME: eventBus.eventBusName,
         CACHE_TTL: '300'
       }
@@ -242,84 +152,7 @@ exports.handler = async (event) => {
     const bookingFunction = new lambda.Function(this, 'BookingFunction', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
-      code: lambda.Code.fromInline(`
-const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
-const { EventBridgeClient, PutEventsCommand } = require('@aws-sdk/client-eventbridge');
-const { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
-const { createClient } = require('redis');
-
-const dynamodb = new DynamoDBClient({});
-const eventbridge = new EventBridgeClient({});
-const cloudwatch = new CloudWatchClient({});
-
-let redisClient = null;
-
-async function getRedisClient() {
-  if (!redisClient) {
-    redisClient = createClient({
-      socket: {
-        host: process.env.REDIS_ENDPOINT,
-        port: parseInt(process.env.REDIS_PORT)
-      }
-    });
-    await redisClient.connect();
-  }
-  return redisClient;
-}
-
-exports.handler = async (event) => {
-  const startTime = Date.now();
-  try {
-    const body = JSON.parse(event.body || '{}');
-    const bookingId = \`booking-\${Date.now()}-\${Math.random().toString(36).substring(7)}\`;
-    const timestamp = Date.now();
-    
-    const item = {
-      id: { S: bookingId },
-      searchKey: { S: body.searchKey || 'default' },
-      timestamp: { N: timestamp.toString() },
-      data: { S: JSON.stringify(body) }
-    };
-    
-    await dynamodb.send(new PutItemCommand({
-      TableName: process.env.BOOKING_TABLE,
-      Item: item
-    }));
-    
-    const redis = await getRedisClient();
-    const cacheKey = \`search:\${body.searchKey || 'default'}\`;
-    await redis.del(cacheKey);
-    
-    await eventbridge.send(new PutEventsCommand({
-      Entries: [{
-        Source: 'booking.platform',
-        DetailType: 'booking.requested',
-        Detail: JSON.stringify({ bookingId, searchKey: body.searchKey }),
-        EventBusName: process.env.EVENT_BUS_NAME
-      }]
-    }));
-    
-    const latency = Date.now() - startTime;
-    await cloudwatch.send(new PutMetricDataCommand({
-      Namespace: 'BookingPlatform',
-      MetricData: [{ MetricName: 'Latency', Value: latency, Unit: 'Milliseconds' }]
-    }));
-    
-    return {
-      statusCode: 201,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bookingId, message: 'Booking created successfully' })
-    };
-  } catch (error) {
-    console.error('Error:', error);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: error.message })
-    };
-  }
-};
-      `),
+      code: lambda.Code.fromAsset('lib/lambda/booking.zip'),
       memorySize: 1024,
       timeout: Duration.seconds(30),
       tracing: lambda.Tracing.ACTIVE,
@@ -328,8 +161,8 @@ exports.handler = async (event) => {
       role: lambdaExecutionRole,
       environment: {
         BOOKING_TABLE: bookingTable.tableName,
-        REDIS_ENDPOINT: redisCluster.attrRedisEndpointAddress,
-        REDIS_PORT: redisCluster.attrRedisEndpointPort,
+        REDIS_ENDPOINT: redisEndpoint,
+        REDIS_PORT: redisPort,
         EVENT_BUS_NAME: eventBus.eventBusName
       }
     });
@@ -502,7 +335,7 @@ exports.handler = async (event) => {
     });
 
     new CfnOutput(this, 'RedisEndpoint', {
-      value: redisCluster.attrRedisEndpointAddress,
+      value: redisEndpoint,
       description: 'Redis Endpoint Address',
       exportName: `${id}-RedisEndpoint`
     });
@@ -522,4 +355,193 @@ exports.handler = async (event) => {
 }
 
 export { TapStack };
+```
+
+lib/lambda/search/index.js
+
+```javascript
+const { DynamoDBClient, QueryCommand } = require('@aws-sdk/client-dynamodb');
+const { unmarshall } = require('@aws-sdk/util-dynamodb');
+const { EventBridgeClient, PutEventsCommand } = require('@aws-sdk/client-eventbridge');
+const { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+const { createClient } = require('redis');
+
+const dynamodb = new DynamoDBClient({});
+const eventbridge = new EventBridgeClient({});
+const cloudwatch = new CloudWatchClient({});
+
+let redisClient = null;
+
+async function getRedisClient() {
+  if (!redisClient) {
+    redisClient = createClient({
+      socket: {
+        host: process.env.REDIS_ENDPOINT,
+        port: parseInt(process.env.REDIS_PORT)
+      }
+    });
+    await redisClient.connect();
+  }
+  return redisClient;
+}
+
+exports.handler = async (event) => {
+  const startTime = Date.now();
+  try {
+    const queryParams = event.queryStringParameters || {};
+    const searchKey = queryParams.searchKey || 'default';
+    const cacheKey = `search:${searchKey}`;
+
+    const redis = await getRedisClient();
+    const cached = await redis.get(cacheKey);
+
+    if (cached) {
+      await cloudwatch.send(new PutMetricDataCommand({
+        Namespace: 'BookingPlatform',
+        MetricData: [{ MetricName: 'CacheHit', Value: 1, Unit: 'Count' }]
+      }));
+
+      await eventbridge.send(new PutEventsCommand({
+        Entries: [{
+          Source: 'booking.platform',
+          DetailType: 'search.completed',
+          Detail: JSON.stringify({ searchKey, cached: true }),
+          EventBusName: process.env.EVENT_BUS_NAME
+        }]
+      }));
+
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ results: JSON.parse(cached), cached: true })
+      };
+    }
+
+    await cloudwatch.send(new PutMetricDataCommand({
+      Namespace: 'BookingPlatform',
+      MetricData: [{ MetricName: 'CacheMiss', Value: 1, Unit: 'Count' }]
+    }));
+
+    const result = await dynamodb.send(new QueryCommand({
+      TableName: process.env.BOOKING_TABLE,
+      IndexName: 'searchIndex',
+      KeyConditionExpression: 'searchKey = :sk',
+      ExpressionAttributeValues: { ':sk': { S: searchKey } },
+      Limit: 50
+    }));
+
+    const rawItems = result.Items || [];
+    const results = rawItems.map(item => unmarshall(item));
+    await redis.setEx(cacheKey, parseInt(process.env.CACHE_TTL), JSON.stringify(results));
+
+    const latency = Date.now() - startTime;
+    await cloudwatch.send(new PutMetricDataCommand({
+      Namespace: 'BookingPlatform',
+      MetricData: [{ MetricName: 'Latency', Value: latency, Unit: 'Milliseconds' }]
+    }));
+
+    await eventbridge.send(new PutEventsCommand({
+      Entries: [{
+        Source: 'booking.platform',
+        DetailType: 'search.completed',
+        Detail: JSON.stringify({ searchKey, cached: false, count: results.length }),
+        EventBusName: process.env.EVENT_BUS_NAME
+      }]
+    }));
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ results, cached: false })
+    };
+  } catch (error) {
+    console.error('Error:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: error.message })
+    };
+  }
+};
+```
+
+lib/lambda/booking/index.js
+
+```javascript
+const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const { EventBridgeClient, PutEventsCommand } = require('@aws-sdk/client-eventbridge');
+const { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+const { createClient } = require('redis');
+
+const dynamodb = new DynamoDBClient({});
+const eventbridge = new EventBridgeClient({});
+const cloudwatch = new CloudWatchClient({});
+
+let redisClient = null;
+
+async function getRedisClient() {
+  if (!redisClient) {
+    redisClient = createClient({
+      socket: {
+        host: process.env.REDIS_ENDPOINT,
+        port: parseInt(process.env.REDIS_PORT)
+      }
+    });
+    await redisClient.connect();
+  }
+  return redisClient;
+}
+
+exports.handler = async (event) => {
+  const startTime = Date.now();
+  try {
+    const body = JSON.parse(event.body || '{}');
+    const bookingId = `booking-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const timestamp = Date.now();
+
+    const item = {
+      id: { S: bookingId },
+      searchKey: { S: body.searchKey || 'default' },
+      timestamp: { N: timestamp.toString() },
+      data: { S: JSON.stringify(body) }
+    };
+
+    await dynamodb.send(new PutItemCommand({
+      TableName: process.env.BOOKING_TABLE,
+      Item: item
+    }));
+
+    const redis = await getRedisClient();
+    const cacheKey = `search:${body.searchKey || 'default'}`;
+    await redis.del(cacheKey);
+
+    await eventbridge.send(new PutEventsCommand({
+      Entries: [{
+        Source: 'booking.platform',
+        DetailType: 'booking.requested',
+        Detail: JSON.stringify({ bookingId, searchKey: body.searchKey }),
+        EventBusName: process.env.EVENT_BUS_NAME
+      }]
+    }));
+
+    const latency = Date.now() - startTime;
+    await cloudwatch.send(new PutMetricDataCommand({
+      Namespace: 'BookingPlatform',
+      MetricData: [{ MetricName: 'Latency', Value: latency, Unit: 'Milliseconds' }]
+    }));
+
+    return {
+      statusCode: 201,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookingId, message: 'Booking created successfully' })
+    };
+  } catch (error) {
+    console.error('Error:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: error.message })
+    };
+  }
+};
 ```
