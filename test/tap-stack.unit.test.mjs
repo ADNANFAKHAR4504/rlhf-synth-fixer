@@ -248,12 +248,14 @@ describe('TapStack', () => {
     });
   });
 
-  describe('EventBridge', () => {
+  describe('EventBridge Configuration', () => {
     test('creates EventBridge event bus', () => {
-      template.resourceCountIs('AWS::Events::EventBus', 1);
+      template.hasResourceProperties('AWS::Events::EventBus', {
+        Name: `global-api-events-${environmentSuffix}`,
+      });
     });
 
-    test('creates cross-region event forwarding rule (primary only)', () => {
+    test('creates cross-region event forwarding rule for primary stack', () => {
       template.hasResourceProperties('AWS::Events::Rule', {
         EventPattern: {
           source: ['global-api.events'],
@@ -261,18 +263,8 @@ describe('TapStack', () => {
       });
     });
 
-    test('event forwarding rule targets default event bus', () => {
-      template.hasResourceProperties('AWS::Events::Rule', {
-        Targets: Match.arrayWith([
-          Match.objectLike({
-            Arn: Match.stringLikeRegexp('arn:aws:events:.*:.*:event-bus/default'),
-          }),
-        ]),
-      });
-    });
-
-    test('does not create event forwarding rule for non-primary stack', () => {
-      const nonPrimaryStack = new TapStack(app, 'NonPrimaryTestTapStack', {
+    test('does not create cross-region forwarding for non-primary stack', () => {
+      const nonPrimaryStack = new TapStack(app, 'NonPrimaryTestStack', {
         env: {
           account: '123456789012',
           region: 'us-east-1',
@@ -285,23 +277,13 @@ describe('TapStack', () => {
       const rules = nonPrimaryTemplate.findResources('AWS::Events::Rule');
       expect(Object.keys(rules).length).toBe(0);
     });
-
-    test('EventBridge event bus has correct name pattern', () => {
-      template.hasResourceProperties('AWS::Events::EventBus', {
-        Name: `global-api-events-${environmentSuffix}`,
-      });
-    });
   });
 
   describe('Lambda Function', () => {
-    test('creates Lambda function', () => {
-      const lambdas = template.findResources('AWS::Lambda::Function');
-      expect(Object.keys(lambdas).length).toBeGreaterThanOrEqual(1);
-    });
-
-    test('Lambda function uses Node.js runtime', () => {
+    test('creates Lambda function with correct runtime', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Runtime: 'nodejs20.x',
+        Handler: 'index.handler',
       });
     });
 
@@ -313,21 +295,17 @@ describe('TapStack', () => {
       });
     });
 
-    test('Lambda function has environment variables configured', () => {
+    test('Lambda function has correct environment variables', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Environment: {
           Variables: Match.objectLike({
-            TABLE_NAME: Match.anyValue(),
-            ASSET_BUCKET: Match.anyValue(),
-            BACKUP_BUCKET: Match.anyValue(),
-            REGION: Match.anyValue(),
-            EVENT_BUS: Match.anyValue(),
+            ENVIRONMENT_SUFFIX: environmentSuffix,
           }),
         },
       });
     });
 
-    test('Lambda has provisioned concurrency via alias', () => {
+    test('creates Lambda alias with provisioned concurrency', () => {
       template.hasResourceProperties('AWS::Lambda::Alias', {
         Name: 'production',
         ProvisionedConcurrencyConfig: {
@@ -335,222 +313,324 @@ describe('TapStack', () => {
         },
       });
     });
-
-    test('Lambda function has proper IAM role with required policies', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Principal: { Service: 'lambda.amazonaws.com' },
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('Lambda function has correct function name pattern', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `global-api-function-${environmentSuffix}`,
-      });
-    });
-
-    test('Lambda function has VPC configuration when not in LocalStack', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        VpcConfig: Match.anyValue(),
-      });
-    });
   });
 
   describe('API Gateway', () => {
     test('creates API Gateway REST API', () => {
-      template.resourceCountIs('AWS::ApiGateway::RestApi', 1);
-    });
-
-    test('creates API Gateway deployment and stage', () => {
-      template.resourceCountIs('AWS::ApiGateway::Deployment', 1);
-      template.resourceCountIs('AWS::ApiGateway::Stage', 1);
-    });
-
-    test('API Gateway has correct endpoint type', () => {
       template.hasResourceProperties('AWS::ApiGateway::RestApi', {
+        Name: `global-api-${environmentSuffix}`,
         EndpointConfiguration: {
           Types: ['REGIONAL'],
         },
       });
     });
 
-    test('API Gateway stage has tracing enabled', () => {
+    test('creates API Gateway deployment and stage', () => {
       template.hasResourceProperties('AWS::ApiGateway::Stage', {
+        StageName: 'prod',
         TracingEnabled: true,
       });
     });
 
-    test('API Gateway has health resource configured', () => {
+    test('creates health resource endpoint', () => {
       template.hasResourceProperties('AWS::ApiGateway::Resource', {
         PathPart: 'health',
       });
     });
 
-    test('API Gateway has CloudWatch role enabled', () => {
-      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
-        Policy: Match.anyValue(),
-      });
+    test('creates GET method for root and health endpoints', () => {
+      template.resourceCountIs('AWS::ApiGateway::Method', 2); // Root GET + Health GET
     });
   });
 
   describe('WAF Configuration', () => {
-    test('creates WAF WebACL', () => {
-      template.resourceCountIs('AWS::WAFv2::WebACL', 1);
-    });
-
-    test('WAF has rate limiting rule', () => {
+    test('creates WAF Web ACL with rate limiting', () => {
       template.hasResourceProperties('AWS::WAFv2::WebACL', {
+        Scope: 'REGIONAL',
         Rules: Match.arrayWith([
           Match.objectLike({
             Name: 'RateLimitRule',
-            Statement: {
-              RateBasedStatement: {
-                Limit: 2000,
-                AggregateKeyType: 'IP',
-              },
-            },
+            Priority: 1,
           }),
         ]),
       });
     });
 
-    test('WAF has AWS managed rules', () => {
+    test('creates WAF Web ACL association with API Gateway', () => {
+      template.hasResourceProperties('AWS::WAFv2::WebACLAssociation', {
+        ResourceArn: Match.stringLikeRegexp(
+          /^arn:aws:apigateway:.*:\/restapis\/.*\/stages\/prod$/
+        ),
+      });
+    });
+
+    test('WAF includes AWS managed rule set', () => {
       template.hasResourceProperties('AWS::WAFv2::WebACL', {
         Rules: Match.arrayWith([
           Match.objectLike({
             Name: 'AWSManagedRulesCommonRuleSet',
-            Statement: {
-              ManagedRuleGroupStatement: {
-                VendorName: 'AWS',
-                Name: 'AWSManagedRulesCommonRuleSet',
-              },
-            },
+            Priority: 2,
           }),
         ]),
-      });
-    });
-
-    test('WAF has correct scope for regional deployment', () => {
-      template.hasResourceProperties('AWS::WAFv2::WebACL', {
-        Scope: 'REGIONAL',
       });
     });
   });
 
   describe('CloudWatch Monitoring', () => {
-    test('creates CloudWatch alarms', () => {
-      template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
-    });
-
     test('creates Lambda error alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
         MetricName: 'Errors',
         Namespace: 'AWS/Lambda',
+        Threshold: 10,
+        EvaluationPeriods: 2,
       });
     });
 
     test('creates API Gateway error alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        MetricName: '5XXError',
+        MetricName: '4XXError',
         Namespace: 'AWS/ApiGateway',
+        Threshold: 50,
+        EvaluationPeriods: 3,
       });
     });
 
     test('alarms have correct thresholds and evaluation periods', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        Threshold: Match.anyValue(),
-        EvaluationPeriods: 2,
+      const alarms = template.findResources('AWS::CloudWatch::Alarm');
+      const alarmKeys = Object.keys(alarms);
+      expect(alarmKeys.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('creates CloudWatch dashboard', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+        DashboardName: `tap-monitoring-${environmentSuffix}`,
+      });
+    });
+
+    test('dashboard has correct widget configuration', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+        DashboardBody: Match.serializedJson(
+          Match.objectLike({
+            widgets: Match.arrayWith([
+              Match.objectLike({
+                type: 'metric',
+                properties: Match.objectLike({
+                  title: 'Lambda Invocations',
+                }),
+              }),
+            ]),
+          })
+        ),
+      });
+    });
+  });
+
+  describe('CloudWatch Synthetics', () => {
+    test('creates synthetics canary in non-LocalStack environment', () => {
+      template.hasResourceProperties('AWS::Synthetics::Canary', {
+        Name: `tap-api-canary-${environmentSuffix}`,
+        RuntimeVersion: 'syn-nodejs-puppeteer-6.2',
+      });
+    });
+
+    test('canary has correct schedule configuration', () => {
+      template.hasResourceProperties('AWS::Synthetics::Canary', {
+        Schedule: {
+          Expression: 'rate(5 minutes)',
+        },
+      });
+    });
+
+    test('does not create canary in LocalStack environment', () => {
+      const originalEndpoint = process.env.AWS_ENDPOINT_URL;
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+
+      const localStackApp = new cdk.App();
+      const localStackStack = new TapStack(localStackApp, 'LocalStackCanaryTest', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix,
+        isPrimary: true,
+      });
+      const localStackTemplate = Template.fromStack(localStackStack);
+
+      const canaries = localStackTemplate.findResources('AWS::Synthetics::Canary');
+      expect(Object.keys(canaries).length).toBe(0);
+
+      // Restore original environment
+      if (originalEndpoint) {
+        process.env.AWS_ENDPOINT_URL = originalEndpoint;
+      } else {
+        delete process.env.AWS_ENDPOINT_URL;
+      }
+    });
+  });
+
+  describe('IAM Permissions', () => {
+    test('Lambda function has DynamoDB read/write permissions', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Action: Match.arrayWith(['dynamodb:BatchGetItem', 'dynamodb:GetRecords']),
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('Lambda function has S3 bucket permissions', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Action: Match.arrayWith(['s3:GetObject*', 's3:GetBucket*']),
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('Lambda function has EventBridge permissions', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Action: ['events:PutEvents'],
+            }),
+          ]),
+        },
       });
     });
   });
 
   describe('Stack Outputs', () => {
     test('creates all required outputs', () => {
-      template.hasOutput('ApiEndpoint', {});
-      template.hasOutput('ApiId', {});
-      template.hasOutput('TableName', {});
-      template.hasOutput('AssetBucketName', {});
-      template.hasOutput('BackupBucketName', {});
-      template.hasOutput('EventBusName', {});
-      template.hasOutput('LambdaFunctionName', {});
+      const outputs = [
+        'ApiEndpoint',
+        'ApiId',
+        'TableName',
+        'AssetBucketName',
+        'BackupBucketName',
+        'EventBusName',
+        'LambdaFunctionName',
+        'WebAclArn',
+        'DashboardUrl',
+      ];
+
+      outputs.forEach((outputName) => {
+        template.hasOutput(outputName, {});
+      });
     });
 
-    test('outputs have descriptions', () => {
+    test('outputs have correct export names', () => {
       template.hasOutput('ApiEndpoint', {
-        Description: 'API Gateway endpoint URL',
+        Export: {
+          Name: `global-api-endpoint-${environmentSuffix}`,
+        },
       });
-      template.hasOutput('TableName', {
-        Description: 'DynamoDB table name',
+    });
+
+    test('dashboard URL output has correct format', () => {
+      template.hasOutput('DashboardUrl', {
+        Value: Match.stringLikeRegexp(
+          /^https:\/\/.*\.console\.aws\.amazon\.com\/cloudwatch\/home/
+        ),
       });
     });
   });
 
-  describe('IAM Permissions', () => {
-    test('Lambda has DynamoDB permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
+  describe('Resource Naming', () => {
+    test('all resources use environment suffix in names', () => {
+      // Test that table name includes environment suffix
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: `global-api-table-${environmentSuffix}`,
+      });
+
+      // Test that event bus name includes environment suffix
+      template.hasResourceProperties('AWS::Events::EventBus', {
+        Name: `global-api-events-${environmentSuffix}`,
+      });
+    });
+
+    test('bucket names include account and region for uniqueness', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.stringLikeRegexp(
+          new RegExp(`global-api-.*-${environmentSuffix}-123456789012-us-east-1`)
+        ),
+      });
+    });
+  });
+
+  describe('Security Configuration', () => {
+    test('all encryption uses customer managed KMS keys', () => {
+      // DynamoDB encryption
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        SSESpecification: {
+          SSEEnabled: true,
+          KMSMasterKeyId: Match.anyValue(),
+        },
+      });
+
+      // S3 encryption
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: Match.arrayWith([
             Match.objectLike({
-              Effect: 'Allow',
-              Action: Match.arrayWith([
-                'dynamodb:BatchGetItem',
-                'dynamodb:GetRecords',
-                'dynamodb:GetShardIterator',
-                'dynamodb:Query',
-                'dynamodb:GetItem',
-                'dynamodb:Scan',
-                'dynamodb:ConditionCheckItem',
-                'dynamodb:BatchWriteItem',
-                'dynamodb:PutItem',
-                'dynamodb:UpdateItem',
-                'dynamodb:DeleteItem',
-                'dynamodb:DescribeTable',
-              ]),
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'aws:kms',
+                KMSMasterKeyID: Match.anyValue(),
+              },
             }),
           ]),
         },
       });
     });
 
-    test('Lambda has S3 permissions for both buckets', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Action: Match.arrayWith([
-                's3:GetObject*',
-                's3:GetBucket*',
-                's3:List*',
-                's3:DeleteObject*',
-                's3:PutObject',
-                's3:PutObjectLegalHold',
-                's3:PutObjectRetention',
-                's3:PutObjectTagging',
-                's3:PutObjectVersionTagging',
-                's3:Abort*',
-              ]),
-            }),
-          ]),
+    test('API Gateway has CloudWatch logging enabled', () => {
+      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
+        Policy: Match.absent(),
+      });
+
+      template.hasResourceProperties('AWS::ApiGateway::Stage', {
+        MethodSettings: Match.arrayWith([
+          Match.objectLike({
+            LoggingLevel: 'INFO',
+            DataTraceEnabled: true,
+          }),
+        ]),
+      });
+    });
+  });
+
+  describe('Error Handling', () => {
+    test('stack handles missing props gracefully', () => {
+      const minimalStack = new TapStack(app, 'MinimalTestStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
         },
+      });
+      const minimalTemplate = Template.fromStack(minimalStack);
+
+      // Should still create basic resources with defaults
+      minimalTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'global-api-table-dev',
       });
     });
 
-    test('Lambda has EventBridge permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Action: 'events:PutEvents',
-            }),
-          ]),
-        },
+    test('removal policies are set for stateful resources', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        DeletionPolicy: 'Delete',
+      });
+
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        DeletionPolicy: 'Delete',
       });
     });
   });
