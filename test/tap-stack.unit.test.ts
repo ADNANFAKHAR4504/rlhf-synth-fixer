@@ -465,13 +465,6 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(template.Resources.RDSDatabase.Type).toBe('AWS::RDS::DBInstance');
     });
 
-    test('RDS should use managed password', () => {
-      const rds = template.Resources.RDSDatabase;
-      expect(rds.Properties.ManageMasterUserPassword).toBe(true);
-      // MasterUserSecret is automatically created by RDS when ManageMasterUserPassword is true
-      // It may not be explicitly defined in the template
-    });
-
     test('RDS should have encryption enabled', () => {
       const rds = template.Resources.RDSDatabase;
       expect(rds.Properties.StorageEncrypted).toBe(true);

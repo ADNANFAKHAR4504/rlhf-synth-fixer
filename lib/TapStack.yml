@@ -1355,7 +1355,7 @@ Resources:
                 -s
             
             # Secrets Manager retrieval commented out - LocalStack does not support RDS MasterUserSecret
-            # DB_SECRET_ARN="${RDSDatabase.MasterUserSecret.SecretArn}"
+            # DB_SECRET_ARN="${DBPasswordSecret}"
             # DB_SECRET=$(aws secretsmanager get-secret-value --secret-id $DB_SECRET_ARN --region ${AWS::Region} --query SecretString --output text)
             # DB_PASSWORD=$(echo $DB_SECRET | jq -r .password)
             DB_PASSWORD="localstack-placeholder"
@@ -1576,8 +1576,21 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${EnvironmentName}/rds/db-password
+      Description: RDS database master password
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+        ExcludePunctuation: false
+
   RDSDatabase:
     Type: AWS::RDS::DBInstance
+    DependsOn: DBPasswordSecret
     Properties:
       DBName: !Ref DBName
       Engine: mysql
@@ -1587,21 +1600,19 @@ Resources:
       StorageType: gp3
       StorageEncrypted: true
       MasterUsername: !Ref DBUsername
-      ManageMasterUserPassword: true
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${EnvironmentName}/rds/db-password:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 7
       PreferredBackupWindow: "03:00-04:00"
       PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
-      MultiAZ: !If [IsProduction, true, false]
-      EnableCloudwatchLogsExports:
-        - error
-        - general
-        - slowquery
+      # MultiAZ disabled for LocalStack - causes timeout issues
+      MultiAZ: false
+      # EnableCloudwatchLogsExports removed for LocalStack - causes timeout issues
       CopyTagsToSnapshot: true
-      MonitoringInterval: !If [UseDetailedMonitoring, 60, 0]
-      MonitoringRoleArn: !If [UseDetailedMonitoring, !GetAtt RDSEnhancedMonitoringRole.Arn, !Ref 'AWS::NoValue']
+      # MonitoringInterval disabled for LocalStack - causes timeout issues
+      MonitoringInterval: 0
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-Database

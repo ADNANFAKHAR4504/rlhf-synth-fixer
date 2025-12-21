@@ -66,8 +66,8 @@ if [ -n "$LOCALSTACK_SERVICES" ]; then
 else
     # Default services for CDK/CFN/Terraform/Pulumi deployments
     # Include all commonly needed services to avoid "service not enabled" errors
-    # Note: elasticloadbalancing is separate from elb and elbv2 in LocalStack
-    SERVICES="acm,apigateway,cloudformation,cloudwatch,dynamodb,ec2,ecr,ecs,elb,elbv2,events,iam,kms,lambda,logs,route53,s3,secretsmanager,sns,sqs,ssm,sts,autoscaling"
+    # elasticloadbalancing is separate from elb and elbv2 in LocalStack
+    SERVICES="acm,apigateway,cloudformation,cloudfront,cloudwatch,dynamodb,ec2,ecr,ecs,elb,elbv2,events,iam,kms,lambda,logs,rds,route53,s3,secretsmanager,sns,sqs,ssm,sts,autoscaling,wafv2"
     echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
     echo -e "${YELLOW}💡 To customize, set LOCALSTACK_SERVICES environment variable${NC}"
 fi
@@ -92,7 +92,11 @@ DOCKER_CMD="docker run -d \
   -e DEBUG=1 \
   -e DATA_DIR=/tmp/localstack/data \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
-  -e ENFORCE_IAM=0"
+  -e ENFORCE_IAM=0 \
+  -e RDS_MYSQL_DOCKER=0 \
+  -e RDS_PG_DOCKER=0 \
+  -e LAMBDA_EXECUTOR=local \
+  -e LAMBDA_REMOVE_CONTAINERS=1 
 
 # Add SERVICES only if explicitly set
 if [ -n "$SERVICES" ]; then
