@@ -1,34 +1,34 @@
-# TAP Infrastructure Stack
+# Infrastructure Provisioning Task
 
 ## Objective
-Create a comprehensive AWS CDK TypeScript infrastructure stack for a TAP (Test Automation Platform) application that includes:
-
-- S3 bucket for data storage
-- Lambda function for processing
-- IAM roles and permissions
-- LocalStack compatibility for development
+Create a basic AWS CDK TypeScript stack that provisions cloud infrastructure including S3 bucket, Lambda function, and IAM role with proper LocalStack compatibility.
 
 ## Requirements
+- AWS CDK TypeScript implementation
+- S3 bucket for data storage with encryption
+- Lambda function for processing with inline code
+- IAM role with appropriate permissions
+- LocalStack compatibility for local development
+- Proper error handling and outputs
+- Unit tests with good coverage
 
-### Core Infrastructure
-1. **S3 Bucket**: For storing application data with proper encryption and versioning
-2. **Lambda Function**: For processing events with environment variables
-3. **IAM Role**: For Lambda execution with appropriate permissions
-4. **Outputs**: Export key resource identifiers
+## Key Features
+- Environment detection (LocalStack vs AWS)
+- Configurable removal policies based on environment
+- S3 bucket with versioning and encryption
+- Lambda function with environment variables
+- IAM role with Lambda execution permissions
+- CloudFormation outputs for integration
 
-### LocalStack Compatibility
-- Detect LocalStack environment automatically
-- Use appropriate configurations for local development
-- Handle bucket naming differences between AWS and LocalStack
-- Set proper removal policies for development vs production
-
-### Security
-- Enable S3 encryption
+## Technical Specifications
+- Runtime: Node.js 18.x for Lambda
+- S3 encryption: S3-managed
 - Block public access on S3 bucket
-- Use least privilege IAM policies
-- Follow AWS security best practices
+- Versioning enabled for production environments
+- Auto-delete objects in LocalStack for testing
 
-### Configuration
-- Support environment suffixes
-- Proper resource naming conventions
-- Environment-specific settings
+## Expected Deliverables
+- CDK stack implementation
+- Unit tests with coverage
+- Integration with CI/CD pipeline
+- LocalStack deployment support
