@@ -1,50 +1,53 @@
-# TAP Infrastructure Implementation
+# CDK Infrastructure Stack Implementation
 
-## Solution Overview
-I have created a comprehensive AWS CDK TypeScript project that addresses the CI/CD pipeline requirements while maintaining LocalStack compatibility.
+## Implementation Overview
+Created a CDK TypeScript stack (`TapStack`) that provisions S3, Lambda, and IAM resources with full LocalStack compatibility.
 
-## Implementation Details
+## Architecture Components
 
-### Core Infrastructure Components
-1. **S3 Bucket** with encryption and security best practices
-2. **Lambda Function** for processing with inline code
-3. **IAM Role** with appropriate service permissions
-4. **Stack Outputs** for integration with other systems
+### 1. S3 Bucket (`TapBucket`)
+- **Encryption**: S3-managed encryption enabled
+- **Access Control**: Block all public access
+- **Versioning**: Enabled for AWS, disabled for LocalStack
+- **Cleanup**: Auto-delete objects in LocalStack environments
+- **Naming**: Dynamic naming for AWS, auto-generated for LocalStack
 
-### LocalStack Compatibility
-- Dynamic bucket naming (undefined for LocalStack, account/region-based for AWS)
-- Conditional removal policies (DESTROY for LocalStack, RETAIN for AWS)
-- Environment variable detection for LocalStack
-- Simplified configurations where LocalStack has limitations
+### 2. Lambda Function (`ProcessingFunction`) 
+- **Runtime**: Node.js 18.x
+- **Handler**: Inline code for event processing
+- **Environment Variables**: 
+  - `BUCKET_NAME`: S3 bucket reference
+  - `IS_LOCALSTACK`: Environment detection flag
+- **Permissions**: Read/write access to S3 bucket
 
-### Testing Strategy
-- Comprehensive unit tests covering all resource creation
-- LocalStack vs AWS configuration testing
-- IAM permissions verification
-- Output validation
-- 80%+ code coverage threshold
+### 3. IAM Role (`TapRole`)
+- **Service Principal**: Lambda service
+- **Managed Policies**: AWS Lambda basic execution role
+- **Custom Permissions**: S3 access granted via bucket policy
 
-### CI/CD Integration
-- Proper stack naming convention (TapStack + environment suffix)
-- Environment suffix support via CDK context
-- Required outputs for integration tests
-- ESLint configuration for code quality
-- Jest configuration with TypeScript support
+## LocalStack Compatibility Features
 
-## Technical Decisions
+### Environment Detection
+```typescript
+const isLocalStack =
+  propsIsLocalStack ??
+  (process.env.CDK_LOCAL === 'true' ||
+    process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+    process.env.LOCALSTACK_HOSTNAME !== undefined);
+```
 
-### TypeScript Configuration
-Fixed the original tsconfig.json issue by properly including source directories (bin/, lib/, test/, tests/) while excluding only unnecessary folders.
+### Resource Configuration
+- **Removal Policy**: `DESTROY` for LocalStack, `RETAIN` for AWS
+- **Bucket Naming**: Undefined for LocalStack (auto-generated)
+- **Versioning**: Disabled for LocalStack to avoid issues
 
-### Package Structure
-- Standard CDK project layout with bin/ and lib/ directories
-- Comprehensive package.json with all required scripts
-- ESLint and Jest configurations aligned with CI/CD requirements
+## Stack Outputs
+1. **BucketName**: S3 bucket identifier
+2. **FunctionArn**: Lambda function ARN for invocation
+3. **RoleArn**: IAM role ARN for reference
 
-### Security Considerations
-- S3 bucket encryption enabled
-- Public access blocked on S3 bucket
-- Proper IAM role assumptions
-- Environment-specific configurations
-
-This implementation ensures all CI/CD pipeline stages will pass while providing a solid foundation for infrastructure expansion.
+## Design Decisions
+- Used inline Lambda code for simplicity and LocalStack compatibility
+- Implemented environment-aware resource configuration
+- Followed AWS CDK best practices for resource naming and policies
+- Ensured clean resource cleanup in LocalStack environments

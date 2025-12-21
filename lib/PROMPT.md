@@ -1,27 +1,39 @@
-# TAP Infrastructure CDK Stack
+# Infrastructure Provisioning Requirements
 
 ## Overview
-This project implements a basic AWS CDK stack for the TAP (Test Automation Platform) infrastructure. It provides essential cloud resources including S3 storage, Lambda functions, and IAM roles with proper LocalStack compatibility.
+Create a CDK TypeScript stack that provisions basic AWS infrastructure including S3 storage, Lambda processing, and IAM roles with LocalStack compatibility.
 
-## Architecture
-- **S3 Bucket**: Secure storage for application data with encryption
-- **Lambda Function**: Processing function with environment-specific configuration
-- **IAM Role**: Service role for Lambda with appropriate permissions
-- **LocalStack Support**: Conditional resource configuration for local development
+## Requirements
 
-## Key Features
-- LocalStack compatibility for local development
-- Environment-specific configuration
-- Proper security configurations (encryption, public access blocking)
-- Comprehensive unit tests with 80%+ coverage
-- CI/CD pipeline integration
+### Core Components
+1. **S3 Bucket** - For application data storage
+   - Encryption enabled (S3-managed)
+   - Block public access
+   - Versioning (except LocalStack)
+   - Auto-delete objects in LocalStack
 
-## Usage
-The stack is designed to be deployed with environment suffixes for multi-environment support:
-- Development: `TapStackdev`
-- Production: `TapStackpr8530`
+2. **Lambda Function** - For data processing
+   - Node.js 18.x runtime
+   - Inline code with basic event processing
+   - Environment variables for bucket name and LocalStack detection
 
-## LocalStack Considerations
-- Simplified bucket naming for LocalStack compatibility
-- Destroy removal policy for easy cleanup
-- Environment variable detection for conditional configuration
+3. **IAM Role** - For Lambda execution
+   - Basic execution role
+   - S3 read/write permissions via bucket grants
+
+### LocalStack Compatibility
+- Detect LocalStack environment via environment variables
+- Use DESTROY removal policy for LocalStack resources
+- Handle bucket naming differences between LocalStack and AWS
+
+### Outputs
+- Bucket name
+- Lambda function ARN  
+- IAM role ARN
+
+## Technical Specifications
+- **Platform**: AWS CDK v2
+- **Language**: TypeScript
+- **Stack Name**: TapStack
+- **Environment**: Support both AWS and LocalStack
+- **Testing**: Unit tests required
