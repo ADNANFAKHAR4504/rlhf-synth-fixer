@@ -13,13 +13,14 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps = {}) {
     super(scope, id, props);
 
-    const { environmentSuffix = 'dev', isLocalStack: propsIsLocalStack, ...restProps } = props;
+    const { isLocalStack: propsIsLocalStack } = props;
 
     // Detect LocalStack environment
-    const isLocalStack = propsIsLocalStack ?? 
-      (process.env.CDK_LOCAL === 'true' || 
-       process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-       process.env.LOCALSTACK_HOSTNAME !== undefined);
+    const isLocalStack =
+      propsIsLocalStack ??
+      (process.env.CDK_LOCAL === 'true' ||
+        process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+        process.env.LOCALSTACK_HOSTNAME !== undefined);
 
     // S3 Bucket for storing application data
     const bucket = new s3.Bucket(this, 'TapBucket', {
