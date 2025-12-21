@@ -98,6 +98,14 @@ Parameters:
       - "false"
     Description: "Set to true to enable EC2 instance, false to skip it for LocalStack."
 
+  EnableWAF:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Set to true to enable WAFv2, false to skip it for LocalStack."
+
 Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
   CreateDetector: !Equals [!Ref CreateGuardDuty, "true"]
@@ -106,6 +114,7 @@ Conditions:
   CreateRDS: !Equals [!Ref EnableRDS, "true"]
   CreateCloudFront: !Equals [!Ref EnableCloudFront, "true"]
   CreateEC2: !Equals [!Ref EnableEC2, "true"]
+  CreateWAF: !Equals [!Ref EnableWAF, "true"]
 
 Mappings:
   RegionMap:
@@ -617,6 +626,7 @@ Resources:
 
   WebACL:
     Type: AWS::WAFv2::WebACL
+    Condition: CreateWAF
     Properties:
       Name: !Sub '${ProjectName}-${Environment}-waf'
       Scope: REGIONAL
@@ -654,6 +664,7 @@ Resources:
 
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
+    Condition: CreateWAF
     Properties:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WebACL.Arn
@@ -830,6 +841,7 @@ Outputs:
       Name: !Sub '${ProjectName}-${Environment}-cf-domain'
 
   WebACLArn:
+    Condition: CreateWAF
     Description: WAF Web ACL ARN
     Value: !GetAtt WebACL.Arn
     Export:
