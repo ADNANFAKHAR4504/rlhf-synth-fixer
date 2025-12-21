@@ -140,7 +140,7 @@ if ! command -v curl &> /dev/null; then
 fi
 
 # Give LocalStack more time to start before checking (Pro image needs more initialization time)
-echo -e "${BLUE}⏱️  Waiting 10 seconds for LocalStack to initialize...${NC}"
+echo -e "${BLUE}⏱️  Waiting 60 seconds for LocalStack to initialize...${NC}"
 sleep 60
 
 while [ $attempt -lt $max_attempts ]; do
