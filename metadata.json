@@ -5,8 +5,7 @@
   "team": "synth",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring",
-    "CI/CD Pipeline"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "AWS CDK",
