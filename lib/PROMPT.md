@@ -1,39 +1,45 @@
-# Infrastructure Provisioning Requirements
+# Infrastructure as Code Challenge: TAP Stack
 
-## Overview
-Create a CDK TypeScript stack that provisions basic AWS infrastructure including S3 storage, Lambda processing, and IAM roles with LocalStack compatibility.
+## Objective
+Create a CDK TypeScript stack that provisions basic AWS resources for a data processing application.
 
 ## Requirements
 
-### Core Components
-1. **S3 Bucket** - For application data storage
-   - Encryption enabled (S3-managed)
-   - Block public access
-   - Versioning (except LocalStack)
-   - Auto-delete objects in LocalStack
+### Core Infrastructure
+1. **S3 Bucket** - For storing application data
+   - Should have appropriate encryption and access controls
+   - Different configuration for LocalStack vs AWS
 
 2. **Lambda Function** - For data processing
    - Node.js 18.x runtime
-   - Inline code with basic event processing
    - Environment variables for bucket name and LocalStack detection
+   - Basic processing logic with logging
 
-3. **IAM Role** - For Lambda execution
-   - Basic execution role
-   - S3 read/write permissions via bucket grants
+3. **IAM Role** - For Lambda execution permissions
+   - Basic Lambda execution role
+   - S3 read/write permissions
 
-### LocalStack Compatibility
-- Detect LocalStack environment via environment variables
-- Use DESTROY removal policy for LocalStack resources
-- Handle bucket naming differences between LocalStack and AWS
+### Technical Requirements
+1. **LocalStack Compatibility**
+   - Detect LocalStack environment automatically
+   - Use appropriate configurations for local development
+   - Different removal policies and naming strategies
 
-### Outputs
-- Bucket name
-- Lambda function ARN  
-- IAM role ARN
+2. **Stack Naming**
+   - Use PascalCase naming convention (TapStack)
+   - Support environment suffix via CDK context
 
-## Technical Specifications
-- **Platform**: AWS CDK v2
-- **Language**: TypeScript
-- **Stack Name**: TapStack
-- **Environment**: Support both AWS and LocalStack
-- **Testing**: Unit tests required
+3. **Outputs**
+   - Bucket name
+   - Lambda function ARN
+   - IAM role ARN
+
+### Testing
+- Unit tests for the stack construction
+- Coverage for LocalStack detection logic
+- Verification of resource creation
+
+## Constraints
+- Must work with both AWS and LocalStack
+- Follow AWS CDK best practices
+- Include proper error handling and logging

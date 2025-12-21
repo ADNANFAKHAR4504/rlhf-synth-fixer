@@ -1,53 +1,70 @@
-# CDK Infrastructure Stack Implementation
+# Model Response: TAP Stack Implementation
 
 ## Implementation Overview
-Created a CDK TypeScript stack (`TapStack`) that provisions S3, Lambda, and IAM resources with full LocalStack compatibility.
 
-## Architecture Components
+I created a CDK TypeScript stack that meets all the specified requirements for a data processing application with LocalStack compatibility.
 
-### 1. S3 Bucket (`TapBucket`)
-- **Encryption**: S3-managed encryption enabled
-- **Access Control**: Block all public access
-- **Versioning**: Enabled for AWS, disabled for LocalStack
-- **Cleanup**: Auto-delete objects in LocalStack environments
-- **Naming**: Dynamic naming for AWS, auto-generated for LocalStack
+## Key Components Implemented
 
-### 2. Lambda Function (`ProcessingFunction`) 
-- **Runtime**: Node.js 18.x
-- **Handler**: Inline code for event processing
-- **Environment Variables**: 
-  - `BUCKET_NAME`: S3 bucket reference
-  - `IS_LOCALSTACK`: Environment detection flag
-- **Permissions**: Read/write access to S3 bucket
+### 1. TapStack Class
+- Extends `cdk.Stack` with custom props interface
+- Supports `isLocalStack` and `environmentSuffix` parameters
+- Automatic LocalStack environment detection
 
-### 3. IAM Role (`TapRole`)
-- **Service Principal**: Lambda service
-- **Managed Policies**: AWS Lambda basic execution role
-- **Custom Permissions**: S3 access granted via bucket policy
-
-## LocalStack Compatibility Features
-
-### Environment Detection
+### 2. S3 Bucket Configuration
 ```typescript
-const isLocalStack =
-  propsIsLocalStack ??
-  (process.env.CDK_LOCAL === 'true' ||
-    process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-    process.env.LOCALSTACK_HOSTNAME !== undefined);
+const bucket = new s3.Bucket(this, 'TapBucket', {
+  bucketName: isLocalStack ? undefined : `tap-bucket-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+  removalPolicy: isLocalStack ? cdk.RemovalPolicy.DESTROY : cdk.RemovalPolicy.RETAIN,
+  autoDeleteObjects: isLocalStack,
+  versioned: !isLocalStack,
+  encryption: s3.BucketEncryption.S3_MANAGED,
+  blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+});
 ```
 
-### Resource Configuration
-- **Removal Policy**: `DESTROY` for LocalStack, `RETAIN` for AWS
-- **Bucket Naming**: Undefined for LocalStack (auto-generated)
-- **Versioning**: Disabled for LocalStack to avoid issues
+### 3. Lambda Function
+- Node.js 18.x runtime with inline code
+- Environment variables for bucket name and LocalStack detection
+- Basic event processing with JSON logging
 
-## Stack Outputs
-1. **BucketName**: S3 bucket identifier
-2. **FunctionArn**: Lambda function ARN for invocation
-3. **RoleArn**: IAM role ARN for reference
+### 4. IAM Role
+- Service principal for Lambda
+- AWS managed policy for basic Lambda execution
+- S3 read/write permissions granted via CDK
+
+### 5. LocalStack Detection Logic
+```typescript
+const isLocalStack = propsIsLocalStack ?? 
+  (process.env.CDK_LOCAL === 'true' ||
+   process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+   process.env.LOCALSTACK_HOSTNAME !== undefined);
+```
 
 ## Design Decisions
-- Used inline Lambda code for simplicity and LocalStack compatibility
-- Implemented environment-aware resource configuration
-- Followed AWS CDK best practices for resource naming and policies
-- Ensured clean resource cleanup in LocalStack environments
+
+### LocalStack Compatibility
+- Conditional bucket naming (auto-generated for LocalStack)
+- Different removal policies (DESTROY for LocalStack, RETAIN for AWS)
+- Disabled versioning in LocalStack to avoid complexity
+- Auto-delete objects enabled for LocalStack cleanup
+
+### Security
+- S3 bucket encryption enabled
+- Block all public access
+- Least privilege IAM permissions
+- Environment variable injection for configuration
+
+### Outputs
+- Bucket name for application integration
+- Lambda function ARN for invocation
+- IAM role ARN for reference
+
+## Testing Strategy
+The implementation includes comprehensive unit tests that verify:
+- Stack construction in both AWS and LocalStack modes
+- Resource creation and configuration
+- Output values and descriptions
+- LocalStack detection logic
+
+This solution provides a solid foundation for a data processing application while maintaining compatibility with both AWS and LocalStack environments.
