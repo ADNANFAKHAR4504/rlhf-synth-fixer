@@ -52,6 +52,40 @@ check_localstack() {
     echo ""
 }
 
+# Function to wait for critical services to be ready before deployment
+# This prevents race conditions where deployment starts before services are initialized
+wait_for_services() {
+    print_status $YELLOW "🔍 Waiting for critical services to be ready..."
+    
+    local max_attempts=30
+    local attempt=0
+    
+    while [ $attempt -lt $max_attempts ]; do
+        local health=$(curl -s http://localhost:4566/_localstack/health 2>/dev/null || echo "{}")
+        
+        # Check if RDS and SecretsManager are available (critical for most deployments)
+        local rds_status=$(echo "$health" | jq -r '.services.rds // "unknown"' 2>/dev/null || echo "unknown")
+        local sm_status=$(echo "$health" | jq -r '.services.secretsmanager // "unknown"' 2>/dev/null || echo "unknown")
+        local cfn_status=$(echo "$health" | jq -r '.services.cloudformation // "unknown"' 2>/dev/null || echo "unknown")
+        
+        if [[ "$rds_status" == "available" || "$rds_status" == "running" ]] && \
+           [[ "$sm_status" == "available" || "$sm_status" == "running" ]] && \
+           [[ "$cfn_status" == "available" || "$cfn_status" == "running" ]]; then
+            print_status $GREEN "✅ Critical services ready (RDS: $rds_status, SecretsManager: $sm_status, CloudFormation: $cfn_status)"
+            return 0
+        fi
+        
+        attempt=$((attempt + 1))
+        if [ $((attempt % 5)) -eq 0 ]; then
+            print_status $YELLOW "   Waiting... RDS: $rds_status, SecretsManager: $sm_status, CloudFormation: $cfn_status"
+        fi
+        sleep 2
+    done
+    
+    print_status $YELLOW "⚠️  Services may not be fully ready, proceeding anyway..."
+    return 0
+}
+
 # Function to detect platform from metadata.json
 detect_platform() {
     local metadata_file="$PROJECT_ROOT/metadata.json"
@@ -1012,6 +1046,10 @@ main() {
 
     # Check LocalStack
     check_localstack
+    
+    # Wait for critical services (RDS, SecretsManager, CloudFormation) to be ready
+    # This prevents race conditions where deployment starts before services are initialized
+    wait_for_services
 
     # Detect platform
     print_status $YELLOW "🔍 Detecting platform from metadata.json..."
