@@ -185,12 +185,12 @@ class TapStack(Stack):
             vpc=vpc,
             subnet_group=db_subnet_group,
             security_groups=[db_sg],
-            multi_az=True,
+            multi_az=False,
             storage_encrypted=True,
             storage_encryption_key=rds_kms_key,
             allocated_storage=20,
             max_allocated_storage=100,
-            backup_retention=Duration.days(7),
+            backup_retention=Duration.days(1),
             deletion_protection=False,
             removal_policy=RemovalPolicy.DESTROY
         )
