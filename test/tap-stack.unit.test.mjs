@@ -47,6 +47,27 @@ const mockConfig = {
   }
 };
 
+// Store original env vars
+const originalEnv = { ...process.env };
+
+// Helper function to clean environment
+function cleanEnvironment() {
+  // Remove test-specific env vars
+  delete process.env.CDK_LOCAL;
+  delete process.env.ENVIRONMENT_SUFFIX;
+  delete process.env.CI;
+  delete process.env.GITHUB_ACTIONS;
+  delete process.env.AWS_ENDPOINT_URL;
+  delete process.env.LOCALSTACK_HOSTNAME;
+  
+  // Restore original environment
+  Object.keys(originalEnv).forEach(key => {
+    if (originalEnv[key] !== undefined) {
+      process.env[key] = originalEnv[key];
+    }
+  });
+}
+
 describe('TapStack Unit Tests', () => {
   let app;
   let stack;
@@ -73,8 +94,7 @@ describe('TapStack Unit Tests', () => {
   });
 
   afterAll(() => {
-    delete process.env.CDK_LOCAL;
-    delete process.env.ENVIRONMENT_SUFFIX;
+    cleanEnvironment();
   });
 
   test('Stack is created successfully', () => {
@@ -136,6 +156,14 @@ describe('TapStack Unit Tests', () => {
 
 // Test with fallback to dev environment
 describe('TapStack Fallback Tests', () => {
+  beforeEach(() => {
+    cleanEnvironment();
+  });
+
+  afterEach(() => {
+    cleanEnvironment();
+  });
+
   test('Falls back to dev when unknown environment', () => {
     process.env.CDK_LOCAL = 'true';
     process.env.ENVIRONMENT_SUFFIX = 'unknown';
@@ -156,9 +184,6 @@ describe('TapStack Fallback Tests', () => {
     
     // Should fall back to dev
     expect(stack.config.environment).toBe('dev');
-    
-    delete process.env.CDK_LOCAL;
-    delete process.env.ENVIRONMENT_SUFFIX;
   });
 
   test('Uses qa environment when available', () => {
@@ -180,14 +205,19 @@ describe('TapStack Fallback Tests', () => {
     });
     
     expect(stack.config.environment).toBe('qa');
-    
-    delete process.env.CDK_LOCAL;
-    delete process.env.ENVIRONMENT_SUFFIX;
   });
 });
 
 // Test config loading from props
 describe('TapStack Config Loading Tests', () => {
+  beforeEach(() => {
+    cleanEnvironment();
+  });
+
+  afterEach(() => {
+    cleanEnvironment();
+  });
+
   test('Loads config from props.config', () => {
     process.env.CDK_LOCAL = 'true';
     
@@ -203,8 +233,6 @@ describe('TapStack Config Loading Tests', () => {
     
     expect(stack.config).toBeDefined();
     expect(stack.config.environment).toBe('dev');
-    
-    delete process.env.CDK_LOCAL;
   });
 
   test('Loads config from context when props.config not provided', () => {
@@ -225,9 +253,6 @@ describe('TapStack Config Loading Tests', () => {
     });
     
     expect(stack.config).toBeDefined();
-    
-    delete process.env.CDK_LOCAL;
-    delete process.env.ENVIRONMENT_SUFFIX;
   });
 
   test('Uses environment suffix from props over context', () => {
@@ -250,9 +275,6 @@ describe('TapStack Config Loading Tests', () => {
     
     expect(stack.environmentSuffix).toBe('prod');
     expect(stack.config.environment).toBe('prod');
-    
-    delete process.env.CDK_LOCAL;
-    delete process.env.ENVIRONMENT_SUFFIX;
   });
 
   test('Uses context environmentSuffix when no props environmentSuffix', () => {
@@ -274,9 +296,6 @@ describe('TapStack Config Loading Tests', () => {
     
     expect(stack.environmentSuffix).toBe('qa');
     expect(stack.config.environment).toBe('qa');
-    
-    delete process.env.CDK_LOCAL;
-    delete process.env.ENVIRONMENT_SUFFIX;
   });
 
   test('Uses environment variable when no props or context', () => {
@@ -297,14 +316,10 @@ describe('TapStack Config Loading Tests', () => {
     
     expect(stack.environmentSuffix).toBe('prod');
     expect(stack.config.environment).toBe('prod');
-    
-    delete process.env.CDK_LOCAL;
-    delete process.env.ENVIRONMENT_SUFFIX;
   });
 
   test('Defaults to dev when no suffix specified anywhere', () => {
     process.env.CDK_LOCAL = 'true';
-    delete process.env.ENVIRONMENT_SUFFIX;
     
     const app = new App({
       context: {
@@ -320,13 +335,19 @@ describe('TapStack Config Loading Tests', () => {
     
     expect(stack.environmentSuffix).toBe('dev');
     expect(stack.config.environment).toBe('dev');
-    
-    delete process.env.CDK_LOCAL;
   });
 });
 
 // Test error handling
 describe('TapStack Error Handling Tests', () => {
+  beforeEach(() => {
+    cleanEnvironment();
+  });
+
+  afterEach(() => {
+    cleanEnvironment();
+  });
+
   test('Throws error when no config found', () => {
     process.env.CDK_LOCAL = 'true';
     
@@ -340,13 +361,19 @@ describe('TapStack Error Handling Tests', () => {
         environmentSuffix: 'dev'
       });
     }).toThrow("No configuration found in 'props' or cdk.json context");
-    
-    delete process.env.CDK_LOCAL;
   });
 });
 
 // Test missing required config fields
 describe('TapStack Missing Config Field Tests', () => {
+  beforeEach(() => {
+    cleanEnvironment();
+  });
+
+  afterEach(() => {
+    cleanEnvironment();
+  });
+
   test('Throws error when prod config is missing', () => {
     process.env.CDK_LOCAL = 'true';
     
@@ -369,8 +396,6 @@ describe('TapStack Missing Config Field Tests', () => {
         config: configWithoutProd
       });
     }).toThrow("No configuration found for 'prod'");
-    
-    delete process.env.CDK_LOCAL;
   });
 
   test('Throws error when dev fallback is also missing', () => {
@@ -393,8 +418,6 @@ describe('TapStack Missing Config Field Tests', () => {
         config: emptyConfig
       });
     }).toThrow("No configuration found for environment: 'qa' (even 'dev' is missing)");
-    
-    delete process.env.CDK_LOCAL;
   });
 
   test('Throws error when VPC ID is missing', () => {
@@ -422,8 +445,6 @@ describe('TapStack Missing Config Field Tests', () => {
         config: configWithoutVpc
       });
     }).toThrow('VPC ID must be provided');
-    
-    delete process.env.CDK_LOCAL;
   });
 
   test('Throws error when S3 bucket is missing', () => {
@@ -451,8 +472,6 @@ describe('TapStack Missing Config Field Tests', () => {
         config: configWithoutS3
       });
     }).toThrow('S3 bucket must be provided');
-    
-    delete process.env.CDK_LOCAL;
   });
 
   test('Handles missing environment in config gracefully', () => {
@@ -480,20 +499,17 @@ describe('TapStack Missing Config Field Tests', () => {
         config: configWithoutEnv
       });
     }).toThrow("No environment field found in configuration for 'dev'");
-    
-    delete process.env.CDK_LOCAL;
   });
 });
 
 // Test LocalStack detection
 describe('TapStack LocalStack Detection Tests', () => {
   beforeEach(() => {
-    // Clean up env vars
-    delete process.env.CDK_LOCAL;
-    delete process.env.CI;
-    delete process.env.GITHUB_ACTIONS;
-    delete process.env.AWS_ENDPOINT_URL;
-    delete process.env.LOCALSTACK_HOSTNAME;
+    cleanEnvironment();
+  });
+
+  afterEach(() => {
+    cleanEnvironment();
   });
 
   test('Detects LocalStack from CDK_LOCAL env var', () => {
@@ -514,8 +530,6 @@ describe('TapStack LocalStack Detection Tests', () => {
     });
     
     expect(stack.isLocalStack).toBe(true);
-    
-    delete process.env.CDK_LOCAL;
   });
 
   test('Detects LocalStack from CI env var', () => {
@@ -536,8 +550,6 @@ describe('TapStack LocalStack Detection Tests', () => {
     });
     
     expect(stack.isLocalStack).toBe(true);
-    
-    delete process.env.CI;
   });
 
   test('Detects LocalStack from GITHUB_ACTIONS env var', () => {
@@ -558,8 +570,6 @@ describe('TapStack LocalStack Detection Tests', () => {
     });
     
     expect(stack.isLocalStack).toBe(true);
-    
-    delete process.env.GITHUB_ACTIONS;
   });
 
   test('Detects LocalStack from AWS_ENDPOINT_URL containing localhost', () => {
@@ -580,8 +590,6 @@ describe('TapStack LocalStack Detection Tests', () => {
     });
     
     expect(stack.isLocalStack).toBe(true);
-    
-    delete process.env.AWS_ENDPOINT_URL;
   });
 
   test('Detects LocalStack from LOCALSTACK_HOSTNAME env var', () => {
@@ -602,8 +610,6 @@ describe('TapStack LocalStack Detection Tests', () => {
     });
     
     expect(stack.isLocalStack).toBe(true);
-    
-    delete process.env.LOCALSTACK_HOSTNAME;
   });
 
   test('Does not detect LocalStack when no env vars set', () => {
@@ -642,20 +648,17 @@ describe('TapStack LocalStack Detection Tests', () => {
     });
     
     expect(stack.isLocalStack).toBe(false);
-    
-    delete process.env.AWS_ENDPOINT_URL;
   });
 });
 
 // Test SecurityGroupConstruct directly for non-LocalStack path (VPC Endpoints)
 describe('SecurityGroupConstruct Direct Tests', () => {
   beforeEach(() => {
-    // Clean up env vars
-    delete process.env.CDK_LOCAL;
-    delete process.env.CI;
-    delete process.env.GITHUB_ACTIONS;
-    delete process.env.AWS_ENDPOINT_URL;
-    delete process.env.LOCALSTACK_HOSTNAME;
+    cleanEnvironment();
+  });
+
+  afterEach(() => {
+    cleanEnvironment();
   });
 
   test('Creates security group with VPC endpoints in non-LocalStack mode', () => {
@@ -798,14 +801,5 @@ describe('SecurityGroupConstruct Direct Tests', () => {
       
       expect(sgConstruct.securityGroup).toBeDefined();
     });
-  });
-
-  afterEach(() => {
-    // Clean up env vars after each test
-    delete process.env.CDK_LOCAL;
-    delete process.env.CI;
-    delete process.env.GITHUB_ACTIONS;
-    delete process.env.AWS_ENDPOINT_URL;
-    delete process.env.LOCALSTACK_HOSTNAME;
   });
 });
