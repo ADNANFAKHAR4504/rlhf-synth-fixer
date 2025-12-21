@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101911958",
+  "team": "synth-2",
+  "startedAt": "2025-12-02T20:22:25.685Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "VPC",
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "Secrets Manager",
+    "CloudWatch",
+    "IAM",
+    "VPC Endpoints"
+  ],
+  "provider": "localstack",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}
