@@ -1,10 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.mjs';
-import path from 'path';
-
-// Mock import.meta for Jest compatibility
-const __dirname = path.dirname(new URL(import.meta.url).pathname);
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
 
@@ -250,15 +246,59 @@ describe('TapStack', () => {
       expect(Object.keys(alarms).length).toBeGreaterThanOrEqual(2);
     });
 
-    test('creates CloudWatch Synthetics canary', () => {
-      // Canary is skipped in LocalStack, so check conditionally
-      const canaries = template.findResources('AWS::Synthetics::Canary');
-      expect(Object.keys(canaries).length).toBeGreaterThanOrEqual(0);
+    test('creates Synthetics canary', () => {
+      template.resourceCountIs('AWS::Synthetics::Canary', 1);
+    });
+  });
+
+  describe('VPC Configuration', () => {
+    test('does not create VPC in LocalStack environment', () => {
+      // Create a new stack with LocalStack environment
+      const localStackApp = new cdk.App();
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+      
+      const localStackStack = new TapStack(localStackApp, 'LocalStackTapStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix: 'localstack',
+        isPrimary: true,
+      });
+      
+      const localStackTemplate = Template.fromStack(localStackStack);
+      
+      // Should not create VPC resources
+      const vpcs = localStackTemplate.findResources('AWS::EC2::VPC');
+      expect(Object.keys(vpcs).length).toBe(0);
+      
+      // Clean up environment variable
+      delete process.env.AWS_ENDPOINT_URL;
+    });
+
+    test('creates VPC in non-LocalStack environment', () => {
+      // Ensure AWS_ENDPOINT_URL is not set
+      delete process.env.AWS_ENDPOINT_URL;
+      
+      const normalApp = new cdk.App();
+      const normalStack = new TapStack(normalApp, 'NormalTapStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix: 'normal',
+        isPrimary: true,
+      });
+      
+      const normalTemplate = Template.fromStack(normalStack);
+      
+      // Should create VPC resources
+      normalTemplate.resourceCountIs('AWS::EC2::VPC', 1);
     });
   });
 
   describe('Stack Outputs', () => {
-    test('creates required stack outputs', () => {
+    test('creates all required stack outputs', () => {
       template.hasOutput('ApiEndpoint', {});
       template.hasOutput('ApiId', {});
       template.hasOutput('TableName', {});
@@ -269,61 +309,26 @@ describe('TapStack', () => {
     });
   });
 
-  describe('LocalStack Compatibility', () => {
-    test('VPC is not created in LocalStack', () => {
-      // Mock LocalStack environment
-      const originalEnv = process.env.AWS_ENDPOINT_URL;
-      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
-      
-      const localApp = new cdk.App();
-      const localStack = new TapStack(localApp, 'LocalTapStack', {
+  describe('Secondary Stack Configuration', () => {
+    test('does not create cross-region forwarding rule for non-primary stack', () => {
+      const secondaryApp = new cdk.App();
+      const secondaryStack = new TapStack(secondaryApp, 'SecondaryTapStack', {
         env: {
           account: '123456789012',
-          region: 'us-east-1',
+          region: 'us-west-2',
         },
-        environmentSuffix: 'local',
-        isPrimary: true,
+        environmentSuffix: 'secondary',
+        isPrimary: false,
       });
-      const localTemplate = Template.fromStack(localStack);
       
-      // Should not create VPC in LocalStack
-      const vpcs = localTemplate.findResources('AWS::EC2::VPC');
-      expect(Object.keys(vpcs).length).toBe(0);
+      const secondaryTemplate = Template.fromStack(secondaryStack);
       
-      // Restore environment
-      if (originalEnv) {
-        process.env.AWS_ENDPOINT_URL = originalEnv;
-      } else {
-        delete process.env.AWS_ENDPOINT_URL;
-      }
-    });
-
-    test('Synthetics canary is not created in LocalStack', () => {
-      // Mock LocalStack environment
-      const originalEnv = process.env.AWS_ENDPOINT_URL;
-      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
-      
-      const localApp = new cdk.App();
-      const localStack = new TapStack(localApp, 'LocalTapStack', {
-        env: {
-          account: '123456789012',
-          region: 'us-east-1',
-        },
-        environmentSuffix: 'local',
-        isPrimary: true,
-      });
-      const localTemplate = Template.fromStack(localStack);
-      
-      // Should not create Synthetics canary in LocalStack
-      const canaries = localTemplate.findResources('AWS::Synthetics::Canary');
-      expect(Object.keys(canaries).length).toBe(0);
-      
-      // Restore environment
-      if (originalEnv) {
-        process.env.AWS_ENDPOINT_URL = originalEnv;
-      } else {
-        delete process.env.AWS_ENDPOINT_URL;
-      }
+      // Should not have the cross-region forwarding rule
+      const rules = secondaryTemplate.findResources('AWS::Events::Rule');
+      const crossRegionRules = Object.values(rules).filter(rule => 
+        rule.Properties?.EventPattern?.source?.includes('global-api.events')
+      );
+      expect(crossRegionRules.length).toBe(0);
     });
   });
 });
