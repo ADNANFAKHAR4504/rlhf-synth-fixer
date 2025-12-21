@@ -1,0 +1,89 @@
+2025-12-19 14:18:23,594 - INFO - Found credentials in environment variables.
+2025-12-19 14:18:23,692 - INFO - Found endpoint for ec2 via: environment_global.
+2025-12-19 14:18:23,710 - INFO - Found endpoint for rds via: environment_global.
+2025-12-19 14:18:23,722 - INFO - Found endpoint for redshift via: environment_global.
+2025-12-19 14:18:23,723 - INFO - Starting VPC security audit in us-east-1
+2025-12-19 14:18:23,733 - INFO - Skipping VPC vpc-81990c7e72d54acc5 - Environment: 
+2025-12-19 14:18:23,733 - INFO - Found 1 VPCs to audit
+2025-12-19 14:18:23,733 - INFO - Auditing VPC: vpc-06cebdcd38ffff5fa (test-production-vpc)
+2025-12-19 14:18:23,733 - INFO - Checking exposed admin ports in VPC vpc-06cebdcd38ffff5fa
+2025-12-19 14:18:23,742 - INFO - Checking public databases in VPC vpc-06cebdcd38ffff5fa
+2025-12-19 14:18:23,758 - INFO - Checking data exfiltration risks in VPC vpc-06cebdcd38ffff5fa
+2025-12-19 14:18:23,771 - INFO - Checking flow logs for VPC vpc-06cebdcd38ffff5fa
+2025-12-19 14:18:23,777 - INFO - Checking NACLs in VPC vpc-06cebdcd38ffff5fa
+2025-12-19 14:18:23,795 - INFO - Checking zombie resources in VPC vpc-06cebdcd38ffff5fa
+2025-12-19 14:18:23,808 - INFO - Critical findings CSV saved to critical_findings_20251219_141823.csv
+2025-12-19 14:18:23,808 - INFO - Detailed audit report saved to vpc_security_audit_20251219_141823.json
+
+================================================================================
+VPC SECURITY AUDIT REPORT
+================================================================================
+Region: us-east-1
+Audit Timestamp: 2025-12-19T14:18:23.808286
+
+Total Findings: 6
+  - Critical: 1
+  - High: 2
+  - Medium: 1
+  - Low: 2
+  - Findings with Security Exceptions: 0
+================================================================================
+
+Internet Exposed Admin Ports (1 findings)
+--------------------------------------------------------------------------------
++------------+-----------------------+----------------------+--------+-----------+-------------+
+| Severity   | VPC ID                | Security Group       |   Port | Service   | Exception   |
++============+=======================+======================+========+===========+=============+
+| CRITICAL   | vpc-06cebdcd38ffff5fa | sg-30565f624c5954e45 |     22 | SSH       | No          |
++------------+-----------------------+----------------------+--------+-----------+-------------+
+
+Compliance Violations: HIPAA 164.312(a)(2)(i), PCI-DSS 2.3
+
+Data Exfiltration Risks (1 findings)
+--------------------------------------------------------------------------------
++------------+-----------------------+-----------------------+-------------+----------------------+-------------+
+| Severity   | VPC ID                | Network Interface     | Data Tier   | Security Group       | Exception   |
++============+=======================+=======================+=============+======================+=============+
+| HIGH       | vpc-06cebdcd38ffff5fa | eni-0ce68d80881cb9200 | database    | sg-c1cb0d4e20f2ad765 | No          |
++------------+-----------------------+-----------------------+-------------+----------------------+-------------+
+
+Compliance Violations: HIPAA 164.312(e)(1), PCI-DSS 1.3.4
+
+Missing VPC Flow Logs (1 findings)
+--------------------------------------------------------------------------------
++------------+-----------------------+----------------------+
+| Severity   | VPC ID                |   Inactive Flow Logs |
++============+=======================+======================+
+| HIGH       | vpc-06cebdcd38ffff5fa |                    0 |
++------------+-----------------------+----------------------+
+
+Compliance Violations: HIPAA 164.312(b), PCI-DSS 10.3
+
+Default NACL Usage (1 findings)
+--------------------------------------------------------------------------------
++------------+-----------------------+-----------------------+---------------+------------+-------------+
+| Severity   | VPC ID                | Subnet ID             | Subnet Name   | AZ         | Exception   |
++============+=======================+=======================+===============+============+=============+
+| MEDIUM     | vpc-06cebdcd38ffff5fa | subnet-9fec710a6abcdb | Unnamed       | us-east-1a | No          |
++------------+-----------------------+-----------------------+---------------+------------+-------------+
+
+Compliance Violations: HIPAA 164.312(c)(1), PCI-DSS 1.2.1
+
+Zombie Resources (2 findings)
+--------------------------------------------------------------------------------
++------------+-----------------------+-----------------+----------------------+------------------+
+| Severity   | VPC ID                | Resource Type   | Resource ID          | Description      |
++============+=======================+=================+======================+==================+
+| LOW        | vpc-06cebdcd38ffff5fa | SecurityGroup   | sg-30565f624c5954e45 | exposed-ssh-sg   |
++------------+-----------------------+-----------------+----------------------+------------------+
+| LOW        | vpc-06cebdcd38ffff5fa | SecurityGroup   | sg-43b86e6c54552da56 | unused-zombie-sg |
++------------+-----------------------+-----------------+----------------------+------------------+
+
+Compliance Violations: HIPAA 164.310(a)(2)(ii), PCI-DSS 2.2.2
+
+================================================================================
+REPORT FILES GENERATED
+================================================================================
+Detailed JSON Report: vpc_security_audit_20251219_141823.json
+Critical Findings CSV: critical_findings_20251219_141823.csv
+================================================================================

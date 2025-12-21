@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "229227",
+  "team": "synth-2",
+  "startedAt": "2025-07-27T05:33:50.258Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "apigateway",
+    "lambda",
+    "s3",
+    "dynamodb",
+    "stepfunctions",
+    "iam"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

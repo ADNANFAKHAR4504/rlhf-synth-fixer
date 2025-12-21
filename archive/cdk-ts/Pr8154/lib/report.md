@@ -1,0 +1,131 @@
+# Deployment Report
+
+**Generated:** 2025-12-15 18:15:44
+
+## Deployment Information
+
+- **Archive Type:** cdk-ts
+- **PR Number:** Pr979
+- **Source Path:** /Users/barunmishra/Desktop/projects/personal/turing/iac-test-automations/archive/cdk-ts/Pr979
+- **Deployment Type:** CDK TypeScript
+- **Stack Name:** CDKToolkit
+
+## Deployment Status
+
+**Status:** CREATE_COMPLETE
+
+ **Deployment:** FAILED
+
+## Stack Resources
+
+```json
+```
+
+## Stack Outputs
+
+```json
+```
+
+## Deployment Details
+
+### LocalStack Information
+
+- **Endpoint:** http://localhost:4566
+- **Region:** us-east-1
+- **Health Status:** running
+
+### Deployment Output
+
+```
+[0;32m Starting CDK Deploy to LocalStack...[0m
+[0;32m LocalStack is running[0m
+[1;33m Cleaning LocalStack resources...[0m
+[0;32m LocalStack state reset[0m
+[1;33m Working directory: /Users/barunmishra/Desktop/projects/personal/turing/iac-test-automations[0m
+[0;32m CDK project found: cdk.json[0m
+[0;34m Using CDK command: npx cdk[0m
+[1;33mℹ  Note: CDK v2 requires proper LocalStack endpoint configuration[0m
+[1;33m Installing dependencies...[0m
+[0;32m Node.js dependencies installed[0m
+[1;33m Building TypeScript...[0m
+
+> tap@0.1.0 build
+> tsc --skipLibCheck
+
+[0;32m TypeScript build completed[0m
+[1;33m Bootstrapping CDK environment in LocalStack...[0m
+[0;32m CDK Bootstrap step completed[0m
+[0;36m Deploying CDK stack:[0m
+[0;34m  • Stack Name: TapStackdev[0m
+[0;34m  • Environment: dev[0m
+[0;34m  • Region: us-east-1[0m
+[1;33m Deploying CDK stack...[0m
+[1;33m[0m
+[1;33m  Synthesis time: 3.45s[0m
+[1;33m[0m
+[1;33mTapStackdev: start: Building TapStackdev/Custom::VpcRestrictDefaultSGCustomResourceProvider Code[0m
+[1;33mTapStackdev: success: Built TapStackdev/Custom::VpcRestrictDefaultSGCustomResourceProvider Code[0m
+[1;33mTapStackdev: start: Building TapStackdev/Custom::S3AutoDeleteObjectsCustomResourceProvider Code[0m
+[1;33mTapStackdev: success: Built TapStackdev/Custom::S3AutoDeleteObjectsCustomResourceProvider Code[0m
+[1;33mTapStackdev: start: Building TapStackdev Template[0m
+[1;33mTapStackdev: success: Built TapStackdev Template[0m
+[1;33mTapStackdev: start: Publishing TapStackdev Template (000000000000-us-east-1-504c73be)[0m
+[1;33mTapStackdev: start: Publishing TapStackdev/Custom::VpcRestrictDefaultSGCustomResourceProvider Code (000000000000-us-east-1-fa324105)[0m
+[1;33mTapStackdev: start: Publishing TapStackdev/Custom::S3AutoDeleteObjectsCustomResourceProvider Code (000000000000-us-east-1-bbba35f2)[0m
+[1;33mTapStackdev: success: Published TapStackdev Template (000000000000-us-east-1-504c73be)[0m
+
+```
+
+
+## Errors
+
+```
+[0;32m Starting CDK Deploy to LocalStack...[0m
+[0;32m LocalStack is running[0m
+[1;33m Cleaning LocalStack resources...[0m
+[0;32m LocalStack state reset[0m
+[1;33m Working directory: /Users/barunmishra/Desktop/projects/personal/turing/iac-test-automations[0m
+[0;32m CDK project found: cdk.json[0m
+[0;34m Using CDK command: npx cdk[0m
+[1;33mℹ  Note: CDK v2 requires proper LocalStack endpoint configuration[0m
+[1;33m Installing dependencies...[0m
+[0;32m Node.js dependencies installed[0m
+[1;33m Building TypeScript...[0m
+
+> tap@0.1.0 build
+> tsc --skipLibCheck
+
+[0;32m TypeScript build completed[0m
+[1;33m Bootstrapping CDK environment in LocalStack...[0m
+[0;32m CDK Bootstrap step completed[0m
+[0;36m Deploying CDK stack:[0m
+[0;34m  • Stack Name: TapStackdev[0m
+[0;34m  • Environment: dev[0m
+[0;34m  • Region: us-east-1[0m
+[1;33m Deploying CDK stack...[0m
+[1;33m[0m
+[1;33m  Synthesis time: 3.45s[0m
+[1;33m[0m
+[1;33mTapStackdev: start: Building TapStackdev/Custom::VpcRestrictDefaultSGCustomResourceProvider Code[0m
+[1;33mTapStackdev: success: Built TapStackdev/Custom::VpcRestrictDefaultSGCustomResourceProvider Code[0m
+[1;33mTapStackdev: start: Building TapStackdev/Custom::S3AutoDeleteObjectsCustomResourceProvider Code[0m
+[1;33mTapStackdev: success: Built TapStackdev/Custom::S3AutoDeleteObjectsCustomResourceProvider Code[0m
+[1;33mTapStackdev: start: Building TapStackdev Template[0m
+[1;33mTapStackdev: success: Built TapStackdev Template[0m
+[1;33mTapStackdev: start: Publishing TapStackdev Template (000000000000-us-east-1-504c73be)[0m
+[1;33mTapStackdev: start: Publishing TapStackdev/Custom::VpcRestrictDefaultSGCustomResourceProvider Code (000000000000-us-east-1-fa324105)[0m
+[1;33mTapStackdev: start: Publishing TapStackdev/Custom::S3AutoDeleteObjectsCustomResourceProvider Code (000000000000-us-east-1-bbba35f2)[0m
+[1;33mTapStackdev: success: Published TapStackdev Template (000000000000-us-east-1-504c73be)[0m
+
+```
+
+
+## Next Steps
+
+1. Review the deployment status above
+2. Check LocalStack logs if deployment failed: `localstack logs`
+3. Verify resources in LocalStack: `awslocal cloudformation list-stacks`
+4. Access LocalStack dashboard: http://localhost:4566
+
+---
+*Report generated by deploy-archive-pr.sh*

@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000803",
+  "team": "synth",
+  "startedAt": "2025-11-02T11:40:56+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "DMS",
+    "ALB",
+    "ELB",
+    "EC2",
+    "Auto Scaling",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "NAT Gateway",
+    "Security Groups",
+    "IAM",
+    "SNS"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "adnan-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,29 @@
+{
+  "po_id": "101912513",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "team": "synth-2",
+  "turn_type": "single",
+  "provider": "localstack",
+  "startedAt": "2025-11-17T12:59:11+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EKS",
+    "EC2",
+    "VPC",
+    "IAM",
+    "KMS",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajc-turing",
+  "dockerS3Location": ""
+}
