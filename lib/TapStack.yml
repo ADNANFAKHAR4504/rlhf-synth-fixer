@@ -90,6 +90,14 @@ Parameters:
       - "false"
     Description: "Set to true to enable CloudFront, false to skip it for LocalStack."
 
+  EnableEC2:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Set to true to enable EC2 instance, false to skip it for LocalStack."
+
 Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
   CreateDetector: !Equals [!Ref CreateGuardDuty, "true"]
@@ -97,6 +105,7 @@ Conditions:
   UseAMIOverride: !Not [!Equals [!Ref AMIOverride, ""]]
   CreateRDS: !Equals [!Ref EnableRDS, "true"]
   CreateCloudFront: !Equals [!Ref EnableCloudFront, "true"]
+  CreateEC2: !Equals [!Ref EnableEC2, "true"]
 
 Mappings:
   RegionMap:
@@ -511,6 +520,7 @@ Resources:
 
   WebServerInstance:
     Type: AWS::EC2::Instance
+    Condition: CreateEC2
     Properties:
       # Direct properties instead of LaunchTemplate for LocalStack compatibility
       ImageId: !If [UseAMIOverride, !Ref AMIOverride, !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]]
@@ -541,6 +551,7 @@ Resources:
 
   CPUAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: CreateEC2
     Properties:
       AlarmName: !Sub '${ProjectName}-${Environment}-cpu-alarm'
       AlarmDescription: Alarm when CPU exceeds 80%
@@ -580,6 +591,7 @@ Resources:
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: CreateEC2
     Properties:
       Name: !Sub '${ProjectName}-${Environment}-tg'
       Port: 80
@@ -594,6 +606,7 @@ Resources:
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: CreateEC2
     Properties:
       DefaultActions:
         - Type: forward
@@ -843,6 +856,7 @@ Outputs:
       Name: !Sub '${ProjectName}-${Environment}-alb-arn'
       
   WebServerInstanceId:
+    Condition: CreateEC2
     Description: Web Server Instance ID
     Value: !Ref WebServerInstance
     Export:
