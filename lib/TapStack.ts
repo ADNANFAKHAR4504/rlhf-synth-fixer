@@ -12,7 +12,7 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps = {}) {
     super(scope, id, props);
 
-    const { environmentSuffix = 'dev', ...restProps } = props;
+    const { isLocalStack = false } = props;
 
     // S3 Bucket for storing application data
     const bucket = new s3.Bucket(this, 'TapBucket', {
