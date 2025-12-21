@@ -1,0 +1,20 @@
+{
+  "provider": "localstack",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291302",
+  "team": "synth-2",
+  "startedAt": "2025-08-14T13:03:32.045Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "EC2"
+  ]
+}
