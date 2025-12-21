@@ -52,6 +52,40 @@ check_localstack() {
     echo ""
 }
 
+# Function to wait for critical services to be ready before deployment
+# This prevents race conditions where deployment starts before services are initialized
+wait_for_services() {
+    print_status $YELLOW "🔍 Waiting for critical services to be ready..."
+    
+    local max_attempts=30
+    local attempt=0
+    
+    while [ $attempt -lt $max_attempts ]; do
+        local health=$(curl -s http://localhost:4566/_localstack/health 2>/dev/null || echo "{}")
+        
+        # Check if RDS and SecretsManager are available (critical for most deployments)
+        local rds_status=$(echo "$health" | jq -r '.services.rds // "unknown"' 2>/dev/null || echo "unknown")
+        local sm_status=$(echo "$health" | jq -r '.services.secretsmanager // "unknown"' 2>/dev/null || echo "unknown")
+        local cfn_status=$(echo "$health" | jq -r '.services.cloudformation // "unknown"' 2>/dev/null || echo "unknown")
+        
+        if [[ "$rds_status" == "available" || "$rds_status" == "running" ]] && \
+           [[ "$sm_status" == "available" || "$sm_status" == "running" ]] && \
+           [[ "$cfn_status" == "available" || "$cfn_status" == "running" ]]; then
+            print_status $GREEN "✅ Critical services ready (RDS: $rds_status, SecretsManager: $sm_status, CloudFormation: $cfn_status)"
+            return 0
+        fi
+        
+        attempt=$((attempt + 1))
+        if [ $((attempt % 5)) -eq 0 ]; then
+            print_status $YELLOW "   Waiting... RDS: $rds_status, SecretsManager: $sm_status, CloudFormation: $cfn_status"
+        fi
+        sleep 2
+    done
+    
+    print_status $YELLOW "⚠️  Services may not be fully ready, proceeding anyway..."
+    return 0
+}
+
 # Function to detect platform from metadata.json
 detect_platform() {
     local metadata_file="$PROJECT_ROOT/metadata.json"
@@ -650,35 +684,99 @@ deploy_cloudformation() {
 
     # Deploy using AWS CLI with LocalStack endpoint
     local stack_name="localstack-stack-${ENVIRONMENT_SUFFIX:-dev}"
+    local cfn_bucket="cfn-templates-localstack-${ENVIRONMENT_SUFFIX:-dev}"
+    local template_size=$(stat -f%z "$template" 2>/dev/null || stat -c%s "$template" 2>/dev/null || echo 0)
+    local max_inline_size=51200  # 51KB CloudFormation limit
+    local use_s3=false
+    local template_url=""
+    
+    print_status $BLUE "📏 Template size: $template_size bytes (limit: $max_inline_size)"
+    
+    # Use S3 for large templates
+    if [ "$template_size" -gt "$max_inline_size" ]; then
+        use_s3=true
+        print_status $YELLOW "📦 Template exceeds 51KB limit, using S3..."
+        
+        # Create S3 bucket (ignore error if exists)
+        awslocal s3 mb "s3://${cfn_bucket}" 2>/dev/null || true
+        
+        # Upload template to S3
+        print_status $YELLOW "📤 Uploading template to S3..."
+        awslocal s3 cp "$template" "s3://${cfn_bucket}/template.yml"
+        
+        template_url="${AWS_ENDPOINT_URL}/${cfn_bucket}/template.yml"
+        print_status $BLUE "📄 Template URL: $template_url"
+    fi
+    
     print_status $YELLOW "🚀 Deploying stack: $stack_name..."
     echo ""
 
-    # Check if stack exists
-    local stack_exists=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" 2>/dev/null && echo "yes" || echo "no")
-    
-    if [ "$stack_exists" == "yes" ]; then
-        print_status $YELLOW "📝 Stack exists, updating..."
-        # Delete and recreate for LocalStack (simpler than update)
-        awslocal cloudformation delete-stack --stack-name "$stack_name" 2>/dev/null || true
-        sleep 2
+    # Check if stack exists and handle existing/failed stacks
+    local stack_exists=false
+    local current_status=""
+    if awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
+        stack_exists=true
+        current_status=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
+            --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "UNKNOWN")
+        
+        # Handle stacks in failed/rollback state - delete first
+        case "$current_status" in
+            ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED|UPDATE_ROLLBACK_COMPLETE)
+                print_status $YELLOW "⚠️ Stack in $current_status state, deleting before recreating..."
+                awslocal cloudformation delete-stack --stack-name "$stack_name" 2>/dev/null || true
+                
+                # Wait for deletion
+                local delete_wait=0
+                while [ $delete_wait -lt 120 ]; do
+                    if ! awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
+                        break
+                    fi
+                    sleep 5
+                    delete_wait=$((delete_wait + 5))
+                done
+                stack_exists=false
+                ;;
+            *)
+                print_status $YELLOW "📝 Stack exists, deleting before recreating..."
+                awslocal cloudformation delete-stack --stack-name "$stack_name" 2>/dev/null || true
+                sleep 2
+                stack_exists=false
+                ;;
+        esac
     fi
 
-    # Create stack with explicit create-stack command for better control
-    print_status $YELLOW "📦 Creating stack resources..."
-    echo ""
+    # Deploy based on template size
+    local deploy_exit=0
+    if [ "$use_s3" = true ]; then
+        # Use create-stack with --template-url for large templates
+        print_status $YELLOW "📝 Creating stack with S3 template..."
+        awslocal cloudformation create-stack \
+            --stack-name "$stack_name" \
+            --template-url "$template_url" \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --on-failure DO_NOTHING 2>&1 || deploy_exit=$?
+    else
+        # Use create-stack with --template-body for small templates
+        print_status $YELLOW "📦 Creating stack resources..."
+        awslocal cloudformation create-stack \
+            --stack-name "$stack_name" \
+            --template-body "file://$template" \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --on-failure DO_NOTHING 2>&1 || deploy_exit=$?
+    fi
     
-    awslocal cloudformation create-stack \
-        --stack-name "$stack_name" \
-        --template-body "file://$template" \
-        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-        --on-failure DO_NOTHING 2>&1
-    local create_exit_code=$?
-    
-    if [ $create_exit_code -ne 0 ]; then
-        print_status $RED "❌ CloudFormation create-stack command failed with exit code: $create_exit_code"
+    if [ $deploy_exit -ne 0 ]; then
+        print_status $RED "❌ CloudFormation create-stack command failed with exit code: $deploy_exit"
         echo ""
         describe_cfn_failure "$stack_name"
-        exit $create_exit_code
+        
+        # Cleanup S3 bucket on failure
+        if [ "$use_s3" = true ]; then
+            print_status $YELLOW "🧹 Cleaning up S3 bucket..."
+            awslocal s3 rm "s3://${cfn_bucket}" --recursive 2>/dev/null || true
+            awslocal s3 rb "s3://${cfn_bucket}" 2>/dev/null || true
+        fi
+        exit $deploy_exit
     fi
 
     # Monitor stack creation with live events
@@ -686,6 +784,13 @@ deploy_cloudformation() {
         print_status $RED "❌ CloudFormation deployment failed"
         echo ""
         describe_cfn_failure "$stack_name"
+        
+        # Cleanup S3 bucket on failure
+        if [ "$use_s3" = true ]; then
+            print_status $YELLOW "🧹 Cleaning up S3 bucket..."
+            awslocal s3 rm "s3://${cfn_bucket}" --recursive 2>/dev/null || true
+            awslocal s3 rb "s3://${cfn_bucket}" 2>/dev/null || true
+        fi
         exit 1
     fi
 
@@ -941,6 +1046,10 @@ main() {
 
     # Check LocalStack
     check_localstack
+    
+    # Wait for critical services (RDS, SecretsManager, CloudFormation) to be ready
+    # This prevents race conditions where deployment starts before services are initialized
+    wait_for_services
 
     # Detect platform
     print_status $YELLOW "🔍 Detecting platform from metadata.json..."
