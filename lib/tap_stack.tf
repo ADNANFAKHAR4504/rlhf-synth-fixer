@@ -520,11 +520,13 @@ module "compute" {
 #######################
 
 #######################
-# RDS Database
+# RDS Database (conditional - disabled in LocalStack CI)
 #######################
 
 # DB subnet group
 resource "aws_db_subnet_group" "main" {
+  count = var.enable_rds ? 1 : 0
+
   name_prefix = "${local.name_prefix}-db-subnet-group-"
   subnet_ids  = aws_subnet.database[*].id
 
@@ -536,6 +538,8 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS instance with encryption and Multi-AZ
 resource "aws_db_instance" "main" {
+  count = var.enable_rds ? 1 : 0
+
   identifier             = "${local.name_prefix}-database-${random_string.suffix.result}"
   allocated_storage      = 20
   storage_type           = "gp2"
@@ -544,7 +548,7 @@ resource "aws_db_instance" "main" {
   instance_class         = "db.t3.micro"
   username               = var.db_username
   password               = var.db_password
-  db_subnet_group_name   = aws_db_subnet_group.main.name
+  db_subnet_group_name   = aws_db_subnet_group.main[0].name
   vpc_security_group_ids = [module.security.rds_sg_id]
   skip_final_snapshot    = true
   multi_az               = false
@@ -687,7 +691,7 @@ output "alb_dns_name" {
 
 output "rds_instance_endpoint" {
   description = "Endpoint of the RDS database instance"
-  value       = aws_db_instance.main.endpoint
+  value       = var.enable_rds ? aws_db_instance.main[0].endpoint : "rds-disabled"
   sensitive   = true
 }
 

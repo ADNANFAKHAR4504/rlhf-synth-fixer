@@ -155,3 +155,9 @@ variable "is_localstack" {
   type        = bool
   default     = true
 }
+
+variable "enable_rds" {
+  description = "Enable RDS deployment (set to false for LocalStack CI)"
+  type        = bool
+  default     = false
+}
