@@ -6,7 +6,7 @@
   "po_id": "iac-cdk-deployment-error-001",
   "team": "synth",
   "startedAt": "2025-12-20T16:48:53.818Z",
-  "subtask": "IaC Diagnosis/Edits",
+  "subtask": "IaC Program Optimization",
   "provider": "localstack",
   "subject_labels": [
     "Infrastructure Analysis/Monitoring",
