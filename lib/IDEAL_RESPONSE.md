@@ -847,15 +847,11 @@ Resources:
   # RDS MySQL Database Instance
   RDSDatabase:
     Type: AWS::RDS::DBInstance
-    DependsOn:
-      - RDSLogGroupError
-      - RDSLogGroupGeneral
-      - RDSLogGroupSlowQuery
+    DependsOn: DatabaseSecret
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-mysql-db
       DBName: applicationdb
       Engine: mysql
-      EngineVersion: '8.0.43'
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: 20
       MaxAllocatedStorage: 100  # Auto-scaling storage

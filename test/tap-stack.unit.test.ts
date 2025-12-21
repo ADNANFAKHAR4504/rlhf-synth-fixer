@@ -513,15 +513,6 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(logExports).toContain('general');
       expect(logExports).toContain('slowquery');
     });
-
-    test('RDSDatabase should depend on log groups', () => {
-      const db = template.Resources.RDSDatabase;
-      expect(db.DependsOn).toBeDefined();
-      expect(Array.isArray(db.DependsOn)).toBe(true);
-      expect(db.DependsOn).toContain('RDSLogGroupError');
-      expect(db.DependsOn).toContain('RDSLogGroupGeneral');
-      expect(db.DependsOn).toContain('RDSLogGroupSlowQuery');
-    });
   });
 
   describe('CloudWatch Logs', () => {

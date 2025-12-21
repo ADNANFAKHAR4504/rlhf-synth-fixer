@@ -1242,18 +1242,13 @@
         },
         "RDSDatabase": {
             "Type": "AWS::RDS::DBInstance",
-            "DependsOn": [
-                "RDSLogGroupError",
-                "RDSLogGroupGeneral",
-                "RDSLogGroupSlowQuery"
-            ],
+            "DependsOn": "DatabaseSecret",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${EnvironmentName}-mysql-db"
                 },
                 "DBName": "applicationdb",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.43",
                 "DBInstanceClass": {
                     "Ref": "DBInstanceClass"
                 },
