@@ -51,20 +51,13 @@ const originalEnv = { ...process.env };
 
 // Helper function to clean environment
 function cleanEnvironment() {
-  // Remove test-specific env vars
+  // Remove ALL LocalStack detection env vars
   delete process.env.CDK_LOCAL;
   delete process.env.ENVIRONMENT_SUFFIX;
   delete process.env.CI;
   delete process.env.GITHUB_ACTIONS;
   delete process.env.AWS_ENDPOINT_URL;
   delete process.env.LOCALSTACK_HOSTNAME;
-  
-  // Restore original environment
-  Object.keys(originalEnv).forEach(key => {
-    if (originalEnv[key] !== undefined) {
-      process.env[key] = originalEnv[key];
-    }
-  });
 }
 
 describe('TapStack Unit Tests', () => {
@@ -343,19 +336,24 @@ describe('TapStack Config Loading Tests', () => {
 
   test('Throws error when S3 bucket not provided', () => {
     process.env.CDK_LOCAL = 'true';
-    
+
     const configWithoutS3 = {
       dev: {
         environment: 'dev',
         existingVpcId: 'vpc-12345678',
+        vpcCidrBlock: '10.0.0.0/16',
+        subnetIds: ['subnet-12345678', 'subnet-87654321'],
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        sshCidrBlock: '10.0.0.0/16',
+        trustedOutboundCidrs: ['10.0.0.0/8'],
         // Missing existingS3Bucket
       }
     };
-    
+
     const app = new App({
       context: { '@aws-cdk/core:newStyleStackSynthesis': false }
     });
-    
+
     expect(() => {
       new TapStack(app, 'NoS3Stack', {
         env: { account: '123456789012', region: 'us-east-1' },
@@ -363,6 +361,8 @@ describe('TapStack Config Loading Tests', () => {
         config: configWithoutS3
       });
     }).toThrow('S3 bucket must be provided');
+
+    delete process.env.CDK_LOCAL;
   });
 });
 
