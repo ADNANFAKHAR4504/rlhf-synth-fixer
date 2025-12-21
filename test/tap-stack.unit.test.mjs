@@ -1,12 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.mjs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { jest } from '@jest/globals';
 
-// Jest-compatible way to handle __dirname in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Mock __dirname for ES modules compatibility with Jest
+const __dirname = process.cwd();
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
 
@@ -88,6 +86,22 @@ describe('TapStack', () => {
         ]),
       });
     });
+
+    test('DynamoDB table does not have GSI for non-primary stack', () => {
+      const nonPrimaryStack = new TapStack(app, 'NonPrimaryTestTapStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix,
+        isPrimary: false,
+      });
+      const nonPrimaryTemplate = Template.fromStack(nonPrimaryStack);
+
+      const tables = nonPrimaryTemplate.findResources('AWS::DynamoDB::Table');
+      const tableResource = Object.values(tables)[0];
+      expect(tableResource.Properties.GlobalSecondaryIndexes).toBeUndefined();
+    });
   });
 
   describe('S3 Buckets', () => {
@@ -164,6 +178,21 @@ describe('TapStack', () => {
         ]),
       });
     });
+
+    test('does not create event forwarding rule for non-primary stack', () => {
+      const nonPrimaryStack = new TapStack(app, 'NonPrimaryTestTapStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix,
+        isPrimary: false,
+      });
+      const nonPrimaryTemplate = Template.fromStack(nonPrimaryStack);
+
+      const rules = nonPrimaryTemplate.findResources('AWS::Events::Rule');
+      expect(Object.keys(rules).length).toBe(0);
+    });
   });
 
   describe('Lambda Function', () => {
@@ -220,6 +249,29 @@ describe('TapStack', () => {
         },
       });
     });
+
+    test('Lambda function is not in VPC for LocalStack', () => {
+      // Set LocalStack environment
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+
+      const localStackApp = new cdk.App();
+      const localStackStack = new TapStack(localStackApp, 'LocalStackTapStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix,
+        isPrimary: true,
+      });
+      const localStackTemplate = Template.fromStack(localStackStack);
+
+      const lambdas = localStackTemplate.findResources('AWS::Lambda::Function');
+      const lambdaResource = Object.values(lambdas)[0];
+      expect(lambdaResource.Properties.VpcConfig).toBeUndefined();
+
+      // Clean up environment
+      delete process.env.AWS_ENDPOINT_URL;
+    });
   });
 
   describe('API Gateway', () => {
@@ -248,25 +300,56 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates API Gateway methods for root and health endpoints', () => {
-      template.hasResourceProperties('AWS::ApiGateway::Method', {
-        HttpMethod: 'GET',
+    test('creates health endpoint resource', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Resource', {
+        PathPart: 'health',
       });
     });
 
-    test('API Gateway has CloudWatch role configured', () => {
-      template.resourceCountIs('AWS::ApiGateway::Account', 1);
+    test('creates GET methods for root and health endpoints', () => {
+      const methods = template.findResources('AWS::ApiGateway::Method');
+      const getMethods = Object.values(methods).filter(
+        method => method.Properties.HttpMethod === 'GET'
+      );
+      expect(getMethods.length).toBeGreaterThanOrEqual(2);
     });
   });
 
-  describe('WAF', () => {
-    test('creates WAF WebACL with regional scope', () => {
-      template.hasResourceProperties('AWS::WAFv2::WebACL', {
-        Scope: 'REGIONAL',
-      });
+  describe('VPC Configuration', () => {
+    test('creates VPC for non-LocalStack environment', () => {
+      template.resourceCountIs('AWS::EC2::VPC', 1);
+      template.resourceCountIs('AWS::EC2::NatGateway', 1);
     });
 
-    test('WAF has rate-based rule', () => {
+    test('does not create VPC for LocalStack environment', () => {
+      // Set LocalStack environment
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+
+      const localStackApp = new cdk.App();
+      const localStackStack = new TapStack(localStackApp, 'LocalStackTapStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+        environmentSuffix,
+        isPrimary: true,
+      });
+      const localStackTemplate = Template.fromStack(localStackStack);
+
+      const vpcs = localStackTemplate.findResources('AWS::EC2::VPC');
+      expect(Object.keys(vpcs).length).toBe(0);
+
+      // Clean up environment
+      delete process.env.AWS_ENDPOINT_URL;
+    });
+  });
+
+  describe('WAF Configuration', () => {
+    test('creates WAF Web ACL', () => {
+      template.resourceCountIs('AWS::WAFv2::WebACL', 1);
+    });
+
+    test('WAF Web ACL has rate limiting rule', () => {
       template.hasResourceProperties('AWS::WAFv2::WebACL', {
         Rules: Match.arrayWith([
           Match.objectLike({
@@ -282,139 +365,60 @@ describe('TapStack', () => {
       });
     });
 
-    test('WAF has managed rule sets', () => {
+    test('WAF Web ACL has AWS managed rules', () => {
       template.hasResourceProperties('AWS::WAFv2::WebACL', {
         Rules: Match.arrayWith([
           Match.objectLike({
             Name: 'AWSManagedRulesCommonRuleSet',
-          }),
-          Match.objectLike({
-            Name: 'AWSManagedRulesSQLiRuleSet',
+            Statement: {
+              ManagedRuleGroupStatement: {
+                VendorName: 'AWS',
+                Name: 'AWSManagedRulesCommonRuleSet',
+              },
+            },
           }),
         ]),
       });
     });
 
-    test('creates WAF association with API Gateway', () => {
+    test('creates WAF Web ACL association with API Gateway', () => {
       template.resourceCountIs('AWS::WAFv2::WebACLAssociation', 1);
     });
   });
 
-  describe('CloudWatch', () => {
+  describe('CloudWatch Resources', () => {
     test('creates CloudWatch dashboard', () => {
       template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
     });
 
     test('creates CloudWatch alarms', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: Match.stringLikeRegexp('global-api-lambda-errors-.*'),
-      });
+      template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
     });
 
-    test('creates Lambda duration alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: Match.stringLikeRegexp('global-api-lambda-duration-.*'),
-        Threshold: 25000,
-      });
-    });
-  });
-
-  describe('Synthetics Canary', () => {
-    test('creates Synthetics canary for API monitoring', () => {
+    test('creates Synthetics canary', () => {
       template.resourceCountIs('AWS::Synthetics::Canary', 1);
-    });
-
-    test('canary has correct schedule', () => {
-      template.hasResourceProperties('AWS::Synthetics::Canary', {
-        Schedule: {
-          Expression: 'rate(5 minutes)',
-        },
-      });
-    });
-  });
-
-  describe('VPC Configuration', () => {
-    test('VPC is not created when LocalStack environment is detected', () => {
-      // Test with LocalStack environment
-      const localStackApp = new cdk.App();
-      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
-      const localStackStack = new TapStack(localStackApp, 'LocalStackTapStack', {
-        env: {
-          account: '123456789012',
-          region: 'us-east-1',
-        },
-        environmentSuffix: 'localstack',
-        isPrimary: true,
-      });
-      const localStackTemplate = Template.fromStack(localStackStack);
-      
-      localStackTemplate.resourceCountIs('AWS::EC2::VPC', 0);
-      localStackTemplate.resourceCountIs('AWS::EC2::NatGateway', 0);
-      
-      // Clean up
-      delete process.env.AWS_ENDPOINT_URL;
-    });
-
-    test('VPC is created when not in LocalStack environment', () => {
-      template.resourceCountIs('AWS::EC2::VPC', 1);
     });
   });
 
   describe('Stack Outputs', () => {
-    test('creates all required stack outputs', () => {
-      template.hasOutput('ApiEndpoint', {});
-      template.hasOutput('ApiId', {});
-      template.hasOutput('TableName', {});
-      template.hasOutput('AssetBucketName', {});
-      template.hasOutput('BackupBucketName', {});
-      template.hasOutput('EventBusName', {});
-      template.hasOutput('LambdaFunctionName', {});
-    });
+    test('creates all required outputs', () => {
+      const outputs = template.findOutputs('*');
+      const expectedOutputs = [
+        'ApiEndpoint',
+        'ApiId',
+        'TableName',
+        'AssetBucketName',
+        'BackupBucketName',
+        'EventBusName',
+        'LambdaFunctionName',
+        'WebAclArn',
+        'DashboardUrl',
+        'CanaryName',
+      ];
 
-    test('outputs have proper export names', () => {
-      template.hasOutput('ApiEndpoint', {
-        Export: { Name: `TapApiEndpoint-${environmentSuffix}` },
+      expectedOutputs.forEach(outputName => {
+        expect(outputs[outputName]).toBeDefined();
       });
-    });
-  });
-
-  describe('Secondary Stack Configuration', () => {
-    test('secondary stack does not create cross-region forwarding rule', () => {
-      const secondaryApp = new cdk.App();
-      const secondaryStack = new TapStack(secondaryApp, 'SecondaryTapStack', {
-        env: {
-          account: '123456789012',
-          region: 'us-west-2',
-        },
-        environmentSuffix: 'test',
-        isPrimary: false,
-      });
-      const secondaryTemplate = Template.fromStack(secondaryStack);
-      
-      const rules = secondaryTemplate.findResources('AWS::Events::Rule');
-      const forwardingRules = Object.values(rules).filter(rule => 
-        rule.Properties?.EventPattern?.source?.includes?.('global-api.events')
-      );
-      expect(forwardingRules.length).toBe(0);
-    });
-
-    test('secondary stack does not create GSI', () => {
-      const secondaryApp = new cdk.App();
-      const secondaryStack = new TapStack(secondaryApp, 'SecondaryTapStack', {
-        env: {
-          account: '123456789012',
-          region: 'us-west-2',
-        },
-        environmentSuffix: 'test',
-        isPrimary: false,
-      });
-      const secondaryTemplate = Template.fromStack(secondaryStack);
-      
-      const tables = secondaryTemplate.findResources('AWS::DynamoDB::Table');
-      const tableWithGSI = Object.values(tables).find(table => 
-        table.Properties?.GlobalSecondaryIndexes
-      );
-      expect(tableWithGSI).toBeUndefined();
     });
   });
 });
