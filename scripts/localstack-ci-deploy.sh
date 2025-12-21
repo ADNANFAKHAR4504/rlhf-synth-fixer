@@ -719,8 +719,41 @@ deploy_cloudformation() {
         current_status=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
             --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "UNKNOWN")
         
-        # Handle stacks in failed/rollback state - delete first
+        # Handle stacks in various states
         case "$current_status" in
+            DELETE_IN_PROGRESS)
+                print_status $YELLOW "⏳ Stack deletion in progress, waiting for completion..."
+                local delete_wait=0
+                while [ $delete_wait -lt 300 ]; do
+                    if ! awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
+                        print_status $GREEN "✅ Stack deleted successfully"
+                        break
+                    fi
+                    sleep 5
+                    delete_wait=$((delete_wait + 5))
+                    if [ $((delete_wait % 30)) -eq 0 ]; then
+                        print_status $YELLOW "   Still waiting for deletion... (${delete_wait}s)"
+                    fi
+                done
+                stack_exists=false
+                ;;
+            CREATE_IN_PROGRESS|UPDATE_IN_PROGRESS)
+                print_status $YELLOW "⏳ Stack operation in progress, waiting then deleting..."
+                local op_wait=0
+                while [ $op_wait -lt 300 ]; do
+                    local check_status=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
+                        --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "UNKNOWN")
+                    if [[ "$check_status" != *"_IN_PROGRESS" ]]; then
+                        break
+                    fi
+                    sleep 5
+                    op_wait=$((op_wait + 5))
+                done
+                print_status $YELLOW "📝 Deleting stack before recreating..."
+                awslocal cloudformation delete-stack --stack-name "$stack_name" 2>/dev/null || true
+                sleep 10
+                stack_exists=false
+                ;;
             ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED|UPDATE_ROLLBACK_COMPLETE)
                 print_status $YELLOW "⚠️ Stack in $current_status state, deleting before recreating..."
                 awslocal cloudformation delete-stack --stack-name "$stack_name" 2>/dev/null || true
@@ -737,9 +770,17 @@ deploy_cloudformation() {
                 stack_exists=false
                 ;;
             *)
-                print_status $YELLOW "📝 Stack exists, deleting before recreating..."
+                print_status $YELLOW "📝 Stack exists in state $current_status, deleting before recreating..."
                 awslocal cloudformation delete-stack --stack-name "$stack_name" 2>/dev/null || true
-                sleep 2
+                # Wait for deletion to complete
+                local delete_wait=0
+                while [ $delete_wait -lt 120 ]; do
+                    if ! awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
+                        break
+                    fi
+                    sleep 5
+                    delete_wait=$((delete_wait + 5))
+                done
                 stack_exists=false
                 ;;
         esac
