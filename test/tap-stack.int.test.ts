@@ -91,25 +91,37 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
     }
     
     // Retry querying outputs if critical outputs are missing (stack might still be creating)
+    // Retry up to 5 times with increasing delays
     if (!outputs.S3BucketName || !outputs.SNSTopicArn) {
-      console.log('⚠️ Critical outputs missing, retrying CloudFormation query...');
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-      
-      for (const stackName of possibleStackNames) {
-        try {
-          const stackResponse = await cfnClient.send(
-            new DescribeStacksCommand({ StackName: stackName })
-          );
-          if (stackResponse.Stacks && stackResponse.Stacks[0]?.Outputs) {
-            stackResponse.Stacks[0].Outputs.forEach(output => {
-              if (output.OutputKey && output.OutputValue) {
-                outputs[output.OutputKey] = output.OutputValue;
+      for (let retry = 0; retry < 5; retry++) {
+        const delay = (retry + 1) * 3000; // 3s, 6s, 9s, 12s, 15s
+        console.log(`⚠️ Critical outputs missing, retrying CloudFormation query (attempt ${retry + 1}/5) after ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        for (const stackName of possibleStackNames) {
+          try {
+            const stackResponse = await cfnClient.send(
+              new DescribeStacksCommand({ StackName: stackName })
+            );
+            if (stackResponse.Stacks && stackResponse.Stacks[0]?.Outputs) {
+              stackResponse.Stacks[0].Outputs.forEach(output => {
+                if (output.OutputKey && output.OutputValue) {
+                  outputs[output.OutputKey] = output.OutputValue;
+                }
+              });
+              // If we got the outputs, break out of retry loop
+              if (outputs.S3BucketName && outputs.SNSTopicArn) {
+                break;
               }
-            });
-            break;
+            }
+          } catch (error: any) {
+            continue;
           }
-        } catch (error: any) {
-          continue;
+        }
+        
+        // If we have the outputs now, stop retrying
+        if (outputs.S3BucketName && outputs.SNSTopicArn) {
+          break;
         }
       }
     }
