@@ -1,0 +1,31 @@
+{
+  "provider": "localstack",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291434",
+  "team": "synth-2",
+  "startedAt": "2025-08-14T10:22:05.595Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS",
+    "CloudFormation",
+    "IAM",
+    "CloudTrail",
+    "GuardDuty",
+    "CloudWatch",
+    "SNS",
+    "ELB",
+    "WAF",
+    "CloudFront",
+    "Lambda",
+    "Secrets Manager"
+  ]
+}
