@@ -31,6 +31,19 @@ const mockConfig = {
     amiId: 'ami-87654321',
     subnetIds: ['subnet-87654321'],
     availabilityZones: ['us-east-1a', 'us-east-1b'],
+  },
+  qa: {
+    environment: 'qa',
+    existingVpcId: 'vpc-11111111',
+    vpcCidrBlock: '10.0.0.0/16',
+    existingS3Bucket: 'test-bucket-qa',
+    sshCidrBlock: '10.0.0.0/16',
+    trustedOutboundCidrs: ['10.0.0.0/8'],
+    instanceType: 't3.micro',
+    keyPairName: 'qa-key',
+    amiId: 'ami-11111111',
+    subnetIds: ['subnet-11111111'],
+    availabilityZones: ['us-east-1a'],
   }
 };
 
@@ -115,6 +128,10 @@ describe('TapStack Unit Tests', () => {
   test('Environment suffix is set correctly', () => {
     expect(stack.environmentSuffix).toBe('dev');
   });
+
+  test('isLocalStack detection works correctly', () => {
+    expect(stack.isLocalStack).toBe(true);
+  });
 });
 
 // Test with fallback to dev environment
@@ -139,6 +156,30 @@ describe('TapStack Fallback Tests', () => {
     
     // Should fall back to dev
     expect(stack.config.environment).toBe('dev');
+    
+    delete process.env.CDK_LOCAL;
+    delete process.env.ENVIRONMENT_SUFFIX;
+  });
+
+  test('Uses qa environment when available', () => {
+    process.env.CDK_LOCAL = 'true';
+    process.env.ENVIRONMENT_SUFFIX = 'qa';
+    
+    const app = new App({
+      context: {
+        environmentSuffix: 'qa',
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'QaStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'qa',
+      config: mockConfig
+    });
+    
+    expect(stack.config.environment).toBe('qa');
     
     delete process.env.CDK_LOCAL;
     delete process.env.ENVIRONMENT_SUFFIX;
@@ -187,6 +228,100 @@ describe('TapStack Config Loading Tests', () => {
     
     delete process.env.CDK_LOCAL;
     delete process.env.ENVIRONMENT_SUFFIX;
+  });
+
+  test('Uses environment suffix from props over context', () => {
+    process.env.CDK_LOCAL = 'true';
+    process.env.ENVIRONMENT_SUFFIX = 'dev';
+    
+    const app = new App({
+      context: {
+        environmentSuffix: 'dev',
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'PropsOverrideStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'prod',
+      config: mockConfig
+    });
+    
+    expect(stack.environmentSuffix).toBe('prod');
+    expect(stack.config.environment).toBe('prod');
+    
+    delete process.env.CDK_LOCAL;
+    delete process.env.ENVIRONMENT_SUFFIX;
+  });
+
+  test('Uses context environmentSuffix when no props environmentSuffix', () => {
+    process.env.CDK_LOCAL = 'true';
+    process.env.ENVIRONMENT_SUFFIX = 'dev';
+    
+    const app = new App({
+      context: {
+        environmentSuffix: 'qa',
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'ContextSuffixStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      config: mockConfig
+    });
+    
+    expect(stack.environmentSuffix).toBe('qa');
+    expect(stack.config.environment).toBe('qa');
+    
+    delete process.env.CDK_LOCAL;
+    delete process.env.ENVIRONMENT_SUFFIX;
+  });
+
+  test('Uses environment variable when no props or context', () => {
+    process.env.CDK_LOCAL = 'true';
+    process.env.ENVIRONMENT_SUFFIX = 'prod';
+    
+    const app = new App({
+      context: {
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'EnvVarStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      config: mockConfig
+    });
+    
+    expect(stack.environmentSuffix).toBe('prod');
+    expect(stack.config.environment).toBe('prod');
+    
+    delete process.env.CDK_LOCAL;
+    delete process.env.ENVIRONMENT_SUFFIX;
+  });
+
+  test('Defaults to dev when no suffix specified anywhere', () => {
+    process.env.CDK_LOCAL = 'true';
+    delete process.env.ENVIRONMENT_SUFFIX;
+    
+    const app = new App({
+      context: {
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'DefaultStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      config: mockConfig
+    });
+    
+    expect(stack.environmentSuffix).toBe('dev');
+    expect(stack.config.environment).toBe('dev');
+    
+    delete process.env.CDK_LOCAL;
   });
 });
 
@@ -350,14 +485,180 @@ describe('TapStack Missing Config Field Tests', () => {
   });
 });
 
-// Test SecurityGroupConstruct directly for non-LocalStack path (VPC Endpoints)
-describe('SecurityGroupConstruct Direct Tests', () => {
-  test('Creates security group with VPC endpoints in non-LocalStack mode', () => {
-    // Clear LocalStack env vars
+// Test LocalStack detection
+describe('TapStack LocalStack Detection Tests', () => {
+  beforeEach(() => {
+    // Clean up env vars
     delete process.env.CDK_LOCAL;
     delete process.env.CI;
     delete process.env.GITHUB_ACTIONS;
+    delete process.env.AWS_ENDPOINT_URL;
+    delete process.env.LOCALSTACK_HOSTNAME;
+  });
+
+  test('Detects LocalStack from CDK_LOCAL env var', () => {
+    process.env.CDK_LOCAL = 'true';
     
+    const app = new App({
+      context: {
+        environmentSuffix: 'dev',
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'CDKLocalStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(true);
+    
+    delete process.env.CDK_LOCAL;
+  });
+
+  test('Detects LocalStack from CI env var', () => {
+    process.env.CI = 'true';
+    
+    const app = new App({
+      context: {
+        environmentSuffix: 'dev',
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'CIStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(true);
+    
+    delete process.env.CI;
+  });
+
+  test('Detects LocalStack from GITHUB_ACTIONS env var', () => {
+    process.env.GITHUB_ACTIONS = 'true';
+    
+    const app = new App({
+      context: {
+        environmentSuffix: 'dev',
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'GitHubStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(true);
+    
+    delete process.env.GITHUB_ACTIONS;
+  });
+
+  test('Detects LocalStack from AWS_ENDPOINT_URL containing localhost', () => {
+    process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+    
+    const app = new App({
+      context: {
+        environmentSuffix: 'dev',
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'EndpointStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(true);
+    
+    delete process.env.AWS_ENDPOINT_URL;
+  });
+
+  test('Detects LocalStack from LOCALSTACK_HOSTNAME env var', () => {
+    process.env.LOCALSTACK_HOSTNAME = 'localstack';
+    
+    const app = new App({
+      context: {
+        environmentSuffix: 'dev',
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'HostnameStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(true);
+    
+    delete process.env.LOCALSTACK_HOSTNAME;
+  });
+
+  test('Does not detect LocalStack when no env vars set', () => {
+    const app = new App({
+      context: {
+        environmentSuffix: 'dev',
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'NoLocalStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(false);
+  });
+
+  test('Does not detect LocalStack from AWS_ENDPOINT_URL without localhost', () => {
+    process.env.AWS_ENDPOINT_URL = 'https://s3.amazonaws.com';
+    
+    const app = new App({
+      context: {
+        environmentSuffix: 'dev',
+        environments: mockConfig,
+        '@aws-cdk/core:newStyleStackSynthesis': false
+      }
+    });
+    
+    const stack = new TapStack(app, 'AWSEndpointStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix: 'dev',
+      config: mockConfig
+    });
+    
+    expect(stack.isLocalStack).toBe(false);
+    
+    delete process.env.AWS_ENDPOINT_URL;
+  });
+});
+
+// Test SecurityGroupConstruct directly for non-LocalStack path (VPC Endpoints)
+describe('SecurityGroupConstruct Direct Tests', () => {
+  beforeEach(() => {
+    // Clean up env vars
+    delete process.env.CDK_LOCAL;
+    delete process.env.CI;
+    delete process.env.GITHUB_ACTIONS;
+    delete process.env.AWS_ENDPOINT_URL;
+    delete process.env.LOCALSTACK_HOSTNAME;
+  });
+
+  test('Creates security group with VPC endpoints in non-LocalStack mode', () => {
     const app = new App({
       context: { '@aws-cdk/core:newStyleStackSynthesis': false }
     });
@@ -402,14 +703,9 @@ describe('SecurityGroupConstruct Direct Tests', () => {
     
     // Verify VPC endpoints are created (CloudWatch, Logs, Events)
     template.resourceCountIs('AWS::EC2::VPCEndpoint', 3);
-    
-    // Restore env vars
-    process.env.CDK_LOCAL = 'true';
   });
 
   test('Creates security group without VPC endpoints in LocalStack mode', () => {
-    process.env.CDK_LOCAL = 'true';
-    
     const app = new App({
       context: { '@aws-cdk/core:newStyleStackSynthesis': false }
     });
@@ -442,15 +738,9 @@ describe('SecurityGroupConstruct Direct Tests', () => {
     
     // Verify NO VPC endpoints in LocalStack mode
     template.resourceCountIs('AWS::EC2::VPCEndpoint', 0);
-    
-    delete process.env.CDK_LOCAL;
   });
 
   test('Throws error for unsupported region in S3 prefix list', () => {
-    delete process.env.CDK_LOCAL;
-    delete process.env.CI;
-    delete process.env.GITHUB_ACTIONS;
-    
     const app = new App({
       context: { '@aws-cdk/core:newStyleStackSynthesis': false }
     });
@@ -476,15 +766,9 @@ describe('SecurityGroupConstruct Direct Tests', () => {
         isLocalStack: false
       });
     }).toThrow('Unsupported region for S3 prefix list');
-    
-    process.env.CDK_LOCAL = 'true';
   });
 
   test('Supports multiple AWS regions for S3 prefix list', () => {
-    delete process.env.CDK_LOCAL;
-    delete process.env.CI;
-    delete process.env.GITHUB_ACTIONS;
-    
     const regions = ['us-west-2', 'eu-west-1', 'ap-southeast-1', 'ap-northeast-1'];
     
     regions.forEach((region, index) => {
@@ -514,7 +798,14 @@ describe('SecurityGroupConstruct Direct Tests', () => {
       
       expect(sgConstruct.securityGroup).toBeDefined();
     });
-    
-    process.env.CDK_LOCAL = 'true';
+  });
+
+  afterEach(() => {
+    // Clean up env vars after each test
+    delete process.env.CDK_LOCAL;
+    delete process.env.CI;
+    delete process.env.GITHUB_ACTIONS;
+    delete process.env.AWS_ENDPOINT_URL;
+    delete process.env.LOCALSTACK_HOSTNAME;
   });
 });
