@@ -132,19 +132,21 @@ install_dependencies() {
 # Fails if no outputs are saved (output_count = 0)
 save_outputs() {
     local output_json=$1
-    
+
     mkdir -p "$PROJECT_ROOT/cfn-outputs"
+    mkdir -p "$PROJECT_ROOT/cdk-outputs"
     echo "$output_json" > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
-    
+    echo "$output_json" > "$PROJECT_ROOT/cdk-outputs/flat-outputs.json"
+
     local output_count=$(echo "$output_json" | jq 'keys | length' 2>/dev/null || echo "0")
-    
+
     if [ "$output_count" -eq 0 ]; then
         print_status $RED "❌ No deployment outputs found!"
         print_status $RED "❌ Deployment must produce at least one output"
         exit 1
     fi
-    
-    print_status $GREEN "✅ Saved $output_count outputs to cfn-outputs/flat-outputs.json"
+
+    print_status $GREEN "✅ Saved $output_count outputs to cdk-outputs/flat-outputs.json"
 }
 
 # Function to describe CDK/CloudFormation deployment failure
@@ -411,26 +413,42 @@ deploy_cdk() {
 
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
-    local stack_name="TapStack${env_suffix}"
+    local stack_name="TapStack-${env_suffix}"
     local output_json="{}"
-    
-    if awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
-        output_json=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
-            --query 'Stacks[0].Outputs' \
-            --output json 2>/dev/null | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    outputs = {}
-    if data:
-        for output in data:
-            outputs[output['OutputKey']] = output['OutputValue']
-    print(json.dumps(outputs, indent=2))
-except:
-    print('{}')
-" || echo "{}")
-    fi
-    
+
+    # Get all stacks (parent and nested)
+    local all_stacks=$(awslocal cloudformation list-stacks \
+        --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
+        --query 'StackSummaries[].StackName' \
+        --output json 2>/dev/null | jq -r '.[]' 2>/dev/null | grep -i "TapStack${env_suffix}" || echo "$stack_name")
+
+    # Collect outputs from all matching stacks
+    output_json=$(python3 -c "
+import sys, json, subprocess
+
+all_outputs = {}
+stacks = '''$all_stacks'''.strip().split('\n')
+
+for stack in stacks:
+    if not stack:
+        continue
+    try:
+        result = subprocess.run(
+            ['awslocal', 'cloudformation', 'describe-stacks', '--stack-name', stack],
+            capture_output=True, text=True, check=False
+        )
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            if data and 'Stacks' in data and len(data['Stacks']) > 0:
+                outputs = data['Stacks'][0].get('Outputs', [])
+                for output in outputs:
+                    all_outputs[output['OutputKey']] = output['OutputValue']
+    except Exception as e:
+        continue
+
+print(json.dumps(all_outputs, indent=2))
+" 2>/dev/null || echo "{}")
+
     save_outputs "$output_json"
 }
 
@@ -496,6 +514,89 @@ deploy_cdktf() {
     save_outputs "$output_json"
 }
 
+# Function to monitor CloudFormation stack events in real-time
+monitor_cfn_stack() {
+    local stack_name=$1
+    local seen_events=""
+    local max_wait=600  # 10 minutes max
+    local wait_time=0
+    local poll_interval=3
+    
+    print_status $CYAN "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_status $CYAN "📋 Live Stack Events:"
+    print_status $CYAN "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    while [ $wait_time -lt $max_wait ]; do
+        # Get stack status
+        local stack_status=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
+            --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "UNKNOWN")
+        
+        # Get recent events
+        local events=$(awslocal cloudformation describe-stack-events --stack-name "$stack_name" \
+            --query 'StackEvents[*].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]' \
+            --output text 2>/dev/null | head -20)
+        
+        # Print new events
+        while IFS=$'\t' read -r timestamp resource_id resource_type status reason; do
+            local event_key="${timestamp}_${resource_id}_${status}"
+            if [[ ! "$seen_events" == *"$event_key"* ]] && [ -n "$timestamp" ]; then
+                seen_events="$seen_events|$event_key"
+                
+                # Color based on status
+                local status_icon="⏳"
+                local status_color=$YELLOW
+                case "$status" in
+                    *COMPLETE)
+                        status_icon="✅"
+                        status_color=$GREEN
+                        ;;
+                    *FAILED)
+                        status_icon="❌"
+                        status_color=$RED
+                        ;;
+                    *IN_PROGRESS)
+                        status_icon="🔄"
+                        status_color=$YELLOW
+                        ;;
+                    *ROLLBACK*)
+                        status_icon="⚠️"
+                        status_color=$RED
+                        ;;
+                esac
+                
+                # Print event
+                echo -e "${status_color}   ${status_icon} ${resource_id}${NC}"
+                echo -e "${BLUE}      Type: ${resource_type}${NC}"
+                echo -e "${status_color}      Status: ${status}${NC}"
+                if [ -n "$reason" ] && [ "$reason" != "None" ] && [ "$reason" != "null" ]; then
+                    echo -e "${CYAN}      Reason: ${reason}${NC}"
+                fi
+                echo ""
+            fi
+        done <<< "$events"
+        
+        # Check if stack is done
+        case "$stack_status" in
+            "CREATE_COMPLETE"|"UPDATE_COMPLETE")
+                print_status $GREEN "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                print_status $GREEN "✅ Stack $stack_name: $stack_status"
+                return 0
+                ;;
+            "CREATE_FAILED"|"ROLLBACK_COMPLETE"|"ROLLBACK_FAILED"|"DELETE_COMPLETE"|"UPDATE_ROLLBACK_COMPLETE")
+                print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                print_status $RED "❌ Stack $stack_name: $stack_status"
+                return 1
+                ;;
+        esac
+        
+        sleep $poll_interval
+        wait_time=$((wait_time + poll_interval))
+    done
+    
+    print_status $RED "❌ Timeout waiting for stack to complete"
+    return 1
+}
+
 # CloudFormation deployment
 # Languages: yaml, json
 deploy_cloudformation() {
@@ -549,174 +650,42 @@ deploy_cloudformation() {
 
     # Deploy using AWS CLI with LocalStack endpoint
     local stack_name="localstack-stack-${ENVIRONMENT_SUFFIX:-dev}"
-    local cfn_bucket="cfn-templates-localstack-${ENVIRONMENT_SUFFIX:-dev}"
-    local template_size=$(stat -f%z "$template" 2>/dev/null || stat -c%s "$template" 2>/dev/null || echo 0)
-    local max_inline_size=51200  # 51KB CloudFormation limit
-    local use_s3=false
-    local template_url=""
-    
-    print_status $BLUE "📏 Template size: $template_size bytes (limit: $max_inline_size)"
-    
-    # Use S3 for large templates
-    if [ "$template_size" -gt "$max_inline_size" ]; then
-        use_s3=true
-        print_status $YELLOW "📦 Template exceeds 51KB limit, using S3..."
-        
-        # Create S3 bucket (ignore error if exists)
-        aws s3 mb "s3://${cfn_bucket}" \
-            --endpoint-url "$AWS_ENDPOINT_URL" \
-            --region "$AWS_DEFAULT_REGION" 2>/dev/null || true
-        
-        # Upload template to S3
-        print_status $YELLOW "📤 Uploading template to S3..."
-        aws s3 cp "$template" "s3://${cfn_bucket}/template.yml" \
-            --endpoint-url "$AWS_ENDPOINT_URL" \
-            --region "$AWS_DEFAULT_REGION"
-        
-        template_url="${AWS_ENDPOINT_URL}/${cfn_bucket}/template.yml"
-        print_status $BLUE "📄 Template URL: $template_url"
-    fi
-    
     print_status $YELLOW "🚀 Deploying stack: $stack_name..."
+    echo ""
+
+    # Check if stack exists
+    local stack_exists=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" 2>/dev/null && echo "yes" || echo "no")
     
-    # Check if stack already exists
-    local stack_exists=false
-    local current_status=""
-    current_status=$(aws cloudformation describe-stacks --stack-name "$stack_name" \
-        --endpoint-url "$AWS_ENDPOINT_URL" \
-        --region "$AWS_DEFAULT_REGION" \
-        --query 'Stacks[0].StackStatus' --output text 2>/dev/null) && stack_exists=true
-    
-    # Handle stacks in failed/rollback state - delete first
-    if [ "$stack_exists" = true ]; then
-        case "$current_status" in
-            ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED|UPDATE_ROLLBACK_COMPLETE)
-                print_status $YELLOW "⚠️ Stack in $current_status state, deleting before recreating..."
-                aws cloudformation delete-stack --stack-name "$stack_name" \
-                    --endpoint-url "$AWS_ENDPOINT_URL" \
-                    --region "$AWS_DEFAULT_REGION"
-                
-                # Wait for deletion
-                local delete_wait=0
-                while [ $delete_wait -lt 120 ]; do
-                    if ! aws cloudformation describe-stacks --stack-name "$stack_name" \
-                        --endpoint-url "$AWS_ENDPOINT_URL" \
-                        --region "$AWS_DEFAULT_REGION" > /dev/null 2>&1; then
-                        break
-                    fi
-                    sleep 5
-                    delete_wait=$((delete_wait + 5))
-                done
-                stack_exists=false
-                ;;
-        esac
+    if [ "$stack_exists" == "yes" ]; then
+        print_status $YELLOW "📝 Stack exists, updating..."
+        # Delete and recreate for LocalStack (simpler than update)
+        awslocal cloudformation delete-stack --stack-name "$stack_name" 2>/dev/null || true
+        sleep 2
     fi
+
+    # Create stack with explicit create-stack command for better control
+    print_status $YELLOW "📦 Creating stack resources..."
+    echo ""
     
-    # Deploy based on template size and stack state
-    local deploy_exit=0
-    if [ "$use_s3" = true ]; then
-        # Use create-stack/update-stack with --template-url for large templates
-        if [ "$stack_exists" = true ]; then
-            print_status $YELLOW "📝 Updating existing stack with S3 template..."
-            aws cloudformation update-stack \
-                --stack-name "$stack_name" \
-                --template-url "$template_url" \
-                --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-                --endpoint-url "$AWS_ENDPOINT_URL" \
-                --region "$AWS_DEFAULT_REGION" 2>&1 || deploy_exit=$?
-            
-            # Exit code 255 with "No updates" is acceptable
-            if [ $deploy_exit -ne 0 ]; then
-                local error_msg=$(aws cloudformation describe-stack-events --stack-name "$stack_name" \
-                    --endpoint-url "$AWS_ENDPOINT_URL" \
-                    --region "$AWS_DEFAULT_REGION" \
-                    --query 'StackEvents[0].ResourceStatusReason' --output text 2>/dev/null || echo "")
-                if [[ "$error_msg" == *"No updates"* ]]; then
-                    print_status $YELLOW "⚠️ No updates to perform"
-                    deploy_exit=0
-                fi
-            fi
-        else
-            print_status $YELLOW "📝 Creating new stack with S3 template..."
-            aws cloudformation create-stack \
-                --stack-name "$stack_name" \
-                --template-url "$template_url" \
-                --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-                --endpoint-url "$AWS_ENDPOINT_URL" \
-                --region "$AWS_DEFAULT_REGION" 2>&1 || deploy_exit=$?
-        fi
-        
-        # Wait for stack operation to complete
-        if [ $deploy_exit -eq 0 ]; then
-            print_status $YELLOW "⏳ Waiting for stack operation to complete..."
-            local max_wait=600  # 10 minutes
-            local elapsed=0
-            local stack_status=""
-            local last_status=""
-            
-            while [ $elapsed -lt $max_wait ]; do
-                stack_status=$(aws cloudformation describe-stacks --stack-name "$stack_name" \
-                    --endpoint-url "$AWS_ENDPOINT_URL" \
-                    --region "$AWS_DEFAULT_REGION" \
-                    --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "UNKNOWN")
-                
-                # Print status changes
-                if [ "$stack_status" != "$last_status" ]; then
-                    print_status $BLUE "   Status: $stack_status"
-                    last_status="$stack_status"
-                fi
-                
-                case "$stack_status" in
-                    CREATE_COMPLETE|UPDATE_COMPLETE)
-                        deploy_exit=0
-                        break
-                        ;;
-                    CREATE_FAILED|UPDATE_FAILED|ROLLBACK_COMPLETE|UPDATE_ROLLBACK_COMPLETE|DELETE_COMPLETE)
-                        deploy_exit=1
-                        break
-                        ;;
-                    *_IN_PROGRESS)
-                        sleep 10
-                        elapsed=$((elapsed + 10))
-                        ;;
-                    *)
-                        sleep 5
-                        elapsed=$((elapsed + 5))
-                        ;;
-                esac
-            done
-            
-            if [ $elapsed -ge $max_wait ]; then
-                print_status $RED "❌ Timeout waiting for stack operation (${max_wait}s)"
-                deploy_exit=1
-            fi
-        fi
-    else
-        # Use deploy command for small templates
-        aws cloudformation deploy \
-            --template-file "$template" \
-            --stack-name "$stack_name" \
-            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-            --endpoint-url "$AWS_ENDPOINT_URL" \
-            --region "$AWS_DEFAULT_REGION" \
-            --no-fail-on-empty-changeset 2>&1 || deploy_exit=$?
+    awslocal cloudformation create-stack \
+        --stack-name "$stack_name" \
+        --template-body "file://$template" \
+        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+        --on-failure DO_NOTHING 2>&1
+    local create_exit_code=$?
+    
+    if [ $create_exit_code -ne 0 ]; then
+        print_status $RED "❌ CloudFormation create-stack command failed with exit code: $create_exit_code"
+        echo ""
+        describe_cfn_failure "$stack_name"
+        exit $create_exit_code
     fi
-    
-    if [ $deploy_exit -ne 0 ]; then
+
+    # Monitor stack creation with live events
+    if ! monitor_cfn_stack "$stack_name"; then
         print_status $RED "❌ CloudFormation deployment failed"
         echo ""
         describe_cfn_failure "$stack_name"
-        
-        # Cleanup S3 bucket on failure
-        if [ "$use_s3" = true ]; then
-            print_status $YELLOW "🧹 Cleaning up S3 bucket..."
-            aws s3 rm "s3://${cfn_bucket}" --recursive \
-                --endpoint-url "$AWS_ENDPOINT_URL" \
-                --region "$AWS_DEFAULT_REGION" 2>/dev/null || true
-            aws s3 rb "s3://${cfn_bucket}" \
-                --endpoint-url "$AWS_ENDPOINT_URL" \
-                --region "$AWS_DEFAULT_REGION" 2>/dev/null || true
-        fi
         exit 1
     fi
 
@@ -726,24 +695,46 @@ deploy_cloudformation() {
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
     local output_json="{}"
-    
+
+    # First check if stack exists
     if awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
-        output_json=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
-            --query 'Stacks[0].Outputs' \
-            --output json 2>/dev/null | python3 -c "
+        print_status $BLUE "   Stack found: $stack_name"
+
+        # Get full stack description and extract outputs with better error handling
+        local stack_desc=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" --output json 2>/dev/null)
+
+        if [ -n "$stack_desc" ]; then
+            print_status $BLUE "   Stack description retrieved, parsing outputs..."
+
+            output_json=$(echo "$stack_desc" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
     outputs = {}
-    if data:
-        for output in data:
-            outputs[output['OutputKey']] = output['OutputValue']
+    if data and 'Stacks' in data and len(data['Stacks']) > 0:
+        stack = data['Stacks'][0]
+        if 'Outputs' in stack and stack['Outputs']:
+            for output in stack['Outputs']:
+                if 'OutputKey' in output and 'OutputValue' in output:
+                    outputs[output['OutputKey']] = output['OutputValue']
+        else:
+            print('DEBUG: No Outputs field in stack or Outputs is empty', file=sys.stderr)
+    else:
+        print('DEBUG: No Stacks in response', file=sys.stderr)
     print(json.dumps(outputs, indent=2))
-except:
+except Exception as e:
+    print(f'DEBUG: Exception parsing outputs: {e}', file=sys.stderr)
     print('{}')
-" || echo "{}")
+" 2>&1)
+
+            print_status $BLUE "   Parsed output_json length: $(echo "$output_json" | wc -c)"
+        else
+            print_status $YELLOW "   ⚠️ Stack description is empty"
+        fi
+    else
+        print_status $RED "   ❌ Stack not found: $stack_name"
     fi
-    
+
     save_outputs "$output_json"
 }
 
