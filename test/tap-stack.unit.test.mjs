@@ -2,9 +2,10 @@ import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.mjs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 // Jest-compatible way to handle __dirname in ES modules
-const __filename = new URL(import.meta.url).pathname;
+const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
