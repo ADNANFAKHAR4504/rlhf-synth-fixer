@@ -96,7 +96,7 @@ DOCKER_CMD="docker run -d \
   -e RDS_MYSQL_DOCKER=0 \
   -e RDS_PG_DOCKER=0 \
   -e LAMBDA_EXECUTOR=local \
-  -e LAMBDA_REMOVE_CONTAINERS=1 
+  -e LAMBDA_REMOVE_CONTAINERS=1"
 
 # Add SERVICES only if explicitly set
 if [ -n "$SERVICES" ]; then
