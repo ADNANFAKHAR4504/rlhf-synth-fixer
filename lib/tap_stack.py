@@ -99,7 +99,9 @@ class TapStack(TerraformStack):
     self._create_outputs()
 
   def _setup_provider(self, default_tags: Dict[str, Any]) -> None:
-    """Configure AWS provider with default tags."""
+    """Configure AWS provider with default tags and LocalStack support."""
+    import os
+
     provider_default_tags = default_tags or {
       "tags": {
         "Environment": "Development",
@@ -107,13 +109,37 @@ class TapStack(TerraformStack):
         "ManagedBy": "CDKTF"
       }
     }
-    
-    AwsProvider(
-      self,
-      "aws",
-      region=self.config["aws_region"],
-      default_tags=[provider_default_tags]
-    )
+
+    # Check if running in LocalStack environment
+    is_localstack = "AWS_ENDPOINT_URL" in os.environ or "LOCALSTACK_HOSTNAME" in os.environ
+
+    provider_config = {
+      "region": self.config["aws_region"],
+      "default_tags": [provider_default_tags]
+    }
+
+    # Add LocalStack-specific configurations
+    if is_localstack:
+      provider_config.update({
+        "access_key": "test",
+        "secret_key": "test",
+        "skip_credentials_validation": True,
+        "skip_metadata_api_check": True,
+        "skip_requesting_account_id": True,
+        "s3_use_path_style": True
+      })
+
+      # Add endpoint overrides if AWS_ENDPOINT_URL is set
+      endpoint_url = os.environ.get("AWS_ENDPOINT_URL", "http://localhost:4566")
+      provider_config["endpoints"] = [{
+        "s3": endpoint_url,
+        "dynamodb": endpoint_url,
+        "ec2": endpoint_url,
+        "sts": endpoint_url,
+        "iam": endpoint_url
+      }]
+
+    AwsProvider(self, "aws", **provider_config)
 
   def _create_vpc(self, create_tags) -> None:
     """Create VPC with DNS support."""
