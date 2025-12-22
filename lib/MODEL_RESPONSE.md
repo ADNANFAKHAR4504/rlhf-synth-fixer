@@ -732,14 +732,14 @@ Outputs:
 
 ## Key Security Features Implemented
 
-### 🔐 **IAM Roles & Least Privilege**
+### **IAM Roles & Least Privilege**
 
 - **EC2InstanceRole**: Minimal permissions for S3 access and CloudWatch
 - **CloudTrailRole**: Only CloudWatch Logs permissions
 - **ConfigRole**: AWS Config service permissions with S3 access
 - All roles follow the principle of least privilege
 
-### 📊 **CloudTrail Logging**
+### **CloudTrail Logging**
 
 - **Multi-region trail** capturing all API activity
 - **Data events** for S3 bucket operations
@@ -747,14 +747,14 @@ Outputs:
 - **KMS encryption** for log files
 - **CloudWatch Logs integration**
 
-### 🔒 **Data Encryption (KMS)**
+### **Data Encryption (KMS)**
 
 - **Customer-managed KMS key** for all encryption
 - **S3 bucket encryption** at rest
 - **CloudTrail log encryption**
 - **Proper key policies** for service access
 
-### 📦 **S3 Security**
+### **S3 Security**
 
 - **Versioning enabled** on all buckets
 - **Public access blocked** on all buckets
@@ -762,7 +762,7 @@ Outputs:
 - **Access logging** configured
 - **Separate buckets** for different purposes
 
-### 🛡️ **Security Groups**
+### **Security Groups**
 
 - **Principle of least privilege** network access
 - **ALB Security Group**: Only HTTP/HTTPS from internet
@@ -770,7 +770,7 @@ Outputs:
 - **Database Security Group**: Only from web servers
 - **Bastion Security Group**: SSH access point
 
-### 📋 **AWS Config Rules**
+### **AWS Config Rules**
 
 - **S3 versioning compliance**
 - **S3 encryption compliance**
@@ -778,7 +778,7 @@ Outputs:
 - **IAM password policy enforcement**
 - **SSH restriction validation**
 
-### 🏗️ **Network Architecture**
+### **Network Architecture**
 
 - **Multi-AZ deployment** for high availability
 - **Public/Private subnet separation**
