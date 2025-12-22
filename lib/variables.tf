@@ -91,3 +91,9 @@ variable "enable_kms_replicas" {
   type        = bool
   default     = false # Disabled by default for LocalStack compatibility
 }
+
+variable "enable_vpc_flow_logs" {
+  description = "Enable VPC Flow Logs (disable for LocalStack due to max_aggregation_interval parameter issues)"
+  type        = bool
+  default     = false # Disabled by default for LocalStack compatibility
+}

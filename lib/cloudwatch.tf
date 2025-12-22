@@ -91,7 +91,7 @@ data "aws_iam_policy_document" "vpc_flow_logs_policy" {
 
 # VPC Flow Logs
 resource "aws_flow_log" "security_vpc" {
-  count = var.vpc_id == "" ? 1 : 0
+  count = var.enable_vpc_flow_logs && var.vpc_id == "" ? 1 : 0
 
   iam_role_arn         = aws_iam_role.vpc_flow_logs.arn
   log_destination      = aws_cloudwatch_log_group.vpc_flow_logs.arn
