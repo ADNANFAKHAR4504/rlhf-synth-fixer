@@ -1,0 +1,29 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "350146",
+  "team": "synth",
+  "startedAt": "2025-11-19T08:00:54.727Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "CloudWatch",
+    "KMS",
+    "Lambda",
+    "S3"
+  ],
+  "provider": "localstack",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

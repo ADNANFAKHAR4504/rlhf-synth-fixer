@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292036_ls",
+  "team": "2",
+  "startedAt": "2025-12-19T04:41:10.077Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "KMS",
+    "IAM",
+    "ELB",
+    "SecretsManager",
+    "AutoScaling"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

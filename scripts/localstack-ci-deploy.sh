@@ -514,6 +514,89 @@ deploy_cdktf() {
     save_outputs "$output_json"
 }
 
+# Function to monitor CloudFormation stack events in real-time
+monitor_cfn_stack() {
+    local stack_name=$1
+    local seen_events=""
+    local max_wait=600  # 10 minutes max
+    local wait_time=0
+    local poll_interval=3
+    
+    print_status $CYAN "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_status $CYAN "📋 Live Stack Events:"
+    print_status $CYAN "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    while [ $wait_time -lt $max_wait ]; do
+        # Get stack status
+        local stack_status=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
+            --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "UNKNOWN")
+        
+        # Get recent events
+        local events=$(awslocal cloudformation describe-stack-events --stack-name "$stack_name" \
+            --query 'StackEvents[*].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]' \
+            --output text 2>/dev/null | head -20)
+        
+        # Print new events
+        while IFS=$'\t' read -r timestamp resource_id resource_type status reason; do
+            local event_key="${timestamp}_${resource_id}_${status}"
+            if [[ ! "$seen_events" == *"$event_key"* ]] && [ -n "$timestamp" ]; then
+                seen_events="$seen_events|$event_key"
+                
+                # Color based on status
+                local status_icon="⏳"
+                local status_color=$YELLOW
+                case "$status" in
+                    *COMPLETE)
+                        status_icon="✅"
+                        status_color=$GREEN
+                        ;;
+                    *FAILED)
+                        status_icon="❌"
+                        status_color=$RED
+                        ;;
+                    *IN_PROGRESS)
+                        status_icon="🔄"
+                        status_color=$YELLOW
+                        ;;
+                    *ROLLBACK*)
+                        status_icon="⚠️"
+                        status_color=$RED
+                        ;;
+                esac
+                
+                # Print event
+                echo -e "${status_color}   ${status_icon} ${resource_id}${NC}"
+                echo -e "${BLUE}      Type: ${resource_type}${NC}"
+                echo -e "${status_color}      Status: ${status}${NC}"
+                if [ -n "$reason" ] && [ "$reason" != "None" ] && [ "$reason" != "null" ]; then
+                    echo -e "${CYAN}      Reason: ${reason}${NC}"
+                fi
+                echo ""
+            fi
+        done <<< "$events"
+        
+        # Check if stack is done
+        case "$stack_status" in
+            "CREATE_COMPLETE"|"UPDATE_COMPLETE")
+                print_status $GREEN "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                print_status $GREEN "✅ Stack $stack_name: $stack_status"
+                return 0
+                ;;
+            "CREATE_FAILED"|"ROLLBACK_COMPLETE"|"ROLLBACK_FAILED"|"DELETE_COMPLETE"|"UPDATE_ROLLBACK_COMPLETE")
+                print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                print_status $RED "❌ Stack $stack_name: $stack_status"
+                return 1
+                ;;
+        esac
+        
+        sleep $poll_interval
+        wait_time=$((wait_time + poll_interval))
+    done
+    
+    print_status $RED "❌ Timeout waiting for stack to complete"
+    return 1
+}
+
 # CloudFormation deployment
 # Languages: yaml, json
 deploy_cloudformation() {
@@ -567,22 +650,114 @@ deploy_cloudformation() {
 
     # Deploy using AWS CLI with LocalStack endpoint
     local stack_name="localstack-stack-${ENVIRONMENT_SUFFIX:-dev}"
-    print_status $YELLOW "🚀 Deploying stack: $stack_name..."
-
-    aws cloudformation deploy \
-        --template-file "$template" \
-        --stack-name "$stack_name" \
-        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-        --endpoint-url "$AWS_ENDPOINT_URL" \
-        --region "$AWS_DEFAULT_REGION" \
-        --no-fail-on-empty-changeset 2>&1
-    local exit_code=$?
+    local cfn_bucket="cfn-templates-localstack-${ENVIRONMENT_SUFFIX:-dev}"
+    local template_size=$(stat -f%z "$template" 2>/dev/null || stat -c%s "$template" 2>/dev/null || echo 0)
+    local max_inline_size=51200  # 51KB CloudFormation limit
+    local use_s3=false
+    local template_url=""
     
-    if [ $exit_code -ne 0 ]; then
-        print_status $RED "❌ CloudFormation deployment failed with exit code: $exit_code"
+    print_status $BLUE "📏 Template size: $template_size bytes (limit: $max_inline_size)"
+    
+    # Use S3 for large templates
+    if [ "$template_size" -gt "$max_inline_size" ]; then
+        use_s3=true
+        print_status $YELLOW "📦 Template exceeds 51KB limit, using S3..."
+        
+        # Create S3 bucket (ignore error if exists)
+        awslocal s3 mb "s3://${cfn_bucket}" 2>/dev/null || true
+        
+        # Upload template to S3
+        print_status $YELLOW "📤 Uploading template to S3..."
+        awslocal s3 cp "$template" "s3://${cfn_bucket}/template.yml"
+        
+        template_url="${AWS_ENDPOINT_URL}/${cfn_bucket}/template.yml"
+        print_status $BLUE "📄 Template URL: $template_url"
+    fi
+    
+    print_status $YELLOW "🚀 Deploying stack: $stack_name..."
+    echo ""
+
+    # Check if stack exists and handle existing/failed stacks
+    local stack_exists=false
+    local current_status=""
+    if awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
+        stack_exists=true
+        current_status=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
+            --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "UNKNOWN")
+        
+        # Handle stacks in failed/rollback state - delete first
+        case "$current_status" in
+            ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED|UPDATE_ROLLBACK_COMPLETE)
+                print_status $YELLOW "⚠️ Stack in $current_status state, deleting before recreating..."
+                awslocal cloudformation delete-stack --stack-name "$stack_name" 2>/dev/null || true
+                
+                # Wait for deletion
+                local delete_wait=0
+                while [ $delete_wait -lt 120 ]; do
+                    if ! awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
+                        break
+                    fi
+                    sleep 5
+                    delete_wait=$((delete_wait + 5))
+                done
+                stack_exists=false
+                ;;
+            *)
+                print_status $YELLOW "📝 Stack exists, deleting before recreating..."
+                awslocal cloudformation delete-stack --stack-name "$stack_name" 2>/dev/null || true
+                sleep 2
+                stack_exists=false
+                ;;
+        esac
+    fi
+
+    # Deploy based on template size
+    local deploy_exit=0
+    if [ "$use_s3" = true ]; then
+        # Use create-stack with --template-url for large templates
+        print_status $YELLOW "📝 Creating stack with S3 template..."
+        awslocal cloudformation create-stack \
+            --stack-name "$stack_name" \
+            --template-url "$template_url" \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --on-failure DO_NOTHING 2>&1 || deploy_exit=$?
+    else
+        # Use create-stack with --template-body for small templates
+        print_status $YELLOW "📦 Creating stack resources..."
+        awslocal cloudformation create-stack \
+            --stack-name "$stack_name" \
+            --template-body "file://$template" \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --on-failure DO_NOTHING 2>&1 || deploy_exit=$?
+    fi
+    
+    if [ $deploy_exit -ne 0 ]; then
+        print_status $RED "❌ CloudFormation create-stack command failed with exit code: $deploy_exit"
         echo ""
         describe_cfn_failure "$stack_name"
-        exit $exit_code
+        
+        # Cleanup S3 bucket on failure
+        if [ "$use_s3" = true ]; then
+            print_status $YELLOW "🧹 Cleaning up S3 bucket..."
+            awslocal s3 rm "s3://${cfn_bucket}" --recursive 2>/dev/null || true
+            awslocal s3 rb "s3://${cfn_bucket}" 2>/dev/null || true
+        fi
+        exit $deploy_exit
+    fi
+
+    # Monitor stack creation with live events
+    if ! monitor_cfn_stack "$stack_name"; then
+        print_status $RED "❌ CloudFormation deployment failed"
+        echo ""
+        describe_cfn_failure "$stack_name"
+        
+        # Cleanup S3 bucket on failure
+        if [ "$use_s3" = true ]; then
+            print_status $YELLOW "🧹 Cleaning up S3 bucket..."
+            awslocal s3 rm "s3://${cfn_bucket}" --recursive 2>/dev/null || true
+            awslocal s3 rb "s3://${cfn_bucket}" 2>/dev/null || true
+        fi
+        exit 1
     fi
 
     print_status $GREEN "✅ CloudFormation deployment completed!"

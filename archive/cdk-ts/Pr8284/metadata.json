@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "292090",
+  "team": "synth-2",
+  "startedAt": "2025-08-15T05:47:05.987Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ELB",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "Route 53",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "Secrets Manager"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

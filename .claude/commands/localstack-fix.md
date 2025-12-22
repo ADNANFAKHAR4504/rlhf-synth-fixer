@@ -219,7 +219,59 @@ if [ -n "$PR_NUMBER" ]; then
 fi
 ```
 
-### Step 4: Invoke localstack-fixer Agent
+### Step 4: Setup Worktree (CRITICAL)
+
+Before invoking the agent, set up the isolated worktree using the shared script:
+
+```bash
+# ═══════════════════════════════════════════════════════════════
+# WORKTREE SETUP - Use shared script for consistency
+# ═══════════════════════════════════════════════════════════════
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+PR_ID="Pr${PR_NUMBER}"
+
+echo "Setting up isolated worktree for PR #${PR_NUMBER}..."
+
+# Use the shared worktree setup script
+if [ -x "${REPO_ROOT}/.claude/scripts/setup-worktree.sh" ]; then
+  WORKTREE_PATH=$("${REPO_ROOT}/.claude/scripts/setup-worktree.sh" "${BRANCH_NAME}" "${PR_ID}" --type localstack 2>&1 | tail -1)
+
+  if [ -z "$WORKTREE_PATH" ] || [ ! -d "$WORKTREE_PATH" ]; then
+    echo "❌ Failed to setup worktree"
+    exit 1
+  fi
+
+  echo "✅ Worktree ready: $WORKTREE_PATH"
+else
+  echo "⚠️ setup-worktree.sh not found, creating worktree manually..."
+  WORKTREE_PATH="${REPO_ROOT}/worktree/localstack-${PR_ID}"
+
+  # Clean existing worktree
+  if [ -d "$WORKTREE_PATH" ]; then
+    git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || rm -rf "$WORKTREE_PATH"
+  fi
+
+  # Fetch and create worktree
+  git fetch origin "${BRANCH_NAME}:${BRANCH_NAME}" 2>/dev/null || true
+  git worktree add "$WORKTREE_PATH" "${BRANCH_NAME}" || {
+    echo "❌ Failed to create worktree"
+    exit 1
+  }
+fi
+
+# Verify worktree
+cd "$WORKTREE_PATH"
+if [ -x "${REPO_ROOT}/.claude/scripts/verify-worktree.sh" ]; then
+  bash "${REPO_ROOT}/.claude/scripts/verify-worktree.sh" || {
+    echo "⚠️ Worktree verification warning (continuing anyway)"
+  }
+fi
+
+echo "📁 Working directory: $WORKTREE_PATH"
+```
+
+### Step 5: Invoke localstack-fixer Agent
 
 Now invoke the `localstack-fixer` agent with full context:
 
@@ -238,24 +290,33 @@ ${FAILING_CHECKS}
 
 **MODE**: PR MODE (standalone fix command)
 
+**WORKTREE**: ${WORKTREE_PATH}
+
 **CRITICAL INSTRUCTIONS**:
 
-1. **Create isolated worktree**: MUST work in isolated worktree at `worktree/localstack-Pr${PR_NUMBER}`
-   - This enables parallel execution of multiple PR fixes
-   - Do NOT work directly on the branch
-   - Worktree path: `$(git rev-parse --show-toplevel)/worktree/localstack-Pr${PR_NUMBER}`
+1. **Add yourself as assignee**: Add your GitHub user as assignee to PR #${PR_NUMBER}
+   - Command: \`gh pr edit ${PR_NUMBER} --add-assignee \$(gh api user --jq '.login')\`
 
-2. **Sync with main**: Automatically sync branch with main (fetch, rebase if behind)
+2. **Use the prepared worktree**: Worktree is already set up at `${WORKTREE_PATH}`
+   - ALWAYS work inside this worktree
+   - Do NOT work directly on the branch outside the worktree
+   - The worktree has been synced with main (if needed)
+
+3. **Verify worktree before changes**: Run verify-worktree.sh before making changes
+   - Command: \`bash .claude/scripts/verify-worktree.sh\`
+
+4. **Sync with main if needed**: The worktree setup script handles this automatically
+   - If manual sync needed: \`git fetch origin main && git rebase origin/main\`
    - Automatically resolve merge conflicts (accept main's version for scripts/configs)
    - If unresolvable conflicts: Exit with instructions for manual resolution
 
-3. **Fetch and analyze CI/CD job status**:
+5. **Fetch and analyze CI/CD job status**:
    - Create complete checklist of all CI/CD pipeline jobs
    - Identify which jobs passed, failed, or are pending
    - For each failed job, fetch logs and identify failure reasons
    - Use this to prioritize fixes
 
-4. **Apply batch fixes based on CI/CD failures**:
+6. **Apply batch fixes based on CI/CD failures**:
    - Identify ALL errors from failed job logs
    - Map errors to known LocalStack fixes (metadata, endpoints, S3 path-style, etc.)
    - Apply ALL fixes in ONE batch commit
@@ -264,15 +325,16 @@ ${FAILING_CHECKS}
 
 **Your Mission**:
 
-1. Create isolated worktree at `worktree/localstack-Pr${PR_NUMBER}`
-2. **CRITICAL: Sync branch with latest main** (rebase if behind)
-3. Fetch CI/CD pipeline status and create job checklist
-4. Analyze failed jobs and extract ALL error patterns
-5. Map errors to LocalStack-specific fixes
-6. Apply ALL fixes in batch (single commit)
-7. Push changes and monitor CI/CD re-runs
-8. Iterate until all CI/CD jobs pass (max 3 iterations)
-9. Report completion status
+1. Add assignee to PR #${PR_NUMBER}
+2. Create isolated worktree at `worktree/localstack-Pr${PR_NUMBER}`
+3. **CRITICAL: Sync branch with latest main** (rebase if behind)
+4. Fetch CI/CD pipeline status and create job checklist
+5. Analyze failed jobs and extract ALL error patterns
+6. Map errors to LocalStack-specific fixes
+7. Apply ALL fixes in batch (single commit)
+8. Push changes and monitor CI/CD re-runs
+9. Iterate until all CI/CD jobs pass (max 3 iterations)
+10. Report completion status
 
 **Expected Outcome**:
 
