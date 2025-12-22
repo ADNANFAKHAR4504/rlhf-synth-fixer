@@ -1,4 +1,4 @@
-You are a Senior Cloud Infrastructure Engineer. Build secure AWS infrastructure where EC2 instances deployed in a monitored VPC use IAM roles to stream logs to CloudWatch, while VPC Flow Logs feed network data into the same centralized logging system, and S3 and DynamoDB provide integrated data protection through versioning and point-in-time recovery.
+You are a Senior Cloud Infrastructure Engineer. Set up a VPC where EC2 instances use IAM roles to authenticate with and send application logs to CloudWatch, while VPC Flow Logs monitor network traffic and feed into the same log group for centralized analysis. Create infrastructure where S3 versioning works together with DynamoDB point-in-time recovery to provide integrated data protection across storage layers.
 
 Task:
 
@@ -6,24 +6,24 @@ Build a CloudFormation template named infrastructure.yaml that works in both us-
 
 Regional Adaptability:
 
-Add a Mappings section that defines the correct Amazon Linux 2 AMI ID for t2.micro instances in each region. The EC2 instance should use this mapping to automatically select the appropriate AMI based on where the stack is deployed.
+Add a Mappings section that defines the correct Amazon Linux 2 AMI ID for t2.micro instances in each region. The EC2 instance connects to this mapping to automatically select the appropriate AMI based on where the stack is deployed.
 
-Centralized Monitoring and Network Visibility:
+Centralized Logging Architecture:
 
-Create a VPC with one public subnet. Set up a central CloudWatch Log Group that serves as the aggregation point for all infrastructure logs. VPC Flow Logs feed network traffic data into this central log group for unified monitoring alongside application logs, enabling real-time security analysis across the entire VPC.
+Create a VPC with one public subnet. Set up a central CloudWatch Log Group that receives logs from multiple sources. VPC Flow Logs capture all network traffic and push this data into the central CloudWatch log group. EC2 instances also send their application logs to this same log group, creating a unified monitoring system where network and application data flow into a single destination for correlated analysis.
 
-Secure Compute with IAM-Based CloudWatch Integration:
+EC2 to CloudWatch Integration via IAM:
 
-Create an IAM Role that enables EC2 instances to authenticate with CloudWatch and stream application logs. This role should have a minimal inline policy granting only CreateLogStream and PutLogEvents permissions. Create an Instance Profile that connects this IAM role to EC2 instances. Launch a single t2.micro EC2 instance in the public subnet with this Instance Profile attached, enabling the EC2 instance to securely connect to and stream logs through CloudWatch into the same central log group that receives VPC Flow Logs.
+Create an IAM Role that EC2 instances assume to authenticate with CloudWatch. This role connects the EC2 instance to CloudWatch by granting CreateLogStream and PutLogEvents permissions. Create an Instance Profile that binds this IAM role to the EC2 instance. Launch a t2.micro EC2 instance in the public subnet with this Instance Profile attached. The EC2 instance uses this IAM role to authenticate with CloudWatch and push application logs to the same central log group that receives VPC Flow Logs.
 
-Integrated Data Protection Strategy:
+Integrated Data Protection Across Storage Services:
 
-Create an S3 Bucket with versioning enabled and AES256 server-side encryption configured by default. Create a DynamoDB Table with a simple string primary key named id and enable Point-in-Time Recovery. S3 versioning integrates with DynamoDB PITR to provide comprehensive point-in-time recovery across both storage layers, ensuring data can be restored from any moment in time regardless of storage type.
+Create an S3 Bucket with versioning enabled and AES256 encryption. Create a DynamoDB Table with a string primary key named id. Enable Point-in-Time Recovery on DynamoDB. S3 versioning works together with DynamoDB PITR to provide integrated point-in-time recovery across both storage layers. When data needs to be restored, S3 provides object version history while DynamoDB provides table state recovery, giving you complete data protection across your storage tier.
 
 Tagging and Outputs:
 
-Tag every resource in this template with Project set to IaCChallenge. This includes the VPC, Subnet, EC2 Instance, IAM Role, Instance Profile, S3 Bucket, DynamoDB Table, CloudWatch Log Group, and VPC Flow Log. Export the S3BucketName, DynamoDBTableName, and EC2InstanceId as stack outputs for cross-stack reference.
+Tag every resource with Project set to IaCChallenge including VPC, Subnet, EC2 Instance, IAM Role, Instance Profile, S3 Bucket, DynamoDB Table, CloudWatch Log Group, and VPC Flow Log. Export S3BucketName, DynamoDBTableName, and EC2InstanceId as stack outputs.
 
 Expected Output:
 
-A single, valid infrastructure.yaml file that passes AWS CloudFormation validation and successfully provisions all resources with correct configurations in either target region.
+A single, valid infrastructure.yaml file that passes AWS CloudFormation validation and provisions all resources in either target region.
