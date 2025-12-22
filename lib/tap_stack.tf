@@ -342,6 +342,13 @@ resource "aws_lb" "main" {
     Project     = var.project_name
     ManagedBy   = "terraform"
   }
+
+  lifecycle {
+    ignore_changes = [
+      access_logs,
+      connection_logs
+    ]
+  }
 }
 
 # Target Group
@@ -488,7 +495,7 @@ resource "aws_db_instance" "main" {
   engine_version         = "8.0"
   instance_class         = var.db_instance_class
   allocated_storage      = var.db_allocated_storage
-  storage_type           = "gp3"
+  storage_type           = "gp2"
   db_name                = var.db_name
   username               = var.db_username
   password               = var.db_password
@@ -496,10 +503,10 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  multi_az                = var.db_multi_az
+  multi_az                = false
   publicly_accessible     = false
   skip_final_snapshot     = true
-  backup_retention_period = var.db_backup_retention_days
+  backup_retention_period = 0
 
   deletion_protection = false
 
@@ -515,11 +522,8 @@ resource "aws_db_instance" "main" {
 resource "aws_s3_bucket" "app" {
   bucket = "app-storage-${var.environment}-${var.environment_suffix}"
 
-  tags = {
-    Name        = "app-storage-${var.environment}-${var.environment_suffix}"
-    Environment = var.environment
-    Project     = var.project_name
-    ManagedBy   = "terraform"
+  lifecycle {
+    ignore_changes = [tags, tags_all]
   }
 }
 
