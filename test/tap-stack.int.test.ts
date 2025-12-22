@@ -1,15 +1,15 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
+import {
+  APIGatewayClient,
+  GetRestApiCommand,
+} from '@aws-sdk/client-api-gateway';
 import { DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import {
   GetBucketEncryptionCommand,
   GetPublicAccessBlockCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
-import {
-  GetRestApiCommand,
-  APIGatewayClient,
-} from '@aws-sdk/client-api-gateway';
 import axios from 'axios';
 import fs from 'fs';
 import os from 'os';
@@ -36,23 +36,23 @@ const runE2E = (() => {
 
   const hasCreds = Boolean(
     process.env.AWS_ACCESS_KEY_ID ||
-      process.env.AWS_PROFILE ||
-      process.env.AWS_SESSION_TOKEN ||
-      process.env.AWS_WEB_IDENTITY_TOKEN_FILE ||
-      process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI ||
-      process.env.AWS_EC2_METADATA_SERVICE_ENDPOINT ||
-      process.env.GITHUB_ACTIONS ||
-      fs.existsSync(credFile) ||
-      fs.existsSync(configFile)
+    process.env.AWS_PROFILE ||
+    process.env.AWS_SESSION_TOKEN ||
+    process.env.AWS_WEB_IDENTITY_TOKEN_FILE ||
+    process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI ||
+    process.env.AWS_EC2_METADATA_SERVICE_ENDPOINT ||
+    process.env.GITHUB_ACTIONS ||
+    fs.existsSync(credFile) ||
+    fs.existsSync(configFile)
   );
 
   const hasOutputs = Boolean(
     outputs?.VpcId &&
-      outputs?.PrivateSubnet1Id &&
-      outputs?.PrivateSubnet2Id &&
-      outputs?.ApiEndpointUrl &&
-      outputs?.LogsBucketName &&
-      outputs?.KmsKeyArn
+    outputs?.PrivateSubnet1Id &&
+    outputs?.PrivateSubnet2Id &&
+    outputs?.ApiEndpointUrl &&
+    outputs?.LogsBucketName &&
+    outputs?.KmsKeyArn
   );
 
   const looksPlaceholder = (() => {
@@ -88,14 +88,14 @@ if (!runE2E) {
 
   const hasCreds = Boolean(
     process.env.AWS_ACCESS_KEY_ID ||
-      process.env.AWS_PROFILE ||
-      process.env.AWS_SESSION_TOKEN ||
-      process.env.AWS_WEB_IDENTITY_TOKEN_FILE ||
-      process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI ||
-      process.env.AWS_EC2_METADATA_SERVICE_ENDPOINT ||
-      process.env.GITHUB_ACTIONS ||
-      fs.existsSync(credFile) ||
-      fs.existsSync(configFile)
+    process.env.AWS_PROFILE ||
+    process.env.AWS_SESSION_TOKEN ||
+    process.env.AWS_WEB_IDENTITY_TOKEN_FILE ||
+    process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI ||
+    process.env.AWS_EC2_METADATA_SERVICE_ENDPOINT ||
+    process.env.GITHUB_ACTIONS ||
+    fs.existsSync(credFile) ||
+    fs.existsSync(configFile)
   );
 
   if (!hasCreds) {
@@ -106,11 +106,11 @@ if (!runE2E) {
 
   const hasOutputs = Boolean(
     outputs?.VpcId &&
-      outputs?.PrivateSubnet1Id &&
-      outputs?.PrivateSubnet2Id &&
-      outputs?.ApiEndpointUrl &&
-      outputs?.LogsBucketName &&
-      outputs?.KmsKeyArn
+    outputs?.PrivateSubnet1Id &&
+    outputs?.PrivateSubnet2Id &&
+    outputs?.ApiEndpointUrl &&
+    outputs?.LogsBucketName &&
+    outputs?.KmsKeyArn
   );
 
   if (!hasOutputs) {
