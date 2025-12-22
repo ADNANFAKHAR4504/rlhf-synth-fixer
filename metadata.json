@@ -6,9 +6,9 @@
   "po_id": "349044",
   "team": "2",
   "startedAt": "2025-11-27T09:30:50.068Z",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "Cloud Environment Setup"
+    "Infrastructure Analysis/Monitoring"
   ],
   "aws_services": [
     "EC2", "RDS", "EBS", "EFS", "DynamoDB"
