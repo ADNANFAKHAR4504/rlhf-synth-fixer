@@ -291,6 +291,16 @@ resource "aws_cloudwatch_metric_alarm" "failed_transactions" {
   }
 }
 
+# CloudWatch Dashboard removed due to LocalStack compatibility issues
+# Using 'removed' block to handle state migration cleanly
+removed {
+  from = aws_cloudwatch_dashboard.payment_operations
+
+  lifecycle {
+    destroy = true
+  }
+}
+
 # CloudWatch Dashboard
 # Note: Temporarily disabled due to LocalStack state refresh issues in CI/CD
 # Will be re-enabled after infrastructure stabilizes
