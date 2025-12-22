@@ -27,11 +27,11 @@ Parameters:
     Default: 'app.tap-us-west-2.meerio.com.'
 
   pAcmCertificateArn:
-    Description: The ARN of the AWS Certificate Manager (ACM) certificate for the ALB HTTPS listener.
+    Description: The ARN of the AWS Certificate Manager (ACM) certificate for the ALB HTTPS listener. Leave empty for LocalStack or HTTP-only deployments.
     Type: String
-    AllowedPattern: ^arn:aws[a-zA-Z-]*:acm:[a-z0-9-]+:\d{12}:certificate/.+$
-    ConstraintDescription: Must be a valid ACM Certificate ARN.
-    Default: 'arn:aws:acm:us-west-2:718240086340:certificate/c43e41ee-5b6c-4d2c-80e9-82c1db57289e'
+    AllowedPattern: ^$|^arn:aws[a-zA-Z-]*:acm:[a-z0-9-]+:\d{12}:certificate/.+$
+    ConstraintDescription: Must be empty or a valid ACM Certificate ARN.
+    Default: ''
 
   pApexDomainName:
     Type: String
@@ -48,6 +48,9 @@ Mappings:
       AMI: ami-0c55b159cbfafe1f0 # Amazon Linux 2 AMI (HVM) - us-east-1
     us-west-2:
       AMI: ami-0e2a4b535ec045ef9 # Amazon Linux 2 AMI (HVM) - us-west-2
+
+Conditions:
+  HasCertificate: !Not [!Equals [!Ref pAcmCertificateArn, '']]
 
 Resources:
   #
@@ -347,6 +350,7 @@ Resources:
 
   ALBListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasCertificate
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Protocol: HTTPS
@@ -364,11 +368,15 @@ Resources:
       Protocol: HTTP
       Port: 80
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: '443'
-            StatusCode: HTTP_301
+        - !If
+          - HasCertificate
+          - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              StatusCode: HTTP_301
+          - Type: forward
+            TargetGroupArn: !Ref ALBTargetGroup
 
   # Replace the existing Route53Record resource with this one
   Route53Record:
