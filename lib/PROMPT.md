@@ -1,52 +1,25 @@
-## Serverless Application Requirements
+## Serverless User API
 
-Create a CloudFormation template in YAML for a serverless application that implements a complete request-response flow through interconnected AWS services.
+I need a CloudFormation template that sets up a simple serverless API for managing users. Here's what I need:
 
-### Service Integration and Data Flow
+### How the Services Connect
 
-Design a serverless API where **API Gateway acts as the entry point** and routes incoming HTTP requests to Lambda functions, which then perform CRUD operations on DynamoDB:
+API Gateway should act as the entry point that receives HTTP requests and directly invokes Lambda functions. When a POST request comes to the /user endpoint, it should trigger CreateUserFunction which receives the user data and writes it to a DynamoDB table. Similarly, when a GET request hits /user with a user ID, it should invoke GetUserFunction which queries DynamoDB and returns the user data.
 
-1. **API Gateway → Lambda Invocation**: API Gateway receives HTTP requests on specific routes and directly invokes Lambda functions:
-   - POST `/user` request triggers CreateUserFunction
-   - GET `/user/{id}` request triggers GetUserFunction
+The Lambda functions need proper IAM permissions so they can actually write to and read from the DynamoDB Users table. CreateUserFunction needs dynamodb:PutItem access and GetUserFunction needs dynamodb:GetItem access. The Lambda execution role should trust the Lambda service.
 
-2. **Lambda → DynamoDB Read/Write Operations**: Lambda functions interact with DynamoDB to persist and retrieve user data:
-   - CreateUserFunction receives user data from API Gateway, writes it to the Users DynamoDB table
-   - GetUserFunction queries the Users DynamoDB table by user ID and returns the data
+### What I Need
 
-3. **IAM Permission Model**: Configure IAM roles that enable the Lambda→DynamoDB connection:
-   - CreateUserFunction requires `dynamodb:PutItem` permission on the Users table
-   - GetUserFunction requires `dynamodb:GetItem` permission on the Users table
-   - Lambda execution role trusts the Lambda service to assume these permissions
+Build this using AWS SAM with the following components:
 
-4. **Monitoring and Logging Integration**: CloudWatch captures the complete request-response flow:
-   - API Gateway logs all incoming requests and responses
-   - Lambda functions emit logs to CloudWatch Logs during execution
-   - DynamoDB logs all read/write operations for audit and debugging
+- Two Lambda functions that handle user creation and retrieval
+- An API Gateway with two routes: POST /user for creating users and GET /user/{id} for fetching user details
+- A DynamoDB table called Users with on-demand billing
+- Proper IAM roles and policies so Lambda can actually talk to DynamoDB
+- CloudWatch logging so I can see what's happening when requests come through
 
-### Core Requirements
+### Deployment and Monitoring
 
-Use AWS SAM to define:
+Deploy everything to us-east-1. I want to be able to see API Gateway logs, Lambda execution logs, and DynamoDB activity in CloudWatch. Also need to tag all resources with Project:ServerlessApp for cost tracking and set up versioning so I can roll back if needed.
 
-- **Lambda functions** with execution roles that grant DynamoDB access
-- **API Gateway** with routes that integrate directly with Lambda functions
-- **DynamoDB table** (Users) configured for on-demand billing
-- **IAM roles and policies** that enable Lambda to read/write to DynamoDB
-- **CloudWatch integration** for logging across all services
-
-Set up API Gateway with these routes and data flow:
-
-- POST `/user` → CreateUserFunction → Writes user data to DynamoDB Users table
-- GET `/user/{id}` → GetUserFunction → Queries DynamoDB Users table and returns user data
-
-### Infrastructure Details
-
-Deploy to us-east-1 region with environment-specific configurations. Include monitoring and logging for all components:
-
-- CloudWatch Logs for API Gateway request/response logging
-- CloudWatch Logs for Lambda function execution logs
-- CloudWatch Log insights for querying request flow and troubleshooting
-
-Tag all resources with `Project:ServerlessApp` and implement versioning support for rollbacks and CodePipeline deployment.
-
-The template must validate successfully as a CloudFormation YAML file.
+The template needs to validate as valid CloudFormation YAML.
