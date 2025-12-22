@@ -210,6 +210,7 @@ export class WebAppStack extends cdk.Stack {
         vpc: this.vpc,
         port: 80,
         protocol: elbv2.ApplicationProtocol.HTTP,
+        targetType: elbv2.TargetType.INSTANCE,
         healthCheck: {
           enabled: true,
           healthyHttpCodes: '200',
