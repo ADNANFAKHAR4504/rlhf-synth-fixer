@@ -1,10 +1,3 @@
-describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-});
 // Integration tests for Terraform Infrastructure
 // Uses live AWS read-only checks driven by CI/CD outputs file
 // Does not apply terraform init/apply/deploy commands
