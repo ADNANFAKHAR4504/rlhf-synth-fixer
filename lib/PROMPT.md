@@ -2,58 +2,28 @@ You are a Senior Cloud Infrastructure Engineer. Create a secure, multi-region AW
 
 Task:
 
-Build a CloudFormation template named infrastructure.yaml with these specifications. The template works in both us-east-1 and us-west-2 without changes.
+Build a CloudFormation template named infrastructure.yaml that works in both us-east-1 and us-west-2 without modification.
 
-Core Infrastructure & Security Requirements:
+Regional Adaptability:
 
-Regional Adaptability (Mappings):
+Add a Mappings section that defines the correct Amazon Linux 2 AMI ID for t2.micro instances in each region. The EC2 instance should use this mapping to automatically select the appropriate AMI based on where the stack is deployed.
 
-Add a Mappings section for regional differences.
+Networking and Centralized Logging:
 
-Define the correct Amazon Linux 2 AMI ID for t2.micro instances in both us-east-1 and us-west-2. Use this mapping to pick the AMI for the EC2 instance based on deployment region (AWS::Region).
+Create a VPC with one public subnet. Set up a central CloudWatch Log Group that serves as the aggregation point for all infrastructure logs. Configure VPC Flow Logs to capture all network traffic and send it directly to this central log group, enabling real-time network monitoring and security analysis across the entire VPC.
 
-Networking & Logging:
+Secure Compute with IAM Integration:
 
-Create a new VPC with one public subnet.
+Create an IAM Role that EC2 instances can assume. This role should have a minimal inline policy granting only the permissions needed to write logs to CloudWatch, specifically CreateLogStream and PutLogEvents. Create an Instance Profile that links this IAM role to EC2 instances. Launch a single t2.micro EC2 instance in the public subnet with this Instance Profile attached, allowing the instance to authenticate with CloudWatch and stream application logs to the central log group without storing credentials on the instance.
 
-Create a central AWS::Logs::LogGroup for service logs.
+Data Protection Strategy:
 
-Enable VPC Flow Logs for the VPC, capturing all traffic (ALL). Send these logs to the CloudWatch Log Group above. This is required for network monitoring.
+Create an S3 Bucket with versioning enabled and AES256 server-side encryption configured by default. This provides object-level recovery capabilities and data-at-rest protection. Create a DynamoDB Table with a simple string primary key named id and enable Point-in-Time Recovery. Together, the S3 versioning and DynamoDB PITR create a comprehensive data protection layer where both storage services support point-in-time restoration.
 
-Secure Compute (EC2 & IAM):
+Tagging and Outputs:
 
-Define an IAM Role for EC2 instances (EC2InstanceRole). The trust policy allows the EC2 service (ec2.amazonaws.com) to assume it.
-
-Attach a minimal IAM policy to this role with permissions to write logs to CloudWatch (logs:CreateLogStream, logs:PutLogEvents). This follows least privilege principle.
-
-Create an Instance Profile to make this IAM role available to an EC2 instance.
-
-Launch one t2.micro EC2 instance in the public subnet. Attach the IAM Instance Profile to this instance.
-
-Data Protection (S3 & DynamoDB):
-
-Create an AWS::S3::Bucket with:
-
-Versioning enabled (Status: Enabled).
-
-Server-Side Encryption by default using AES256 algorithm.
-
-Create an AWS::DynamoDB::Table with a simple primary key (e.g., an id of type String). Configure with:
-
-Point-in-Time Recovery (PITR) enabled (PointInTimeRecoveryEnabled: true).
-
-Universal Requirements:
-
-Tagging: Tag every resource created by this template (VPC, Subnet, EC2 Instance, IAM Role, S3 Bucket, DynamoDB Table, etc.) with key Project and value IaCChallenge.
-
-Outputs: Create an Outputs section exporting these resource identifiers:
-
-S3BucketName: The name of the created S3 bucket.
-
-DynamoDBTableName: The name of the created DynamoDB table.
-
-EC2InstanceId: The ID of the launched EC2 instance.
+Tag every resource in this template with Project set to IaCChallenge. This includes the VPC, Subnet, EC2 Instance, IAM Role, Instance Profile, S3 Bucket, DynamoDB Table, CloudWatch Log Group, and VPC Flow Log. Export the S3BucketName, DynamoDBTableName, and EC2InstanceId as stack outputs for cross-stack reference.
 
 Expected Output:
 
-A single, valid infrastructure.yaml file. The template must be self-contained and pass AWS CloudFormation validation checks without errors, successfully provisioning all specified resources with correct configurations in either target region.
+A single, valid infrastructure.yaml file that passes AWS CloudFormation validation and successfully provisions all resources with correct configurations in either target region.
