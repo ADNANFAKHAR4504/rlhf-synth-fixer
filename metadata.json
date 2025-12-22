@@ -10,5 +10,8 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
+  "aws_services": [
+    "EC2", "RDS", "EBS", "EFS", "DynamoDB"
+  ],
   "provider": "localstack"
 }
