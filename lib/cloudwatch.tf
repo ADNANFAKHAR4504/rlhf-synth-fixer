@@ -8,24 +8,6 @@ resource "aws_cloudwatch_dashboard" "migration" {
         type = "metric"
         properties = {
           metrics = [
-            ["AWS/DMS", "CDCLatencySource", { stat = "Average" }],
-            [".", "CDCLatencyTarget", { stat = "Average" }]
-          ]
-          period = 300
-          stat   = "Average"
-          region = var.aws_region
-          title  = "DMS Replication Lag"
-          yAxis = {
-            left = {
-              min = 0
-            }
-          }
-        }
-      },
-      {
-        type = "metric"
-        properties = {
-          metrics = [
             ["AWS/ECS", "CPUUtilization", { stat = "Average", dimensions = { ServiceName = aws_ecs_service.app.name, ClusterName = aws_ecs_cluster.main.name } }],
             [".", "MemoryUtilization", { stat = "Average", dimensions = { ServiceName = aws_ecs_service.app.name, ClusterName = aws_ecs_cluster.main.name } }]
           ]

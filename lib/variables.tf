@@ -88,17 +88,6 @@ variable "aws_weighted_routing_weight" {
   default     = 0
 }
 
-variable "dms_source_endpoint" {
-  description = "Source database endpoint for DMS"
-  type        = string
-}
-
-variable "dms_source_db_name" {
-  description = "Source database name"
-  type        = string
-  default     = "trading_db"
-}
-
 variable "project_name" {
   description = "Project name for tagging"
   type        = string

@@ -140,14 +140,3 @@ resource "aws_db_subnet_group" "main" {
     Name = "db-subnet-group-${var.environment_suffix}"
   }
 }
-
-# DMS Subnet Group
-resource "aws_dms_replication_subnet_group" "main" {
-  replication_subnet_group_id          = "dms-subnet-group-${var.environment_suffix}"
-  replication_subnet_group_description = "DMS replication subnet group"
-  subnet_ids                           = aws_subnet.private[*].id
-
-  tags = {
-    Name = "dms-subnet-group-${var.environment_suffix}"
-  }
-}

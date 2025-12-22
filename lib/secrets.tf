@@ -26,28 +26,6 @@ resource "aws_secretsmanager_secret_version" "db_master_password" {
   })
 }
 
-# Store DMS source credentials
-resource "aws_secretsmanager_secret" "dms_source_credentials" {
-  name        = "dms-source-credentials-${var.environment_suffix}"
-  description = "Credentials for DMS source database"
-
-  tags = {
-    Name = "dms-source-credentials-${var.environment_suffix}"
-  }
-}
-
-resource "aws_secretsmanager_secret_version" "dms_source_credentials" {
-  secret_id = aws_secretsmanager_secret.dms_source_credentials.id
-  secret_string = jsonencode({
-    username = "source_admin"
-    password = "PLACEHOLDER_TO_BE_UPDATED"
-  })
-
-  lifecycle {
-    ignore_changes = [secret_string]
-  }
-}
-
 # Store API keys
 resource "aws_secretsmanager_secret" "api_keys" {
   name        = "api-keys-${var.environment_suffix}"

@@ -74,14 +74,6 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.ecs.id]
   }
 
-  ingress {
-    description     = "PostgreSQL from DMS"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.dms.id]
-  }
-
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -92,24 +84,5 @@ resource "aws_security_group" "rds" {
 
   tags = {
     Name = "rds-sg-${var.environment_suffix}"
-  }
-}
-
-# DMS Security Group
-resource "aws_security_group" "dms" {
-  name        = "dms-sg-${var.environment_suffix}"
-  description = "Security group for DMS replication instance"
-  vpc_id      = aws_vpc.main.id
-
-  egress {
-    description = "Allow all outbound"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "dms-sg-${var.environment_suffix}"
   }
 }
