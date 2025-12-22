@@ -458,7 +458,7 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: FunctionName
-          Value: !GetAtt HelloWorldFunction.FunctionName
+          Value: !Ref HelloWorldFunction
       TreatMissingData: notBreaching
 
   # CloudWatch Alarm for Lambda function throttles
@@ -478,7 +478,7 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: FunctionName
-          Value: !GetAtt HelloWorldFunction.FunctionName
+          Value: !Ref HelloWorldFunction
       TreatMissingData: notBreaching
 
   # CloudWatch Alarm for API Gateway 5xx errors
