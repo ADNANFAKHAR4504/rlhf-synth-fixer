@@ -10,7 +10,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "training_quality": 8,
   "provider": "localstack",
   "aws_services": [
     "EC2",
