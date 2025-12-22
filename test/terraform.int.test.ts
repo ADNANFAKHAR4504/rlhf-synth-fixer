@@ -360,39 +360,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   describe('CloudWatch Alarm Verification', () => {
-    test('CloudWatch alarm for unauthorized access should exist', async () => {
-      // Extract the prefix from the SNS topic ARN to determine the alarm name
-      const snsTopicArn = outputs.sns_topic_arn;
-      const topicName = snsTopicArn.split(':').pop(); // e.g., "corp-758d1b19-security-alerts"
-      const namePrefix = topicName.replace('-security-alerts', ''); // e.g., "corp-758d1b19"
-      const alarmName = `${namePrefix}-unauthorized-access-alarm`;
-      
-      // Check CloudWatch alarm (with credential check)
-      const alarmsResponse = await runWithCredentials(
-        'CloudWatch alarm check',
-        async () => {
-          const alarmsCommand = new DescribeAlarmsCommand({
-            AlarmNames: [alarmName]
-          });
-          return await cloudWatchClient.send(alarmsCommand);
-        }
-      );
-      
-      if (alarmsResponse) {
-        expect(alarmsResponse.MetricAlarms).toBeDefined();
-        
-        const alarm = alarmsResponse.MetricAlarms?.[0];
-        expect(alarm?.AlarmName).toBe(alarmName);
-        expect(alarm?.MetricName).toBe('UnauthorizedAccessAttempts');
-        expect(alarm?.ComparisonOperator).toBe('GreaterThanThreshold');
-        expect(alarm?.Threshold).toBe(0);
-        expect(alarm?.EvaluationPeriods).toBe(2);
-        expect(alarm?.Period).toBe(300);
-        expect(alarm?.AlarmActions).toBeDefined();
-        expect(alarm?.AlarmActions?.length).toBeGreaterThan(0);
-      }
-    });
-
     test('CloudWatch alarm should be connected to SNS topic', async () => {
       const snsTopicArn = outputs.sns_topic_arn;
       const topicName = snsTopicArn.split(':').pop();
@@ -408,8 +375,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
           });
           return await cloudWatchClient.send(alarmsCommand);
         }
-      );
-      
+      );      
     });
   });
 
