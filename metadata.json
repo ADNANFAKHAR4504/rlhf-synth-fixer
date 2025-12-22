@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "po_id": "101000886",
+  "team": "synth",
+  "startedAt": "2025-11-10T08:52:19+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "ECS Fargate",
+    "RDS Aurora",
+    "Application Load Balancer",
+    "Route 53",
+    "DMS",
+    "CloudWatch",
+    "SNS",
+    "AWS Backup",
+    "Secrets Manager",
+    "SSM Parameter Store",
+    "Lambda",
+    "NAT Gateway",
+    "IAM",
+    "ACM",
+    "KMS",
+    "Security Groups",
+    "S3",
+    "Auto Scaling"
+  ],
+  "provider": "localstack"
+}
