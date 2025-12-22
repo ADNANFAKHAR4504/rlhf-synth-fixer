@@ -19,5 +19,5 @@
     "kms"
   ],
   "provider": "localstack",
-  "training_quality": 8
+  "wave": "P0"
 }
