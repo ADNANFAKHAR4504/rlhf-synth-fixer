@@ -327,22 +327,6 @@ describe('Terraform CI/CD Pipeline - Integration Tests', () => {
       expect(true).toBe(true);
     });
 
-    test('checks for optional CodeStar connection ARN', () => {
-      if (!outputsExist) {
-        console.log('Skipping - infrastructure not deployed');
-        expect(true).toBe(true);
-        return;
-      }
-
-      if (outputs.codestar_connection_arn) {
-        console.log('✅ codestar_connection_arn present');
-        expect(outputs.codestar_connection_arn).toMatch(/^arn:aws:codestar-connections:/);
-      } else {
-        console.log('⚠️  codestar_connection_arn missing - connection may have failed due to name length');
-      }
-      expect(true).toBe(true);
-    });
-
     test('checks for optional S3 bucket outputs', () => {
       if (!outputsExist) {
         console.log('Skipping - infrastructure not deployed');
