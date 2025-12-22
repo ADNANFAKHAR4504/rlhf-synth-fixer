@@ -519,46 +519,46 @@ Outputs:
 
 ## Key Security Features Implemented
 
-### 🔐 **IAM Roles & Least Privilege**
+### **IAM Roles & Least Privilege**
 
 - **EC2 Role**: Minimal permissions for S3 access and CloudWatch logging
 - **API Gateway Role**: Limited to CloudWatch logs only
 - **Instance Profile**: Secure attachment for EC2 instances
 
-### 🔒 **S3 Encryption**
+### **S3 Encryption**
 
 - **KMS Encryption**: Custom KMS key for all S3 buckets
 - **Bucket Policies**: Block all public access
 - **Versioning**: Enabled for data protection
 - **Access Logging**: Comprehensive audit trail
 
-### 📊 **CloudTrail Logging**
+### **CloudTrail Logging**
 
 - **Multi-region**: Captures events across all regions
 - **IAM Focus**: Specifically monitors IAM role activities
 - **Log Validation**: Ensures log integrity
 - **S3 Integration**: Secure storage with encryption
 
-### 🌐 **API Gateway Security**
+### **API Gateway Security**
 
 - **HTTPS Only**: Policy enforces secure transport
 - **Access Logging**: Detailed request/response logging
 - **Regional Endpoint**: Better security than edge-optimized
 - **Metrics & Tracing**: Full observability enabled
 
-### 🛡️ **Security Groups**
+### **Security Groups**
 
 - **Restrictive Ingress**: Only from trusted IP ranges
 - **Minimal Egress**: HTTPS outbound only for web tier
 - **Layered Security**: Separate groups for web and database tiers
 
-### 🏢 **VPC Configuration**
+### **VPC Configuration**
 
 - **Private Subnets**: Database and application tiers isolated
 - **Public Subnets**: Only for load balancers and NAT gateways
 - **Multi-AZ**: High availability across availability zones
 
-### 🚨 **Security Monitoring**
+### **Security Monitoring**
 
 - **CloudWatch Alarms**: Unauthorized access detection
 - **Root Account Monitoring**: Alerts on root account usage
