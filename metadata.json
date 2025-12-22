@@ -12,8 +12,9 @@
   ],
   "aws_services": [
     "S3",
-    "SNS", 
-    "cloudTrail", 
-    "CloudWatch"],
+    "SNS",
+    "cloudTrail",
+    "CloudWatch"
+  ],
   "provider": "localstack"
 }
