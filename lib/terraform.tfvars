@@ -8,9 +8,9 @@ vpc_cidr           = "10.0.0.0/16"
 # Disable NAT Gateway for cost optimization
 enable_nat_gateway = false
 
-# Minimal instances for testing
-web_instance_count = 1
-app_instance_count = 1
+# EC2 instances disabled for LocalStack (LocalStack has limited EC2 support)
+web_instance_count = 0
+app_instance_count = 0
 
 # Instance types
 web_instance_type = "t3.micro"

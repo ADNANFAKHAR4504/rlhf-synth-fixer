@@ -38,11 +38,17 @@ variable "enable_nat_gateway" {
   default     = false
 }
 
+variable "enable_vpc_resources" {
+  description = "Enable VPC and networking resources (set to false for LocalStack which has limited EC2/VPC support)"
+  type        = bool
+  default     = false
+}
+
 # Web Tier Configuration
 variable "web_instance_count" {
   description = "Number of web tier EC2 instances"
   type        = number
-  default     = 2
+  default     = 0
 }
 
 variable "web_instance_type" {
@@ -61,7 +67,7 @@ variable "web_ami_id" {
 variable "app_instance_count" {
   description = "Number of application tier EC2 instances"
   type        = number
-  default     = 2
+  default     = 0
 }
 
 variable "app_instance_type" {
