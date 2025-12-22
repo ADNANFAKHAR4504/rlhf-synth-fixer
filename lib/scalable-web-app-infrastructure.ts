@@ -32,6 +32,13 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
 
     const environmentSuffix = args.environmentSuffix;
 
+    // Detect LocalStack environment (used for conditional resource creation)
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('localstack') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+      false;
+
     // Configuration
     const config = new pulumi.Config();
     const minCapacity = config.getNumber('minCapacity') || 2;
@@ -240,10 +247,6 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
     // VPC Flow Logs
     // Note: LocalStack doesn't support VPC Flow Logs with maxAggregationInterval,
     // so we skip creating this resource when running against LocalStack
-    const isLocalStack =
-      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-      process.env.AWS_ENDPOINT_URL?.includes('localstack');
-
     if (!isLocalStack) {
       new aws.ec2.FlowLog(
         `vpc-flow-logs-${environmentSuffix}`,
@@ -972,44 +975,47 @@ EOF
     );
 
     // CloudFront WAF WebACL (must be in us-east-1)
-    const cfWebAcl = new aws.wafv2.WebAcl(
-      `cf-web-acl-${environmentSuffix}`,
-      {
-        scope: 'CLOUDFRONT',
-        defaultAction: { allow: {} },
-        rules: [
+    // Skip WAFv2 in LocalStack as it's not supported
+    const cfWebAcl = isLocalStack
+      ? undefined
+      : new aws.wafv2.WebAcl(
+          `cf-web-acl-${environmentSuffix}`,
           {
-            name: 'AWS-AWSManagedRulesCommonRuleSet',
-            priority: 0,
-            overrideAction: { none: {} },
-            statement: {
-              managedRuleGroupStatement: {
-                vendorName: 'AWS',
-                name: 'AWSManagedRulesCommonRuleSet',
+            scope: 'CLOUDFRONT',
+            defaultAction: { allow: {} },
+            rules: [
+              {
+                name: 'AWS-AWSManagedRulesCommonRuleSet',
+                priority: 0,
+                overrideAction: { none: {} },
+                statement: {
+                  managedRuleGroupStatement: {
+                    vendorName: 'AWS',
+                    name: 'AWSManagedRulesCommonRuleSet',
+                  },
+                },
+                visibilityConfig: {
+                  cloudwatchMetricsEnabled: true,
+                  metricName: `cfCommonRules-${environmentSuffix}`,
+                  sampledRequestsEnabled: true,
+                },
               },
-            },
+            ],
             visibilityConfig: {
               cloudwatchMetricsEnabled: true,
-              metricName: `cfCommonRules-${environmentSuffix}`,
+              metricName: `cfWebAcl-${environmentSuffix}`,
               sampledRequestsEnabled: true,
             },
           },
-        ],
-        visibilityConfig: {
-          cloudwatchMetricsEnabled: true,
-          metricName: `cfWebAcl-${environmentSuffix}`,
-          sampledRequestsEnabled: true,
-        },
-      },
-      { provider: usEast1Provider, parent: this }
-    );
+          { provider: usEast1Provider, parent: this }
+        );
 
     // CloudFront in front of ALB
     const cfDistribution = new aws.cloudfront.Distribution(
       `cf-dist-${environmentSuffix}`,
       {
         enabled: true,
-        webAclId: cfWebAcl.arn,
+        ...(cfWebAcl ? { webAclId: cfWebAcl.arn } : {}),
         origins: [
           {
             originId: `alb-origin-${environmentSuffix}`,
