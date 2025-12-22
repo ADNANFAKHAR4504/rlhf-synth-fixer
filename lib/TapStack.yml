@@ -44,6 +44,8 @@ Mappings:
   # Using a mapping for AMIs allows for easy updates and region portability.
   # These should be updated to the latest Amazon Linux 2 AMI for the target region.
   RegionMap:
+    us-east-1:
+      AMI: ami-0c55b159cbfafe1f0 # Amazon Linux 2 AMI (HVM) - us-east-1
     us-west-2:
       AMI: ami-0e2a4b535ec045ef9 # Amazon Linux 2 AMI (HVM) - us-west-2
 
