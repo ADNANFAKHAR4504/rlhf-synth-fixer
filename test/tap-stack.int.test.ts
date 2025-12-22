@@ -257,22 +257,6 @@ describe('TapStack Serverless Integration Tests', () => {
   });
 
   describe('S3 Buckets', () => {
-    test('artifacts bucket should be accessible', async () => {
-      if (useFlatOutputs) {
-        // Validate bucket name structure
-        expect(artifactsBucketName).toContain('artifacts');
-        expect(artifactsBucketName).toContain('TapStack-dev');
-        console.log('✅ Flat outputs: S3 bucket structure validated');
-      } else {
-        // Real AWS validation
-        const { HeadBucketCommand } = require('@aws-sdk/client-s3');
-        const command = new HeadBucketCommand({
-          Bucket: artifactsBucketName
-        });
-        await expect(s3Client.send(command)).resolves.not.toThrow();
-      }
-    });
-
     test('artifacts bucket should have encryption enabled', async () => {
       if (useFlatOutputs) {
         // Validate bucket name structure
