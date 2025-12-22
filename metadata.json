@@ -17,8 +17,5 @@
     "API Gateway",
     "CloudFormation",
     "CloudWatch"
-  ],
-  "training_quality": 9,
-  "author": "Prakhar12s",
-  "dockerS3Location": ""
+  ]
 }
