@@ -37,7 +37,7 @@
   - IAM: CreateRole, AttachRolePolicy, etc.
   - CloudFormation: CreateStack, UpdateStack, etc.
 
-**Code Quality Status**: ✅ PASSED
+**Code Quality Status**:  PASSED
 - Linting: 10.00/10 (100% clean)
 - Unit Tests: 24/24 passing (100% coverage)
 - Integration Tests: 10/10 passing (mocked)
