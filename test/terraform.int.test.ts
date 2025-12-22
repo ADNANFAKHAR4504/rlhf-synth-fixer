@@ -514,7 +514,7 @@ describe("LIVE: Application Load Balancer", () => {
     expect(listenersResponse.Listeners).toBeTruthy();
     expect(listenersResponse.Listeners!.length).toBeGreaterThan(0);
 
-    const httpListener = listenersResponse.Listeners!.find((l) => l.Protocol === "HTTP" && l.Port === 80);
+    const httpListener = listenersResponse.Listeners!.find((l) => l.Protocol === "HTTP" && (l.Port === 80 || l.Port === "80" as any));
     expect(httpListener).toBeTruthy();
     expect(httpListener!.DefaultActions).toBeTruthy();
     expect(httpListener!.DefaultActions!.length).toBeGreaterThan(0);
