@@ -4,16 +4,16 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "291969",
-  "team": "1",
+  "team": "synth-2",
   "startedAt": "2025-08-18T18:25:09.850Z",
-  "subtask": "CI/CD Pipeline Infrastructure",
+  "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
-    "CI/CD Pipeline Implementation",
+    "CI/CD Pipeline",
     "IaC Optimization",
-    "Security Configuration",
-    "Network Configuration",
-    "Monitoring Setup",
-    "Performance Optimization"
+    "Security Configuration as Code",
+    "Infrastructure Analysis/Monitoring",
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA"
   ],
   "aws_services": [
     "AWS CodePipeline",
