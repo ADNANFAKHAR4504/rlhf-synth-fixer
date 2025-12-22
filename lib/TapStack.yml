@@ -441,6 +441,68 @@ Resources:
         - Key: Application
           Value: ServerlessApp
 
+  # CloudWatch Alarm for Lambda function errors
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - ${ResourcePrefix}-lambda-errors-${AWS::StackName}
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+      AlarmDescription: Alert when Lambda function encounters errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !GetAtt HelloWorldFunction.FunctionName
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for Lambda function throttles
+  LambdaThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - ${ResourcePrefix}-lambda-throttles-${AWS::StackName}
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+      AlarmDescription: Alert when Lambda function is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !GetAtt HelloWorldFunction.FunctionName
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for API Gateway 5xx errors
+  ApiGateway5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - ${ResourcePrefix}-api-5xx-errors-${AWS::StackName}
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+      AlarmDescription: Alert when API Gateway returns 5xx errors
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref HelloWorldApi
+        - Name: Stage
+          Value: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ApiGatewayStageName]
+      TreatMissingData: notBreaching
+
 # Outputs section
 Outputs:
   ApiGatewayInvokeUrl:

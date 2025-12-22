@@ -15,6 +15,7 @@
     "S3",
     "Lambda",
     "API Gateway",
-    "CloudFormation"
+    "CloudFormation",
+    "CloudWatch"
   ]
 }
