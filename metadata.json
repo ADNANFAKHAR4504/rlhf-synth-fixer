@@ -1,0 +1,23 @@
+{
+  "po_id": "101912422",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T05:18:52Z",
+  "subtask": "Security, Compliance, and Governance",
+  "review": "adnan-turing",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "KMS",
+    "CloudWatch Logs",
+    "STS",
+    "ECS",
+    "RDS"
+  ],
+  "provider": "localstack"
+}
