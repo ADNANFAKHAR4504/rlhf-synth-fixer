@@ -70,8 +70,8 @@ if awslocal cloudformation describe-stacks --stack-name $STACK_NAME > /dev/null 
         --stack-name $STACK_NAME \
         --change-set-name $CHANGE_SET_NAME \
         --template-url https://cf-templates-$AWS_DEFAULT_REGION.s3.amazonaws.com/$TEMPLATE_FILE \
-        --parameters ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX ParameterKey=ProjectName,ParameterValue=cloud-env \
-        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+        --parameters ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX \
+        --capabilities CAPABILITY_IAM
 
     echo -e "${YELLOW}⏳ Waiting for change set to be created...${NC}"
     awslocal cloudformation wait change-set-create-complete \
