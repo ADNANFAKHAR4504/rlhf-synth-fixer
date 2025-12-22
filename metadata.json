@@ -10,5 +10,12 @@
   "provider": "localstack",
   "subject_labels": [
     "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "S3",
+    "CloudTrail",
+    "KMS",
+    "EC2"
   ]
 }
