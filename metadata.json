@@ -7,11 +7,10 @@
   "team": "5",
   "startedAt": "2025-08-19T01:48:41.014Z",
   "provider": "localstack",
-  "subtask": [
-    "Application Deployment"
-  ],
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "Web Application Deployment"
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "Lambda",
