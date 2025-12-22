@@ -67,7 +67,8 @@ else
     # Default services for CDK/CFN/Terraform/Pulumi deployments
     # Include all commonly needed services to avoid "service not enabled" errors
     # Note: elasticloadbalancing is separate from elb and elbv2 in LocalStack
-    SERVICES="acm,apigateway,cloudformation,cloudtrail,cloudwatch,dynamodb,ec2,ecr,ecs,elb,elbv2,events,iam,kms,lambda,logs,route53,s3,secretsmanager,sns,sqs,ssm,sts,autoscaling"
+    # CRITICAL: RDS, backup, config, elasticache added for full CloudFormation support
+    SERVICES="acm,apigateway,cloudformation,cloudtrail,cloudwatch,dynamodb,ec2,ecr,ecs,elb,elbv2,events,iam,kms,lambda,logs,route53,s3,secretsmanager,sns,sqs,ssm,sts,autoscaling,rds,backup,config,elasticache"
     echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
     echo -e "${YELLOW}💡 To customize, set LOCALSTACK_SERVICES environment variable${NC}"
 fi
@@ -130,8 +131,10 @@ if ! command -v curl &> /dev/null; then
 fi
 
 # Give LocalStack more time to start before checking (Pro image needs more initialization time)
-echo -e "${BLUE}⏱️  Waiting 10 seconds for LocalStack to initialize...${NC}"
-sleep 60
+# Extended to 90 seconds for RDS, EC2 VPC, and CloudTrail initialization
+echo -e "${BLUE}⏱️  Waiting 90 seconds for LocalStack to fully initialize...${NC}"
+echo -e "${YELLOW}💡 RDS, EC2, and CloudTrail require additional startup time${NC}"
+sleep 90
 
 while [ $attempt -lt $max_attempts ]; do
     # Show logs on first attempt to debug CI issues immediately
@@ -174,6 +177,39 @@ while [ $attempt -lt $max_attempts ]; do
         # Show status
         echo -e "${BLUE}📊 LocalStack Health Status:${NC}"
         curl -s http://localhost:4566/_localstack/health 2>/dev/null | jq . 2>/dev/null || curl -s http://localhost:4566/_localstack/health
+        echo ""
+
+        # Verify critical services are operational
+        echo -e "${BLUE}🔍 Verifying critical services...${NC}"
+        HEALTH_JSON=$(curl -s http://localhost:4566/_localstack/health 2>/dev/null)
+        
+        # Check RDS service (critical for RDS instance creation)
+        if echo "$HEALTH_JSON" | grep -q '"rds"' && echo "$HEALTH_JSON" | grep -q '"rds":.*"running\|available"'; then
+            echo -e "${GREEN}  ✅ RDS service operational${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  RDS service status unknown (may cause deployment issues)${NC}"
+        fi
+        
+        # Check CloudFormation service
+        if echo "$HEALTH_JSON" | grep -q '"cloudformation"' && echo "$HEALTH_JSON" | grep -q '"cloudformation":.*"running\|available"'; then
+            echo -e "${GREEN}  ✅ CloudFormation service operational${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  CloudFormation service status unknown${NC}"
+        fi
+        
+        # Check EC2 service (critical for VPC/subnet creation)
+        if echo "$HEALTH_JSON" | grep -q '"ec2"' && echo "$HEALTH_JSON" | grep -q '"ec2":.*"running\|available"'; then
+            echo -e "${GREEN}  ✅ EC2 service operational${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  EC2 service status unknown${NC}"
+        fi
+        
+        # Check CloudTrail service
+        if echo "$HEALTH_JSON" | grep -q '"cloudtrail"' && echo "$HEALTH_JSON" | grep -q '"cloudtrail":.*"running\|available"'; then
+            echo -e "${GREEN}  ✅ CloudTrail service operational${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  CloudTrail service status unknown${NC}"
+        fi
         echo ""
 
         # Show container info
