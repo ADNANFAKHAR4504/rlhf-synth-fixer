@@ -2,7 +2,7 @@ You are an expert cloud infrastructure engineer. Create a secure, scalable web a
 
 I need a three-tier web application where an Application Load Balancer routes HTTPS traffic to EC2 instances running in private subnets on port 443. The EC2 instances connect to an RDS MySQL database through security group rules that only allow database traffic from the application tier. The database sits in isolated private subnets with no internet access.
 
-For static content delivery, an S3 bucket stores frontend assets and CloudFront distribution caches and serves this content globally to users. EC2 instances assume an IAM role with least-privilege permissions to read application config from S3 and write logs to a separate logging bucket.
+For static content delivery, an S3 bucket stores frontend assets and CloudFront distribution caches and serves this content globally to users. EC2 instances assume an IAM role with least-privilege access to read application config from S3 and write logs to a separate logging bucket.
 
 The Auto Scaling Group monitors CloudWatch CPU utilization alarms and automatically scales EC2 instances when average CPU exceeds 70%. CloudWatch also tracks RDS burst balance metrics to alert before database performance degrades.
 
