@@ -744,11 +744,11 @@ Outputs:
     Value: !GetAtt CloudFrontDistribution.DomainName
 ```
 
-### `test/tap-stack.unit.test.ts`
+### `test/tap-stack.unit.test` (TypeScript)
 
 Unit tests validating template structure and configuration
 
-### `test/tap-stack.int.test.ts`
+### `test/tap-stack.int.test` (TypeScript)
 
 Integration tests verifying component relationships and security configurations
 
@@ -813,8 +813,8 @@ lib/
 └── IDEAL_RESPONSE.md    # This documentation
 
 test/
-├── tap-stack.unit.test.ts    # Unit tests for template validation
-└── tap-stack.int.test.ts     # Integration tests for deployed resources
+├── tap-stack.unit.test       # Unit tests for template validation (TypeScript)
+└── tap-stack.int.test        # Integration tests for deployed resources (TypeScript)
 ```
 
 ## Deployment Instructions
