@@ -447,10 +447,10 @@ const testConfig = {
 ```typescript
 // FIXED: Region-agnostic configuration
 const testConfig = {
-  apiEndpoint: outputs['ServerlessStackServerlessApiEndpoint3B0EFFAB'] || 
+  apiEndpoint: outputs['TapStackServerlessApiEndpoint3B0EFFAB'] || 
                process.env.API_ENDPOINT || 
                `https://mock-api.execute-api.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/dev`,
-  cognitoUserPoolId: outputs['ServerlessStackApiUserPool03DDFC07'] || 
+  cognitoUserPoolId: outputs['TapStackApiUserPool03DDFC07'] || 
                      process.env.COGNITO_USER_POOL_ID || 
                      `${process.env.AWS_REGION || 'us-east-1'}_testpool`,
   // ... other config
@@ -478,14 +478,14 @@ const environmentSuffix = props?.environmentSuffix || 'dev';
 ```
 
 **Root Cause:**
-- Actually, the variable WAS being used in the ServerlessStack constructor
+- Actually, the variable WAS being used in the TapStack constructor
 - False positive from static analysis
 - Variable is correctly utilized
 
 **Solution:**
 ```typescript
 // VERIFIED: Variable is properly used
-new ServerlessStack(this, 'ServerlessStack', {
+new TapStack(this, 'TapStack', {
   environment: environmentSuffix, //  ACTUALLY USED
   owner: 'TAP-Project',
   costCenter: 'TAP-CC-001',
@@ -551,7 +551,7 @@ aws apigateway get-rest-apis
 ```typescript
 // Test resource creation
 test('Lambda function has correct configuration', () => {
-  const stack = new ServerlessStack(app, 'TestStack', {
+  const stack = new TapStack(app, 'TestStack', {
     environment: 'test',
     owner: 'test',
     costCenter: 'test',

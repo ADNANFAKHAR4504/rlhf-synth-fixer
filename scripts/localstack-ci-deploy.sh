@@ -403,7 +403,7 @@ deploy_cdk() {
         if [ $exit_code -ne 0 ]; then
             print_status $RED "❌ CDK deployment failed with exit code: $exit_code"
             echo ""
-            describe_cfn_failure "ServerlessStack${env_suffix}"
+            describe_cfn_failure "TapStack${env_suffix}"
             exit $exit_code
         fi
     fi
@@ -413,14 +413,14 @@ deploy_cdk() {
 
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
-    local stack_name="ServerlessStack${env_suffix}"
+    local stack_name="TapStack-${env_suffix}"
     local output_json="{}"
 
     # Get all stacks (parent and nested) - match any stack starting with TapStack
     local all_stacks=$(awslocal cloudformation list-stacks \
         --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
         --query 'StackSummaries[].StackName' \
-        --output json 2>/dev/null | jq -r '.[]' 2>/dev/null | grep -i "ServerlessStack${env_suffix}" || echo "$stack_name")
+        --output json 2>/dev/null | jq -r '.[]' 2>/dev/null | grep -i "TapStack${env_suffix}" || echo "$stack_name")
 
     # Collect outputs from all matching stacks
     output_json=$(python3 -c "

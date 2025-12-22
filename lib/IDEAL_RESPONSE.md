@@ -98,7 +98,7 @@ The implementation consists of the following files:
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { ServerlessStack } from './serverless-stack';
+import { TapStack } from './serverless-stack';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -113,7 +113,7 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    new ServerlessStack(this, 'ServerlessStack', {
+    new TapStack(this, 'TapStack', {
       environment: environmentSuffix,
       owner: 'TAP-Project',
       costCenter: 'TAP-CC-001',
@@ -252,9 +252,9 @@ dataResource.addMethod('POST', lambdaIntegration, {
 
 ### 6. Unused Environment Variable
 **Original Issue**: False positive from static analysis
-**Solution**: Verified variable is properly used in ServerlessStack constructor
+**Solution**: Verified variable is properly used in TapStack constructor
 ```typescript
-new ServerlessStack(this, 'ServerlessStack', {
+new TapStack(this, 'TapStack', {
   environment: environmentSuffix, // Actually used
   owner: 'TAP-Project',
   costCenter: 'TAP-CC-001',

@@ -11,19 +11,19 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 
-export interface ServerlessStackProps {
+export interface TapStackProps {
   environment: string;
   owner: string;
   costCenter: string;
   compliance: string;
 }
 
-export class ServerlessStack extends Construct {
+export class TapStack extends Construct {
   public readonly lambdaFunction: lambda.Function;
   public readonly apiGateway: apigateway.RestApi;
   public readonly s3Bucket: s3.Bucket;
 
-  constructor(scope: Construct, id: string, props: ServerlessStackProps) {
+  constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id);
 
     // Common tags for all resources
@@ -32,7 +32,7 @@ export class ServerlessStack extends Construct {
       Owner: props.owner,
       CostCenter: props.costCenter,
       Compliance: props.compliance,
-      Project: 'ServerlessStack'
+      Project: 'TapStack'
     };
 
     // KMS Key for encryption
