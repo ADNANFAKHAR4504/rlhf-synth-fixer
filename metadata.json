@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291586",
+  "team": "5",
+  "startedAt": "2025-08-20T16:35:09.926Z",
+  "subtask": "Security and Compliance Implementation",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "KMS",
+    "EC2",
+    "IAM",
+    "S3",
+    "CloudTrail",
+    "Logs",
+    "SNS",
+    "CloudWatch",
+    "ApiGateway"
+  ]
+}
