@@ -141,10 +141,8 @@ if ! command -v curl &> /dev/null; then
 fi
 
 # Give LocalStack more time to start before checking (Pro image needs more initialization time)
-# Extended to 90 seconds for RDS, EC2 VPC, and CloudTrail initialization
-echo -e "${BLUE}⏱️  Waiting 90 seconds for LocalStack to fully initialize...${NC}"
-echo -e "${YELLOW}💡 RDS, EC2, and CloudTrail require additional startup time${NC}"
-sleep 90
+echo -e "${BLUE}⏱️  Waiting 60 seconds for LocalStack to initialize...${NC}"
+sleep 60
 
 while [ $attempt -lt $max_attempts ]; do
     # Show logs on first attempt to debug CI issues immediately
