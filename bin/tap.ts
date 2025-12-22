@@ -11,7 +11,7 @@ const environmentSuffix =
   process.env.ENVIRONMENT_SUFFIX ||
   'dev';
 
-new TapStack(app, 'TapStack', {
+new TapStack(app, `TapStack${environmentSuffix}`, {
   environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT || '000000000000',
