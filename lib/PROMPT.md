@@ -14,7 +14,7 @@ root/
     │   └── tests_tap_stack.py  # Unit tests
     └── integration/
         └── test_tap_stack.py  # Integration tests
-📌 Requirements:
+ Requirements:
 Region: us-east-2
 
 Environment: preprod
@@ -23,7 +23,7 @@ Naming convention: Use 'project-env-resource' format (e.g., tap-preprod-s3)
 
 Tags: Apply a tag CostCenter=ProjectX to all resources
 
-🚀 Infrastructure Components to Implement:
+ Infrastructure Components to Implement:
 S3 Bucket
 
 Used for storing static files or backups
@@ -52,7 +52,7 @@ IAM Role
 
 Grant least-privilege access for the Lambda to the S3 bucket and DynamoDB table
 
-✅ Testing Requirements:
+ Testing Requirements:
 Unit Test (tests/unit/tests_tap_stack.py):
 Validate that:
 
@@ -67,7 +67,7 @@ Resources exist
 
 Lambda has access to S3 and DynamoDB
 
-🧠 Best Practices to Follow:
+ Best Practices to Follow:
 Use CDK constructs and avoid low-level Cfn* APIs unless necessary
 
 Keep code modular and reusable
