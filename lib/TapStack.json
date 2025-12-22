@@ -2,6 +2,11 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Production-grade multi-AZ infrastructure stack with ALB, ASG, RDS, and S3 with cross-region-ready replication (LocalStack-compatible)",
     "Parameters": {
+        "DBEngineVersion": {
+            "Type": "String",
+            "Default": "16.3",
+            "Description": "RDS PostgreSQL engine version (major.minor). Use describe-db-engine-versions to select a creatable version for the region."
+        },
         "EnvironmentSuffix": {
             "Type": "String",
             "Default": "localstack",
@@ -1879,12 +1884,16 @@
             "DeletionPolicy": "Snapshot",
             "UpdateReplacePolicy": "Snapshot",
             "Properties": {
+                "Engine": "postgres",
+                "EngineVersion": {
+                    "Ref": "DBEngineVersion"
+                },
+                "AutoMinorVersionUpgrade": true,
+                "AllowMajorVersionUpgrade": false,
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "myapp-db-${EnvironmentSuffix}"
                 },
                 "DBInstanceClass": "db.t3.micro",
-                "Engine": "postgres",
-                "EngineVersion": "14",
                 "MasterUsername": {
                     "Ref": "DBMasterUsername"
                 },
