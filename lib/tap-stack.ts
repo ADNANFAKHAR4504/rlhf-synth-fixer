@@ -196,7 +196,7 @@ echo "EC2 instance setup complete" > /var/log/setup.log
     // 10. RDS Instance
     const rdsInstance = new rds.DatabaseInstance(this, 'RDSInstance', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_4_5,
+        version: rds.MysqlEngineVersion.VER_8_0_37,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -212,7 +212,7 @@ echo "EC2 instance setup complete" > /var/log/setup.log
       backupRetention: cdk.Duration.days(7), // 7 days backup retention
       deleteAutomatedBackups: false,
       deletionProtection: false, // Set to true for production
-      monitoringInterval: cdk.Duration.seconds(60), // Enhanced monitoring
+      monitoringInterval: cdk.Duration.seconds(60), // Enhanced monitoring (not Performance Insights)
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
     });
 
