@@ -5,9 +5,9 @@ Please provide a detailed AWS CloudFormation YAML template that defines the infr
 AWS Lambda Function
 • Purpose: Process incoming order data and store it in Amazon DynamoDB.
 • Trigger: An HTTP API Gateway endpoint.
-• Runtime: Choose a suitable runtime (e.g., nodejs18.x or python3.9).
-• Memory: Assign appropriate memory (e.g., 256 MB).
-• Timeout: Set a reasonable timeout (e.g., 30 seconds).
+• Runtime: Choose a suitable runtime like nodejs18.x or python3.9.
+• Memory: Assign appropriate memory like 256 MB.
+• Timeout: Set a reasonable timeout such as 30 seconds.
 • IAM Permissions: The Lambda function’s IAM role must have the necessary permissions to:
 • Be invoked by API Gateway.
 • Write items to the specified DynamoDB table.
@@ -15,7 +15,7 @@ AWS Lambda Function
 
 Amazon DynamoDB Table
 • Purpose: Persistently store processed order data.
-• Primary Key: Define a primary key suitable for order data (e.g., orderId as a String partition key).
+• Primary Key: Define a primary key suitable for order data such as orderId as a String partition key.
 • Billing Mode: Use On-Demand billing mode to inherently support variable workloads and simplify scaling.
 
 API Gateway (HTTP API)
@@ -23,7 +23,7 @@ API Gateway (HTTP API)
 • Type: HTTP API (not REST API).
 • Integration: Integrate directly with the Lambda function created.
 • Method: Allow POST requests.
-• Path: Define a specific path for order submission (e.g., /orders).
+• Path: Define a specific path for order submission like /orders.
 
 2. Scalability & High Availability
 
@@ -38,7 +38,7 @@ High Availability
 3. CloudFormation Best Practices
 
 Parameters
-• Include Parameters for configurable values, such as a base name for resources (e.g., ProjectName or Environment).
+• Include Parameters for configurable values, such as a base name for resources like ProjectName or Environment.
 
 Outputs
 • Define Outputs for crucial resource identifiers, such as:
