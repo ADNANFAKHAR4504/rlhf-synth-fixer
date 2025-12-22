@@ -145,9 +145,7 @@
                             "Sid": "Allow CloudWatch Logs",
                             "Effect": "Allow",
                             "Principal": {
-                                "Service": {
-                                    "Fn::Sub": "logs.us-west-1.amazonaws.com"
-                                }
+                                "Service": "logs.us-west-1.amazonaws.com"
                             },
                             "Action": [
                                 "kms:Encrypt",
