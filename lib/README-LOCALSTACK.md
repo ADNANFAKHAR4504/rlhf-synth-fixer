@@ -19,19 +19,19 @@ Created a simplified LocalStack-compatible configuration (`main.tf`) that:
 - `terraform.tfvars` - Updated with instance counts set to 0
 
 ## Resources Deployed to LocalStack
-✅ IAM Role (`aws_iam_role.ec2_role`)
-✅ IAM Instance Profile (`aws_iam_instance_profile.ec2_profile`)
-✅ IAM Role Policy (`aws_iam_role_policy.s3_access`)
-✅ S3 Bucket (`aws_s3_bucket.app_data`)
-✅ S3 Bucket Versioning (`aws_s3_bucket_versioning.app_data`)
-✅ S3 Bucket Encryption (`aws_s3_bucket_server_side_encryption_configuration.app_data`)
-✅ S3 Bucket Public Access Block (`aws_s3_bucket_public_access_block.app_data`)
+- IAM Role (`aws_iam_role.ec2_role`)
+- IAM Instance Profile (`aws_iam_instance_profile.ec2_profile`)
+- IAM Role Policy (`aws_iam_role_policy.s3_access`)
+- S3 Bucket (`aws_s3_bucket.app_data`)
+- S3 Bucket Versioning (`aws_s3_bucket_versioning.app_data`)
+- S3 Bucket Encryption (`aws_s3_bucket_server_side_encryption_configuration.app_data`)
+- S3 Bucket Public Access Block (`aws_s3_bucket_public_access_block.app_data`)
 
 ## Resources NOT Deployed (LocalStack Limitations)
-❌ VPC and Networking (requires EC2 service)
-❌ EC2 Instances (EC2 service disabled)
-❌ RDS Database (RDS service not available)
-❌ Security Groups (requires VPC/EC2)
+- VPC and Networking (requires EC2 service)
+- EC2 Instances (EC2 service disabled)
+- RDS Database (RDS service not available)
+- Security Groups (requires VPC/EC2)
 
 ## Deployment Results
 ```
