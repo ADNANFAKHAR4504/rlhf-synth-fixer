@@ -18,8 +18,6 @@
   },
   "context": {
     "@aws-cdk/core:newStyleStackSynthesis": true,
-    "aws:cdk:enable-path-metadata": false,
-    "aws:asset:minimize": false,
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": [
