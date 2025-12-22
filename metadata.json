@@ -8,12 +8,9 @@
   "startedAt": "2025-08-18T17:52:07.730Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
+    "Environment Migration",
     "Cloud Environment Setup",
-    "Cloud Environment Setup",
-    "Security Configuration as Code",
-    "Infrastructure Analysis/Monitoring",
-    "IaC Optimization"
+    "Multi-Environment Consistency"
   ],
   "aws_services": [
     "S3",
