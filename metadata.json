@@ -1,0 +1,43 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349077",
+  "team": "3",
+  "startedAt": "2025-12-20T16:20:03.758Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "PublicSubnets",
+    "PrivateSubnets",
+    "InternetGateway",
+    "VPCGatewayAttachment",
+    "NATGateways",
+    "ElasticIPs",
+    "PublicRouteTables",
+    "PrivateRouteTables",
+    "PublicRoutes",
+    "PrivateRoutes",
+    "SubnetRouteTableAssociations",
+    "SecurityGroups",
+    "LoadBalancer",
+    "TargetGroup",
+    "Listener",
+    "LaunchTemplate",
+    "AutoScalingGroup",
+    "ScalingPolicies",
+    "CloudWatchAlarms",
+    "DBSubnetGroup",
+    "RDSInstance",
+    "S3Buckets",
+    "S3Replication",
+    "IAMRoles",
+    "InstanceProfile",
+    "CloudWatchLogGroup"
+  ]
+}

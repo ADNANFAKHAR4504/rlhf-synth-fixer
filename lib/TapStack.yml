@@ -1,0 +1,1051 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-grade multi-AZ infrastructure stack with ALB, ASG, RDS, and S3 with cross-region-ready replication (LocalStack-compatible)'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'localstack'
+    Description: 'Environment identifier suffix (e.g., localstack, dev-us, qa, prod)'
+    AllowedPattern: '^[a-z0-9-]{3,20}$'
+    ConstraintDescription: 'Must be lowercase alphanumeric with hyphens, 3-20 characters'
+
+  DestinationBucketRegion:
+    Type: String
+    Default: 'us-east-1'
+    Description: 'Intended AWS region for S3 replication destination bucket (informational tag / documentation only)'
+
+  SSHAllowedCIDR:
+    Type: String
+    Default: '203.0.113.0/24'
+    Description: 'CIDR block allowed for SSH access to EC2 instances'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+
+  DBMasterUsername:
+    Type: String
+    Default: 'dbadmin'
+    Description: 'Master username for RDS instance'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
+
+  # LocalStack-safe password (used only when EnvironmentSuffix=localstack)
+  DBMasterPasswordLocalstack:
+    Type: String
+    NoEcho: true
+    Default: 'LocalstackPassw0rd123'
+    Description: 'LocalStack ONLY: RDS master password (NoEcho). Not used in AWS when Secrets Manager is enabled.'
+    MinLength: 8
+    MaxLength: 41
+
+  # LocalStack-safe AMI id (used only when EnvironmentSuffix=localstack)
+  LocalstackAmiId:
+    Type: String
+    Default: 'ami-12345678'
+    Description: 'LocalStack ONLY: AMI id placeholder used by LaunchTemplate when deploying to LocalStack'
+    AllowedPattern: '^ami-[0-9a-fA-F]{8,17}$'
+
+Conditions:
+  IsLocalStack: !Equals [!Ref EnvironmentSuffix, 'localstack']
+  IsAws: !Not [!Condition IsLocalStack]
+
+Resources:
+  # VPC and Core Networking
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-vpc-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-igw-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets (dynamic AZs)
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-subnet-public-az-a-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-subnet-public-az-b-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.3.0/24'
+      AvailabilityZone: !Select [2, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-subnet-public-az-c-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Private Subnets (dynamic AZs)
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.11.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-subnet-private-az-a-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.12.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-subnet-private-az-b-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.13.0/24'
+      AvailabilityZone: !Select [2, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-subnet-private-az-c-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Elastic IPs for NAT Gateways
+  NATGatewayEIPA:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-natgw-eip-az-a-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NATGatewayEIPB:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-natgw-eip-az-b-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NATGatewayEIPC:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-natgw-eip-az-c-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # NAT Gateways
+  NATGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIPA.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-natgw-az-a-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NATGatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIPB.AllocationId
+      SubnetId: !Ref PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-natgw-az-b-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NATGatewayC:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIPC.AllocationId
+      SubnetId: !Ref PublicSubnetC
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-natgw-az-c-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Route Tables for Public Subnets
+  PublicRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-rt-public-az-a-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-rt-public-az-b-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicRouteTableC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-rt-public-az-c-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicRouteA:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTableA
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicRouteB:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTableB
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicRouteC:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTableC
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-rt-private-az-a-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-rt-private-az-b-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRouteTableC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-rt-private-az-c-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGatewayA
+
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGatewayB
+
+  PrivateRouteC:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableC
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGatewayC
+
+  PublicSubnetRouteTableAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTableA
+
+  PublicSubnetRouteTableAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTableB
+
+  PublicSubnetRouteTableAssociationC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetC
+      RouteTableId: !Ref PublicRouteTableC
+
+  PrivateSubnetRouteTableAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTableA
+
+  PrivateSubnetRouteTableAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTableB
+
+  PrivateSubnetRouteTableAssociationC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetC
+      RouteTableId: !Ref PrivateRouteTableC
+
+  # Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Application Load Balancer'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow HTTP from anywhere'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow HTTPS from anywhere'
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-sg-alb-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for EC2 instances'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: 'Allow HTTP from ALB'
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHAllowedCIDR
+          Description: 'Allow SSH from restricted CIDR'
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-sg-ec2-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for RDS instance'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: 'Allow PostgreSQL from EC2 instances'
+      Tags:
+        - Key: Name
+          Value: !Sub 'myapp-sg-rds-${EnvironmentSuffix}'
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # KMS for replication (also used for bucket encryption best practice)
+  S3ReplicationKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowRoot
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: AllowS3Use
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+            Resource: "*"
+      Tags:
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  S3ReplicationKmsAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/myapp-replication-key-${EnvironmentSuffix}
+      TargetKeyId: !Ref S3ReplicationKmsKey
+
+  # Destination bucket (replica)
+  ApplicationBucketReplica:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'myapp-storage-replica-${EnvironmentSuffix}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3ReplicationKmsKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ApplicationBucketReplicaPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationBucketReplica
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowReplicationFromSource
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt S3ReplicationRole.Arn
+            Action:
+              - 's3:ReplicateObject'
+              - 's3:ReplicateDelete'
+              - 's3:ReplicateTags'
+            Resource: !Sub '${ApplicationBucketReplica.Arn}/*'
+
+  # IAM role for replication
+  S3ReplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'myapp-s3-replication-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: ReplicationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetReplicationConfiguration'
+                  - 's3:ListBucket'
+                Resource: !Sub 'arn:aws:s3:::myapp-storage-${EnvironmentSuffix}'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObjectVersionForReplication'
+                  - 's3:GetObjectVersionAcl'
+                  - 's3:GetObjectVersionTagging'
+                Resource: !Sub 'arn:aws:s3:::myapp-storage-${EnvironmentSuffix}/*'
+              - Effect: Allow
+                Action:
+                  - 's3:ReplicateObject'
+                  - 's3:ReplicateDelete'
+                  - 's3:ReplicateTags'
+                Resource: !Sub 'arn:aws:s3:::myapp-storage-replica-${EnvironmentSuffix}/*'
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:ReEncrypt*
+                  - kms:GenerateDataKey*
+                Resource: !GetAtt S3ReplicationKmsKey.Arn
+      Tags:
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Source bucket with replication (KMS encrypted = best practice)
+  ApplicationBucket:
+    Type: AWS::S3::Bucket
+    DependsOn:
+      - ApplicationBucketReplica
+      - ApplicationBucketReplicaPolicy
+    Properties:
+      BucketName: !Sub 'myapp-storage-${EnvironmentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3ReplicationKmsKey
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      ReplicationConfiguration:
+        Role: !GetAtt S3ReplicationRole.Arn
+        Rules:
+          - Id: ReplicateAll
+            Status: Enabled
+            Priority: 1
+            Filter: {}
+            DeleteMarkerReplication:
+              Status: Enabled
+            Destination:
+              Bucket: !Sub 'arn:aws:s3:::myapp-storage-replica-${EnvironmentSuffix}'
+              StorageClass: STANDARD_IA
+              EncryptionConfiguration:
+                ReplicaKmsKeyID: !GetAtt S3ReplicationKmsKey.Arn
+      Tags:
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: ReplicationDestinationRegion
+          Value: !Ref DestinationBucketRegion
+
+  ApplicationBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ApplicationBucket.Arn
+              - !Sub '${ApplicationBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+
+  # ALB access logs bucket
+  ALBAccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'myapp-alb-logs-${EnvironmentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ALBAccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ALBAccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${ALBAccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt ALBAccessLogsBucket.Arn
+
+  # Secrets Manager (AWS only) - LocalStack uses DBMasterPasswordLocalstack parameter
+  DBMasterSecret:
+    Condition: IsAws
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'myapp-db-password-${EnvironmentSuffix}'
+      Description: 'Master password for RDS'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DBMasterUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/'
+        ExcludePunctuation: true
+      Tags:
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # IAM Roles
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'myapp-ec2-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+
+      # LocalStack doesn't always have AWS managed policies; keep them AWS-only
+      ManagedPolicyArns: !If
+        - IsAws
+        - ['arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy']
+        - !Ref AWS::NoValue
+
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                Resource: !Sub 'arn:aws:s3:::myapp-storage-${EnvironmentSuffix}/*'
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                Resource: !Sub 'arn:aws:s3:::myapp-storage-${EnvironmentSuffix}'
+
+        - PolicyName: SSMParameterAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ssm:GetParameter'
+                  - 'ssm:GetParameters'
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/aws/service/*'
+
+  EC2RoleRdsIamAuthPolicy:
+    Condition: IsAws
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub 'myapp-rds-iam-auth-${EnvironmentSuffix}'
+      Roles:
+        - !Ref EC2Role
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'rds-db:connect'
+            Resource: !Sub
+              - 'arn:aws:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${DBResourceId}/${DBUser}'
+              - DBResourceId: !GetAtt DBInstance.DbiResourceId
+                DBUser: !Ref DBMasterUsername
+
+
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub 'myapp-ec2-profile-${EnvironmentSuffix}'
+      Roles:
+        - !Ref EC2Role
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub 'myapp-alb-${EnvironmentSuffix}'
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+        - !Ref PublicSubnetC
+      LoadBalancerAttributes:
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref ALBAccessLogsBucket
+        - Key: deletion_protection.enabled
+          Value: 'false'
+      Tags:
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub 'myapp-tg-${EnvironmentSuffix}'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # Launch Template (SSM public param is AWS-only; LocalStack uses LocalstackAmiId)
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub 'myapp-lt-${EnvironmentSuffix}'
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        ImageId: !If
+          - IsLocalStack
+          - !Ref LocalstackAmiId
+          - '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        InstanceType: t3.micro
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            echo "<h1>Hello from ${EnvironmentSuffix}</h1>" > /var/www/html/index.html
+            # CloudWatch agent install (safe to attempt; no impact on CFN create)
+            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm || true
+            rpm -U ./amazon-cloudwatch-agent.rpm || true
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub 'myapp-instance-${EnvironmentSuffix}'
+              - Key: Project
+                Value: CloudFormationChallenge
+              - Key: Environment
+                Value: !Ref EnvironmentSuffix
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub 'myapp-asg-${EnvironmentSuffix}'
+      VPCZoneIdentifier:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+        - !Ref PublicSubnetC
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !If
+          - IsLocalStack
+          - '$Latest'
+          - !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 5
+      DesiredCapacity: 2
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Project
+          Value: CloudFormationChallenge
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+          PropagateAtLaunch: true
+
+
+  # CloudWatch alarms & scaling policies (AWS only - avoid LocalStack limitations)
+  ScaleUpPolicy:
+    Condition: IsAws
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: 1
+
+  ScaleDownPolicy:
+    Condition: IsAws
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: -1
+
+  HighCPUAlarm:
+    Condition: IsAws
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'myapp-high-cpu-${EnvironmentSuffix}'
+      AlarmDescription: 'Trigger scale up when CPU > 70%'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      AlarmActions:
+        - !Ref ScaleUpPolicy
+
+  LowCPUAlarm:
+    Condition: IsAws
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'myapp-low-cpu-${EnvironmentSuffix}'
+      AlarmDescription: 'Trigger scale down when CPU < 30%'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 30
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      AlarmActions:
+        - !Ref ScaleDownPolicy
+
+  # RDS Resources
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub 'myapp-db-subnet-group-${EnvironmentSuffix}'
+      DBSubnetGroupDescription: 'Subnet group for RDS'
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+        - !Ref PrivateSubnetC
+      Tags:
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DBInstance:
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1011
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub 'myapp-db-${EnvironmentSuffix}'
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      EngineVersion: '14'
+      MasterUsername: !Ref DBMasterUsername
+      # ✅ LocalStack uses parameter; AWS uses correct dynamic secrets reference
+      MasterUserPassword: !If
+        - IsLocalStack
+        - !Ref DBMasterPasswordLocalstack
+        - !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}'
+      AllocatedStorage: 20
+      StorageType: gp3
+      # LocalStack often fails on encryption & multi-AZ; keep strong settings for AWS
+      StorageEncrypted: !If [IsLocalStack, false, true]
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      MultiAZ: !If [IsLocalStack, false, true]
+      BackupRetentionPeriod: !If [IsLocalStack, 0, 7]
+      PreferredBackupWindow: !If [IsLocalStack, !Ref AWS::NoValue, '03:00-04:00']
+      PreferredMaintenanceWindow: !If [IsLocalStack, !Ref AWS::NoValue, 'sun:04:00-sun:05:00']
+      EnableCloudwatchLogsExports: !If
+        - IsLocalStack
+        - !Ref AWS::NoValue
+        - - postgresql
+      EnableIAMDatabaseAuthentication: !If [IsLocalStack, false, true]
+      Tags:
+        - Key: Project
+          Value: CloudFormationChallenge
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+Outputs:
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref VPC
+
+  ALBEndpoint:
+    Description: 'Application Load Balancer DNS name'
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+
+  ApplicationBucketName:
+    Description: 'Application S3 bucket name'
+    Value: !Ref ApplicationBucket
+
+  DBEndpoint:
+    Description: 'RDS instance endpoint'
+    Value: !GetAtt DBInstance.Endpoint.Address
