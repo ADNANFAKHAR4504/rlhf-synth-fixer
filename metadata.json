@@ -1,0 +1,24 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-20T12:32:32.952913+00:00",
+  "po_id": "101912540",
+  "aws_services": [
+    "Lambda",
+    "RDS",
+    "VPC",
+    "IAM",
+    "CloudWatch",
+    "S3",
+    "DynamoDB",
+    "Security Groups"
+  ],
+  "provider": "localstack"
+}
