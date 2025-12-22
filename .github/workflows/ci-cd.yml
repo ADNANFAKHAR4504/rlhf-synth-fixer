@@ -89,8 +89,44 @@ jobs:
         id: metadata
         run: ./scripts/detect-metadata.sh
 
+  claude-review-prompt-quality:
+    runs-on: ubuntu-24.04
+    name: 'Claude Review: Prompt Quality'
+    needs: detect-metadata
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+
+      - name: Prepare Claude prompt
+        id: prepare-prompt
+        run: |
+          PROMPT=$(cat .claude/prompts/claude-prompt-quality-review.md)
+          {
+            echo 'CLAUDE_PROMPT<<PROMPT_EOF'
+            echo "$PROMPT"
+            echo 'PROMPT_EOF'
+          } >> $GITHUB_ENV
+
+      - name: Run Claude Prompt Quality Review
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_tools: 'Bash,Read,Grep,Glob'
+          trigger_phrase: ''
+          custom_instructions: '${{ env.CLAUDE_PROMPT }}'
+
   validate-commit-message:
     name: Validate Commit Message
+    needs: [detect-metadata, claude-review-prompt-quality]
     runs-on: ubuntu-24.04
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     steps:
@@ -115,7 +151,7 @@ jobs:
   validate-jest-config:
     name: Validate Jest Config
     runs-on: ubuntu-24.04
-    needs: detect-metadata
+    needs: [detect-metadata, validate-commit-message]
     # Only run for TypeScript/JavaScript projects (Jest is not used for Python, Go, Java)
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && (needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js') }}
     steps:
@@ -160,8 +196,12 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-24.04
-    needs: detect-metadata
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
+    needs: [detect-metadata, claude-review-prompt-quality, validate-commit-message, validate-jest-config]
+    if: |
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) &&
+      (needs.validate-jest-config.result == 'success' || needs.validate-jest-config.result == 'skipped')
     environment: dev
 
     steps:
@@ -340,7 +380,7 @@ jobs:
   analysis:
     name: Analysis
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, lint, unit-tests]
+    needs: [detect-metadata, claude-review-prompt-quality, lint, unit-tests]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && needs.lint.result == 'success' && needs.unit-tests.result == 'success' }}
     environment: dev
     env:
@@ -382,7 +422,7 @@ jobs:
   cicd-pipeline-optimization:
     name: CICD Pipeline Optimization
     runs-on: ubuntu-24.04
-    needs: detect-metadata
+    needs: [detect-metadata, claude-review-prompt-quality, validate-commit-message]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
     environment: dev
     permissions:
@@ -571,7 +611,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, build]
+    needs: [detect-metadata, claude-review-prompt-quality, build]
     if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: qa
     outputs:
@@ -664,6 +704,7 @@ jobs:
             coverage/
             cov.json
 
+
   # mocked-integration-tests:
   #   name: Mocked Integration Tests
   #   runs-on: ubuntu-24.04
@@ -692,7 +733,13 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
+    if: |
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.unit-tests.result == 'success' || needs.unit-tests.result == 'skipped')
 
     steps:
       - name: Checkout code
@@ -757,12 +804,14 @@ jobs:
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+
   claude-code-action:
     runs-on: ubuntu-24.04
     name: 'Claude Review'
     needs:
       [
         detect-metadata,
+        claude-review-prompt-quality,
         integration-tests-live,
         analysis,
         cicd-pipeline-optimization,
@@ -774,6 +823,7 @@ jobs:
       github.event_name == 'pull_request' &&
       (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') &&
       (needs.cicd-pipeline-optimization.result == 'success' || needs.cicd-pipeline-optimization.result == 'skipped') &&
+      (needs.claude-review-prompt-quality.result == 'success' || needs.claude-review-prompt-quality.result == 'skipped') &&
       (
         (
           (contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) ||
@@ -1560,12 +1610,50 @@ jobs:
           echo "---- full needs json ----"
           echo '${{ toJson(needs) }}'
 
+  claude-review-ideal-response:
+    runs-on: ubuntu-24.04
+    name: 'Claude Review: IDEAL_RESPONSE Code Validation'
+    needs: [detect-metadata, cleanup, claude-code-action]
+    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.claude-code-action.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+
+      - name: Install jq for metadata parsing
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Prepare Claude prompt for IDEAL_RESPONSE validation
+        id: prepare-ideal-response-prompt
+        run: |
+          PROMPT=$(cat .claude/prompts/claude-ideal-response-review.md)
+          {
+            echo 'CLAUDE_IDEAL_RESPONSE_PROMPT<<PROMPT_EOF'
+            echo "$PROMPT"
+            echo 'PROMPT_EOF'
+          } >> $GITHUB_ENV
+
+      - name: Run Claude IDEAL_RESPONSE Code Validation
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_tools: 'Bash,Read,Grep,Glob'
+          trigger_phrase: ''
+          custom_instructions: '${{ env.CLAUDE_IDEAL_RESPONSE_PROMPT }}'
+
   archive-folders:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, cleanup, claude-code-action]
+    needs: [detect-metadata, cleanup, claude-code-action, claude-review-ideal-response]
     environment: stage
-    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.claude-code-action.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.claude-code-action.result == 'success' && needs.claude-review-ideal-response.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
 

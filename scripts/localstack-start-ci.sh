@@ -104,12 +104,6 @@ DOCKER_CMD="docker run -d \
   -e DISABLE_CORS_CHECKS=1 \
   -e SKIP_INFRA_DOWNLOADS=1"
 
-# Add SERVICES only if explicitly set
-if [ -n "$SERVICES" ]; then
-    DOCKER_CMD="$DOCKER_CMD \
-  -e SERVICES=\"${SERVICES}\""
-fi
-
 # Add API key if available (required for Pro features)
 if [ -n "$LOCALSTACK_API_KEY" ]; then
     DOCKER_CMD="$DOCKER_CMD \
