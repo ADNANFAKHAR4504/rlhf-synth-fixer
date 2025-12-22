@@ -498,28 +498,31 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    const rdsSecurityGroup = new aws.ec2.SecurityGroup(
-      `rds-sg-${environmentSuffix}`,
-      {
-        name: `rds-security-group-${environmentSuffix}`,
-        description: 'Security group for RDS database',
-        vpcId: vpc.id,
-        ingress: [
+    // RDS Security Group (skip in LocalStack as RDS is not supported)
+    const rdsSecurityGroup = isLocalStack
+      ? undefined
+      : new aws.ec2.SecurityGroup(
+          `rds-sg-${environmentSuffix}`,
           {
-            description: 'MySQL/Aurora from EC2',
-            fromPort: 3306,
-            toPort: 3306,
-            protocol: 'tcp',
-            securityGroups: [ec2SecurityGroup.id],
+            name: `rds-security-group-${environmentSuffix}`,
+            description: 'Security group for RDS database',
+            vpcId: vpc.id,
+            ingress: [
+              {
+                description: 'MySQL/Aurora from EC2',
+                fromPort: 3306,
+                toPort: 3306,
+                protocol: 'tcp',
+                securityGroups: [ec2SecurityGroup.id],
+              },
+            ],
+            egress: [],
+            tags: {
+              Name: `rds-sg-${environmentSuffix}`,
+            },
           },
-        ],
-        egress: [],
-        tags: {
-          Name: `rds-sg-${environmentSuffix}`,
-        },
-      },
-      { provider, parent: this }
-    );
+          { provider, parent: this }
+        );
 
     // Add ALB egress rule after EC2 security group is created
     new aws.ec2.SecurityGroupRule(
@@ -535,19 +538,21 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Add EC2 egress rule for MySQL to RDS
-    new aws.ec2.SecurityGroupRule(
-      `ec2-egress-to-rds-${environmentSuffix}`,
-      {
-        type: 'egress',
-        fromPort: 3306,
-        toPort: 3306,
-        protocol: 'tcp',
-        sourceSecurityGroupId: rdsSecurityGroup.id,
-        securityGroupId: ec2SecurityGroup.id,
-      },
-      { provider, parent: this }
-    );
+    // Add EC2 egress rule for MySQL to RDS (skip in LocalStack)
+    if (!isLocalStack && rdsSecurityGroup) {
+      new aws.ec2.SecurityGroupRule(
+        `ec2-egress-to-rds-${environmentSuffix}`,
+        {
+          type: 'egress',
+          fromPort: 3306,
+          toPort: 3306,
+          protocol: 'tcp',
+          sourceSecurityGroupId: rdsSecurityGroup.id,
+          securityGroupId: ec2SecurityGroup.id,
+        },
+        { provider, parent: this }
+      );
+    }
 
     // IAM Role for EC2 instances
     const ec2Role = new aws.iam.Role(
@@ -1165,166 +1170,180 @@ EOF
       { provider, parent: this }
     );
 
-    // RDS Subnet Group
-    const rdsSubnetGroup = new aws.rds.SubnetGroup(
-      `rds-subnet-group-${environmentSuffix}`,
-      {
-        name: `rds-subnet-group-${environmentSuffix}`,
-        subnetIds: pulumi.all(privateSubnets.map(s => s.id)),
-        tags: {
-          Name: `rds-subnet-group-${environmentSuffix}`,
-        },
-      },
-      { provider, parent: this }
-    );
+    // RDS Subnet Group (skip in LocalStack as RDS is not supported)
+    const rdsSubnetGroup = isLocalStack
+      ? undefined
+      : new aws.rds.SubnetGroup(
+          `rds-subnet-group-${environmentSuffix}`,
+          {
+            name: `rds-subnet-group-${environmentSuffix}`,
+            subnetIds: pulumi.all(privateSubnets.map(s => s.id)),
+            tags: {
+              Name: `rds-subnet-group-${environmentSuffix}`,
+            },
+          },
+          { provider, parent: this }
+        );
 
-    // KMS Key for RDS encryption
-    const rdsKmsKey = new aws.kms.Key(
-      `rds-kms-key-${environmentSuffix}`,
-      {
-        description: `KMS key for RDS encryption - ${environmentSuffix}`,
-        deletionWindowInDays: 30,
-        policy: pulumi
-          .all([aws.getCallerIdentity({}, { provider }).then(i => i.accountId)])
-          .apply(([accountId]) =>
-            JSON.stringify({
+    // KMS Key for RDS encryption (skip in LocalStack as RDS is not supported)
+    const rdsKmsKey = isLocalStack
+      ? undefined
+      : new aws.kms.Key(
+          `rds-kms-key-${environmentSuffix}`,
+          {
+            description: `KMS key for RDS encryption - ${environmentSuffix}`,
+            deletionWindowInDays: 30,
+            policy: pulumi
+              .all([
+                aws.getCallerIdentity({}, { provider }).then(i => i.accountId),
+              ])
+              .apply(([accountId]) =>
+                JSON.stringify({
+                  Version: '2012-10-17',
+                  Statement: [
+                    {
+                      Sid: 'Enable IAM User Permissions',
+                      Effect: 'Allow',
+                      Principal: { AWS: `arn:aws:iam::${accountId}:root` },
+                      Action: 'kms:*',
+                      Resource: '*',
+                    },
+                    {
+                      Sid: 'Allow RDS Service',
+                      Effect: 'Allow',
+                      Principal: { Service: 'rds.amazonaws.com' },
+                      Action: [
+                        'kms:Decrypt',
+                        'kms:GenerateDataKey',
+                        'kms:CreateGrant',
+                      ],
+                      Resource: '*',
+                    },
+                  ],
+                })
+              ),
+            tags: {
+              Name: `rds-kms-key-${environmentSuffix}`,
+              Environment: 'production',
+            },
+          },
+          { provider, parent: this }
+        );
+
+    // IAM Role for RDS Enhanced Monitoring (skip in LocalStack as RDS is not supported)
+    const rdsMonitoringRole = isLocalStack
+      ? undefined
+      : new aws.iam.Role(
+          `rds-monitoring-role-${environmentSuffix}`,
+          {
+            assumeRolePolicy: JSON.stringify({
               Version: '2012-10-17',
               Statement: [
                 {
-                  Sid: 'Enable IAM User Permissions',
+                  Action: 'sts:AssumeRole',
                   Effect: 'Allow',
-                  Principal: { AWS: `arn:aws:iam::${accountId}:root` },
-                  Action: 'kms:*',
-                  Resource: '*',
-                },
-                {
-                  Sid: 'Allow RDS Service',
-                  Effect: 'Allow',
-                  Principal: { Service: 'rds.amazonaws.com' },
-                  Action: [
-                    'kms:Decrypt',
-                    'kms:GenerateDataKey',
-                    'kms:CreateGrant',
-                  ],
-                  Resource: '*',
+                  Principal: {
+                    Service: 'monitoring.rds.amazonaws.com',
+                  },
                 },
               ],
-            })
-          ),
-        tags: {
-          Name: `rds-kms-key-${environmentSuffix}`,
-          Environment: 'production',
-        },
-      },
-      { provider, parent: this }
-    );
+            }),
+          },
+          { provider, parent: this }
+        );
 
-    // IAM Role for RDS Enhanced Monitoring
-    const rdsMonitoringRole = new aws.iam.Role(
-      `rds-monitoring-role-${environmentSuffix}`,
-      {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'monitoring.rds.amazonaws.com',
-              },
+    if (!isLocalStack && rdsMonitoringRole) {
+      new aws.iam.RolePolicyAttachment(
+        `rds-monitoring-policy-${environmentSuffix}`,
+        {
+          role: rdsMonitoringRole.name,
+          policyArn:
+            'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
+        },
+        { provider, parent: this }
+      );
+    }
+
+    // RDS Instance (skip in LocalStack as RDS is not supported)
+    const rdsInstance = isLocalStack
+      ? undefined
+      : new aws.rds.Instance(
+          `app-database-${environmentSuffix}`,
+          {
+            identifier: `app-database-${environmentSuffix}`,
+            allocatedStorage: 30,
+            maxAllocatedStorage: 100,
+            storageType: 'gp3',
+            storageEncrypted: true,
+            kmsKeyId: rdsKmsKey!.arn,
+            engine: 'mysql',
+            engineVersion: '8.0.39',
+            instanceClass: 'db.t3.micro',
+            dbName: 'appdb',
+            username: dbUsername,
+            manageMasterUserPassword: true,
+            vpcSecurityGroupIds: [rdsSecurityGroup!.id],
+            dbSubnetGroupName: rdsSubnetGroup!.name,
+            backupRetentionPeriod: 30,
+            backupWindow: '03:00-04:00',
+            maintenanceWindow: 'sun:04:00-sun:05:00',
+            multiAz: true,
+            skipFinalSnapshot: false,
+            finalSnapshotIdentifier: `app-database-final-snapshot-${environmentSuffix}`,
+            deletionProtection: true,
+            enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
+            performanceInsightsEnabled: false,
+            monitoringInterval: 60,
+            monitoringRoleArn: rdsMonitoringRole!.arn,
+            autoMinorVersionUpgrade: true,
+            tags: {
+              Name: `app-database-${environmentSuffix}`,
+              Environment: 'production',
             },
-          ],
-        }),
-      },
-      { provider, parent: this }
-    );
+          },
+          { provider, parent: this }
+        );
 
-    new aws.iam.RolePolicyAttachment(
-      `rds-monitoring-policy-${environmentSuffix}`,
-      {
-        role: rdsMonitoringRole.name,
-        policyArn:
-          'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
-      },
-      { provider, parent: this }
-    );
-
-    // RDS Instance
-    const rdsInstance = new aws.rds.Instance(
-      `app-database-${environmentSuffix}`,
-      {
-        identifier: `app-database-${environmentSuffix}`,
-        allocatedStorage: 30,
-        maxAllocatedStorage: 100,
-        storageType: 'gp3',
-        storageEncrypted: true,
-        kmsKeyId: rdsKmsKey.arn,
-        engine: 'mysql',
-        engineVersion: '8.0.39',
-        instanceClass: 'db.t3.micro',
-        dbName: 'appdb',
-        username: dbUsername,
-        manageMasterUserPassword: true,
-        vpcSecurityGroupIds: [rdsSecurityGroup.id],
-        dbSubnetGroupName: rdsSubnetGroup.name,
-        backupRetentionPeriod: 30,
-        backupWindow: '03:00-04:00',
-        maintenanceWindow: 'sun:04:00-sun:05:00',
-        multiAz: true,
-        skipFinalSnapshot: false,
-        finalSnapshotIdentifier: `app-database-final-snapshot-${environmentSuffix}`,
-        deletionProtection: true,
-        enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
-        performanceInsightsEnabled: false,
-        monitoringInterval: 60,
-        monitoringRoleArn: rdsMonitoringRole.arn,
-        autoMinorVersionUpgrade: true,
-        tags: {
-          Name: `app-database-${environmentSuffix}`,
-          Environment: 'production',
+    // RDS CloudWatch Alarms (skip in LocalStack as RDS is not supported)
+    if (!isLocalStack && rdsInstance) {
+      new aws.cloudwatch.MetricAlarm(
+        `rds-connections-alarm-${environmentSuffix}`,
+        {
+          name: `rds-connections-alarm-${environmentSuffix}`,
+          comparisonOperator: 'GreaterThanThreshold',
+          evaluationPeriods: 2,
+          metricName: 'DatabaseConnections',
+          namespace: 'AWS/RDS',
+          period: 300,
+          statistic: 'Average',
+          threshold: 15,
+          alarmDescription: 'This metric monitors RDS connections',
+          dimensions: {
+            DBInstanceIdentifier: rdsInstance.id,
+          },
         },
-      },
-      { provider, parent: this }
-    );
+        { provider, parent: this }
+      );
 
-    // RDS CloudWatch Alarms
-    new aws.cloudwatch.MetricAlarm(
-      `rds-connections-alarm-${environmentSuffix}`,
-      {
-        name: `rds-connections-alarm-${environmentSuffix}`,
-        comparisonOperator: 'GreaterThanThreshold',
-        evaluationPeriods: 2,
-        metricName: 'DatabaseConnections',
-        namespace: 'AWS/RDS',
-        period: 300,
-        statistic: 'Average',
-        threshold: 15,
-        alarmDescription: 'This metric monitors RDS connections',
-        dimensions: {
-          DBInstanceIdentifier: rdsInstance.id,
+      new aws.cloudwatch.MetricAlarm(
+        `rds-cpu-alarm-${environmentSuffix}`,
+        {
+          name: `rds-cpu-alarm-${environmentSuffix}`,
+          comparisonOperator: 'GreaterThanThreshold',
+          evaluationPeriods: 2,
+          metricName: 'CPUUtilization',
+          namespace: 'AWS/RDS',
+          period: 300,
+          statistic: 'Average',
+          threshold: 80,
+          alarmDescription: 'This metric monitors RDS CPU utilization',
+          dimensions: {
+            DBInstanceIdentifier: rdsInstance.id,
+          },
         },
-      },
-      { provider, parent: this }
-    );
-
-    new aws.cloudwatch.MetricAlarm(
-      `rds-cpu-alarm-${environmentSuffix}`,
-      {
-        name: `rds-cpu-alarm-${environmentSuffix}`,
-        comparisonOperator: 'GreaterThanThreshold',
-        evaluationPeriods: 2,
-        metricName: 'CPUUtilization',
-        namespace: 'AWS/RDS',
-        period: 300,
-        statistic: 'Average',
-        threshold: 80,
-        alarmDescription: 'This metric monitors RDS CPU utilization',
-        dimensions: {
-          DBInstanceIdentifier: rdsInstance.id,
-        },
-      },
-      { provider, parent: this }
-    );
+        { provider, parent: this }
+      );
+    }
 
     // ALB Health Check Alarm
     new aws.cloudwatch.MetricAlarm(
@@ -1350,7 +1369,9 @@ EOF
     // Set outputs
     this.albDnsName = alb.dnsName;
     this.vpcId = vpc.id;
-    this.rdsEndpoint = rdsInstance.endpoint;
+    this.rdsEndpoint = rdsInstance
+      ? rdsInstance.endpoint
+      : pulumi.output('Not available in LocalStack');
     this.autoScalingGroupName = autoScalingGroup.name;
     this.cloudFrontDomain = cfDistribution.domainName;
     this.launchTemplateName = launchTemplate.name;
@@ -1359,9 +1380,13 @@ EOF
     this.secretName = dbSecret.name;
     this.vpcFlowLogsGroupName = vpcFlowLogsGroup.name;
     this.secretsKmsKeyId = secretsKmsKey.id;
-    this.rdsKmsKeyId = rdsKmsKey.id;
+    this.rdsKmsKeyId = rdsKmsKey
+      ? rdsKmsKey.id
+      : pulumi.output('Not available in LocalStack');
     this.ec2RoleName = ec2Role.name;
-    this.rdsSubnetGroupName = rdsSubnetGroup.name;
+    this.rdsSubnetGroupName = rdsSubnetGroup
+      ? rdsSubnetGroup.name
+      : pulumi.output('Not available in LocalStack');
 
     // Register outputs
     this.registerOutputs({
