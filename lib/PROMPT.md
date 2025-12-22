@@ -56,4 +56,4 @@ Deliver an AWS CDK (TypeScript) project that:
   1. `bin/tap.ts`
   2. `lib/tap-stack.ts`
   3. `cdk.json`
-- **Do not** include any explanations, comments, or extra text—**only the code** for each file.
+- **Do not** include any explanations, comments, or extra text - **only the code** for each file.
