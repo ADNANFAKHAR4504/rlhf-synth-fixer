@@ -1,0 +1,26 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-18T06:18:00Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "101912503",
+  "aws_services": [
+    "KMS",
+    "Secrets Manager",
+    "IAM",
+    "VPC",
+    "Lambda",
+    "CloudWatch Logs",
+    "AWS Config",
+    "S3",
+    "VPC Flow Logs",
+    "EC2"
+  ],
+  "provider": "localstack"
+}
