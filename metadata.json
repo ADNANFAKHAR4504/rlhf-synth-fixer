@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292029",
+  "team": "5",
+  "startedAt": "2025-08-19T14:21:19.840Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 8,
+  "provider": "localstack",
+  "aws_services": [
+    "EC2",
+    "S3",
+    "CloudWatch",
+    "IAM"
+  ]
+}
