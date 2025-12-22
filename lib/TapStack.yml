@@ -63,9 +63,9 @@ Parameters:
 
   EnableCloudTrail:
     Type: String
-    Default: 'true'
+    Default: 'false'
     AllowedValues: ['true', 'false']
-    Description: 'Enable CloudTrail (set to false for LocalStack Community)'
+    Description: 'Enable CloudTrail (disabled by default for LocalStack compatibility)'
 
 Conditions:
   # Update conditions to use EnvironmentSuffix instead of EnvironmentName
