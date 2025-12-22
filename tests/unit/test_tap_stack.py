@@ -30,20 +30,23 @@ class TestTapStack(unittest.TestCase):
         template.resource_count_is("AWS::EC2::SecurityGroup", 2)
 
     @mark.it("creates RDS MySQL instance with correct settings")
-    @patch.dict(os.environ, {"AWS_ENDPOINT_URL": ""}, clear=False)
     def test_creates_rds_instance(self):
-        # Temporarily clear LocalStack env to test non-LocalStack path
-        if "AWS_ENDPOINT_URL" in os.environ and os.environ["AWS_ENDPOINT_URL"]:
-            del os.environ["AWS_ENDPOINT_URL"]
-        stack = TapStack(self.app, "TapStackRdsTest")
-        template = Template.from_stack(stack)
-        template.resource_count_is("AWS::RDS::DBInstance", 1)
-        template.has_resource_properties("AWS::RDS::DBInstance", {
-            "Engine": "mysql",
-            "StorageEncrypted": True,
-            "BackupRetentionPeriod": 1,
-            "DeletionProtection": False
-        })
+        # Temporarily remove LocalStack env to test non-LocalStack path
+        saved_endpoint = os.environ.pop("AWS_ENDPOINT_URL", None)
+        try:
+            stack = TapStack(self.app, "TapStackRdsTest")
+            template = Template.from_stack(stack)
+            template.resource_count_is("AWS::RDS::DBInstance", 1)
+            template.has_resource_properties("AWS::RDS::DBInstance", {
+                "Engine": "mysql",
+                "StorageEncrypted": True,
+                "BackupRetentionPeriod": 1,
+                "DeletionProtection": False
+            })
+        finally:
+            # Restore the environment variable
+            if saved_endpoint is not None:
+                os.environ["AWS_ENDPOINT_URL"] = saved_endpoint
 
     @mark.it("creates S3 buckets for backup and logs")
     def test_creates_s3_buckets(self):
@@ -60,14 +63,17 @@ class TestTapStack(unittest.TestCase):
         template.resource_count_is("AWS::ElasticLoadBalancingV2::Listener", 1)
 
     @mark.it("creates KMS keys for S3 and RDS")
-    @patch.dict(os.environ, {"AWS_ENDPOINT_URL": ""}, clear=False)
     def test_creates_kms_keys(self):
-        # Temporarily clear LocalStack env to test non-LocalStack path
-        if "AWS_ENDPOINT_URL" in os.environ and os.environ["AWS_ENDPOINT_URL"]:
-            del os.environ["AWS_ENDPOINT_URL"]
-        stack = TapStack(self.app, "TapStackKmsTest")
-        template = Template.from_stack(stack)
-        template.resource_count_is("AWS::KMS::Key", 2)
+        # Temporarily remove LocalStack env to test non-LocalStack path
+        saved_endpoint = os.environ.pop("AWS_ENDPOINT_URL", None)
+        try:
+            stack = TapStack(self.app, "TapStackKmsTest")
+            template = Template.from_stack(stack)
+            template.resource_count_is("AWS::KMS::Key", 2)
+        finally:
+            # Restore the environment variable
+            if saved_endpoint is not None:
+                os.environ["AWS_ENDPOINT_URL"] = saved_endpoint
 
     @mark.it("creates CloudWatch dashboard and SNS topic")
     def test_creates_dashboard_and_sns(self):
@@ -77,21 +83,24 @@ class TestTapStack(unittest.TestCase):
         template.resource_count_is("AWS::SNS::Topic", 1)
 
     @mark.it("outputs key resource identifiers")
-    @patch.dict(os.environ, {"AWS_ENDPOINT_URL": ""}, clear=False)
     def test_outputs(self):
-        # Temporarily clear LocalStack env to test non-LocalStack path
-        if "AWS_ENDPOINT_URL" in os.environ and os.environ["AWS_ENDPOINT_URL"]:
-            del os.environ["AWS_ENDPOINT_URL"]
-        stack = TapStack(self.app, "TapStackOutputsTest")
-        template = Template.from_stack(stack)
-        outputs = template.to_json().get("Outputs", {})
-        self.assertIn("VpcId", outputs)
-        self.assertIn("DatabaseEndpoint", outputs)
-        self.assertIn("AlbDnsName", outputs)
-        self.assertIn("BackupBucketName", outputs)
-        self.assertIn("LogsBucketName", outputs)
-        self.assertIn("S3KmsKeyId", outputs)
-        self.assertIn("RdsKmsKeyId", outputs)
+        # Temporarily remove LocalStack env to test non-LocalStack path
+        saved_endpoint = os.environ.pop("AWS_ENDPOINT_URL", None)
+        try:
+            stack = TapStack(self.app, "TapStackOutputsTest")
+            template = Template.from_stack(stack)
+            outputs = template.to_json().get("Outputs", {})
+            self.assertIn("VpcId", outputs)
+            self.assertIn("DatabaseEndpoint", outputs)
+            self.assertIn("AlbDnsName", outputs)
+            self.assertIn("BackupBucketName", outputs)
+            self.assertIn("LogsBucketName", outputs)
+            self.assertIn("S3KmsKeyId", outputs)
+            self.assertIn("RdsKmsKeyId", outputs)
+        finally:
+            # Restore the environment variable
+            if saved_endpoint is not None:
+                os.environ["AWS_ENDPOINT_URL"] = saved_endpoint
 
     @mark.it("skips RDS resources when running on LocalStack")
     @patch.dict(os.environ, {"AWS_ENDPOINT_URL": "http://localhost:4566"})
