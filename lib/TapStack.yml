@@ -22,6 +22,16 @@ Parameters:
     Description: 'EC2 instance type for the application server'
     AllowedValues: ['t3.micro', 't3.small', 't3.medium']
 
+  DeployEC2:
+    Type: String
+    Default: 'true'
+    Description: 'Whether to deploy EC2 instance (set to false for LocalStack)'
+    AllowedValues: ['true', 'false']
+
+# Conditions for optional resources
+Conditions:
+  CreateEC2Instance: !Equals [!Ref DeployEC2, 'true']
+
 # Mappings for dynamic AMI lookup
 Mappings:
   RegionMap:
@@ -387,6 +397,7 @@ Resources:
 
   ApplicationInstance:
     Type: AWS::EC2::Instance
+    Condition: CreateEC2Instance
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: !Ref InstanceType
@@ -440,6 +451,7 @@ Resources:
   # CloudWatch Alarm for EC2 Instance Auto Recovery
   EC2RecoveryAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: CreateEC2Instance
     Properties:
       AlarmName: !Sub '${ApplicationName}-${Environment}-EC2-Recovery-Alarm'
       AlarmDescription: 'Trigger a recovery when instance status check fails for 2 consecutive periods'
@@ -608,6 +620,7 @@ Outputs:
       Name: !Sub '${ApplicationName}-${Environment}-VPC-ID'
 
   EC2InstanceId:
+    Condition: CreateEC2Instance
     Description: 'ID of the EC2 instance'
     Value: !Ref ApplicationInstance
     Export:
