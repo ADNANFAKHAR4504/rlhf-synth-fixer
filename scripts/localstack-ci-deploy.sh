@@ -822,7 +822,7 @@ try:
 except Exception as e:
     print(f'DEBUG: Exception parsing outputs: {e}', file=sys.stderr)
     print('{}')
-" 2>/dev/null)
+" 2>&1)
 
             print_status $BLUE "   Parsed output_json length: $(echo "$output_json" | wc -c)"
         else
