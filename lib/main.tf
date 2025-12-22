@@ -2,7 +2,7 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# Local variables for resource naming
+# Local variables for resource 
 locals {
   suffix      = var.environment_suffix != "" ? var.environment_suffix : random_id.bucket_suffix.hex
   name_prefix = "${var.project_name}-${local.suffix}"
