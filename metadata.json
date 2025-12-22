@@ -1,0 +1,25 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-04T11:33:00+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "101000818",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "DynamoDB",
+    "KMS",
+    "CloudWatch"
+  ],
+  "provider": "localstack"
+}
