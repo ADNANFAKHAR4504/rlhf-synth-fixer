@@ -1,3 +1,8 @@
 .env
 *.env
 *.sh
+config.env
+# Ignore config.env file to prevent accidental exposure of sensitive information
+# This file contains API keys and other sensitive configuration settings
+# Please ensure to set the environment variables in your deployment environment
+# and do not commit this file to version control.
