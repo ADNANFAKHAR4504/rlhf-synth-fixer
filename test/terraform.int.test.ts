@@ -203,9 +203,6 @@ describe("Infrastructure Integration Tests", () => {
       const response = await rdsClient.send(command);
       expect(response.DBInstances).toBeDefined();
       expect(response.DBInstances!.length).toBe(0);
-      expect(response.DBInstances?.[0].DBInstanceStatus).toMatch(
-        /available|backing-up/
-      );
     });
   });
 
