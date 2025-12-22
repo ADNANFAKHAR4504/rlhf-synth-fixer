@@ -434,18 +434,6 @@
                     "Version": "2012-10-17",
                     "Statement": [
                         {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}"
-                                }
-                            },
-                            "Action": "s3:GetObject",
-                            "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}/*"
-                            }
-                        },
-                        {
                             "Effect": "Deny",
                             "Principal": "*",
                             "Action": "s3:*",
@@ -788,6 +776,7 @@
         },
         "CloudTrailLogBucket": {
             "Type": "AWS::S3::Bucket",
+            "Condition": "NotLocalStack",
             "Properties": {
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -820,6 +809,7 @@
         },
         "CloudTrailBucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
+            "Condition": "NotLocalStack",
             "Properties": {
                 "Bucket": {
                     "Ref": "CloudTrailLogBucket"
@@ -860,6 +850,7 @@
         },
         "CloudTrailTrail": {
             "Type": "AWS::CloudTrail::Trail",
+            "Condition": "NotLocalStack",
             "DependsOn": [
                 "CloudTrailBucketPolicy"
             ],
@@ -1005,6 +996,7 @@
         },
         "GuardDutyDetector": {
             "Type": "AWS::GuardDuty::Detector",
+            "Condition": "NotLocalStack",
             "Properties": {
                 "Enable": true,
                 "FindingPublishingFrequency": "FIFTEEN_MINUTES"
@@ -1024,6 +1016,7 @@
         },
         "GuardDutyEventRule": {
             "Type": "AWS::Events::Rule",
+            "Condition": "NotLocalStack",
             "Properties": {
                 "Description": "GuardDuty Findings",
                 "EventPattern": {
@@ -1228,6 +1221,7 @@
             "Description": "Secure Encrypted S3 Bucket"
         },
         "CloudTrailLogBucketName": {
+            "Condition": "NotLocalStack",
             "Value": {
                 "Ref": "CloudTrailLogBucket"
             },

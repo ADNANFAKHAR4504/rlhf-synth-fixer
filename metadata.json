@@ -5,9 +5,9 @@
   "turn_type": "single",
   "po_id": "229162",
   "team": "synth-2",
-  "provider": "localstack",
   "startedAt": "2025-12-15T14:00:00.000Z",
   "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup"
   ],

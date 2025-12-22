@@ -253,13 +253,6 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17" # Always good to explicitly define the version
         Statement:
-          # Explicitly allow access for the CloudFront OAI to GetObject
-          - Effect: Allow
-            Principal:
-              # This correctly references the OAI created in your template
-              AWS: !Sub "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}"
-            Action: "s3:GetObject"
-            Resource: !Sub "arn:aws:s3:::${EncryptedBucket}/*"
           # Deny all access EXCEPT if the principal is the whitelisted IAM User ARN
           - Effect: Deny
             Principal: "*" # Applies to everyone
@@ -434,6 +427,7 @@ Resources:
   # CloudTrail S3 Bucket (dedicated, secure, encrypted)
   CloudTrailLogBucket:
     Type: AWS::S3::Bucket
+    Condition: NotLocalStack
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -452,6 +446,7 @@ Resources:
 
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: NotLocalStack
     Properties:
       Bucket: !Ref CloudTrailLogBucket
       PolicyDocument:
@@ -475,6 +470,7 @@ Resources:
 
   CloudTrailTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: NotLocalStack
     DependsOn:
       - CloudTrailBucketPolicy
     Properties:
@@ -695,6 +691,7 @@ Outputs:
     Description: Secure Encrypted S3 Bucket
 
   CloudTrailLogBucketName:
+    Condition: NotLocalStack
     Value: !Ref CloudTrailLogBucket
     Description: CloudTrail Log Bucket
 
