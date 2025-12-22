@@ -1,4 +1,4 @@
-Functional scope (build everything new):
+Functional scope:
 
 * Generate a single CloudFormation template named **TapStack.yml** that **creates** (does not reference) all infrastructure from scratch for a production-grade, highly available **Aurora MySQL 8.0** deployment in **us-east-1** spanning three AZs (**us-east-1a, us-east-1b, us-east-1c**).
 * All logical/resource names, identifiers, and exported names MUST include **`-${EnvironmentSuffix}`** to prevent collisions across environments.
