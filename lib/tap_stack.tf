@@ -17,7 +17,8 @@ resource "aws_kms_alias" "document_storage" {
 
 # S3 Bucket for Document Storage
 resource "aws_s3_bucket" "documents" {
-  bucket = "secure-documents-${var.environment_suffix}"
+  bucket        = "secure-documents-${var.environment_suffix}"
+  force_destroy = true
 
   tags = {
     Name        = "documents-bucket-${var.environment_suffix}"
@@ -86,7 +87,8 @@ resource "aws_s3_bucket_logging" "documents" {
 
 # S3 Bucket for Logs
 resource "aws_s3_bucket" "logs" {
-  bucket = "document-logs-${var.environment_suffix}"
+  bucket        = "document-logs-${var.environment_suffix}"
+  force_destroy = true
 
   tags = {
     Name        = "logs-bucket-${var.environment_suffix}"
@@ -709,29 +711,30 @@ resource "aws_sns_topic_subscription" "security_email" {
 }
 
 # CloudWatch Alarm for WAF Blocks
-resource "aws_cloudwatch_metric_alarm" "waf_blocks" {
-  alarm_name          = "waf-high-blocks-${var.environment_suffix}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 1
-  metric_name         = "BlockedRequests"
-  namespace           = "AWS/WAFV2"
-  period              = 3600
-  statistic           = "Sum"
-  threshold           = 50
-  alarm_description   = "Alert when WAF blocks exceed 50 requests per hour"
-  alarm_actions       = [aws_sns_topic.security_alerts.arn]
-
-  dimensions = {
-    WebACL = aws_wafv2_web_acl.cloudfront.name
-    Region = "us-east-1"
-    Rule   = "ALL"
-  }
-
-  tags = {
-    Name        = "waf-alarm-${var.environment_suffix}"
-    Environment = var.environment_suffix
-  }
-}
+# Note: Commented out for LocalStack compatibility due to serialization issues
+# resource "aws_cloudwatch_metric_alarm" "waf_blocks" {
+#   alarm_name          = "waf-high-blocks-${var.environment_suffix}"
+#   comparison_operator = "GreaterThanThreshold"
+#   evaluation_periods  = 1
+#   metric_name         = "BlockedRequests"
+#   namespace           = "AWS/WAFV2"
+#   period              = 3600
+#   statistic           = "Sum"
+#   threshold           = 50
+#   alarm_description   = "Alert when WAF blocks exceed 50 requests per hour"
+#   alarm_actions       = [aws_sns_topic.security_alerts.arn]
+#
+#   dimensions = {
+#     WebACL = aws_wafv2_web_acl.cloudfront.name
+#     Region = "us-east-1"
+#     Rule   = "ALL"
+#   }
+#
+#   tags = {
+#     Name        = "waf-alarm-${var.environment_suffix}"
+#     Environment = var.environment_suffix
+#   }
+# }
 
 # Systems Manager Parameter Store
 resource "aws_ssm_parameter" "allowed_extensions" {
