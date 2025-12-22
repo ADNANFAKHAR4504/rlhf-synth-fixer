@@ -426,6 +426,8 @@ resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
+  depends_on = [aws_internet_gateway.main]
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-nat-${count.index + 1}"
   })
@@ -692,9 +694,37 @@ resource "aws_iam_role" "config" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "config" {
-  role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+# Custom IAM policy for Config (LocalStack doesn't support managed ConfigRole policy)
+resource "aws_iam_role_policy" "config" {
+  name = "${local.name_prefix}-config-policy"
+  role = aws_iam_role.config.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetBucketAcl"
+        ]
+        Resource = [
+          aws_s3_bucket.logs.arn,
+          "${aws_s3_bucket.logs.arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "config:Put*",
+          "config:Get*",
+          "config:List*",
+          "config:Describe*"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 # IAM role for CloudTrail
@@ -782,6 +812,18 @@ resource "aws_launch_template" "main" {
     tags          = merge(local.common_tags, { Name = "${local.name_prefix}-volume" })
   }
 
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = 20
+      volume_type           = "gp3"
+      encrypted             = true
+      kms_key_id            = aws_kms_key.main.arn
+      delete_on_termination = true
+    }
+  }
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-launch-template"
   })
@@ -837,6 +879,9 @@ resource "aws_lb" "main" {
     prefix  = "alb-access-logs"
     enabled = true
   }
+
+  # Note: health_check_logs attribute is not supported in LocalStack
+  # This is only available in AWS for Network Load Balancers
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb"
@@ -1044,20 +1089,22 @@ resource "aws_config_config_rule" "rds_encryption" {
   })
 }
 
-resource "aws_config_config_rule" "rds_backup" {
-  name = "${local.name_prefix}-rds-backup"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "RDS_INSTANCE_BACKUP_ENABLED"
-  }
-
-  depends_on = [aws_config_configuration_recorder_status.main]
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-rds-backup-rule"
-  })
-}
+# RDS backup config rule disabled for LocalStack compatibility
+# LocalStack doesn't support RDS_INSTANCE_BACKUP_ENABLED source identifier
+# resource "aws_config_config_rule" "rds_backup" {
+#   name = "${local.name_prefix}-rds-backup"
+#
+#   source {
+#     owner             = "AWS"
+#     source_identifier = "RDS_INSTANCE_BACKUP_ENABLED"
+#   }
+#
+#   depends_on = [aws_config_configuration_recorder_status.main]
+#
+#   tags = merge(local.common_tags, {
+#     Name = "${local.name_prefix}-rds-backup-rule"
+#   })
+# }
 
 resource "aws_config_config_rule" "ec2_ebs_encryption" {
   name = "${local.name_prefix}-ec2-ebs-encryption"
@@ -1168,6 +1215,9 @@ resource "aws_flow_log" "main" {
   log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.main.id
+
+  # max_aggregation_interval must be 60 (1 minute) or 600 (10 minutes)
+  max_aggregation_interval = 60
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc-flow-logs"
@@ -1313,6 +1363,11 @@ output "alb_dns_name" {
   value       = aws_lb.main.dns_name
 }
 
+output "load_balancer_dns_name" {
+  description = "Application Load Balancer DNS name (alias for compatibility)"
+  value       = aws_lb.main.dns_name
+}
+
 output "alb_arn" {
   description = "Application Load Balancer ARN"
   value       = aws_lb.main.arn
@@ -1320,6 +1375,11 @@ output "alb_arn" {
 
 output "rds_endpoint" {
   description = "RDS instance endpoint"
+  value       = aws_db_instance.main.endpoint
+}
+
+output "database_endpoint" {
+  description = "RDS instance endpoint (alias for compatibility)"
   value       = aws_db_instance.main.endpoint
 }
 
