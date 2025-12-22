@@ -17,6 +17,5 @@
     "STS",
     "IAM"
   ],
-  "provider": "localstack",
-  "training_quality": 9
+  "provider": "localstack"
 }
