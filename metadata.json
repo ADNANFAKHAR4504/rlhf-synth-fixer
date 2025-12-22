@@ -4,12 +4,10 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "291823",
-  "team": "1",
+  "team": "synth-2",
   "startedAt": "2025-08-06T13:59:48.786Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "rahulladumor",
-  "dockerS3Location": ""
+  "provider": "localstack",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": ["Security Configuration as Code"],
+  "aws_services": ["KMS", "RDS", "S3", "EC2", "CloudWatch", "IAM", "CloudTrail", "SecurityGroup"]
 }
