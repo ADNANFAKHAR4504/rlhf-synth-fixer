@@ -88,6 +88,31 @@ class TapStack(cdk.Stack):
     self.lambda_role = self._create_lambda_role()
     self.lambda_function = self._create_lambda_function()
 
+    # Add CDK outputs for deployment validation
+    cdk.CfnOutput(
+      self,
+      "S3BucketName",
+      value=self.s3_bucket.bucket_name,
+      description="S3 bucket for static files and backups",
+      export_name=f"{self.project_name}-{self.env_name}-bucket-name"
+    )
+
+    cdk.CfnOutput(
+      self,
+      "DynamoDBTableName",
+      value=self.dynamodb_table.table_name,
+      description="DynamoDB table for application data",
+      export_name=f"{self.project_name}-{self.env_name}-table-name"
+    )
+
+    cdk.CfnOutput(
+      self,
+      "LambdaFunctionName",
+      value=self.lambda_function.function_name,
+      description="Lambda function for backend processing",
+      export_name=f"{self.project_name}-{self.env_name}-lambda-name"
+    )
+
   def _create_s3_bucket(self) -> s3.Bucket:
     """
     Create S3 bucket for static files and backups
