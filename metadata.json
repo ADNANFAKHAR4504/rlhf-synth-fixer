@@ -17,6 +17,5 @@
     "Amazon CloudWatch",
     "AWS CloudWatch Logs"
   ],
-  "provider": "localstack",
-  "training_quality": 10
+  "provider": "localstack"
 }
