@@ -66,19 +66,28 @@ The ideal response correctly identifies this as an IAM permissions issue between
 
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  TapStack.yml — Aurora MySQL 8.0 cluster across 3 AZs with automatic failover,
-  reader auto scaling (2–5 @ 70% CPU), 72h backtrack, 10s enhanced monitoring,
-  Database Activity Streams (auto sync→async fallback) with dedicated CMK,
-  CloudWatch alarms, and SNS notifications. Fully self-contained.
+  TapStack.yml — Dual-mode deployment (AWS + LocalStack).
+  AWS mode: Aurora MySQL cluster across 3 AZs with failover, reader autoscaling, alarms, and optional DAS.
+  LocalStack mode: Single MySQL DBInstance (Aurora/DAS/autoscaling/alarms disabled automatically).
 
 Metadata:
   TemplateAuthor: TapStack
-  Version: v3.0
+  Version: v3.2
   Notes:
     - Pure YAML (no anchors/aliases; no flow-style maps/sequences)
     - VPC, subnets, SGs created in-stack (no external params)
+    - Best-practice: secrets come from Secrets Manager via dynamic references (no secret params)
 
 Parameters:
+  DeploymentTarget:
+    Type: String
+    Default: aws
+    AllowedValues:
+      - aws
+      - localstack
+    Description: >
+      Set to 'aws' for real AWS. Set to 'localstack' to disable AWS-only features and use a single MySQL DBInstance.
+
   EnvironmentSuffix:
     Type: String
     Default: prod-us
@@ -86,17 +95,37 @@ Parameters:
     AllowedPattern: '^[a-z0-9-]{3,20}$'
     ConstraintDescription: Must be 3–20 characters of lowercase letters, digits, and dashes.
 
+  DatabaseName:
+    Type: String
+    Default: appdb
+    AllowedPattern: '^[A-Za-z0-9_]+$'
+    Description: Initial database name.
+
   DBInstanceClass:
     Type: String
     Default: db.r6g.large
     AllowedPattern: '^[a-z0-9.-]+$'
-    Description: Instance class for Aurora DB instances (e.g., db.r6g.large).
+    Description: Instance class for Aurora instances (AWS mode).
+
+  LocalDbInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    AllowedPattern: '^[a-z0-9.-]+$'
+    Description: Instance class for MySQL instance (LocalStack mode).
 
   DBEngineVersion:
     Type: String
     Default: ''
     AllowedPattern: '^[0-9A-Za-z._-]*$'
-    Description: '(Optional) Aurora MySQL 8.0 engine version (aurora-mysql 3.x). Leave blank to use the latest supported in-region.'
+    Description: >
+      (Optional) Aurora MySQL 8.0 engine version (aurora-mysql 3.x) for AWS mode.
+      Leave blank to use default.
+
+  LocalMySqlEngineVersion:
+    Type: String
+    Default: '8.0'
+    AllowedPattern: '^[0-9A-Za-z._-]+$'
+    Description: MySQL engine version for LocalStack mode.
 
   MasterUsername:
     Type: String
@@ -116,7 +145,7 @@ Parameters:
       - 15
       - 30
       - 60
-    Description: Enhanced Monitoring interval in seconds (10s required).
+    Description: Enhanced Monitoring interval in seconds (AWS mode only).
 
   PerformanceInsightsEnabled:
     Type: String
@@ -124,7 +153,7 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'true'
-    Description: Enable Performance Insights on instances.
+    Description: Enable Performance Insights on instances (AWS mode only).
 
   PerformanceInsightsRetention:
     Type: Number
@@ -132,30 +161,30 @@ Parameters:
     AllowedValues:
       - 7
       - 731
-    Description: Performance Insights retention in days (7 required by spec).
+    Description: Performance Insights retention in days (AWS mode only).
 
   BackupRetentionDays:
     Type: Number
     Default: 35
     MinValue: 1
     MaxValue: 35
-    Description: Automated backup retention in days (35 days required).
+    Description: Automated backup retention in days (AWS mode only).
 
   PreferredBackupWindowUTC:
     Type: String
     Default: '03:00-04:00'
     AllowedPattern: '^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$'
-    Description: Preferred backup window in UTC (HH:MM-HH:MM).
+    Description: Preferred backup window in UTC (AWS mode only).
 
   KmsKeyId:
     Type: String
     Default: ''
-    Description: Optional KMS Key ARN for cluster storage encryption. Blank = AWS managed key for Aurora storage.
+    Description: Optional KMS Key ARN for Aurora storage encryption (AWS mode only).
 
   SNSNotificationEmail:
     Type: String
     Default: ''
-    Description: Optional email to subscribe for alarms/notifications. Blank = no subscription.
+    Description: Optional email to subscribe for alarms/notifications (AWS mode only).
 
   ActivityStreamEnabled:
     Type: String
@@ -163,7 +192,7 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'true'
-    Description: Enable Database Activity Streams (DAS). Set 'false' to skip custom resource.
+    Description: Enable Database Activity Streams (AWS mode only; auto-disabled in LocalStack mode).
 
   ActivityStreamMode:
     Type: String
@@ -172,14 +201,31 @@ Parameters:
       - 'async'
       - 'auto'
     Default: 'auto'
-    Description: DAS mode. 'auto' tries sync then falls back to async if region doesn’t support sync.
+    Description: DAS mode. 'auto' tries sync then falls back to async if region doesn’t support sync (AWS mode only).
 
 Conditions:
-  UseCustomerKms: !Not [!Equals [!Ref KmsKeyId, '']]
-  CreateEmailSubscription: !Not [!Equals [!Ref SNSNotificationEmail, '']]
-  EnablePI: !Equals [!Ref PerformanceInsightsEnabled, 'true']
-  HasEngineVersion: !Not [!Equals [!Ref DBEngineVersion, '']]
-  EnableActivityStreams: !Equals [!Ref ActivityStreamEnabled, 'true']
+  IsLocalStack: !Equals [!Ref DeploymentTarget, 'localstack']
+  IsAws: !Equals [!Ref DeploymentTarget, 'aws']
+
+  UseCustomerKms: !And
+    - !Condition IsAws
+    - !Not [!Equals [!Ref KmsKeyId, '']]
+
+  CreateEmailSubscription: !And
+    - !Condition IsAws
+    - !Not [!Equals [!Ref SNSNotificationEmail, '']]
+
+  EnablePI: !And
+    - !Condition IsAws
+    - !Equals [!Ref PerformanceInsightsEnabled, 'true']
+
+  HasEngineVersion: !And
+    - !Condition IsAws
+    - !Not [!Equals [!Ref DBEngineVersion, '']]
+
+  EnableActivityStreams: !And
+    - !Condition IsAws
+    - !Equals [!Ref ActivityStreamEnabled, 'true']
 
 Resources:
   ########################################
@@ -280,7 +326,7 @@ Resources:
       VpcId: !Ref Vpc
       SecurityGroupEgress:
         - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
+          CidrIp: 10.20.0.0/16
       Tags:
         - Key: Name
           Value: !Sub app-sg-${EnvironmentSuffix}
@@ -288,7 +334,7 @@ Resources:
   DbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: !Sub 'Aurora DB SG - restrict to app tier only - ${EnvironmentSuffix}'
+      GroupDescription: !Sub 'DB SG - restrict to app tier only - ${EnvironmentSuffix}'
       VpcId: !Ref Vpc
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -305,7 +351,7 @@ Resources:
   DbSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: !Sub 'Aurora DB Subnet Group - ${EnvironmentSuffix}'
+      DBSubnetGroupDescription: !Sub 'DB Subnet Group - ${EnvironmentSuffix}'
       DBSubnetGroupName: !Sub db-subnet-group-${EnvironmentSuffix}
       SubnetIds:
         - !Ref SubnetPrivateA
@@ -316,9 +362,10 @@ Resources:
           Value: !Sub db-subnet-group-${EnvironmentSuffix}
 
   ########################################
-  # Parameter Group (binlog for cross-region)
+  # Parameter Group (AWS/Aurora only)
   ########################################
   ClusterParameterGroup:
+    Condition: IsAws
     Type: AWS::RDS::DBClusterParameterGroup
     Properties:
       Description: !Sub 'Cluster parameter group with binary logging enabled - ${EnvironmentSuffix}'
@@ -331,9 +378,10 @@ Resources:
           Value: !Sub aurora-cluster-parameter-group-${EnvironmentSuffix}
 
   ########################################
-  # Enhanced Monitoring Role
+  # Enhanced Monitoring Role (AWS only)
   ########################################
   EnhancedMonitoringRole:
+    Condition: IsAws
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub enhanced-monitoring-role-${EnvironmentSuffix}
@@ -351,9 +399,10 @@ Resources:
           Value: !Sub enhanced-monitoring-role-${EnvironmentSuffix}
 
   ########################################
-  # Secrets Manager (auto-generate master password)
+  # Secrets Manager (AWS + LocalStack) — dynamic references (best practice)
   ########################################
   MasterSecret:
+    Condition: IsAws
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub aurora-master-secret-${EnvironmentSuffix}
@@ -367,10 +416,26 @@ Resources:
         - Key: Name
           Value: !Sub aurora-master-secret-${EnvironmentSuffix}
 
+  LocalMasterSecret:
+    Condition: IsLocalStack
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub mysql-local-master-secret-${EnvironmentSuffix}
+      Description: !Sub 'Master password for LocalStack MySQL instance ${EnvironmentSuffix}'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${MasterUsername}"}'
+        GenerateStringKey: password
+        ExcludeCharacters: '"@/\\'
+        PasswordLength: 24
+      Tags:
+        - Key: Name
+          Value: !Sub mysql-local-master-secret-${EnvironmentSuffix}
+
   ########################################
-  # Aurora Cluster
+  # AWS MODE — Aurora Cluster
   ########################################
   AuroraDBCluster:
+    Condition: IsAws
     Type: AWS::RDS::DBCluster
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
@@ -378,6 +443,7 @@ Resources:
       DBClusterIdentifier: !Sub aurora-cluster-${EnvironmentSuffix}
       Engine: aurora-mysql
       EngineVersion: !If [HasEngineVersion, !Ref DBEngineVersion, !Ref "AWS::NoValue"]
+      DatabaseName: !Ref DatabaseName
       DBSubnetGroupName: !Ref DbSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DbSecurityGroup
@@ -388,7 +454,7 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: !If [UseCustomerKms, !Ref KmsKeyId, !Ref "AWS::NoValue"]
       DeletionProtection: true
-      BacktrackWindow: 259200  # 72h
+      BacktrackWindow: 259200
       DBClusterParameterGroupName: !Ref ClusterParameterGroup
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       EnableCloudwatchLogsExports:
@@ -400,10 +466,8 @@ Resources:
         - Key: Name
           Value: !Sub aurora-cluster-${EnvironmentSuffix}
 
-  ########################################
-  # Aurora Instances — 1 writer + 2 readers across 3 AZs
-  ########################################
   AuroraWriterInstance:
+    Condition: IsAws
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier: !Sub aurora-writer-instance-${EnvironmentSuffix}
@@ -411,7 +475,7 @@ Resources:
       Engine: aurora-mysql
       DBInstanceClass: !Ref DBInstanceClass
       PromotionTier: 0
-      AvailabilityZone: !GetAtt SubnetPrivateA.AvailabilityZone
+      AvailabilityZone: !Select [0, !GetAZs '']
       MonitoringInterval: !Ref MonitoringIntervalSeconds
       MonitoringRoleArn: !GetAtt EnhancedMonitoringRole.Arn
       EnablePerformanceInsights: !If [EnablePI, true, false]
@@ -423,6 +487,7 @@ Resources:
           Value: !Sub aurora-writer-instance-${EnvironmentSuffix}
 
   AuroraReaderAInstance:
+    Condition: IsAws
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier: !Sub aurora-reader-a-instance-${EnvironmentSuffix}
@@ -430,7 +495,7 @@ Resources:
       Engine: aurora-mysql
       DBInstanceClass: !Ref DBInstanceClass
       PromotionTier: 1
-      AvailabilityZone: !GetAtt SubnetPrivateB.AvailabilityZone
+      AvailabilityZone: !Select [1, !GetAZs '']
       MonitoringInterval: !Ref MonitoringIntervalSeconds
       MonitoringRoleArn: !GetAtt EnhancedMonitoringRole.Arn
       EnablePerformanceInsights: !If [EnablePI, true, false]
@@ -442,6 +507,7 @@ Resources:
           Value: !Sub aurora-reader-a-instance-${EnvironmentSuffix}
 
   AuroraReaderBInstance:
+    Condition: IsAws
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier: !Sub aurora-reader-b-instance-${EnvironmentSuffix}
@@ -449,7 +515,7 @@ Resources:
       Engine: aurora-mysql
       DBInstanceClass: !Ref DBInstanceClass
       PromotionTier: 2
-      AvailabilityZone: !GetAtt SubnetPrivateC.AvailabilityZone
+      AvailabilityZone: !Select [2, !GetAZs '']
       MonitoringInterval: !Ref MonitoringIntervalSeconds
       MonitoringRoleArn: !GetAtt EnhancedMonitoringRole.Arn
       EnablePerformanceInsights: !If [EnablePI, true, false]
@@ -461,9 +527,10 @@ Resources:
           Value: !Sub aurora-reader-b-instance-${EnvironmentSuffix}
 
   ########################################
-  # Application Auto Scaling — read replicas (2–5, 70% CPU)
+  # AWS MODE — Application Auto Scaling (Read replicas 2–5 @ 70% CPU)
   ########################################
   AuroraReadReplicaScalableTarget:
+    Condition: IsAws
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     DependsOn:
       - AuroraWriterInstance
@@ -477,6 +544,7 @@ Resources:
       ServiceNamespace: rds
 
   AuroraReadReplicaScalingPolicy:
+    Condition: IsAws
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
       PolicyName: !Sub aurora-autoscaling-scaling-policy-${EnvironmentSuffix}
@@ -490,9 +558,10 @@ Resources:
         ScaleOutCooldown: 300
 
   ########################################
-  # SNS for notifications
+  # AWS MODE — SNS for notifications
   ########################################
   FailoverSnsTopic:
+    Condition: IsAws
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub sns-failover-topic-${EnvironmentSuffix}
@@ -501,17 +570,18 @@ Resources:
           Value: !Sub sns-failover-topic-${EnvironmentSuffix}
 
   FailoverSnsSubscription:
-    Type: AWS::SNS::Subscription
     Condition: CreateEmailSubscription
+    Type: AWS::SNS::Subscription
     Properties:
       Protocol: email
       TopicArn: !Ref FailoverSnsTopic
       Endpoint: !Ref SNSNotificationEmail
 
   ########################################
-  # CloudWatch Alarms
+  # AWS MODE — CloudWatch Alarms
   ########################################
   ReplicaLagAlarm:
+    Condition: IsAws
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub alarm-replica-lag-${EnvironmentSuffix}
@@ -535,6 +605,7 @@ Resources:
         - !Ref FailoverSnsTopic
 
   WriterCpuAlarm:
+    Condition: IsAws
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub alarm-writer-cpu-${EnvironmentSuffix}
@@ -558,9 +629,10 @@ Resources:
         - !Ref FailoverSnsTopic
 
   ########################################
-  # KMS CMK — ALWAYS create for DAS (correct policy)
+  # AWS MODE — DAS (Database Activity Streams) — guarded (NOT created in LocalStack)
   ########################################
   DasKmsKey:
+    Condition: EnableActivityStreams
     Type: AWS::KMS::Key
     Properties:
       Description: !Sub 'KMS CMK for Aurora Database Activity Streams - ${EnvironmentSuffix}'
@@ -574,25 +646,6 @@ Resources:
               AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
             Action: 'kms:*'
             Resource: '*'
-
-          - Sid: AllowRDSServiceLinkedRoleUse
-            Effect: Allow
-            Principal:
-              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-              - kms:CreateGrant
-            Resource: '*'
-            Condition:
-              Bool:
-                kms:GrantIsForAWSResource: 'true'
-              StringEquals:
-                kms:ViaService: !Sub rds.${AWS::Region}.amazonaws.com
-
           - Sid: AllowRDSServicePrincipalUse
             Effect: Allow
             Principal:
@@ -615,17 +668,14 @@ Resources:
           Value: !Sub das-kms-${EnvironmentSuffix}
 
   DasKmsAlias:
+    Condition: EnableActivityStreams
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub alias/das-${EnvironmentSuffix}
       TargetKeyId: !Ref DasKmsKey
 
-
-
-  ########################################
-  # Custom Resource — Enable Database Activity Streams (auto sync→async, CMK fallback)
-  ########################################
   ActivityStreamLambdaRole:
+    Condition: EnableActivityStreams
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub das-custom-role-${EnvironmentSuffix}
@@ -643,33 +693,17 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              # RDS permissions for DAS
               - Effect: Allow
                 Action:
                   - rds:StartActivityStream
                   - rds:StopActivityStream
                   - rds:DescribeDBClusters
                 Resource: '*'
-
-              # ✅ Allow Lambda to check CMK state
               - Effect: Allow
                 Action:
                   - kms:DescribeKey
-                Resource: !GetAtt DasKmsKey.Arn
-
-              # ✅ Required so RDS can use this CMK on our behalf
-              #    (Create a KMS grant for the RDS service)
-              - Effect: Allow
-                Action:
                   - kms:CreateGrant
                 Resource: !GetAtt DasKmsKey.Arn
-                Condition:
-                  Bool:
-                    kms:GrantIsForAWSResource: 'true'
-                  StringEquals:
-                    kms:ViaService: !Sub rds.${AWS::Region}.amazonaws.com
-
-              # CloudWatch Logs for the function
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -680,8 +714,8 @@ Resources:
         - Key: Name
           Value: !Sub das-custom-role-${EnvironmentSuffix}
 
-
   ActivityStreamLambda:
+    Condition: EnableActivityStreams
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub enable-das-${EnvironmentSuffix}
@@ -726,7 +760,6 @@ Resources:
             raise TimeoutError(f"DB cluster {cluster_id} not ready in {timeout}s")
 
           def wait_kms_ready(kms, key_arn, timeout=300):
-            """Wait until CMK exists, is Enabled, correct usage, and not pending deletion."""
             start = time.time()
             last_err = None
             while time.time() - start < timeout:
@@ -734,8 +767,7 @@ Resources:
                 meta = kms.describe_key(KeyId=key_arn)["KeyMetadata"]
                 state = meta.get("KeyState")
                 usage = meta.get("KeyUsage")
-                mgr = meta.get("KeyManager")
-                logger.info("KMS %s state=%s usage=%s mgr=%s", key_arn, state, usage, mgr)
+                logger.info("KMS %s state=%s usage=%s", key_arn, state, usage)
                 if state == "Enabled" and usage == "ENCRYPT_DECRYPT" and meta.get("DeletionDate") is None:
                   return True
               except Exception as e:
@@ -745,8 +777,6 @@ Resources:
             raise TimeoutError(f"KMS key not ready in {timeout}s: {last_err}")
 
           def start_with_required_kms(rds, cluster_arn, desired_mode, kms_key):
-            if not kms_key:
-              raise ValueError("Effective KmsKeyId is required but not provided")
             args = {
               "ResourceArn": cluster_arn,
               "Mode": desired_mode,
@@ -761,7 +791,7 @@ Resources:
             props = event["ResourceProperties"]
             cluster_arn = props["ClusterArn"]
             cluster_id = props.get("ClusterIdentifier")
-            mode_param = str(props.get("Mode", "auto")).lower()   # sync | async | auto
+            mode_param = str(props.get("Mode", "auto")).lower()
             kms_key = props.get("KmsKeyId") or None
 
             rds = boto3.client("rds")
@@ -770,68 +800,65 @@ Resources:
 
             try:
               if req_type in ("Create", "Update"):
-                # Ensure the KMS key is real & enabled before proceeding
                 wait_kms_ready(kms, kms_key)
-
                 desc = wait_cluster_ready(rds, cluster_id) if cluster_id else {}
-                as_status = desc.get("ActivityStreamStatus", "stopped")
-                if as_status == "started":
+                if desc.get("ActivityStreamStatus") == "started":
                   _respond(event["ResponseURL"], "SUCCESS", event,
                           {"ActivityStream": "ALREADY_STARTED",
-                            "Mode": desc.get("ActivityStreamMode", ""),
-                            "KinesisStreamName": desc.get("ActivityStreamKinesisStreamName", "")},
+                           "Mode": desc.get("ActivityStreamMode", ""),
+                           "KinesisStreamName": desc.get("ActivityStreamKinesisStreamName", "")},
                           phys_id, reason="Already enabled")
                   return
 
                 desired_mode = "sync" if mode_param in ("sync","auto") else "async"
 
-                # Try desired mode; if region doesn't support sync, fall back to async
                 try:
                   start_with_required_kms(rds, cluster_arn, desired_mode, kms_key)
                 except botocore.exceptions.ClientError as e:
                   msg = str(e)
-                  code = e.response.get("Error", {}).get("Code", "")
-                  logger.warning("StartActivityStream(%s) failed: %s / %s", desired_mode, code, msg)
-                  if "not supported in this region" in msg.lower() and desired_mode == "sync":
+                  low = msg.lower()
+
+                  # Safety: if some environment doesn't support the API, do not brick the stack.
+                  if ("not yet been emulated" in low) or ("not available in your current license plan" in low):
+                    _respond(event["ResponseURL"], "SUCCESS", event,
+                            {"ActivityStream": "SKIPPED_UNSUPPORTED",
+                             "Reason": msg[:300]},
+                            phys_id, reason="Activity Streams not supported in this environment")
+                    return
+
+                  if "not supported in this region" in low and desired_mode == "sync":
                     start_with_required_kms(rds, cluster_arn, "async", kms_key)
                     desired_mode = "async"
                   else:
                     raise
 
-                time.sleep(15)
+                time.sleep(10)
                 desc2 = rds.describe_db_clusters(DBClusterIdentifier=cluster_id)["DBClusters"][0] if cluster_id else {}
                 _respond(event["ResponseURL"], "SUCCESS", event,
                         {"ActivityStream": "STARTED",
-                          "Mode": desc2.get("ActivityStreamMode", desired_mode),
-                          "KinesisStreamName": desc2.get("ActivityStreamKinesisStreamName", "")},
-                        phys_id, reason=f"Enabled in {desc2.get('ActivityStreamMode', desired_mode)} mode")
+                         "Mode": desc2.get("ActivityStreamMode", desired_mode),
+                         "KinesisStreamName": desc2.get("ActivityStreamKinesisStreamName", "")},
+                        phys_id, reason="Enabled")
 
               elif req_type == "Delete":
                 try:
                   desc = wait_cluster_ready(rds, cluster_id, timeout=300) if cluster_id else {}
                   if desc.get("ActivityStreamStatus") == "started":
                     rds.stop_activity_stream(ResourceArn=cluster_arn, ApplyImmediately=True)
-                    time.sleep(5)
                 except Exception as e:
                   logger.warning("StopActivityStream warning: %s", e)
                 _respond(event["ResponseURL"], "SUCCESS", event,
-                        {"ActivityStream": "STOPPED_OR_NOT_ENABLED"}, phys_id,
-                        reason="Disabled or not enabled")
+                        {"ActivityStream": "STOPPED_OR_NOT_ENABLED"}, phys_id, reason="Deleted")
 
             except Exception as e:
               logger.exception("DAS operation failed")
               _respond(event["ResponseURL"], "FAILED", event, {"Error": str(e)}, phys_id, reason=str(e))
-      Tags:
-        - Key: Name
-          Value: !Sub enable-das-${EnvironmentSuffix}
-
-
 
   ActivityStreamEnabler:
     Condition: EnableActivityStreams
     Type: Custom::RDSActivityStream
     DependsOn:
-      - DasKmsAlias            
+      - DasKmsAlias
       - AuroraWriterInstance
       - AuroraReaderAInstance
       - AuroraReaderBInstance
@@ -842,21 +869,60 @@ Resources:
       Mode: !Ref ActivityStreamMode
       KmsKeyId: !GetAtt DasKmsKey.Arn
 
-       
-
+  ########################################
+  # LOCALSTACK MODE — Single MySQL instance (Aurora/DAS/autoscaling/alarms skipped)
+  ########################################
+  LocalMysqlInstance:
+    Condition: IsLocalStack
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub mysql-local-${EnvironmentSuffix}
+      Engine: mysql
+      EngineVersion: !Ref LocalMySqlEngineVersion
+      DBName: !Ref DatabaseName
+      DBInstanceClass: !Ref LocalDbInstanceClass
+      AllocatedStorage: 20
+      StorageType: gp2
+      PubliclyAccessible: false
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DbSecurityGroup
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${LocalMasterSecret}:SecretString:password}}'
+      AutoMinorVersionUpgrade: true
+      MultiAZ: false
+      Tags:
+        - Key: Name
+          Value: !Sub mysql-local-${EnvironmentSuffix}
 
 Outputs:
   ClusterEndpoint:
+    Condition: IsAws
     Description: Writer endpoint of the Aurora cluster.
     Value: !GetAtt AuroraDBCluster.Endpoint.Address
     Export:
       Name: !Sub cluster-endpoint-${EnvironmentSuffix}
 
   ReaderEndpoint:
+    Condition: IsAws
     Description: Reader endpoint of the Aurora cluster.
     Value: !GetAtt AuroraDBCluster.ReadEndpoint.Address
     Export:
       Name: !Sub reader-endpoint-${EnvironmentSuffix}
+
+  LocalDbEndpoint:
+    Condition: IsLocalStack
+    Description: Endpoint address of the LocalStack MySQL DB instance.
+    Value: !GetAtt LocalMysqlInstance.Endpoint.Address
+    Export:
+      Name: !Sub localdb-endpoint-${EnvironmentSuffix}
+
+  LocalDbPort:
+    Condition: IsLocalStack
+    Description: Endpoint port of the LocalStack MySQL DB instance.
+    Value: !GetAtt LocalMysqlInstance.Endpoint.Port
+    Export:
+      Name: !Sub localdb-port-${EnvironmentSuffix}
 
   KinesisStreamArn:
     Condition: EnableActivityStreams
