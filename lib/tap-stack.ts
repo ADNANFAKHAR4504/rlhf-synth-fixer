@@ -52,7 +52,7 @@ export class TapStack extends cdk.Stack {
 
     // 2. S3 Logging Bucket
     const loggingBucket = new s3.Bucket(this, 'LoggingBucket', {
-      bucketName: `complete-env-logs-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      bucketName: `complete-env-logs-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
@@ -69,7 +69,7 @@ export class TapStack extends cdk.Stack {
 
     // 3. Main S3 Bucket with KMS encryption and logging
     const mainBucket = new s3.Bucket(this, 'MainBucket', {
-      bucketName: `complete-env-main-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      bucketName: `complete-env-main-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: s3KmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
