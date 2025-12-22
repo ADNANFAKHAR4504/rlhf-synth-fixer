@@ -12,13 +12,8 @@ terraform {
 
   # S3 backend configuration for remote state management
   # Values are provided via -backend-config during terraform init
-  backend "s3" {
-    bucket         = "terraform-state-bucket-name"
-    key            = "nova-model-breaking/tfstate/${terraform.workspace}.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "terraform-state-lock-table"
-    encrypt        = true
-  }
+  # Empty backend block allows all configuration to be provided via -backend-config flags
+  backend "s3" {}
 }
 
 # Default AWS provider using var.aws_region (declared in lib/tap_stack.tf)
