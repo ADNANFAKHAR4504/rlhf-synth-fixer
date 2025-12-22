@@ -5,9 +5,9 @@
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-12-05T14:28:00Z",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "Cloud Environment Setup"
+    "Infrastructure Analysis/Monitoring"
   ],
   "po_id": "c0l9i9q4",
   "aws_services": [
