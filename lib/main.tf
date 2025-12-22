@@ -379,7 +379,7 @@ resource "aws_macie2_classification_job" "s3_classification" {
   depends_on = [aws_macie2_account.main]
 }
 
-# AWS Shield Advanced (if enabled)
+# AWS Shield Advanced 
 resource "aws_shield_protection" "s3_protection" {
   count        = var.enable_shield_advanced ? 1 : 0
   name         = "${local.name_prefix}-s3-shield-protection"
