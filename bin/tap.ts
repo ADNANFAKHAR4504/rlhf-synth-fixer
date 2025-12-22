@@ -13,11 +13,16 @@ const account = process.env.CDK_DEFAULT_ACCOUNT || '000000000000';
 const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
                      process.env.AWS_ENDPOINT_URL?.includes('4566');
 
-new TapStack(app, 'TapStack', {
+// Get environment suffix from CDK context (passed via -c environmentSuffix=xxx)
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || '';
+const stackName = environmentSuffix ? `TapStack-${environmentSuffix}` : 'TapStack';
+
+new TapStack(app, stackName, {
   env: {
     account,
     region,
   },
+  environmentSuffix: environmentSuffix || undefined,
   description: 'Task 277 - Secure multi-tier infrastructure with VPC, ALB, Auto Scaling, RDS, and CloudTrail',
   tags: {
     Environment: 'Production',
