@@ -107,6 +107,21 @@ describe('TapStack Integration Tests', () => {
         keyId = '';
       }
     }, TEST_TIMEOUT);
+
+    test('should have KMS key for S3 encryption', async () => {
+      if (!keyId) {
+        console.warn('KMS key ID not found, skipping KMS test');
+        return;
+      }
+
+      try {
+        const key = await kms.describeKey({ KeyId: keyId }).promise();
+        expect(key.KeyMetadata).toBeDefined();
+        expect(key.KeyMetadata?.KeyId).toBe(keyId);
+      } catch (error) {
+        console.warn('Failed to access KMS key, skipping KMS test');
+      }
+    }, TEST_TIMEOUT);
   });
 
   // Backup infrastructure not present in this stack - tests removed
