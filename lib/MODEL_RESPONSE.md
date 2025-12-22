@@ -326,35 +326,35 @@ Outputs:
 
 ## Key Features and Compliance
 
-### 🌍 **Regional Adaptability**
+### **Regional Adaptability**
 
 - **Mappings Section**: Dynamically selects the correct Amazon Linux 2 AMI based on deployment region
 - **Region-Agnostic Resources**: All resource names include region references to avoid conflicts
 
-### 🔒 **Security Best Practices**
+### **Security Best Practices**
 
 - **IAM Principle of Least Privilege**: EC2 role only has minimal CloudWatch Logs permissions
 - **VPC Flow Logs**: Captures ALL traffic and sends to centralized CloudWatch Log Group
 - **Security Groups**: Restrictive ingress rules with explicit descriptions
 - **S3 Security**: Public access blocked by default
 
-### 📊 **Comprehensive Logging**
+### **Comprehensive Logging**
 
 - **Central Log Group**: Aggregates logs from VPC Flow Logs and EC2 instances
 - **VPC Flow Logs**: Monitors all network traffic for security analysis
 - **EC2 CloudWatch Agent**: Configured via UserData to send system logs
 
-### 🛡️ **Data Protection**
+### **Data Protection**
 
 - **S3 Versioning**: Enabled for data recovery and audit trails
 - **S3 Encryption**: AES256 server-side encryption by default
 - **DynamoDB PITR**: Point-in-Time Recovery enabled for data protection
 
-### 🏷️ **Consistent Tagging**
+### **Consistent Tagging**
 
 - All resources tagged with `Project: IaCChallenge` for cost allocation and management
 
-### 📤 **Comprehensive Outputs**
+### **Comprehensive Outputs**
 
 - Exports all critical resource identifiers for integration with other stacks
 
