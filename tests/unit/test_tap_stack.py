@@ -30,9 +30,11 @@ class TestTapStack(unittest.TestCase):
         template.resource_count_is("AWS::EC2::SecurityGroup", 2)
 
     @mark.it("creates RDS MySQL instance with correct settings")
+    @patch.dict(os.environ, {"AWS_ENDPOINT_URL": ""}, clear=False)
     def test_creates_rds_instance(self):
-        if self.is_localstack:
-            self.skipTest("RDS not supported in LocalStack")
+        # Temporarily clear LocalStack env to test non-LocalStack path
+        if "AWS_ENDPOINT_URL" in os.environ and os.environ["AWS_ENDPOINT_URL"]:
+            del os.environ["AWS_ENDPOINT_URL"]
         stack = TapStack(self.app, "TapStackRdsTest")
         template = Template.from_stack(stack)
         template.resource_count_is("AWS::RDS::DBInstance", 1)
@@ -58,9 +60,11 @@ class TestTapStack(unittest.TestCase):
         template.resource_count_is("AWS::ElasticLoadBalancingV2::Listener", 1)
 
     @mark.it("creates KMS keys for S3 and RDS")
+    @patch.dict(os.environ, {"AWS_ENDPOINT_URL": ""}, clear=False)
     def test_creates_kms_keys(self):
-        if self.is_localstack:
-            self.skipTest("Full KMS test requires RDS (not supported in LocalStack)")
+        # Temporarily clear LocalStack env to test non-LocalStack path
+        if "AWS_ENDPOINT_URL" in os.environ and os.environ["AWS_ENDPOINT_URL"]:
+            del os.environ["AWS_ENDPOINT_URL"]
         stack = TapStack(self.app, "TapStackKmsTest")
         template = Template.from_stack(stack)
         template.resource_count_is("AWS::KMS::Key", 2)
@@ -73,9 +77,11 @@ class TestTapStack(unittest.TestCase):
         template.resource_count_is("AWS::SNS::Topic", 1)
 
     @mark.it("outputs key resource identifiers")
+    @patch.dict(os.environ, {"AWS_ENDPOINT_URL": ""}, clear=False)
     def test_outputs(self):
-        if self.is_localstack:
-            self.skipTest("Full output test requires RDS (not supported in LocalStack)")
+        # Temporarily clear LocalStack env to test non-LocalStack path
+        if "AWS_ENDPOINT_URL" in os.environ and os.environ["AWS_ENDPOINT_URL"]:
+            del os.environ["AWS_ENDPOINT_URL"]
         stack = TapStack(self.app, "TapStackOutputsTest")
         template = Template.from_stack(stack)
         outputs = template.to_json().get("Outputs", {})
