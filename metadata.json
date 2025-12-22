@@ -1,0 +1,13 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291834",
+  "team": "synth-2",
+  "startedAt": "2025-08-07T10:20:13.089Z",
+  "provider": "localstack",
+  "subtask": "Application Deployment",
+  "subject_labels": ["Serverless Infrastructure (Functions as Code)"],
+  "aws_services": ["DynamoDB", "Lambda", "SQS", "SNS", "IAM", "CloudWatch Logs"]
+}
