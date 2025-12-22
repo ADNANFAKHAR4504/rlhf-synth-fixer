@@ -1,0 +1,16 @@
+{
+  "batch_id": "20251221-173524",
+  "started": "2025-12-21T17:35:24+05:00",
+  "total_prs": 1,
+  "max_concurrent": 3,
+  "prs": [
+    {
+      "pr": "8535",
+      "status": "running",
+      "started": "2025-12-21T19:29:49+05:00",
+      "completed": null,
+      "result": null,
+      "attempts": 15
+    }
+  ]
+}
