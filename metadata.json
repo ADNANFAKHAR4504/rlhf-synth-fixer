@@ -3,6 +3,7 @@
   "language": "hcl",
   "complexity": "medium",
   "team": "synth",
+  "turn_type": "single",
   "startedAt": "2025-11-12T00:13:29+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
