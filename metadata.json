@@ -1,0 +1,24 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291518",
+  "team": "5",
+  "startedAt": "2025-08-18T09:19:07.495Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "VPC",
+    "S3",
+    "CloudTrail",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "EC2"
+  ]
+}
