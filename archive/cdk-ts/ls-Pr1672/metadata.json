@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292037",
+  "team": "synth-2",
+  "startedAt": "2025-08-19T14:59:20.887Z",
+  "subtask": "General Infrastructure Provisioning",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "KMS",
+    "IAM",
+    "SecurityGroups",
+    "SubnetGroups",
+    "ParameterGroups",
+    "CloudWatch"
+  ]
+}
