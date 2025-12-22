@@ -631,7 +631,7 @@ class TapStack(TerraformStack):
 
 ## Key Fixes Applied
 
-### 🔧 **Critical Issues Resolved**
+###  **Critical Issues Resolved**
 
 1. **Missing Entry Point**: Created `tap.py` with proper CDKTF app initialization
 2. **Region Configuration**: Fixed region to use `us-west-2` as specified in requirements  
@@ -642,7 +642,7 @@ class TapStack(TerraformStack):
    - Fixed Lambda VPC and environment configurations  
    - Corrected tracing configurations
 
-### 🏗️ **Architecture Highlights**
+### ️ **Architecture Highlights**
 
 1. **High Availability**: Resources deployed across 2 AZs in us-west-2
 2. **Security**: 
@@ -662,7 +662,7 @@ class TapStack(TerraformStack):
    - CloudWatch logs with retention policies and encryption
    - CloudWatch alarms for error monitoring
 
-### 🛡️ **Security Features**
+### ️ **Security Features**
 
 - **VPC Isolation**: All compute resources in private subnets
 - **Encryption**: DynamoDB and CloudWatch logs encrypted at rest  
@@ -670,7 +670,7 @@ class TapStack(TerraformStack):
 - **Network Security**: Security groups allowing only HTTPS/HTTP egress
 - **Tracing**: X-Ray enabled for request tracing and debugging
 
-### 🧾 **Setup Instructions**
+###  **Setup Instructions**
 
 1. **Install Dependencies**:
 ```bash

@@ -594,7 +594,7 @@ def lambda_handler(event, context):
 
 ## Key Features Implemented
 
-### 🏗️ **Architecture Highlights**
+### ️ **Architecture Highlights**
 
 1. **High Availability**: Resources deployed across 2 AZs in us-west-2
 2. **Security**: 
@@ -614,7 +614,7 @@ def lambda_handler(event, context):
    - CloudWatch logs with retention policies
    - CloudWatch alarms for error monitoring
 
-### 🔧 **Setup Instructions**
+###  **Setup Instructions**
 
 1. **Install Dependencies**:
 ```bash
@@ -639,7 +639,7 @@ rm -rf lambda_temp
 cdktf deploy
 ```
 
-### 🛡️ **Security Features**
+### ️ **Security Features**
 
 - **VPC Isolation**: All compute resources in private subnets
 - **Encryption**: DynamoDB and CloudWatch logs encrypted at rest
