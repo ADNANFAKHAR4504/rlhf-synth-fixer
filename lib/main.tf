@@ -365,6 +365,10 @@ resource "aws_cloudwatch_dashboard" "payment_operations" {
       }
     ]
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # EventBridge Rule for Security Events
