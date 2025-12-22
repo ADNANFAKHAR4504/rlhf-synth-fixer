@@ -334,24 +334,24 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_access" {
 }
 
 # CloudWatch Alarm for unauthorized access
-resource "aws_cloudwatch_metric_alarm" "unauthorized_access_alarm" {
-  alarm_name          = "${local.name_prefix}-unauthorized-access-alarm"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = aws_cloudwatch_log_metric_filter.unauthorized_access.metric_transformation[0].name
-  namespace           = aws_cloudwatch_log_metric_filter.unauthorized_access.metric_transformation[0].namespace
-  period              = "300"
-  statistic           = "Sum"
-  threshold           = "0"
-  alarm_description   = "This metric monitors unauthorized access attempts"
-  alarm_actions       = [aws_sns_topic.security_alerts.arn]
+# resource "aws_cloudwatch_metric_alarm" "unauthorized_access_alarm" {
+#   alarm_name          = "${local.name_prefix}-unauthorized-access-alarm"
+#   comparison_operator = "GreaterThanThreshold"
+#   evaluation_periods  = "2"
+#   metric_name         = aws_cloudwatch_log_metric_filter.unauthorized_access.metric_transformation[0].name
+#   namespace           = aws_cloudwatch_log_metric_filter.unauthorized_access.metric_transformation[0].namespace
+#   period              = "300"
+#   statistic           = "Sum"
+#   threshold           = "0"
+#   alarm_description   = "This metric monitors unauthorized access attempts"
+#   alarm_actions       = [aws_sns_topic.security_alerts.arn]
 
-  tags = {
-    Name        = "${local.name_prefix}-unauthorized-access-alarm"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-  }
-}
+#   tags = {
+#     Name        = "${local.name_prefix}-unauthorized-access-alarm"
+#     Environment = var.environment
+#     ManagedBy   = "terraform"
+#   }
+# }
 
 # Amazon Macie (if enabled)
 resource "aws_macie2_account" "main" {

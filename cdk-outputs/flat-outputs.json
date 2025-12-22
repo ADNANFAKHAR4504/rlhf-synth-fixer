@@ -1,0 +1,8 @@
+{
+  "access_logs_bucket_name": "corp-b66917f8-access-logs-b66917f8",
+  "cloudtrail_arn": "arn:aws:cloudtrail:us-east-1:000000000000:trail/corp-b66917f8-security-trail",
+  "iam_role_arn": "arn:aws:iam::000000000000:role/corp-b66917f8-s3-access-role-b66917f8",
+  "kms_key_id": "821d455a-89c1-436a-97f6-cc45d64cf841",
+  "main_bucket_name": "corp-b66917f8-secure-bucket-b66917f8",
+  "sns_topic_arn": "arn:aws:sns:us-east-1:000000000000:corp-b66917f8-security-alerts"
+}
