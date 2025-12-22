@@ -1,8 +1,9 @@
 
-output "cloudtrail_arn" {
-  description = "ARN of the CloudTrail trail for audit logging"
-  value       = aws_cloudtrail.payment_audit.arn
-}
+# CloudTrail output commented out for LocalStack compatibility
+# output "cloudtrail_arn" {
+#   description = "ARN of the CloudTrail trail for audit logging"
+#   value       = aws_cloudtrail.payment_audit.arn
+# }
 
 output "cloudtrail_bucket" {
   description = "S3 bucket name for CloudTrail logs"
@@ -29,10 +30,11 @@ output "security_events_log_group" {
   value       = aws_cloudwatch_log_group.security_events_logs.name
 }
 
-output "xray_sampling_rule_payment" {
-  description = "X-Ray sampling rule for payment transactions"
-  value       = aws_xray_sampling_rule.payment_transactions.id
-}
+# X-Ray output commented out for LocalStack compatibility
+# output "xray_sampling_rule_payment" {
+#   description = "X-Ray sampling rule for payment transactions"
+#   value       = aws_xray_sampling_rule.payment_transactions.id
+# }
 
 output "payment_alerts_topic_arn" {
   description = "SNS topic ARN for payment alerts"

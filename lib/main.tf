@@ -84,20 +84,22 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
 }
 
 # CloudTrail for API audit logging
-resource "aws_cloudtrail" "payment_audit" {
-  name                          = "payment-audit-trail-${var.environment_suffix}"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.id
-  include_global_service_events = true
-  is_multi_region_trail         = false
-  enable_log_file_validation    = true
+# Note: CloudTrail is not fully supported in LocalStack Community Edition
+# Commented out for LocalStack compatibility
+# resource "aws_cloudtrail" "payment_audit" {
+#   name                          = "payment-audit-trail-${var.environment_suffix}"
+#   s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.id
+#   include_global_service_events = true
+#   is_multi_region_trail         = false
+#   enable_log_file_validation    = true
 
-  event_selector {
-    read_write_type           = "All"
-    include_management_events = true
-  }
+#   event_selector {
+#     read_write_type           = "All"
+#     include_management_events = true
+#   }
 
-  depends_on = [aws_s3_bucket_policy.cloudtrail_logs]
-}
+#   depends_on = [aws_s3_bucket_policy.cloudtrail_logs]
+# }
 
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "payment_api_logs" {
@@ -173,41 +175,43 @@ resource "aws_kms_alias" "observability" {
 }
 
 # X-Ray Sampling Rule
-resource "aws_xray_sampling_rule" "payment_transactions" {
-  rule_name      = "pay-txn-${var.environment_suffix}"
-  priority       = 1000
-  version        = 1
-  reservoir_size = 1
-  fixed_rate     = var.xray_sampling_percentage
-  url_path       = "/api/payment/*"
-  host           = "*"
-  http_method    = "POST"
-  service_type   = "*"
-  service_name   = "*"
-  resource_arn   = "*"
+# Note: X-Ray is not fully supported in LocalStack Community Edition
+# Commented out for LocalStack compatibility
+# resource "aws_xray_sampling_rule" "payment_transactions" {
+#   rule_name      = "pay-txn-${var.environment_suffix}"
+#   priority       = 1000
+#   version        = 1
+#   reservoir_size = 1
+#   fixed_rate     = var.xray_sampling_percentage
+#   url_path       = "/api/payment/*"
+#   host           = "*"
+#   http_method    = "POST"
+#   service_type   = "*"
+#   service_name   = "*"
+#   resource_arn   = "*"
 
-  attributes = {
-    Environment = var.environment_suffix
-  }
-}
+#   attributes = {
+#     Environment = var.environment_suffix
+#   }
+# }
 
-resource "aws_xray_sampling_rule" "default_sampling" {
-  rule_name      = "def-${var.environment_suffix}"
-  priority       = 5000
-  version        = 1
-  reservoir_size = 1
-  fixed_rate     = 0.05
-  url_path       = "*"
-  host           = "*"
-  http_method    = "*"
-  service_type   = "*"
-  service_name   = "*"
-  resource_arn   = "*"
+# resource "aws_xray_sampling_rule" "default_sampling" {
+#   rule_name      = "def-${var.environment_suffix}"
+#   priority       = 5000
+#   version        = 1
+#   reservoir_size = 1
+#   fixed_rate     = 0.05
+#   url_path       = "*"
+#   host           = "*"
+#   http_method    = "*"
+#   service_type   = "*"
+#   service_name   = "*"
+#   resource_arn   = "*"
 
-  attributes = {
-    Environment = var.environment_suffix
-  }
-}
+#   attributes = {
+#     Environment = var.environment_suffix
+#   }
+# }
 
 # SNS Topic for Alerts
 resource "aws_sns_topic" "payment_alerts" {

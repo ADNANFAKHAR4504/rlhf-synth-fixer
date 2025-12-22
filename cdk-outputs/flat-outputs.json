@@ -1,0 +1,16 @@
+{
+  "cloudtrail_bucket": "cloudtrail-logs-synth101912462",
+  "dashboard_name": "payment-operations-synth101912462",
+  "kms_key_arn": "arn:aws:kms:us-east-1:000000000000:key/5ef10150-ac83-45c5-a66d-bdaa62b5a55d",
+  "kms_key_id": "5ef10150-ac83-45c5-a66d-bdaa62b5a55d",
+  "payment_alerts_topic_arn": "arn:aws:sns:us-east-1:000000000000:payment-alerts-synth101912462",
+  "payment_api_log_group": "/aws/payment-api-synth101912462",
+  "payment_database_log_group": "/aws/payment-database-synth101912462",
+  "payment_processor_log_group": "/aws/payment-processor-synth101912462",
+  "security_alerts_topic_arn": "arn:aws:sns:us-east-1:000000000000:security-alerts-synth101912462",
+  "security_events_log_group": "/aws/security-events-synth101912462",
+  "security_hub_enabled": false,
+  "ssm_latency_threshold_parameter": "/observability/synth101912462/alerts/latency-threshold-ms",
+  "ssm_log_retention_parameter": "/observability/synth101912462/logs/retention-days",
+  "ssm_xray_sampling_parameter": "/observability/synth101912462/xray/sampling-rate"
+}
