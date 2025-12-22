@@ -105,6 +105,18 @@ jobs:
           fetch-depth: 0
           ref: refs/pull/${{ github.event.pull_request.number }}/head
 
+      - name: Verify prompt quality review file exists
+        run: |
+          echo "Checking for prompt quality review file..."
+          if [ ! -f .claude/prompts/claude-prompt-quality-review.md ]; then
+            echo "::error::File .claude/prompts/claude-prompt-quality-review.md not found"
+            echo "::error::Please ensure your branch is up to date with main"
+            echo "::error::Run: git pull origin main"
+            ls -la .claude/prompts/ || echo "Directory .claude/prompts/ not found"
+            exit 1
+          fi
+          echo "✅ Prompt quality review file found"
+
       - name: Prepare Claude prompt
         id: prepare-prompt
         run: |
@@ -1628,6 +1640,18 @@ jobs:
 
       - name: Install jq for metadata parsing
         run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Verify ideal response review file exists
+        run: |
+          echo "Checking for ideal response review file..."
+          if [ ! -f .claude/prompts/claude-ideal-response-review.md ]; then
+            echo "::error::File .claude/prompts/claude-ideal-response-review.md not found"
+            echo "::error::Please ensure your branch is up to date with main"
+            echo "::error::Run: git pull origin main"
+            ls -la .claude/prompts/ || echo "Directory .claude/prompts/ not found"
+            exit 1
+          fi
+          echo "✅ Ideal response review file found"
 
       - name: Prepare Claude prompt for IDEAL_RESPONSE validation
         id: prepare-ideal-response-prompt
