@@ -6,10 +6,16 @@
   "po_id": "291795",
   "team": "synth-2",
   "startedAt": "2025-08-12T13:24:08.656Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Cloud Environment Setup"
   ],
-  "aws_services": []
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "s3",
+    "iam",
+    "cloudwatch"
+  ]
 }

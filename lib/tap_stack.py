@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import os
 from constructs import Construct
 from cdktf import TerraformStack, TerraformOutput
 # S3Backend import removed - using local backend for LocalStack
@@ -43,13 +44,35 @@ class TapStack(TerraformStack):
     if "tags" in default_tags:
       production_tags.update(default_tags["tags"])
     
-    # AWS Provider
-    AwsProvider(self, "aws",
-      region=aws_region,
-      default_tags=[{
+    # AWS Provider with LocalStack support
+    is_localstack = os.getenv("AWS_ENDPOINT_URL") and ("localhost" in os.getenv("AWS_ENDPOINT_URL") or "4566" in os.getenv("AWS_ENDPOINT_URL"))
+
+    provider_config = {
+      "region": aws_region,
+      "default_tags": [{
         "tags": production_tags
       }]
-    )
+    }
+
+    # Add LocalStack configuration if detected
+    if is_localstack:
+      provider_config.update({
+        "access_key": "test",
+        "secret_key": "test",
+        "skip_credentials_validation": True,
+        "skip_metadata_api_check": True,
+        "skip_requesting_account_id": True,
+        "s3_use_path_style": True,
+        "endpoints": [{
+          "s3": "http://localhost:4566",
+          "ec2": "http://localhost:4566",
+          "iam": "http://localhost:4566",
+          "cloudwatch": "http://localhost:4566",
+          "sts": "http://localhost:4566"
+        }]
+      })
+
+    AwsProvider(self, "aws", **provider_config)
     
     # Use hardcoded availability zones to avoid token issues in tests
     availability_zones = [f"{aws_region}a", f"{aws_region}b"]
@@ -205,6 +228,7 @@ class TapStack(TerraformStack):
     # S3 Bucket for logs
     s3_logs_bucket = S3Bucket(self, "s3_logs_bucket",
       bucket=f"logs-bucket-{environment_suffix}-{aws_region}",
+      force_destroy=True,  # Required for LocalStack cleanup
       tags={
         "Name": f"logs-bucket-{environment_suffix}",
         "Environment": "Production"
