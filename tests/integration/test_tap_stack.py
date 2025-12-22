@@ -18,7 +18,8 @@ if os.path.exists(flat_outputs_path):
 else:
     flat_outputs = {}
 
-REGION = "us-west-2"
+# Use region from environment variable or default to us-west-2
+REGION = os.environ.get('AWS_REGION', os.environ.get('AWS_DEFAULT_REGION', 'us-west-2'))
 
 # Check if running in LocalStack environment
 IS_LOCALSTACK = os.environ.get('AWS_ENDPOINT_URL', '').startswith('http://localhost') or \
