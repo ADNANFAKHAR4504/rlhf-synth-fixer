@@ -185,22 +185,37 @@ jest.mock('@pulumi/aws', () => ({
   },
   wafv2: {
     WebAcl: jest.fn().mockImplementation(() => ({ 
-      id: 'waf-12345',
-      arn: 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/mock-waf/12345'
+      id: createMockOutput('waf-12345'),
+      arn: createMockOutput('arn:aws:wafv2:us-east-1:123456789012:global/webacl/mock-waf/12345')
     })),
   },
 }));
 
 // Mock random provider
 jest.mock('@pulumi/random', () => ({
-  RandomPassword: jest.fn().mockImplementation(() => ({ result: 'mock-password' })),
-  RandomString: jest.fn().mockImplementation(() => ({ result: 'mock-secret' })),
+  RandomPassword: jest.fn().mockImplementation(() => ({ result: createMockOutput('mock-password') })),
+  RandomString: jest.fn().mockImplementation(() => ({ result: createMockOutput('mock-secret') })),
 }));
 
 import { ScalableWebAppInfrastructure } from '../lib/scalable-web-app-infrastructure';
 
 describe('ScalableWebAppInfrastructure Unit Tests', () => {
   let infrastructure: ScalableWebAppInfrastructure;
+  let originalAwsEndpointUrl: string | undefined;
+
+  beforeAll(() => {
+    // Save and clear AWS_ENDPOINT_URL so tests run as if in real AWS (not LocalStack)
+    // This ensures all resources (RDS, WAF, etc.) are created
+    originalAwsEndpointUrl = process.env.AWS_ENDPOINT_URL;
+    delete process.env.AWS_ENDPOINT_URL;
+  });
+
+  afterAll(() => {
+    // Restore original environment
+    if (originalAwsEndpointUrl !== undefined) {
+      process.env.AWS_ENDPOINT_URL = originalAwsEndpointUrl;
+    }
+  });
 
   beforeEach(() => {
     jest.clearAllMocks();
