@@ -116,14 +116,8 @@ Conditions:
   IsUSEast1: !Equals [!Ref 'AWS::Region', us-east-1]
   HasEmailSubscription: !Not [!Equals [!Ref EmailSubscription, ""]]
   UsePostgres: !Equals [!Ref RDSEngine, postgres]
-
-  # LocalStack heuristic: default/fallback account ID is commonly 000000000000
-  IsLocalInferred: !Equals [!Ref 'AWS::AccountId', '000000000000']  # LocalStack default :contentReference[oaicite:2]{index=2}
-  IsLocalParam: !Equals [!Ref IsLocalStack, "true"]
-
-  # Treat as LocalStack if either param says so OR account inference matches
-  IsLocal: !Or [!Condition IsLocalParam, !Condition IsLocalInferred]
-  IsAWS: !Not [!Condition IsLocal]
+  IsAWS: !Not [!Equals [!Ref IsLocalStack, "true"]]
+  IsLocal: !Equals [!Ref IsLocalStack, "true"]
 
 # =============================================================================
 # RESOURCES
@@ -859,8 +853,8 @@ Resources:
 
   # ----------------------------
   # DYNAMODB + APP AUTO SCALING
+  # NOTE: Removed RoleName (pipeline-safe)
   # ----------------------------
-
   DynamoTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -875,35 +869,20 @@ Resources:
           KeyType: HASH
         - AttributeName: sk
           KeyType: RANGE
-
-      # LocalStack-safe mode: no autoscaling needed
-      BillingMode: !If [IsAWS, PROVISIONED, PAY_PER_REQUEST]
-
-      # Only valid/needed when BillingMode = PROVISIONED
-      ProvisionedThroughput: !If
-        - IsAWS
-        - ReadCapacityUnits: !Ref DynamoReadMin
-          WriteCapacityUnits: !Ref DynamoWriteMin
-        - !Ref "AWS::NoValue"
-
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: !Ref DynamoReadMin
+        WriteCapacityUnits: !Ref DynamoWriteMin
       SSESpecification: !If
         - IsAWS
-        - SSEEnabled: true
-          SSEType: KMS
-          KMSMasterKeyId: !Ref PrimaryKmsKey
+        - { SSEEnabled: true, SSEType: KMS, KMSMasterKeyId: !Ref PrimaryKmsKey }
         - !Ref "AWS::NoValue"
-
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-items'
 
-
-  # ----------------------------
-  # Application Auto Scaling (AWS only)
-  # ----------------------------
   AppScalingRole:
     Type: AWS::IAM::Role
-    Condition: IsAWS
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -923,24 +902,20 @@ Resources:
                   - cloudwatch:PutMetricAlarm
                   - cloudwatch:DeleteAlarms
                   - cloudwatch:DescribeAlarms
-                Resource: "*"
-
+                Resource: '*'
 
   DynamoReadScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Condition: IsAWS
     Properties:
       MaxCapacity: !Ref DynamoReadMax
       MinCapacity: !Ref DynamoReadMin
-      # safer than rebuilding the name:
-      ResourceId: !Sub 'table/${DynamoTable}'
+      ResourceId: !Sub 'table/${ProjectName}-${EnvironmentSuffix}-items'
       RoleARN: !GetAtt AppScalingRole.Arn
       ScalableDimension: dynamodb:table:ReadCapacityUnits
       ServiceNamespace: dynamodb
 
   DynamoReadScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Condition: IsAWS
     Properties:
       PolicyName: !Sub '${ProjectName}-${EnvironmentSuffix}-dynamo-read-policy'
       PolicyType: TargetTrackingScaling
@@ -950,21 +925,18 @@ Resources:
         PredefinedMetricSpecification:
           PredefinedMetricType: DynamoDBReadCapacityUtilization
 
-
   DynamoWriteScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Condition: IsAWS
     Properties:
       MaxCapacity: !Ref DynamoWriteMax
       MinCapacity: !Ref DynamoWriteMin
-      ResourceId: !Sub 'table/${DynamoTable}'
+      ResourceId: !Sub 'table/${ProjectName}-${EnvironmentSuffix}-items'
       RoleARN: !GetAtt AppScalingRole.Arn
       ScalableDimension: dynamodb:table:WriteCapacityUnits
       ServiceNamespace: dynamodb
 
   DynamoWriteScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Condition: IsAWS
     Properties:
       PolicyName: !Sub '${ProjectName}-${EnvironmentSuffix}-dynamo-write-policy'
       PolicyType: TargetTrackingScaling
@@ -973,7 +945,6 @@ Resources:
         TargetValue: 70
         PredefinedMetricSpecification:
           PredefinedMetricType: DynamoDBWriteCapacityUtilization
-
 
   # ----------------------------
   # RDS + Secrets Manager
