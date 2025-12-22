@@ -267,30 +267,25 @@
         PolicyDocument:
           Version: '2012-10-17'
           Statement:
-            - Sid: AWSCloudTrailAclCheck
+            - Sid: AllowS3Logging
               Effect: Allow
               Principal:
-                Service: cloudtrail.amazonaws.com
-              Action: s3:GetBucketAcl
-              Resource: !GetAtt S3LogBucket.Arn
-            - Sid: AWSCloudTrailWrite
-              Effect: Allow
-              Principal:
-                Service: cloudtrail.amazonaws.com
+                Service: logging.s3.amazonaws.com
               Action: s3:PutObject
               Resource: !Sub '${S3LogBucket.Arn}/*'
-              Condition:
-                StringEquals:
-                  's3:x-amz-acl': bucket-owner-full-control
 
-    CloudTrail:
-      Type: AWS::CloudTrail::Trail
-      DependsOn: S3LogBucketPolicy
-      Properties:
-        S3BucketName: !Ref S3LogBucket
-        IsLogging: true
-        IncludeGlobalServiceEvents: true
-        IsMultiRegionTrail: true
+    # CloudTrail removed for LocalStack compatibility
+    # CloudTrail service is not enabled by default in LocalStack Community
+    # For production AWS deployments, uncomment the following resource:
+    #
+    # CloudTrail:
+    #   Type: AWS::CloudTrail::Trail
+    #   DependsOn: S3LogBucketPolicy
+    #   Properties:
+    #     S3BucketName: !Ref S3LogBucket
+    #     IsLogging: true
+    #     IncludeGlobalServiceEvents: true
+    #     IsMultiRegionTrail: true
 
     SecureS3Bucket:
       Type: AWS::S3::Bucket
@@ -522,7 +517,6 @@
 
     S3BucketPolicy:
       Type: AWS::S3::BucketPolicy
-      DependsOn: CloudFrontOriginAccessIdentity
       Properties:
         Bucket: !Ref SecureS3Bucket
         PolicyDocument:
@@ -536,7 +530,6 @@
 
     CloudFrontDistribution:
       Type: AWS::CloudFront::Distribution
-      DependsOn: CloudFrontOriginAccessIdentity
       Properties:
         DistributionConfig:
           Enabled: true
