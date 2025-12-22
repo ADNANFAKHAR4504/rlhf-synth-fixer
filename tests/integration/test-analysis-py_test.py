@@ -34,7 +34,7 @@ from pathlib import Path
 import boto3
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "lib" / "analyse.py"
 DEFAULT_ENDPOINT = os.environ.get("AWS_ENDPOINT_URL", "http://localhost:4566")
 
