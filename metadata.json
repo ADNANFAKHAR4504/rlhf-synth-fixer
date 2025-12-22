@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292041",
+  "team": "1",
+  "startedAt": "2025-08-18T17:52:07.730Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Database Management",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Resource Scaling"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "EC2",
+    "VPC",
+    "RDS",
+    "IAM",
+    "CloudWatch",
+    "Logs"
+  ],
+  "provider": "localstack"
+}
