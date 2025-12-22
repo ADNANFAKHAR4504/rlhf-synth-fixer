@@ -496,9 +496,10 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, synth]
+    needs: [detect-metadata, claude-review-prompt-quality, synth]
     if: |
       always() &&
+      needs.claude-review-prompt-quality.result == 'success' &&
       (needs.synth.result == 'success' || needs.synth.result == 'skipped') &&
       (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
       !contains(github.event.head_commit.message, '[skip-jobs]') &&
@@ -890,7 +891,7 @@ jobs:
       github.event_name == 'pull_request' &&
       (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') &&
       (needs.cicd-pipeline-optimization.result == 'success' || needs.cicd-pipeline-optimization.result == 'skipped') &&
-      (needs.claude-review-prompt-quality.result == 'success' || needs.claude-review-prompt-quality.result == 'skipped') &&
+      needs.claude-review-prompt-quality.result == 'success' &&
       (
         (
           (contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) ||
