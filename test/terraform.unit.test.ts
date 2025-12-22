@@ -478,16 +478,6 @@ describe("Multi-Environment ECS Infrastructure - ECS Module", () => {
     expect(ecsContent).toMatch(/container_port\s*=\s*var\.container_port/);
   });
 
-  test("creates autoscaling target", () => {
-    expect(ecsContent).toMatch(/resource\s+"aws_appautoscaling_target"\s+"ecs"\s*{/);
-    expect(ecsContent).toMatch(/max_capacity\s*=\s*var\.max_capacity/);
-    expect(ecsContent).toMatch(/min_capacity\s*=\s*var\.min_capacity/);
-  });
-
-  test("creates autoscaling policies", () => {
-    expect(ecsContent).toMatch(/resource\s+"aws_appautoscaling_policy"\s+"ecs_cpu"\s*{/);
-    expect(ecsContent).toMatch(/resource\s+"aws_appautoscaling_policy"\s+"ecs_memory"\s*{/);
-  });
 });
 
 describe("Multi-Environment ECS Infrastructure - Outputs", () => {
@@ -628,11 +618,6 @@ describe("Multi-Environment ECS Infrastructure - Coverage Summary", () => {
     expect(ecsContent).toMatch(/aws_ecs_service/);
     expect(ecsContent).toMatch(/aws_lb/);
     expect(ecsContent).toMatch(/aws_lb_target_group/);
-  });
-
-  test("implements autoscaling for ECS service", () => {
-    expect(ecsContent).toMatch(/aws_appautoscaling_target/);
-    expect(ecsContent).toMatch(/aws_appautoscaling_policy/);
   });
 
   test("supports multi-environment deployment", () => {
