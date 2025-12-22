@@ -114,8 +114,8 @@ else
     echo -e "${YELLOW}⚠️  Could not detect CDK language (supports: ts, js, py, java, go)${NC}"
 fi
 
-# Bootstrap LocalStack CDK environment (ECR-free)
-echo -e "${YELLOW}📦 Bootstrapping CDK environment in LocalStack (ECR-free)...${NC}"
+# Bootstrap LocalStack CDK environment
+echo -e "${YELLOW}📦 Bootstrapping CDK environment in LocalStack...${NC}"
 
 # Clean up existing bootstrap resources to avoid conflicts
 echo -e "${BLUE}  🧹 Cleaning existing CDK bootstrap resources...${NC}"
@@ -124,24 +124,34 @@ echo -e "${BLUE}  🧹 Cleaning existing CDK bootstrap resources...${NC}"
 awslocal cloudformation delete-stack --stack-name CDKToolkit 2>/dev/null || true
 sleep 2
 
-# Delete S3 buckets used by CDK bootstrap (both old and new names)
+# Delete existing ECR repository if it exists (common bootstrap conflict)
+awslocal ecr delete-repository \
+    --repository-name cdk-hnb659fds-container-assets-000000000000-us-east-1 \
+    --force 2>/dev/null || true
+
+# Delete S3 buckets used by CDK bootstrap
 awslocal s3 rb s3://cdk-hnb659fds-assets-000000000000-us-east-1 --force 2>/dev/null || true
-awslocal s3 rb s3://cdk-localstack-assets-000000000000-us-east-1 --force 2>/dev/null || true
 
 echo -e "${GREEN}✅ Bootstrap resources cleaned${NC}"
 
-# Use custom ECR-free bootstrap script (avoids LocalStack Pro requirement)
-echo -e "${BLUE}  🔧 Running ECR-free bootstrap...${NC}"
-if [ -f "./scripts/localstack-bootstrap.sh" ]; then
-    if bash ./scripts/localstack-bootstrap.sh; then
-        echo -e "${GREEN}✅ CDK Bootstrap completed (ECR-free)${NC}"
+# Run bootstrap with proper error handling
+BOOTSTRAP_OUTPUT=$($CDKLOCAL_PATH bootstrap aws://000000000000/us-east-1 --force 2>&1)
+BOOTSTRAP_EXIT_CODE=$?
+
+if [ $BOOTSTRAP_EXIT_CODE -ne 0 ]; then
+    echo -e "${YELLOW}⚠️  Bootstrap warning (non-fatal):${NC}"
+    echo "$BOOTSTRAP_OUTPUT" | grep -i "error\|warn\|exception" | head -5 || true
+
+    # Check if bootstrap stack actually exists despite error
+    if awslocal cloudformation describe-stacks --stack-name CDKToolkit 2>/dev/null | grep -q "StackStatus"; then
+        echo -e "${GREEN}✅ CDK Bootstrap stack exists (ignoring warning)${NC}"
     else
         echo -e "${RED}❌ CDK Bootstrap failed${NC}"
+        echo "$BOOTSTRAP_OUTPUT"
         exit 1
     fi
 else
-    echo -e "${RED}❌ Bootstrap script not found: ./scripts/localstack-bootstrap.sh${NC}"
-    exit 1
+    echo -e "${GREEN}✅ CDK Bootstrap completed${NC}"
 fi
 
 # Set stack parameters
