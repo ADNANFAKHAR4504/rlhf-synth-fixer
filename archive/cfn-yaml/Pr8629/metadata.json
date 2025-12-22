@@ -23,5 +23,12 @@
     "EC2",
     "ELB",
     "AutoScaling"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
 }
