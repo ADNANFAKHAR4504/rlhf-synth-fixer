@@ -1,12 +1,12 @@
 import * as cdk from 'aws-cdk-lib';
+import * as applicationinsights from 'aws-cdk-lib/aws-applicationinsights';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as resourcegroups from 'aws-cdk-lib/aws-resourcegroups';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
-import * as applicationinsights from 'aws-cdk-lib/aws-applicationinsights';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as resourcegroups from 'aws-cdk-lib/aws-resourcegroups';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
