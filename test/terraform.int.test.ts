@@ -442,7 +442,7 @@ describe("LIVE: Application Load Balancer", () => {
   }, 90000);
 
   test("ALB target group has healthy targets", async () => {
-    const albNameMatch = albDnsName!.match(/^([^-]+-[^-]+-[^-]+)/);
+    const albNameMatch = albDnsName!.match(/^([^-]+-[^-]+-[^-]+-[^\.]+)/);
     const response = await retry(async () => {
       return await elbv2Client.send(
         new DescribeLoadBalancersCommand({
@@ -698,8 +698,8 @@ describe("LIVE: Output Validation", () => {
     // ECS service name format
     expect(outputs.ecs_service_name?.value).toMatch(/^app-service-/);
 
-    // ALB DNS name format
-    expect(outputs.alb_dns_name?.value).toMatch(/\.elb\.amazonaws\.com$/);
+    // ALB DNS name format (AWS or LocalStack)
+    expect(outputs.alb_dns_name?.value).toMatch(/\.elb\.(amazonaws\.com|localhost\.localstack\.cloud)$/);
   });
 });
 
