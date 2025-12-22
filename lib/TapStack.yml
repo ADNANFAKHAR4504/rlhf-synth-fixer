@@ -19,6 +19,9 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
     Default: 'example@example.com'
 
+Conditions:
+  IsNotLocalStack: !Not [!Equals [!Ref AWS::AccountId, '000000000000']]
+
 Resources:
   # =============================================================================
   # KMS Key for Encryption
@@ -127,6 +130,7 @@ Resources:
   # CloudTrail Service Role
   CloudTrailRole:
     Type: AWS::IAM::Role
+    Condition: IsNotLocalStack
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -226,6 +230,7 @@ Resources:
 
   CloudTrailBucket:
     Type: AWS::S3::Bucket
+    Condition: IsNotLocalStack
     Properties:
       BucketName: !Sub 'cloudtrail-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
@@ -241,6 +246,7 @@ Resources:
 
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: IsNotLocalStack
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
@@ -365,6 +371,7 @@ Resources:
   # =============================================================================
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: IsNotLocalStack
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/enterprise-audit-${EnvironmentSuffix}'
       RetentionInDays: 365
@@ -372,6 +379,7 @@ Resources:
 
   EnterpriseCloudTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: IsNotLocalStack
     DependsOn: CloudTrailBucketPolicy
     Properties:
       TrailName: !Sub 'EnterpriseSecurityTrail-${EnvironmentSuffix}'
@@ -422,6 +430,7 @@ Resources:
   # Metric Filters and Alarms
   FailedMFALoginMetricFilter:
     Type: AWS::Logs::MetricFilter
+    Condition: IsNotLocalStack
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") || ($.responseElements.assumeRoleFailure.code = "MultiFactorAuthentication") }'
@@ -449,6 +458,7 @@ Resources:
 
   UnauthorizedAPICallsMetricFilter:
     Type: AWS::Logs::MetricFilter
+    Condition: IsNotLocalStack
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }'
@@ -475,6 +485,7 @@ Resources:
 
   RootAccountUsageMetricFilter:
     Type: AWS::Logs::MetricFilter
+    Condition: IsNotLocalStack
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: '{ $.userIdentity.type = "Root" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != "AwsServiceEvent" }'
@@ -580,6 +591,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-VPC'
 
   CloudTrailArn:
+    Condition: IsNotLocalStack
     Description: 'CloudTrail ARN for audit logging'
     Value: !GetAtt EnterpriseCloudTrail.Arn
     Export:
