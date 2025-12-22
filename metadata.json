@@ -16,10 +16,8 @@
     "RDS Aurora",
     "Application Load Balancer",
     "Route 53",
-    "DMS",
     "CloudWatch",
     "SNS",
-    "AWS Backup",
     "Secrets Manager",
     "SSM Parameter Store",
     "Lambda",
@@ -28,8 +26,7 @@
     "ACM",
     "KMS",
     "Security Groups",
-    "S3",
-    "Auto Scaling"
+    "S3"
   ],
   "provider": "localstack"
 }
