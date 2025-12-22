@@ -1,0 +1,26 @@
+{
+  "platform": "terraform",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-04T12:48:03+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "101000822",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "S3",
+    "KMS",
+    "CloudWatch",
+    "IAM",
+    "ALB",
+    "Secrets Manager"
+  ],
+  "provider": "localstack"
+}
