@@ -13,7 +13,7 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // LocalStack Configuration
 const localstackEndpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
-const awsRegion = process.env.AWS_REGION || 'us-east-1';
+const awsRegion = process.env.AWS_REGION || 'us-west-1';
 const clientConfig = {
   region: awsRegion,
   endpoint: localstackEndpoint,

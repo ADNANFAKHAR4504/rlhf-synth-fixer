@@ -49,8 +49,9 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have LatestAmiId parameter', () => {
       expect(template.Parameters.LatestAmiId).toBeDefined();
-      expect(template.Parameters.LatestAmiId.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
-      expect(template.Parameters.LatestAmiId.Default).toBe('/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64');
+      expect(template.Parameters.LatestAmiId.Type).toBe('String');
+      expect(template.Parameters.LatestAmiId.Default).toBe('ami-0c02fb55956c7d316');
+      expect(template.Parameters.LatestAmiId.Description).toContain('LocalStack compatible');
     });
   });
 
