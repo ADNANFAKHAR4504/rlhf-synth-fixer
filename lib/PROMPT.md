@@ -8,110 +8,32 @@ This is essentially a read-only infrastructure scanner that generates comprehens
 
 ## What we need to build
 
-Create an AWS infrastructure compliance scanner using **Pulumi with TypeScript** that analyzes existing resources and identifies violations.
+Create an AWS infrastructure compliance scanner using Pulumi with TypeScript that analyzes existing resources and identifies violations.
 
-### Core Requirements
+The scanner needs to check EC2 instances for unencrypted EBS volumes. Iterate through all instances in the region, examine their attached volumes, and flag any that aren't encrypted. Report should include the volume IDs and which instance they're attached to.
 
-1. **EBS Volume Encryption Analysis**
-   - Scan all EC2 instances in the specified region
-   - Identify any instances with unencrypted EBS volumes
-   - Report volume IDs and associated instance details
+For security groups, we need to validate that no EC2 instance security groups have unrestricted inbound access on sensitive ports. Check for rules allowing 0.0.0.0/0 on SSH port 22, RDP port 3389, and MySQL port 3306. If found, report the security group ID, the rule details, and which instances are using that group. This is critical because we've had incidents where developers accidentally opened these ports publicly during testing.
 
-2. **Security Group Validation**
-   - Examine all security groups attached to EC2 instances
-   - Flag groups with unrestricted inbound rules (0.0.0.0/0) on sensitive ports
-   - Specifically check ports 22 (SSH), 3389 (RDP), and 3306 (MySQL)
-   - Include rule details in violation reports
+Tag compliance is another requirement. Every EC2 instance must have Environment, Owner, and CostCenter tags for our billing and governance processes. Scan all instances and report which ones are missing these tags, along with details on what's missing. Our finance team needs this for cost allocation.
 
-3. **Tag Compliance Checking**
-   - Verify all EC2 instances have required tags: Environment, Owner, and CostCenter
-   - Report instances missing any of these mandatory tags
-   - List which tags are missing for each non-compliant instance
+AMI validation should check if instances are running approved AMIs. We maintain a list of approved AMI IDs that have passed our security hardening process. Flag any instance using an AMI not on the approved list, including the current AMI ID and instance details. Unapproved AMIs haven't gone through our security review and could have vulnerabilities or misconfigurations.
 
-4. **AMI Approval Validation**
-   - Check if EC2 instances are using approved AMIs from a predefined list
-   - Flag instances running unapproved or outdated AMIs
-   - Report both the current AMI and instance details
+Check SSM agent status for all EC2 instances. We need the agent installed and running for patch management and remote access. Query the Systems Manager API to verify agent connectivity and online status. Report instances where the agent is disconnected or missing entirely.
 
-5. **Systems Manager Agent Status**
-   - Validate that all EC2 instances have SSM agent installed and running
-   - Check agent connectivity and online status
-   - Report instances with disconnected or missing agents
+VPC flow logs need to be enabled on all VPCs for security monitoring and incident response. Check each VPC in the region to verify flow logs are configured and active. If not enabled, report the VPC ID so we can remediate. Our security team reviews these logs for suspicious network patterns.
 
-6. **VPC Flow Logs Monitoring**
-   - Verify that VPC flow logs are enabled for all VPCs in the region
-   - Identify VPCs without flow logging configured
-   - Include VPC IDs and configuration status
+The scanner should generate a structured JSON report with all findings. Include resource IDs, violation type, severity level, and timestamp for each issue discovered. Organize findings by resource type and compliance check category. Output can go to an S3 bucket or local file system depending on how it's deployed.
 
-7. **Compliance Report Generation**
-   - Generate a structured JSON report with all findings
-   - Include violation details: resource IDs, violation type, severity, timestamp
-   - Organize by resource type and compliance check category
-   - Output to S3 bucket or local file system
+Export compliance metrics to CloudWatch so ops can build dashboards and set up alerts. Calculate compliance percentage by resource type - like what percent of EC2 instances have encrypted volumes, what percent have all required tags, etc. Track total resources scanned, violations found, and overall compliance rate. This gives leadership visibility into our security posture over time.
 
-8. **CloudWatch Metrics Export**
-   - Calculate compliance percentage by resource type
-   - Export custom metrics to CloudWatch for monitoring
-   - Track metrics like total resources scanned, violations found, compliance rate
-   - Enable dashboard creation and alerting
+Build this with Pulumi and TypeScript, using AWS SDK v3 for all the resource queries. Default to us-east-1 but make the region configurable. Any resources created for the scanner itself should include an environmentSuffix parameter in the name for uniqueness across environments. Keep the infrastructure minimal since this is mainly a scanning tool, not a deployment.
 
-### Technical Requirements
+Make sure to handle AWS API rate limits gracefully with exponential backoff and retry logic. Support pagination when querying large resource sets - some of our accounts have hundreds of instances. Use least-privilege IAM permissions, only read access to EC2, SSM, VPC, and CloudWatch. No hardcoded credentials, follow standard AWS credential chain.
 
-- All scanning logic implemented using **Pulumi with TypeScript**
-- Use AWS SDK v3 for reading existing resource configurations
-- Deploy to **us-east-1** region (or configurable region)
-- Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `compliance-scanner-{environmentSuffix}`
-- All resources must be destroyable (no Retain policies)
-- Include proper error handling for API rate limits and permissions
-- Support for pagination when scanning large resource sets
+Error handling is important - if a permission is missing or a resource is unavailable, log it but continue scanning other resources. We don't want one failure to block the entire scan. The JSON report must be valid and parseable by downstream tools we're integrating with.
 
-### Deployment Requirements (CRITICAL)
+Target execution time under 5 minutes for environments with up to 100 instances. This needs to run in CI/CD without causing timeouts.
 
-- **environmentSuffix Requirement**: All created resources (if any) must include environmentSuffix parameter for unique naming
-- **Destroyability**: No DeletionPolicy=Retain or RemovalPolicy=RETAIN - all resources must be fully destroyable
-- **Read-Only Focus**: This is primarily a scanning tool - minimize infrastructure creation
-- **IAM Permissions**: Ensure proper read-only IAM permissions for EC2, SSM, VPC, CloudWatch
-- **Rate Limiting**: Handle AWS API throttling gracefully with exponential backoff
+Deliver a complete Pulumi TypeScript implementation with all the scanning logic, report generation, and CloudWatch metrics export. Include unit tests for the core scanning functions. Add deployment documentation covering how to set it up and run it. Make sure everything is destroyable - no DeletionPolicy=Retain settings that would leave resources behind.
 
-### AWS Services to Use
-
-- **EC2**: Instance and EBS volume scanning
-- **Security Groups**: Ingress rule analysis
-- **Systems Manager**: SSM agent status checking
-- **VPC**: Flow logs validation
-- **CloudWatch**: Metrics publishing for compliance tracking
-
-### Constraints
-
-- Read-only operations on existing infrastructure (no modifications)
-- Must handle large fleets efficiently (hundreds of instances)
-- Graceful error handling for missing permissions or unavailable resources
-- JSON report must be valid and parseable by downstream tools
-- CloudWatch metrics must follow proper namespace conventions
-- Execution time under 5 minutes for typical environments
-
-## Success Criteria
-
-- **Functionality**: Successfully scans all EC2 instances and identifies violations across all 8 compliance checks
-- **Performance**: Completes full scan in under 5 minutes for environments with up to 100 instances
-- **Reliability**: Handles API errors gracefully without crashing, continues scanning remaining resources
-- **Security**: Uses least-privilege IAM permissions, no hardcoded credentials
-- **Resource Naming**: All created resources include environmentSuffix parameter
-- **Code Quality**: TypeScript code with proper typing, well-tested, documented
-- **Reporting**: Generates valid JSON reports with detailed violation information
-- **Monitoring**: Exports compliance metrics to CloudWatch successfully
-
-## What to deliver
-
-- Complete Pulumi TypeScript implementation with AWS SDK integration
-- EC2 instance scanning with EBS encryption validation
-- Security group analysis for unrestricted inbound rules
-- Tag compliance verification logic
-- AMI approval checking against predefined list
-- SSM agent connectivity validation
-- VPC flow logs verification
-- JSON report generation with structured violation data
-- CloudWatch metrics export for compliance tracking
-- Unit tests for all scanning logic
-- Documentation covering deployment and usage instructions
+The security team will review the implementation to ensure we're following AWS best practices for read-only access and handling sensitive compliance data appropriately.
