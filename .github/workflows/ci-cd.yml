@@ -270,7 +270,12 @@ jobs:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    if: |
+      always() &&
+      needs.build.result == 'success' &&
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)
     environment: dev
     permissions:
       contents: read
@@ -411,7 +416,15 @@ jobs:
     name: Analysis
     runs-on: ubuntu-24.04
     needs: [detect-metadata, claude-review-prompt-quality, lint, unit-tests]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && needs.claude-review-prompt-quality.result == 'success' && needs.lint.result == 'success' && needs.unit-tests.result == 'success' }}
+    if: |
+      always() &&
+      needs.claude-review-prompt-quality.result == 'success' &&
+      needs.lint.result == 'success' &&
+      needs.unit-tests.result == 'success' &&
+      github.event_name == 'pull_request' &&
+      github.event.action != 'closed' &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label)
     environment: dev
     env:
       AWS_ENDPOINT_URL: http://127.0.0.1:5001
@@ -484,7 +497,13 @@ jobs:
     name: Deploy
     runs-on: ubuntu-24.04
     needs: [detect-metadata, synth]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
+    if: |
+      always() &&
+      (needs.synth.result == 'success' || needs.synth.result == 'skipped') &&
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)
     environment: dev
 
     steps:
@@ -603,7 +622,12 @@ jobs:
     name: IaC Optimization
     runs-on: ubuntu-24.04
     needs: [detect-metadata, deploy]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, 'IaC Optimization')}}
+    if: |
+      always() &&
+      needs.deploy.result == 'success' &&
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      contains(needs.detect-metadata.outputs.subject_labels, 'IaC Optimization')
     environment: dev
 
     steps:
@@ -642,7 +666,13 @@ jobs:
     name: Lint
     runs-on: ubuntu-24.04
     needs: [detect-metadata, claude-review-prompt-quality, build]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) && needs.claude-review-prompt-quality.result == 'success' && needs.build.result == 'success' }}
+    if: |
+      always() &&
+      needs.claude-review-prompt-quality.result == 'success' &&
+      needs.build.result == 'success' &&
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -669,7 +699,12 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    if: |
+      always() &&
+      needs.lint.result == 'success' &&
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)
     environment: qa
 
     steps:
@@ -764,12 +799,14 @@ jobs:
     needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
     if: |
+      always() &&
+      needs.deploy.result == 'success' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.unit-tests.result == 'success' || needs.unit-tests.result == 'skipped') &&
       (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
       !contains(github.event.head_commit.message, '[skip-jobs]') &&
       !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) &&
-      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) &&
-      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
-      (needs.unit-tests.result == 'success' || needs.unit-tests.result == 'skipped')
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)
 
     steps:
       - name: Checkout code
