@@ -1,0 +1,23 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291226",
+  "team": "synth-2",
+  "startedAt": "2025-08-06T11:21:17.247Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "API Gateway",
+    "VPC",
+    "S3",
+    "IAM",
+    "CloudWatch"
+  ]
+}
