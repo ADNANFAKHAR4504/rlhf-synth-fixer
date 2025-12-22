@@ -1,13 +1,13 @@
 {
   "po_id": "q0r6h2p0",
-  "platform": "pulumi",
-  "language": "ts",
+  "platform": "cicd",
+  "language": "yaml",
   "complexity": "hard",
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
     "CI/CD Pipeline"
   ],
-  "team": "synth",
+  "team": "synth-2",
   "turn_type": "single",
   "startedAt": "2025-12-03T14:03:00Z",
   "aws_services": [],

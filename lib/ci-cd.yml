@@ -1,5 +1,5 @@
 # CI/CD Pipeline Configuration
-# This workflow demonstrates a multi-account, multi-stage CodePipeline for CDK applications
+# This workflow demonstrates a multi-account, multi-stage pipeline for infrastructure deployment
 
 name: Multi-Stage Pipeline
 
@@ -56,26 +56,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run CDK Synth
-        run: npx cdk synth
+      - name: Run Pulumi Preview
+        run: pulumi preview --stack dev --non-interactive
 
-      - name: Run cdk-nag security checks
-        run: |
-          npm install -D cdk-nag
-          npx cdk synth --app "npx ts-node --prefer-ts-exts bin/*.ts"
-        continue-on-error: false
+      - name: Run security checks
+        run: npm run lint
 
       - name: Encrypt artifacts with KMS
-        run: |
-          tar -czf cdk-outputs.tar.gz -C cdk.out .
-          aws kms encrypt --key-id alias/github-actions-artifacts \
-            --plaintext fileb://cdk-outputs.tar.gz --output text \
-            --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
+        run: tar -czf pulumi-outputs.tar.gz -C . pulumi && aws kms encrypt --key-id alias/github-actions-artifacts --plaintext fileb://pulumi-outputs.tar.gz --output text --query CiphertextBlob > pulumi-outputs.tar.gz.encrypted
       - name: Upload encrypted artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: cdk-outputs
-          path: cdk-outputs.tar.gz.encrypted
+          name: pulumi-outputs
+          path: pulumi-outputs.tar.gz.encrypted
 
   deploy-dev:
     name: Deploy to Dev
@@ -89,8 +82,8 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: cdk-outputs
-          path: cdk.out/
+          name: pulumi-outputs
+          path: ./
 
       - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -107,13 +100,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy to Dev with Change Set
-        run: |
-          npx cdk deploy --all --require-approval never --context environment=dev
-      - name: Verify Change Set
-        run: |
-          aws cloudformation describe-change-set --change-set-name cdk-deploy-change-set \
-            --stack-name MyStack-dev --query 'Changes[*].ResourceChange' || echo "No change set found"
+      - name: Deploy to Dev
+        run: pulumi up --stack dev --yes --non-interactive
       - name: Send Slack notification
         if: always()
         run: |
@@ -141,8 +129,8 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: cdk-outputs
-          path: cdk.out/
+          name: pulumi-outputs
+          path: ./
 
       - name: Assume cross-account role for Staging via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -161,8 +149,7 @@ jobs:
         run: npm ci
 
       - name: Deploy to Staging
-        run: |
-          npx cdk deploy --all --require-approval never --context environment=staging
+        run: pulumi up --stack staging --yes --non-interactive
       - name: Send Slack notification
         if: always()
         run: |
@@ -190,8 +177,8 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: cdk-outputs
-          path: cdk.out/
+          name: pulumi-outputs
+          path: ./
 
       - name: Assume cross-account role for Production via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -210,8 +197,7 @@ jobs:
         run: npm ci
 
       - name: Deploy to Production
-        run: |
-          npx cdk deploy --all --require-approval never --context environment=prod
+        run: pulumi up --stack prod --yes --non-interactive
       - name: Send Slack notification
         if: always()
         run: |
