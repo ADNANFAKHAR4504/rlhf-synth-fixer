@@ -221,11 +221,11 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
     expect(res.Role).toBeDefined();
   });
 
-  test('CloudTrail bucket policy should allow CloudTrail access', async () => {
+  (isLocalStack ? test.skip : test)('CloudTrail bucket policy should allow CloudTrail access', async () => {
     const res = await s3.send(new GetBucketPolicyCommand({
       Bucket: outputs.CloudTrailLogBucketName,
     }));
-    
+
     const policy = JSON.parse(res.Policy || '{}');
     expect(policy.Statement).toBeDefined();
 
@@ -239,21 +239,16 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
     expect(hasTrailPermissions).toBe(true);
   });
 
-  test('CloudTrail should be enabled and logging to bucket', async () => {
+  (isLocalStack ? test.skip : test)('CloudTrail should be enabled and logging to bucket', async () => {
     const cloudtrail = new CloudTrailClient({ region });
     const trails = await cloudtrail.send(new DescribeTrailsCommand({}));
     expect(trails.trailList?.[0]?.IsMultiRegionTrail).toBe(true);
   });
 
-  test('AWS Config recorder should be active', async () => {
+  (isLocalStack ? test.skip : test)('AWS Config recorder should be active', async () => {
     const config = new ConfigServiceClient({ region });
     const res = await config.send(new DescribeConfigurationRecordersCommand({}));
-    if (isLocalStack) {
-      // LocalStack may have limited Config support
-      expect(res.ConfigurationRecorders).toBeDefined();
-    } else {
-      expect(res.ConfigurationRecorders?.[0].recordingGroup?.allSupported).toBe(true);
-    }
+    expect(res.ConfigurationRecorders?.[0].recordingGroup?.allSupported).toBe(true);
   });
 
   test('VPC Flow Logs should be enabled', async () => {
@@ -300,7 +295,10 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
     }));
     const rdsInstance = res.DBInstances?.[0];
     expect(rdsInstance?.DBInstanceStatus).toBe('available');
-    expect(rdsInstance?.MultiAZ).toBe(true);
+    // LocalStack Community doesn't support MultiAZ
+    if (!isLocalStack) {
+      expect(rdsInstance?.MultiAZ).toBe(true);
+    }
     expect(rdsInstance?.StorageEncrypted).toBe(true);
   });
 
@@ -312,7 +310,7 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
     expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
   });
 
-  test('CloudTrail S3 bucket exists with AES256 encryption', async () => {
+  (isLocalStack ? test.skip : test)('CloudTrail S3 bucket exists with AES256 encryption', async () => {
     await s3.send(new HeadBucketCommand({ Bucket: outputs.CloudTrailLogBucketName }));
     const encryption = await s3.send(new GetBucketEncryptionCommand({
       Bucket: outputs.CloudTrailLogBucketName,
@@ -339,7 +337,6 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
       'RDSInstanceId',
       'RDSEndpoint',
       'S3BucketName',
-      'CloudTrailLogBucketName',
       'LambdaFunctionName',
       'DBSubnetGroupName',
       'RDSSecret',
@@ -347,6 +344,12 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
       'SecurityAlertsTopicArn',
       'DailyBackupRuleName'
     ];
+
+    // CloudTrailLogBucketName only exists when not running on LocalStack
+    if (!isLocalStack) {
+      expected.push('CloudTrailLogBucketName');
+    }
+
     expected.forEach(key => expect(outputs[key]).toBeDefined());
   });
 
