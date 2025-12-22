@@ -842,10 +842,11 @@ resource "aws_launch_template" "main" {
 }
 
 resource "aws_autoscaling_group" "main" {
-  name                      = "${local.name_prefix}-asg"
-  vpc_zone_identifier       = aws_subnet.private[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
+  name                = "${local.name_prefix}-asg"
+  vpc_zone_identifier = aws_subnet.private[*].id
+  # target_group_arns disabled for LocalStack compatibility (ALB disabled)
+  # target_group_arns         = [aws_lb_target_group.main.arn]
+  health_check_type         = "EC2" # Changed from ELB to EC2 for LocalStack compatibility
   health_check_grace_period = 300
 
   min_size         = local.current_config.min_size
@@ -877,68 +878,62 @@ resource "aws_autoscaling_group" "main" {
 # APPLICATION LOAD BALANCER
 # =============================================================================
 
-resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
+# ALB resources disabled for LocalStack compatibility
+# LocalStack has issues with ALB attributes (health_check_logs.s3.enabled)
+# Uncomment these resources for production AWS deployments:
 
-  enable_deletion_protection = local.current_config.deletion_protection
-
-  # Access logs disabled for LocalStack compatibility
-  # LocalStack has issues with ALB access logs configuration
-  # Uncomment for production AWS deployments:
-  # access_logs {
-  #   bucket  = aws_s3_bucket.logs.id
-  #   prefix  = "alb-access-logs"
-  #   enabled = true
-  # }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-alb"
-  })
-
-  # Prevent Terraform from trying to modify attributes that LocalStack doesn't support
-  lifecycle {
-    ignore_changes = [
-      access_logs,
-    ]
-  }
-}
-
-resource "aws_lb_target_group" "main" {
-  name     = "${local.name_prefix}-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-    path                = "/"
-    protocol            = "HTTP"
-    matcher             = "200"
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-target-group"
-  })
-}
-
-resource "aws_lb_listener" "main" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
-  }
-}
+# resource "aws_lb" "main" {
+#   name               = "${local.name_prefix}-alb"
+#   internal           = false
+#   load_balancer_type = "application"
+#   security_groups    = [aws_security_group.alb.id]
+#   subnets            = aws_subnet.public[*].id
+#
+#   enable_deletion_protection = local.current_config.deletion_protection
+#
+#   access_logs {
+#     bucket  = aws_s3_bucket.logs.id
+#     prefix  = "alb-access-logs"
+#     enabled = true
+#   }
+#
+#   tags = merge(local.common_tags, {
+#     Name = "${local.name_prefix}-alb"
+#   })
+# }
+#
+# resource "aws_lb_target_group" "main" {
+#   name     = "${local.name_prefix}-tg"
+#   port     = 80
+#   protocol = "HTTP"
+#   vpc_id   = aws_vpc.main.id
+#
+#   health_check {
+#     enabled             = true
+#     healthy_threshold   = 2
+#     unhealthy_threshold = 2
+#     timeout             = 5
+#     interval            = 30
+#     path                = "/"
+#     protocol            = "HTTP"
+#     matcher             = "200"
+#   }
+#
+#   tags = merge(local.common_tags, {
+#     Name = "${local.name_prefix}-target-group"
+#   })
+# }
+#
+# resource "aws_lb_listener" "main" {
+#   load_balancer_arn = aws_lb.main.arn
+#   port              = "80"
+#   protocol          = "HTTP"
+#
+#   default_action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.main.arn
+#   }
+# }
 
 # =============================================================================
 # RDS DATABASE
@@ -1229,21 +1224,22 @@ resource "aws_cloudtrail" "main" {
 # VPC FLOW LOGS
 # =============================================================================
 
-resource "aws_flow_log" "main" {
-  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
+# Flow Log disabled for LocalStack compatibility
+# LocalStack has issues with max_aggregation_interval attribute
+# Uncomment for production AWS deployments:
 
-  # max_aggregation_interval disabled for LocalStack compatibility
-  # LocalStack doesn't properly support this attribute
-  # Uncomment for production AWS deployments:
-  # max_aggregation_interval = 60
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc-flow-logs"
-  })
-}
+# resource "aws_flow_log" "main" {
+#   iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
+#   log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
+#   traffic_type    = "ALL"
+#   vpc_id          = aws_vpc.main.id
+#
+#   max_aggregation_interval = 60
+#
+#   tags = merge(local.common_tags, {
+#     Name = "${local.name_prefix}-vpc-flow-logs"
+#   })
+# }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/${local.name_prefix}/flowlogs"
@@ -1379,19 +1375,38 @@ output "database_subnet_ids" {
   value       = aws_subnet.database[*].id
 }
 
+# ALB outputs disabled for LocalStack compatibility (ALB resource disabled)
+# Uncomment for production AWS deployments:
+
+# output "alb_dns_name" {
+#   description = "Application Load Balancer DNS name"
+#   value       = aws_lb.main.dns_name
+# }
+#
+# output "load_balancer_dns_name" {
+#   description = "Application Load Balancer DNS name (alias for compatibility)"
+#   value       = aws_lb.main.dns_name
+# }
+#
+# output "alb_arn" {
+#   description = "Application Load Balancer ARN"
+#   value       = aws_lb.main.arn
+# }
+
+# Placeholder outputs for LocalStack compatibility
 output "alb_dns_name" {
-  description = "Application Load Balancer DNS name"
-  value       = aws_lb.main.dns_name
+  description = "Application Load Balancer DNS name (disabled for LocalStack)"
+  value       = "alb-disabled-for-localstack"
 }
 
 output "load_balancer_dns_name" {
-  description = "Application Load Balancer DNS name (alias for compatibility)"
-  value       = aws_lb.main.dns_name
+  description = "Application Load Balancer DNS name (disabled for LocalStack)"
+  value       = "alb-disabled-for-localstack"
 }
 
 output "alb_arn" {
-  description = "Application Load Balancer ARN"
-  value       = aws_lb.main.arn
+  description = "Application Load Balancer ARN (disabled for LocalStack)"
+  value       = "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/disabled/localstack"
 }
 
 output "rds_endpoint" {
