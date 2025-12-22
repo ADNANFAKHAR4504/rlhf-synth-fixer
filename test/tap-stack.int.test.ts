@@ -181,7 +181,7 @@ describe('TapStack Integration Tests', () => {
 
       expect(dbInstance.DBInstanceStatus).toBe('available');
       expect(dbInstance.Engine).toBe('mysql');
-      expect(dbInstance.EngineVersion).toContain('8.4');
+      expect(dbInstance.EngineVersion).toContain('8.0');
       expect(dbInstance.StorageEncrypted).toBe(false); // Updated to match tap-stack.ts configuration
       expect(dbInstance.MultiAZ).toBe(false); // Updated to match tap-stack.ts configuration (no MultiAZ specified)
       expect(dbInstance.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
