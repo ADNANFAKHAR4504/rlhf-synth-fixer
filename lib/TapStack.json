@@ -1151,12 +1151,7 @@
                     "LaunchTemplateId": {
                         "Ref": "ProdLaunchTemplate"
                     },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "ProdLaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
+                    "Version": "$Latest"
                 },
                 "MinSize": "2",
                 "MaxSize": "4",

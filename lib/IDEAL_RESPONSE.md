@@ -587,7 +587,7 @@ Resources:
         - !If [CreatePrivateSubnets, !Ref PrivateSubnetB, !Ref 'AWS::NoValue']
       LaunchTemplate:
         LaunchTemplateId: !Ref ProdLaunchTemplate
-        Version: !GetAtt ProdLaunchTemplate.LatestVersionNumber
+        Version: '$Latest'
       MinSize: '2'
       MaxSize: '4'
       DesiredCapacity: '2'
