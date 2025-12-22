@@ -1,6 +1,6 @@
 I'll help you create a secure AWS infrastructure for an e-commerce application using AWS CDK in Python with comprehensive testing. Let me break this down into the required components.
 
-## 📁 Project Structure Implementation
+##  Project Structure Implementation
 
 ### 1. Entry Point: `tap.py`
 
@@ -763,7 +763,7 @@ pytest-cov>=4.0.0
 }
 ```
 
-## 🧪 Running the Tests
+##  Running the Tests
 
 ### Setup and Installation
 ```bash
@@ -792,29 +792,29 @@ cdk deploy TapStack-dev
 cdk destroy TapStack-dev
 ```
 
-## 🔒 Security Features Implemented
+##  Security Features Implemented
 
 ### S3 Security
-- ✅ Block all public access
-- ✅ Versioning enabled
-- ✅ SSE-S3 encryption
-- ✅ Bucket policy restricts access to CloudFront OAC only
-- ✅ SSL enforcement
-- ✅ Access logging
+-  Block all public access
+-  Versioning enabled
+-  SSE-S3 encryption
+-  Bucket policy restricts access to CloudFront OAC only
+-  SSL enforcement
+-  Access logging
 
 ### RDS Security
-- ✅ Private subnets only (no public access)
-- ✅ Encryption at rest
-- ✅ Multi-AZ deployment
-- ✅ Automated backups (7 days retention)
-- ✅ Deletion protection
-- ✅ Security group restricts access to application services only
-- ✅ Credentials stored in AWS Secrets Manager
+-  Private subnets only (no public access)
+-  Encryption at rest
+-  Multi-AZ deployment
+-  Automated backups (7 days retention)
+-  Deletion protection
+-  Security group restricts access to application services only
+-  Credentials stored in AWS Secrets Manager
 
 ### IAM Security
-- ✅ Least privilege principle
-- ✅ Resource-scoped permissions
-- ✅ Action-limited policies
-- ✅ Service-specific assume role policies
+-  Least privilege principle
+-  Resource-scoped permissions
+-  Action-limited policies
+-  Service-specific assume role policies
 
 This implementation provides a comprehensive, secure e-commerce infrastructure with thorough testing coverage that validates both the resource definitions and the synthesized CloudFormation template behavior.

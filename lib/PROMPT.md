@@ -6,28 +6,28 @@ Entry point: tap.py
 
 Main stack: lib/tap_stack.py
 
-✅ CDK Python Prompt: Secure E-Commerce Infrastructure with Tests
+ CDK Python Prompt: Secure E-Commerce Infrastructure with Tests
 You are developing a secure AWS infrastructure for an e-commerce application using AWS CDK in Python. Your goal is to implement the infrastructure and include both unit and integration tests to validate the deployment.
 
-📁 Project Structure
+ Project Structure
 graphql
 Copy
 Edit
 .
-├── tap.py                          # CDK app entry point
-├── lib/
-│   └── tap_stack.py                # CDK stack implementation
-└── tests/
-    ├── unit/
-    │   └── test_tap_stack.py       # Unit tests for resource definitions
-    └── integration/
-        └── test_tap_stack.py       # Integration tests for synthesized stack
-🌍 Environment
+ tap.py                          # CDK app entry point
+ lib/
+    tap_stack.py                # CDK stack implementation
+ tests/
+     unit/
+        test_tap_stack.py       # Unit tests for resource definitions
+     integration/
+         test_tap_stack.py       # Integration tests for synthesized stack
+ Environment
 Use a single environment: dev
 
 Hardcode environment values (account, region) or read from context/environment variables if needed
 
-🛠️ Required Infrastructure
+ Required Infrastructure
 Amazon RDS (PostgreSQL/MySQL)
 
 Launched in private subnets (no public access)
@@ -52,7 +52,7 @@ Role for accessing S3
 
 Each role must have resource-scoped, action-limited policies to follow the principle of least privilege
 
-🧪 Testing Requirements
+ Testing Requirements
 Unit Tests (tests/unit/test_tap_stack.py):
 
 Assert S3 bucket has:
@@ -75,7 +75,7 @@ RDS subnet group does not include public subnets
 
 Bucket policy only allows access from CloudFront
 
-✅ Output Expectations
+ Output Expectations
 Working CDK Python application with:
 
 Secure RDS and S3 setup
