@@ -5,7 +5,7 @@
   "turn_type": "single",
   "po_id": "291816",
   "startedAt": "2025-08-04T11:47:33.817Z",
-  "team": 2,
+  "team": "synth-2",
   "provider": "localstack",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
