@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "provider": "localstack",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291555",
+  "team": "5",
+  "startedAt": "2025-08-19T10:30:07.823Z",
+ "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Lambda", 
+    "IAM", 
+    "KMS", 
+    "S3", 
+    "CloudWatch Logs",
+    "EC2", 
+    "VPC", 
+    "Internet Gateway", 
+    "Subnet", 
+    "Route Table", 
+    "Security Group", 
+    "VPC Flow Logs", 
+    "CloudFormation", 
+    "SSM", 
+    "Instance Profile"
+  ]
+}
