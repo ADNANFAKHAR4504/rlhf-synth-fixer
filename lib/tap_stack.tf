@@ -788,10 +788,10 @@ resource "aws_launch_template" "main" {
 }
 
 resource "aws_autoscaling_group" "main" {
-  name                = "${local.name_prefix}-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns    = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
+  name                      = "${local.name_prefix}-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.main.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = local.current_config.min_size
@@ -921,7 +921,7 @@ resource "aws_db_instance" "main" {
   deletion_protection = local.current_config.deletion_protection
   skip_final_snapshot = !local.current_config.deletion_protection
 
-  performance_insights_enabled = var.environment == "production"
+  performance_insights_enabled    = var.environment == "production"
   performance_insights_kms_key_id = var.environment == "production" ? aws_kms_key.main.arn : null
 
   tags = merge(local.common_tags, {
@@ -1144,8 +1144,8 @@ resource "aws_cloudtrail" "main" {
   kms_key_id = aws_kms_key.main.arn
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type                  = "All"
+    include_management_events        = true
     exclude_management_event_sources = []
 
     data_resource {
@@ -1380,10 +1380,10 @@ output "account_id" {
 
 output "regional_vpc_ids" {
   description = "Regional VPC IDs"
-  value = {}  # Disabled for LocalStack compatibility
+  value       = {} # Disabled for LocalStack compatibility
 }
 
 output "regional_s3_buckets" {
   description = "Regional S3 bucket names"
-  value = {}  # Disabled for LocalStack compatibility
+  value       = {} # Disabled for LocalStack compatibility
 }
