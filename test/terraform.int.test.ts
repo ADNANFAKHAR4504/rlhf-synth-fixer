@@ -31,23 +31,34 @@ const isLocalStack = (() => {
 // AWS SDK client configuration for LocalStack
 const clientConfig = isLocalStack
   ? {
-    region,
-    endpoint: process.env.AWS_ENDPOINT_URL,
-    credentials: {
-      accessKeyId: 'test',
-      secretAccessKey: 'test',
-    },
-  }
+      region,
+      endpoint: process.env.AWS_ENDPOINT_URL,
+      credentials: {
+        accessKeyId: 'test',
+        secretAccessKey: 'test',
+      },
+    }
   : { region };
 
-const s3Client = new S3Client(clientConfig);
+// S3 needs forcePathStyle for LocalStack
+const s3ClientConfig = isLocalStack
+  ? { ...clientConfig, forcePathStyle: true }
+  : clientConfig;
+
+const s3Client = new S3Client(s3ClientConfig);
 const iamClient = new IAMClient(clientConfig);
 const kmsClient = new KMSClient(clientConfig);
 
+// Support both flat outputs (direct values) and nested outputs ({ value: string })
 interface TerraformOutputs {
-  s3_bucket_name: { value: string };
-  kms_key_arn: { value: string };
-  iam_role_arn: { value: string };
+  s3_bucket_name: string | { value: string };
+  kms_key_arn: string | { value: string };
+  iam_role_arn: string | { value: string };
+}
+
+// Helper to extract value from either format
+function getValue(output: string | { value: string }): string {
+  return typeof output === 'string' ? output : output.value;
 }
 
 describe('Live AWS Infrastructure Integration Tests', () => {
@@ -57,9 +68,9 @@ describe('Live AWS Infrastructure Integration Tests', () => {
   beforeAll(() => {
     // Try multiple possible output file locations
     const possiblePaths = [
+      'cdk-outputs/flat-outputs.json',
       'cfn-outputs/flat-outputs.json',
       'cfn-outputs/all-outputs.json',
-      'cdk-outputs/flat-outputs.json',
     ];
 
     let outputPath = '';
@@ -83,7 +94,7 @@ describe('Live AWS Infrastructure Integration Tests', () => {
   // --- S3 Bucket Validation ---
   describe('S3 Bucket: Security and Configuration', () => {
     test('should be encrypted with the correct KMS key', async () => {
-      const bucketName = outputs.s3_bucket_name.value; // ✅ Defined inside the test
+      const bucketName = getValue(outputs.s3_bucket_name);
       const command = new GetBucketEncryptionCommand({ Bucket: bucketName });
       const response = await s3Client.send(command);
 
@@ -98,11 +109,11 @@ describe('Live AWS Infrastructure Integration Tests', () => {
         encryptionRule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID;
 
       expect(sseAlgorithm).toBe('aws:kms');
-      expect(kmsKeyArn).toBe(outputs.kms_key_arn.value);
+      expect(kmsKeyArn).toBe(getValue(outputs.kms_key_arn));
     });
 
     test('should block all public access', async () => {
-      const bucketName = outputs.s3_bucket_name.value; // ✅ Defined inside the test
+      const bucketName = getValue(outputs.s3_bucket_name);
       const command = new GetPublicAccessBlockCommand({ Bucket: bucketName });
       const response = await s3Client.send(command);
 
@@ -115,7 +126,7 @@ describe('Live AWS Infrastructure Integration Tests', () => {
     });
 
     test('should have versioning enabled', async () => {
-      const bucketName = outputs.s3_bucket_name.value; // ✅ Defined inside the test
+      const bucketName = getValue(outputs.s3_bucket_name);
       const command = new GetBucketVersioningCommand({ Bucket: bucketName });
       const response = await s3Client.send(command);
       expect(response.Status).toBe('Enabled');
@@ -125,7 +136,7 @@ describe('Live AWS Infrastructure Integration Tests', () => {
   // --- IAM Role Validation ---
   describe('IAM Role: Least Privilege', () => {
     test('should only be assumable by the EC2 service', async () => {
-      const roleName = outputs.iam_role_arn.value.split('/').pop()!; // ✅ Defined inside the test
+      const roleName = getValue(outputs.iam_role_arn).split('/').pop()!;
       const command = new GetRoleCommand({ RoleName: roleName });
       const response = await iamClient.send(command);
 
@@ -138,7 +149,7 @@ describe('Live AWS Infrastructure Integration Tests', () => {
     });
 
     test('should have a read-only policy for S3 and KMS', async () => {
-      const roleName = outputs.iam_role_arn.value.split('/').pop()!; // ✅ Defined inside the test
+      const roleName = getValue(outputs.iam_role_arn).split('/').pop()!;
 
       // 1. List policies attached to the role
       const listPoliciesCommand = new ListAttachedRolePoliciesCommand({
@@ -180,7 +191,7 @@ describe('Live AWS Infrastructure Integration Tests', () => {
   // --- KMS Key Validation ---
   describe('KMS Key: Configuration', () => {
     test('should be enabled and customer-managed', async () => {
-      const keyId = outputs.kms_key_arn.value.split('/').pop()!; // ✅ Defined inside the test
+      const keyId = getValue(outputs.kms_key_arn).split('/').pop()!;
       const command = new DescribeKeyCommand({ KeyId: keyId });
       const response = await kmsClient.send(command);
 
@@ -189,7 +200,7 @@ describe('Live AWS Infrastructure Integration Tests', () => {
     });
 
     test('should have key rotation enabled', async () => {
-      const keyId = outputs.kms_key_arn.value.split('/').pop()!; // ✅ Defined inside the test
+      const keyId = getValue(outputs.kms_key_arn).split('/').pop()!;
       const command = new GetKeyRotationStatusCommand({ KeyId: keyId });
       const response = await kmsClient.send(command);
       expect(response.KeyRotationEnabled).toBe(true);
