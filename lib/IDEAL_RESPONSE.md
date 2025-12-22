@@ -135,6 +135,10 @@ terraform {
       source  = "hashicorp/archive"
       version = "~> 2.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.0"
+    }
   }
 
   # Partial backend config: values are injected at `terraform init` time
@@ -696,6 +700,11 @@ resource "aws_dynamodb_table" "document_metadata" {
 }
 
 # Secrets Manager for API Keys
+resource "random_password" "api_key" {
+  length  = 32
+  special = true
+}
+
 resource "aws_secretsmanager_secret" "api_keys" {
   name                    = "api-keys-${var.environment_suffix}"
   description             = "API keys for document management system"
@@ -710,7 +719,7 @@ resource "aws_secretsmanager_secret" "api_keys" {
 resource "aws_secretsmanager_secret_version" "api_keys" {
   secret_id = aws_secretsmanager_secret.api_keys.id
   secret_string = jsonencode({
-    api_key    = "initial-key-${var.environment_suffix}"
+    api_key    = random_password.api_key.result
     created_at = timestamp()
   })
 
