@@ -7,7 +7,7 @@
   "team": "synth-2",
   "startedAt": "2025-08-01T09:00:45.375Z",
   "provider": "localstack",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "Application Deployment",
   "subject_labels": ["Web Application Deployment"],
   "aws_services": ["VPC", "EC2", "RDS", "S3", "KMS", "IAM", "CloudFront", "CloudWatch", "Auto Scaling", "VPC Peering"]
 }
