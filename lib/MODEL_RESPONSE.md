@@ -1,7 +1,5 @@
 # Serverless Application CloudFormation Template
 
-Here's a comprehensive SAM CloudFormation template that meets all your requirements:
-
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
