@@ -10,10 +10,10 @@ Data Integrity and Availability:
 - EC2: Launch an instance with automatic recovery. Set up a CloudWatch alarm that triggers recovery when status checks fail. Use the latest Amazon Linux 2023 AMI with dynamic lookup.
 
 Access Control:
-- IAM: Create a role and instance profile for the EC2 instance. The policy should only grant minimal required permissions (like read-only access to a specific S3 bucket if needed). Don't require CAPABILITY_NAMED_IAM for deployment.
+- IAM: Create a role and instance profile for the EC2 instance. The policy should only grant minimal required permissions, such as read-only access to a specific S3 bucket. Don't require CAPABILITY_NAMED_IAM for deployment.
 
 Security:
-- Security Group: Only allow inbound HTTPS traffic (port 443) from anywhere. Block everything else by default.
+- Security Group: Only allow inbound HTTPS traffic on port 443 from anywhere. Block everything else by default.
 
 Monitoring:
 - CloudTrail: Set up a trail to log all API calls across the account. Store the logs in one of your S3 buckets and configure the bucket policy so CloudTrail can write to it.
