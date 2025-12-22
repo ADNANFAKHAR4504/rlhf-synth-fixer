@@ -556,7 +556,7 @@ describe('Financial Services CloudFormation Template', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      simpleEqual(parameterCount, 3, 'Should have exactly 3 parameters');
+      simpleEqual(parameterCount, 4, 'Should have exactly 4 parameters (ApplicationName, Environment, InstanceType, DeployEC2)');
     });
 
     test('should have expected number of outputs', () => {

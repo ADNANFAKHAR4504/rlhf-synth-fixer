@@ -24,8 +24,8 @@ Parameters:
 
   DeployEC2:
     Type: String
-    Default: 'true'
-    Description: 'Whether to deploy EC2 instance (set to false for LocalStack)'
+    Default: 'false'
+    Description: 'Whether to deploy EC2 instance (set to false for LocalStack, true for AWS)'
     AllowedValues: ['true', 'false']
 
 # Conditions for optional resources
