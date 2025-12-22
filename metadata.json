@@ -9,7 +9,7 @@
   "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "Security Configuration as Code",
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "CloudTrail",
