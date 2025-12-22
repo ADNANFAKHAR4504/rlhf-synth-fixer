@@ -471,7 +471,7 @@
       Properties:
         DBInstanceIdentifier: !Sub 'prod-db-${EnvironmentSuffix}'
         Engine: mysql
-        EngineVersion: '8.0.35'
+        EngineVersion: '8.0.39'
         DBInstanceClass: db.t3.micro
         MasterUsername: admin
         MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
@@ -514,8 +514,29 @@
           - Key: Environment
             Value: !Ref EnvironmentSuffix
 
+    CloudFrontOriginAccessIdentity:
+      Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+      Properties:
+        CloudFrontOriginAccessIdentityConfig:
+          Comment: !Sub 'OAI for S3 bucket in ${EnvironmentSuffix} environment'
+
+    S3BucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      DependsOn: CloudFrontOriginAccessIdentity
+      Properties:
+        Bucket: !Ref SecureS3Bucket
+        PolicyDocument:
+          Statement:
+            - Sid: AllowCloudFrontOAI
+              Effect: Allow
+              Principal:
+                CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+              Action: 's3:GetObject'
+              Resource: !Sub '${SecureS3Bucket.Arn}/*'
+
     CloudFrontDistribution:
       Type: AWS::CloudFront::Distribution
+      DependsOn: CloudFrontOriginAccessIdentity
       Properties:
         DistributionConfig:
           Enabled: true
@@ -524,10 +545,17 @@
             ViewerProtocolPolicy: redirect-to-https
             ForwardedValues:
               QueryString: false
+            AllowedMethods:
+              - GET
+              - HEAD
+            CachedMethods:
+              - GET
+              - HEAD
           Origins:
             - Id: S3Origin
-              DomainName: !GetAtt SecureS3Bucket.DomainName
-              S3OriginConfig: {}
+              DomainName: !GetAtt SecureS3Bucket.RegionalDomainName
+              S3OriginConfig:
+                OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}'
           DefaultRootObject: index.html
         Tags:
           - Key: Environment
