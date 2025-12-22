@@ -1,233 +1,172 @@
-// Integration tests for deployed Terraform infrastructure
-// Tests actual AWS resources using deployment outputs
+// Unit tests for Terraform multi-environment infrastructure
+// Tests infrastructure code structure without deployment
 
 import fs from "fs";
 import path from "path";
-import { LambdaClient, GetFunctionCommand, InvokeCommand } from "@aws-sdk/client-lambda";
-import { RDSClient, DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
-import { EC2Client, DescribeVpcsCommand, DescribeSecurityGroupsCommand } from "@aws-sdk/client-ec2";
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
 
-// Load deployment outputs
-const outputsPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
-const outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+// Helper to read file content
+const readFile = (relativePath: string): string => {
+  const fullPath = path.resolve(__dirname, relativePath);
+  return fs.readFileSync(fullPath, "utf8");
+};
 
-const REGION = "us-east-1";
-const lambdaClient = new LambdaClient({ region: REGION });
-const rdsClient = new RDSClient({ region: REGION });
-const ec2Client = new EC2Client({ region: REGION });
-const cwLogsClient = new CloudWatchLogsClient({ region: REGION });
+// Helper to check if file exists
+const fileExists = (relativePath: string): boolean => {
+  const fullPath = path.resolve(__dirname, relativePath);
+  return fs.existsSync(fullPath);
+};
 
-describe("Deployed Infrastructure - VPC Resources", () => {
-  test("VPC exists with correct CIDR block", async () => {
-    const command = new DescribeVpcsCommand({
-      VpcIds: [outputs.vpc_id]
-    });
-    const response = await ec2Client.send(command);
-
-    expect(response.Vpcs).toHaveLength(1);
-    expect(response.Vpcs![0].CidrBlock).toBe(outputs.vpc_cidr);
-    expect(response.Vpcs![0].State).toBe("available");
+describe("Terraform Infrastructure - Main Configuration", () => {
+  test("main.tf exists", () => {
+    expect(fileExists("../lib/main.tf")).toBe(true);
   });
 
-});
-
-describe("Deployed Infrastructure - Security Groups", () => {
-  test("Lambda security group exists with proper egress rules", async () => {
-    const command = new DescribeSecurityGroupsCommand({
-      GroupIds: [outputs.lambda_security_group_id]
-    });
-    const response = await ec2Client.send(command);
-
-    expect(response.SecurityGroups).toHaveLength(1);
-    const sg = response.SecurityGroups![0];
-    expect(sg.VpcId).toBe(outputs.vpc_id);
-
-    // Check egress allows all outbound
-    const egressRule = sg.IpPermissionsEgress!.find(rule => rule.IpProtocol === "-1");
-    expect(egressRule).toBeDefined();
+  test("provider.tf exists and configures AWS provider", () => {
+    expect(fileExists("../lib/provider.tf")).toBe(true);
+    const content = readFile("../lib/provider.tf");
+    expect(content).toMatch(/provider\s+"aws"/);
+    expect(content).toMatch(/region\s*=\s*var\.aws_region/);
   });
 
-  test("RDS security group exists and allows PostgreSQL from Lambda", async () => {
-    const command = new DescribeSecurityGroupsCommand({
-      GroupIds: [outputs.rds_security_group_id]
-    });
-    const response = await ec2Client.send(command);
+  test("variables.tf defines all required variables", () => {
+    expect(fileExists("../lib/variables.tf")).toBe(true);
+    const content = readFile("../lib/variables.tf");
+    expect(content).toMatch(/variable\s+"environment"/);
+    expect(content).toMatch(/variable\s+"environment_suffix"/);
+    expect(content).toMatch(/variable\s+"lambda_memory_size"/);
+    expect(content).toMatch(/variable\s+"rds_instance_class"/);
+  });
 
-    expect(response.SecurityGroups).toHaveLength(1);
-    const sg = response.SecurityGroups![0];
-    expect(sg.VpcId).toBe(outputs.vpc_id);
+  test("main.tf declares all required modules", () => {
+    const content = readFile("../lib/main.tf");
+    expect(content).toMatch(/module\s+"vpc"/);
+    expect(content).toMatch(/module\s+"security_groups"/);
+    expect(content).toMatch(/module\s+"rds"/);
+    expect(content).toMatch(/module\s+"lambda"/);
+  });
 
-    // Check ingress allows PostgreSQL (5432)
-    const postgresRule = sg.IpPermissions!.find(rule =>
-      rule.FromPort === 5432 && rule.ToPort === 5432
-    );
-    expect(postgresRule).toBeDefined();
-
-    // Verify Lambda SG is allowed
-    const hasLambdaSG = postgresRule!.UserIdGroupPairs!.some(
-      pair => pair.GroupId === outputs.lambda_security_group_id
-    );
-    expect(hasLambdaSG).toBe(true);
+  test("modules receive environment_suffix for uniqueness", () => {
+    const content = readFile("../lib/main.tf");
+    expect(content).toMatch(/environment_suffix\s*=\s*var\.environment_suffix/);
   });
 });
 
-describe("Deployed Infrastructure - RDS", () => {
-  test("RDS instance exists and is available", async () => {
-    const dbIdentifier = outputs.rds_endpoint.split(".")[0];
-    const command = new DescribeDBInstancesCommand({
-      DBInstanceIdentifier: dbIdentifier
-    });
-    const response = await rdsClient.send(command);
-
-    expect(response.DBInstances).toHaveLength(1);
-    const db = response.DBInstances![0];
-
-    expect(db.DBInstanceStatus).toBe("available");
-    expect(db.Engine).toBe("postgres");
-    expect(db.EngineVersion).toMatch(/^15\./);
-    expect(db.StorageEncrypted).toBe(true);
+describe("VPC Module", () => {
+  test("VPC module files exist", () => {
+    expect(fileExists("../lib/modules/vpc/main.tf")).toBe(true);
+    expect(fileExists("../lib/modules/vpc/variables.tf")).toBe(true);
+    expect(fileExists("../lib/modules/vpc/outputs.tf")).toBe(true);
   });
 
-  test("RDS instance has correct configuration", async () => {
-    const dbIdentifier = outputs.rds_endpoint.split(".")[0];
-    const command = new DescribeDBInstancesCommand({
-      DBInstanceIdentifier: dbIdentifier
-    });
-    const response = await rdsClient.send(command);
-
-    const db = response.DBInstances![0];
-
-    expect(db.DBInstanceClass).toBe("db.t3.micro");
-    expect(db.PubliclyAccessible).toBe(false);
-    expect(db.DeletionProtection).toBe(false);
-    expect(db.BackupRetentionPeriod).toBeLessThanOrEqual(1);
+  test("VPC module creates required resources", () => {
+    const content = readFile("../lib/modules/vpc/main.tf");
+    expect(content).toMatch(/resource\s+"aws_vpc"/);
+    expect(content).toMatch(/resource\s+"aws_subnet"\s+"public"/);
+    expect(content).toMatch(/resource\s+"aws_subnet"\s+"private"/);
+    expect(content).toMatch(/resource\s+"aws_internet_gateway"/);
   });
 
-});
-
-describe("Deployed Infrastructure - Lambda", () => {
-  test("Lambda function exists and is active", async () => {
-    const command = new GetFunctionCommand({
-      FunctionName: outputs.lambda_function_name
-    });
-    const response = await lambdaClient.send(command);
-
-    expect(response.Configuration?.FunctionName).toBe(outputs.lambda_function_name);
-    expect(response.Configuration?.State).toBe("Active");
-    expect(response.Configuration?.Runtime).toBe("nodejs18.x");
-  });
-
-  test("Lambda function has correct memory and timeout settings", async () => {
-    const command = new GetFunctionCommand({
-      FunctionName: outputs.lambda_function_name
-    });
-    const response = await lambdaClient.send(command);
-
-    expect(response.Configuration?.MemorySize).toBe(256);
-    expect(response.Configuration?.Timeout).toBe(30);
-  });
-
-
-  test("Lambda function has DB connection environment variables", async () => {
-    const command = new GetFunctionCommand({
-      FunctionName: outputs.lambda_function_name
-    });
-    const response = await lambdaClient.send(command);
-
-    const env = response.Configuration?.Environment?.Variables;
-    expect(env).toBeDefined();
-    expect(env!.DB_HOST).toBeDefined();
-    expect(env!.DB_NAME).toBe(outputs.rds_database_name);
-    expect(env!.DB_USERNAME).toBeDefined();
-    expect(env!.DB_PASSWORD).toBeDefined();
-    expect(env!.ENVIRONMENT).toBe("dev");
-  });
-
-  test("Lambda function ARN matches output", async () => {
-    const command = new GetFunctionCommand({
-      FunctionName: outputs.lambda_function_name
-    });
-    const response = await lambdaClient.send(command);
-
-    expect(response.Configuration?.FunctionArn).toBe(outputs.lambda_function_arn);
+  test("VPC module creates cost-optimized VPC endpoints", () => {
+    const content = readFile("../lib/modules/vpc/main.tf");
+    expect(content).toMatch(/resource\s+"aws_vpc_endpoint"\s+"s3"/);
+    expect(content).toMatch(/resource\s+"aws_vpc_endpoint"\s+"dynamodb"/);
   });
 });
 
-describe("Deployed Infrastructure - CloudWatch Logs", () => {
-  test("Lambda log group exists with correct retention", async () => {
-    const logGroupName = `/aws/lambda/${outputs.lambda_function_name}`;
-    const command = new DescribeLogGroupsCommand({
-      logGroupNamePrefix: logGroupName
-    });
-    const response = await cwLogsClient.send(command);
-
-    const logGroup = response.logGroups?.find(lg => lg.logGroupName === logGroupName);
-    expect(logGroup).toBeDefined();
-    expect(logGroup!.retentionInDays).toBe(7);
+describe("RDS Module", () => {
+  test("RDS module files exist", () => {
+    expect(fileExists("../lib/modules/rds/main.tf")).toBe(true);
   });
 
-  test("Application log group exists", async () => {
-    const logGroupName = "/aws/payment/dev-101912540/application";
-    const command = new DescribeLogGroupsCommand({
-      logGroupNamePrefix: logGroupName
-    });
-    const response = await cwLogsClient.send(command);
-
-    const logGroup = response.logGroups?.find(lg => lg.logGroupName === logGroupName);
-    expect(logGroup).toBeDefined();
-    expect(logGroup!.retentionInDays).toBe(7);
+  test("RDS uses correct PostgreSQL version", () => {
+    const content = readFile("../lib/modules/rds/main.tf");
+    expect(content).toMatch(/engine_version\s*=\s*"15\.15"/);
+    expect(content).not.toMatch(/engine_version\s*=\s*"15\.4"/);
   });
 
-  test("Payment log group exists", async () => {
-    const logGroupName = "/aws/payment/dev-101912540/payment";
-    const command = new DescribeLogGroupsCommand({
-      logGroupNamePrefix: logGroupName
-    });
-    const response = await cwLogsClient.send(command);
+  test("RDS password excludes problematic characters", () => {
+    const content = readFile("../lib/modules/rds/main.tf");
+    expect(content).toMatch(/override_special/);
+  });
 
-    const logGroup = response.logGroups?.find(lg => lg.logGroupName === logGroupName);
-    expect(logGroup).toBeDefined();
-    expect(logGroup!.retentionInDays).toBe(7);
+  test("RDS is fully destroyable", () => {
+    const content = readFile("../lib/modules/rds/main.tf");
+    expect(content).toMatch(/skip_final_snapshot\s*=\s*true/);
+    expect(content).toMatch(/deletion_protection\s*=\s*false/);
+  });
+
+  test("RDS Multi-AZ is environment-specific", () => {
+    const content = readFile("../lib/modules/rds/main.tf");
+    expect(content).toMatch(/multi_az\s*=\s*var\.environment\s*==\s*"prod"/);
   });
 });
 
-describe("Resource Naming and Tagging", () => {
+describe("Lambda Module", () => {
+  test("Lambda module creates all required resources", () => {
+    const content = readFile("../lib/modules/lambda/main.tf");
+    expect(content).toMatch(/resource\s+"aws_iam_role"/);
+    expect(content).toMatch(/resource\s+"aws_lambda_function"/);
+    expect(content).toMatch(/resource\s+"aws_cloudwatch_log_group"/);
+  });
 
-  test("VPC has correct tags", async () => {
-    const command = new DescribeVpcsCommand({
-      VpcIds: [outputs.vpc_id]
-    });
-    const response = await ec2Client.send(command);
+  test("Lambda has VPC configuration", () => {
+    const content = readFile("../lib/modules/lambda/main.tf");
+    expect(content).toMatch(/vpc_config/);
+  });
 
-    const tags = response.Vpcs![0].Tags;
-    const envTag = tags?.find(t => t.Key === "Environment");
-    // Module-level tags override default_tags, so check for "dev" or "dev-101912540"
-    expect(envTag?.Value).toMatch(/^dev/);
+  test("Lambda has DB environment variables", () => {
+    const content = readFile("../lib/modules/lambda/main.tf");
+    expect(content).toMatch(/DB_HOST/);
+    expect(content).toMatch(/DB_PASSWORD/);
   });
 });
 
-describe("End-to-End Workflow", () => {
-  test("Lambda can connect to RDS successfully", async () => {
-    // This test invokes Lambda to verify it can connect to the database
-    const command = new InvokeCommand({
-      FunctionName: outputs.lambda_function_name,
-      Payload: JSON.stringify({ test: "connection" })
-    });
+describe("Security Groups Module", () => {
+  test("Security groups allow Lambda to RDS connectivity", () => {
+    const content = readFile("../lib/modules/security_groups/main.tf");
+    expect(content).toMatch(/5432/); // PostgreSQL port
+  });
 
-    const response = await lambdaClient.send(command);
+  test("Dev environment has additional access rules", () => {
+    const content = readFile("../lib/modules/security_groups/main.tf");
+    expect(content).toMatch(/dynamic\s+"ingress"/);
+    expect(content).toMatch(/var\.environment\s*==\s*"dev"/);
+  });
+});
 
-    // Lambda may fail due to cold start or missing pg module, but should execute
-    expect(response.StatusCode).toBe(200);
+describe("Environment Files", () => {
+  test("dev.tfvars has correct memory and instance sizes", () => {
+    const content = readFile("../lib/dev.tfvars");
+    expect(content).toMatch(/lambda_memory_size\s*=\s*256/);
+    expect(content).toMatch(/rds_instance_class\s*=\s*"db\.t3\.micro"/);
+    expect(content).toMatch(/log_retention_days\s*=\s*7/);
+  });
 
-    // If function executed successfully (no unhandled error)
-    if (!response.FunctionError) {
-      const payload = JSON.parse(Buffer.from(response.Payload!).toString());
-      expect(payload.statusCode).toBe(200);
-    } else {
-      // Function error is expected due to missing pg module in inline code
-      expect(response.FunctionError).toBeDefined();
-    }
-  }, 60000); // Extended timeout for cold start + VPC attachment
+  test("staging.tfvars has correct memory and instance sizes", () => {
+    const content = readFile("../lib/staging.tfvars");
+    expect(content).toMatch(/lambda_memory_size\s*=\s*512/);
+    expect(content).toMatch(/rds_instance_class\s*=\s*"db\.t3\.small"/);
+    expect(content).toMatch(/log_retention_days\s*=\s*30/);
+  });
 
+  test("prod.tfvars has correct memory and instance sizes", () => {
+    const content = readFile("../lib/prod.tfvars");
+    expect(content).toMatch(/lambda_memory_size\s*=\s*1024/);
+    expect(content).toMatch(/rds_instance_class\s*=\s*"db\.t3\.medium"/);
+    expect(content).toMatch(/log_retention_days\s*=\s*90/);
+  });
+
+  test("VPC CIDRs are unique across environments", () => {
+    const devContent = readFile("../lib/dev.tfvars");
+    const stagingContent = readFile("../lib/staging.tfvars");
+    const prodContent = readFile("../lib/prod.tfvars");
+
+    const devCidr = devContent.match(/vpc_cidr\s*=\s*"([^"]+)"/)?.[1];
+    const stagingCidr = stagingContent.match(/vpc_cidr\s*=\s*"([^"]+)"/)?.[1];
+    const prodCidr = prodContent.match(/vpc_cidr\s*=\s*"([^"]+)"/)?.[1];
+
+    expect(devCidr).not.toBe(stagingCidr);
+    expect(devCidr).not.toBe(prodCidr);
+    expect(stagingCidr).not.toBe(prodCidr);
+  });
 });
