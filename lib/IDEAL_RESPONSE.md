@@ -89,7 +89,7 @@ Resources:
           };
       Environment:
         Variables:
-          TABLE_NAME: !Ref DynamoDBTable
+          TABLE_NAME: !Ref TurnAroundPromptTable
 
   LambdaFunction2:
     Type: 'AWS::Lambda::Function'
@@ -229,4 +229,8 @@ Outputs:
   ExecutionRoleName:
     Description: 'Lambda Execution Role Name'
     Value: !Ref LambdaExecutionRole
+
+  ExecutionRoleArn:
+    Description: 'Lambda Execution Role ARN'
+    Value: !GetAtt LambdaExecutionRole.Arn
 ```
