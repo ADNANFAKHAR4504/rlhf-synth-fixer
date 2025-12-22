@@ -1,0 +1,13 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "provider": "localstack",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291984",
+  "team": "5",
+  "startedAt": "2025-08-09T13:43:36.499Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": ["Cloud Environment Setup"],
+  "aws_services": ["EC2", "VPC", "S3", "IAM", "CloudWatch"]
+}
