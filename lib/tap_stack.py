@@ -1,10 +1,11 @@
 """tap_stack.py
-This module defines the TapStack class, which serves as the main CDK stack for 
+This module defines the TapStack class, which serves as the main CDK stack for
 the TAP (Test Automation Platform) project.
-It orchestrates the instantiation of other resource-specific stacks and 
+It orchestrates the instantiation of other resource-specific stacks and
 manages environment-specific configurations.
 """
 
+import os
 from typing import Optional
 
 import aws_cdk as cdk
@@ -75,6 +76,9 @@ class TapStack(Stack):
         ) or self.node.try_get_context('environmentSuffix') or 'dev'
         self.environment_suffix = environment_suffix
 
+        # Check if running on LocalStack
+        is_localstack = os.environ.get("AWS_ENDPOINT_URL") is not None
+
         # KMS Keys
         s3_kms_key = kms.Key(
             self, f"s3-kms-key-{environment_suffix}",
@@ -82,12 +86,16 @@ class TapStack(Stack):
             enable_key_rotation=True,
             removal_policy=RemovalPolicy.DESTROY
         )
-        rds_kms_key = kms.Key(
-            self, f"rds-kms-key-{environment_suffix}",
-            description="KMS key for RDS encryption",
-            enable_key_rotation=True,
-            removal_policy=RemovalPolicy.DESTROY
-        )
+
+        # Only create RDS KMS key if not on LocalStack (RDS not supported)
+        rds_kms_key = None
+        if not is_localstack:
+            rds_kms_key = kms.Key(
+                self, f"rds-kms-key-{environment_suffix}",
+                description="KMS key for RDS encryption",
+                enable_key_rotation=True,
+                removal_policy=RemovalPolicy.DESTROY
+            )
 
         # VPC
         vpc = ec2.Vpc(
@@ -164,36 +172,38 @@ class TapStack(Stack):
             removal_policy=RemovalPolicy.DESTROY
         )
 
-        # RDS Subnet Group
-        db_subnet_group = rds.SubnetGroup(
-            self, f"db-subnet-group-{environment_suffix}",
-            description="Subnet group for RDS database",
-            vpc=vpc,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED)
-        )
+        # RDS Subnet Group and Database (skip on LocalStack - RDS not supported)
+        database = None
+        if not is_localstack:
+            db_subnet_group = rds.SubnetGroup(
+                self, f"db-subnet-group-{environment_suffix}",
+                description="Subnet group for RDS database",
+                vpc=vpc,
+                vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED)
+            )
 
-        # RDS MySQL Instance
-        database = rds.DatabaseInstance(
-            self, f"tap-database-{environment_suffix}",
-            engine=rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_8_0
-            ),
-            instance_type=ec2.InstanceType.of(
-                ec2.InstanceClass.BURSTABLE3,
-                ec2.InstanceSize.MICRO
-            ),
-            vpc=vpc,
-            subnet_group=db_subnet_group,
-            security_groups=[db_sg],
-            multi_az=False,
-            storage_encrypted=True,
-            storage_encryption_key=rds_kms_key,
-            allocated_storage=20,
-            max_allocated_storage=100,
-            backup_retention=Duration.days(1),
-            deletion_protection=False,
-            removal_policy=RemovalPolicy.DESTROY
-        )
+            # RDS MySQL Instance
+            database = rds.DatabaseInstance(
+                self, f"tap-database-{environment_suffix}",
+                engine=rds.DatabaseInstanceEngine.mysql(
+                    version=rds.MysqlEngineVersion.VER_8_0
+                ),
+                instance_type=ec2.InstanceType.of(
+                    ec2.InstanceClass.BURSTABLE3,
+                    ec2.InstanceSize.MICRO
+                ),
+                vpc=vpc,
+                subnet_group=db_subnet_group,
+                security_groups=[db_sg],
+                multi_az=False,
+                storage_encrypted=True,
+                storage_encryption_key=rds_kms_key,
+                allocated_storage=20,
+                max_allocated_storage=100,
+                backup_retention=Duration.days(1),
+                deletion_protection=False,
+                removal_policy=RemovalPolicy.DESTROY
+            )
 
         # Application Load Balancer
         alb = elbv2.ApplicationLoadBalancer(
@@ -245,12 +255,16 @@ class TapStack(Stack):
             description="The VPC ID",
             export_name=f"{self.stack_name}-VpcId"
         )
-        CfnOutput(
-            self, "DatabaseEndpoint",
-            value=database.db_instance_endpoint_address,
-            description="The database endpoint",
-            export_name=f"{self.stack_name}-DatabaseEndpoint"
-        )
+
+        # Only output database endpoint if RDS was created (not on LocalStack)
+        if database is not None:
+            CfnOutput(
+                self, "DatabaseEndpoint",
+                value=database.db_instance_endpoint_address,
+                description="The database endpoint",
+                export_name=f"{self.stack_name}-DatabaseEndpoint"
+            )
+
         CfnOutput(
             self, "AlbDnsName",
             value=alb.load_balancer_dns_name,
@@ -275,12 +289,16 @@ class TapStack(Stack):
             description="The KMS key ID for S3 encryption",
             export_name=f"{self.stack_name}-S3KmsKeyId"
         )
-        CfnOutput(
-            self, "RdsKmsKeyId",
-            value=rds_kms_key.key_id,
-            description="The KMS key ID for RDS encryption",
-            export_name=f"{self.stack_name}-RdsKmsKeyId"
-        )
+
+        # Only output RDS KMS key if it was created (not on LocalStack)
+        if rds_kms_key is not None:
+            CfnOutput(
+                self, "RdsKmsKeyId",
+                value=rds_kms_key.key_id,
+                description="The KMS key ID for RDS encryption",
+                export_name=f"{self.stack_name}-RdsKmsKeyId"
+            )
+
         CfnOutput(
             self, "AlertTopicArn",
             value=alert_topic.topic_arn,
