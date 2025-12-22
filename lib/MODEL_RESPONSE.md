@@ -633,25 +633,25 @@ Outputs:
 
 ## Key Security Features Implemented
 
-### 🔐 **Encryption & Data Protection**
+### **Encryption & Data Protection**
 - **KMS Customer-Managed Key** for RDS with least privilege policy
 - **AES256 encryption** for both S3 buckets
 - **S3 versioning** enabled for data integrity
 - **30-day backup retention** for RDS
 
-### 🛡️ **Access Control**
+### **Access Control**
 - **Least privilege IAM policies** for EC2 instance
 - **Security group** allowing only HTTPS (port 443)
 - **VPC isolation** with public/private subnets
 - **Database security group** restricting access to application tier only
 
-### 📊 **Monitoring & Compliance**
+### **Monitoring & Compliance**
 - **CloudTrail** with comprehensive logging including data events
 - **CloudWatch alarms** for EC2 auto-recovery
 - **Enhanced monitoring** for RDS
 - **CloudWatch agent** configuration for detailed metrics
 
-### 🏗️ **Infrastructure Best Practices**
+### **Infrastructure Best Practices**
 - **Consistent naming convention** using parameters
 - **Resource tagging** for governance
 - **Deletion protection** for critical resources
@@ -679,9 +679,9 @@ aws cloudformation describe-stacks \
 
 ## Compliance Notes
 
-- ✅ **SOC 2 Type II** - Comprehensive logging and monitoring
-- ✅ **PCI DSS** - Encryption at rest and in transit
-- ✅ **GDPR** - Data protection with versioning and encryption
-- ✅ **Financial Services** - Audit trails and access controls
+- **SOC 2 Type II** - Comprehensive logging and monitoring
+- **PCI DSS** - Encryption at rest and in transit
+- **GDPR** - Data protection with versioning and encryption
+- **Financial Services** - Audit trails and access controls
 
 This template provides a production-ready, secure foundation for financial services applications with comprehensive security controls and monitoring capabilities.
