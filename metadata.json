@@ -10,5 +10,6 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "aws_services": []
 }
