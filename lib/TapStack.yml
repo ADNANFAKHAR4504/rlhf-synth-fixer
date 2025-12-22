@@ -116,8 +116,14 @@ Conditions:
   IsUSEast1: !Equals [!Ref 'AWS::Region', us-east-1]
   HasEmailSubscription: !Not [!Equals [!Ref EmailSubscription, ""]]
   UsePostgres: !Equals [!Ref RDSEngine, postgres]
-  IsAWS: !Not [!Equals [!Ref IsLocalStack, "true"]]
-  IsLocal: !Equals [!Ref IsLocalStack, "true"]
+
+  # LocalStack heuristic: default/fallback account ID is commonly 000000000000
+  IsLocalInferred: !Equals [!Ref 'AWS::AccountId', '000000000000']  # LocalStack default :contentReference[oaicite:2]{index=2}
+  IsLocalParam: !Equals [!Ref IsLocalStack, "true"]
+
+  # Treat as LocalStack if either param says so OR account inference matches
+  IsLocal: !Or [!Condition IsLocalParam, !Condition IsLocalInferred]
+  IsAWS: !Not [!Condition IsLocal]
 
 # =============================================================================
 # RESOURCES
