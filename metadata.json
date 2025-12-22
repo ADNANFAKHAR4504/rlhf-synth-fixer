@@ -8,12 +8,7 @@
   "startedAt": "2025-08-18T18:25:09.850Z",
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
-    "CI/CD Pipeline",
-    "IaC Optimization",
-    "Security Configuration as Code",
-    "Infrastructure Analysis/Monitoring",
-    "Cloud Environment Setup",
-    "General Infrastructure Tooling QA"
+    "CI/CD Pipeline"
   ],
   "aws_services": [
     "AWS CodePipeline",
