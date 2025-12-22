@@ -8,6 +8,12 @@ import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = 'test';
 
+// Mock environment for cross-stack reference tests
+const testEnv = {
+  account: '123456789012',
+  region: 'us-east-1',
+};
+
 describe('TapStack Infrastructure Tests', () => {
   describe('Main TapStack', () => {
     let app: cdk.App;
@@ -16,7 +22,10 @@ describe('TapStack Infrastructure Tests', () => {
 
     beforeEach(() => {
       app = new cdk.App();
-      mainStack = new TapStack(app, 'TestTapStack', { environmentSuffix });
+      mainStack = new TapStack(app, 'TestTapStack', {
+        environmentSuffix,
+        env: testEnv,
+      });
       template = Template.fromStack(mainStack);
     });
 
@@ -45,7 +54,9 @@ describe('TapStack Infrastructure Tests', () => {
 
     test('TapStack uses default environment suffix when not provided', () => {
       const appDefault = new cdk.App();
-      const stackDefault = new TapStack(appDefault, 'TestTapStackDefault', {});
+      const stackDefault = new TapStack(appDefault, 'TestTapStackDefault', {
+        env: testEnv,
+      });
       expect(stackDefault).toBeDefined();
 
       // Verify default 'dev' suffix is used in child stack names
@@ -58,7 +69,9 @@ describe('TapStack Infrastructure Tests', () => {
       const appContext = new cdk.App({
         context: { environmentSuffix: 'context-env' },
       });
-      const stackContext = new TapStack(appContext, 'TestTapStackContext', {});
+      const stackContext = new TapStack(appContext, 'TestTapStackContext', {
+        env: testEnv,
+      });
       expect(stackContext).toBeDefined();
 
       // Verify context suffix is used
@@ -71,6 +84,7 @@ describe('TapStack Infrastructure Tests', () => {
       const appSsh = new cdk.App();
       const stackSsh = new TapStack(appSsh, 'TestTapStackSsh', {
         environmentSuffix,
+        env: testEnv,
       });
       expect(stackSsh).toBeDefined();
       // Default SSH CIDR should be used (10.0.0.0/8)
@@ -85,6 +99,7 @@ describe('TapStack Infrastructure Tests', () => {
         {
           environmentSuffix,
           allowedSshCidr: '192.168.1.0/24',
+          env: testEnv,
         }
       );
       expect(stackCustomSsh).toBeDefined();
@@ -756,7 +771,10 @@ describe('TapStack Infrastructure Tests', () => {
 
     beforeEach(() => {
       app = new cdk.App();
-      new TapStack(app, 'TestTapStackIntegration', { environmentSuffix });
+      new TapStack(app, 'TestTapStackIntegration', {
+        environmentSuffix,
+        env: testEnv,
+      });
     });
 
     test('All required stacks are created and properly named', () => {

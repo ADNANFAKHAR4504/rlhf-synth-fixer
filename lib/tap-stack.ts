@@ -22,9 +22,9 @@ export class TapStack extends cdk.Stack {
 
     const allowedSshCidr = props?.allowedSshCidr || '10.0.0.0/8';
 
-    // Common stack props
+    // Common stack props - use passed env or fall back to process.env
     const commonProps = {
-      env: {
+      env: props?.env || {
         account: process.env.CDK_DEFAULT_ACCOUNT,
         region: process.env.CDK_DEFAULT_REGION,
       },
