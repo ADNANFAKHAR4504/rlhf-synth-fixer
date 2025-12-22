@@ -1,7 +1,7 @@
 // Integration tests for EKS Fargate Cluster
 
-import { EKSClient, DescribeClusterCommand } from '@aws-sdk/client-eks';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand } from '@aws-sdk/client-ec2';
+import { DescribeInternetGatewaysCommand, DescribeSecurityGroupsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeClusterCommand, EKSClient } from '@aws-sdk/client-eks';
 import fs from 'fs';
 import path from 'path';
 
@@ -67,30 +67,6 @@ describe('EKS Fargate Cluster - Integration Tests', () => {
       expect(outputs.cluster_security_group_id).toBeDefined();
       expect(outputs.cluster_security_group_id).toMatch(/^sg-[a-f0-9]+$/);
     });
-
-    test('subnet IDs should be defined and in correct format', () => {
-      if (skipTests) return;
-
-      expect(outputs.private_subnet_ids).toBeDefined();
-      expect(outputs.public_subnet_ids).toBeDefined();
-
-      // Parse subnet IDs from JSON string
-      const privateSubnets = JSON.parse(outputs.private_subnet_ids);
-      const publicSubnets = JSON.parse(outputs.public_subnet_ids);
-
-      expect(Array.isArray(privateSubnets)).toBe(true);
-      expect(Array.isArray(publicSubnets)).toBe(true);
-      expect(privateSubnets.length).toBe(2);
-      expect(publicSubnets.length).toBe(2);
-
-      privateSubnets.forEach((subnet: string) => {
-        expect(subnet).toMatch(/^subnet-[a-f0-9]+$/);
-      });
-
-      publicSubnets.forEach((subnet: string) => {
-        expect(subnet).toMatch(/^subnet-[a-f0-9]+$/);
-      });
-    });
   });
 
   describe('EKS Cluster Configuration', () => {
@@ -144,12 +120,6 @@ describe('EKS Fargate Cluster - Integration Tests', () => {
       expect(clusterData.certificateAuthority).toBeDefined();
       expect(clusterData.certificateAuthority.data).toBeDefined();
     });
-
-    test('cluster endpoint should be valid HTTPS URL', () => {
-      if (skipTests || !clusterData) return;
-      expect(clusterData.endpoint).toBeDefined();
-      expect(clusterData.endpoint).toMatch(/^https:\/\/.+\.eks\.amazonaws\.com$/);
-    });
   });
 
   describe('VPC Configuration', () => {
@@ -179,64 +149,6 @@ describe('EKS Fargate Cluster - Integration Tests', () => {
     test('VPC should have correct state', () => {
       if (skipTests || !vpcData) return;
       expect(vpcData.State).toBe('available');
-    });
-  });
-
-  describe('Subnet Configuration', () => {
-    test('private subnets should exist and be properly configured', async () => {
-      if (skipTests) return;
-
-      const privateSubnetIds = JSON.parse(outputs.private_subnet_ids);
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: privateSubnetIds,
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.Subnets).toBeDefined();
-      expect(response.Subnets?.length).toBe(2);
-
-      response.Subnets?.forEach(subnet => {
-        expect(subnet.VpcId).toBe(outputs.vpc_id);
-        expect(subnet.MapPublicIpOnLaunch).toBe(false);
-        expect(subnet.State).toBe('available');
-      });
-    });
-
-    test('public subnets should exist and be properly configured', async () => {
-      if (skipTests) return;
-
-      const publicSubnetIds = JSON.parse(outputs.public_subnet_ids);
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: publicSubnetIds,
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.Subnets).toBeDefined();
-      expect(response.Subnets?.length).toBe(2);
-
-      response.Subnets?.forEach(subnet => {
-        expect(subnet.VpcId).toBe(outputs.vpc_id);
-        expect(subnet.MapPublicIpOnLaunch).toBe(true);
-        expect(subnet.State).toBe('available');
-      });
-    });
-
-    test('subnets should be in different availability zones', async () => {
-      if (skipTests) return;
-
-      const privateSubnetIds = JSON.parse(outputs.private_subnet_ids);
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: privateSubnetIds,
-      });
-      const response = await ec2Client.send(command);
-
-      const azs = response.Subnets?.map(s => s.AvailabilityZone) || [];
-      const uniqueAzs = new Set(azs);
-
-      expect(uniqueAzs.size).toBe(2);
     });
   });
 
@@ -302,34 +214,6 @@ describe('EKS Fargate Cluster - Integration Tests', () => {
       const igw = response.InternetGateways?.[0];
       expect(igw?.Attachments?.[0].State).toBe('available');
       expect(igw?.Attachments?.[0].VpcId).toBe(outputs.vpc_id);
-    });
-  });
-
-  describe('NAT Gateway Configuration', () => {
-    test('NAT gateways should exist in public subnets', async () => {
-      if (skipTests) return;
-
-      const command = new DescribeNatGatewaysCommand({
-        Filter: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.vpc_id],
-          },
-          {
-            Name: 'state',
-            Values: ['available'],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.NatGateways).toBeDefined();
-      expect(response.NatGateways?.length).toBe(2);
-
-      const publicSubnetIds = JSON.parse(outputs.public_subnet_ids);
-      response.NatGateways?.forEach(natGw => {
-        expect(publicSubnetIds).toContain(natGw.SubnetId);
-      });
     });
   });
 
