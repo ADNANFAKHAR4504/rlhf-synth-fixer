@@ -1,0 +1,24 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912532",
+  "team": "synth",
+  "startedAt": "2025-11-20T11:36:18+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "SecurityGroups",
+    "NetworkACL",
+    "NATGateway",
+    "InternetGateway",
+    "CloudWatch",
+    "IAM"
+  ],
+  "provider": "localstack"
+}
