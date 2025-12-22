@@ -1,6 +1,6 @@
 {
-  "platform": "cdk",
-  "language": "ts",
+  "platform": "cicd",
+  "language": "yaml",
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "291969",
