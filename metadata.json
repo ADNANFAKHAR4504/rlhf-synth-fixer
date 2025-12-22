@@ -20,5 +20,6 @@
     "SSM",
     "VPC"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": 1
 }
