@@ -75,7 +75,7 @@ class TapStack(cdk.Stack):
 
         # Get environment suffix from props, context, or use 'dev' as default
         _environment_suffix = (
-                props.environment_suffix if props else None
+        props.environment_suffix if props else None
         ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
         # Environment and naming configuration
@@ -90,27 +90,27 @@ class TapStack(cdk.Stack):
 
         # Add CDK outputs for deployment validation
         cdk.CfnOutput(
-                self,
-                "S3BucketName",
-                value=self.s3_bucket.bucket_name,
-                description="S3 bucket for static files and backups",
-                export_name=f"{self.project_name}-{self.env_name}-bucket-name"
+        self,
+        "S3BucketName",
+        value=self.s3_bucket.bucket_name,
+        description="S3 bucket for static files and backups",
+        export_name=f"{self.project_name}-{self.env_name}-bucket-name"
         )
 
         cdk.CfnOutput(
-                self,
-                "DynamoDBTableName",
-                value=self.dynamodb_table.table_name,
-                description="DynamoDB table for application data",
-                export_name=f"{self.project_name}-{self.env_name}-table-name"
+        self,
+        "DynamoDBTableName",
+        value=self.dynamodb_table.table_name,
+        description="DynamoDB table for application data",
+        export_name=f"{self.project_name}-{self.env_name}-table-name"
         )
 
         cdk.CfnOutput(
-                self,
-                "LambdaFunctionName",
-                value=self.lambda_function.function_name,
-                description="Lambda function for backend processing",
-                export_name=f"{self.project_name}-{self.env_name}-lambda-name"
+        self,
+        "LambdaFunctionName",
+        value=self.lambda_function.function_name,
+        description="Lambda function for backend processing",
+        export_name=f"{self.project_name}-{self.env_name}-lambda-name"
         )
 
     def _create_s3_bucket(self) -> s3.Bucket:
@@ -128,7 +128,7 @@ class TapStack(cdk.Stack):
             versioned=True,
             # Configure lifecycle for cost optimization
             lifecycle_rules=[
-                s3.LifecycleRule(
+        s3.LifecycleRule(
                     id="cost-optimization",
                     enabled=True,
                     # Move to IA after 30 days
@@ -142,7 +142,7 @@ class TapStack(cdk.Stack):
               transition_after=Duration.days(90)
                         )
                     ]
-                )
+        )
             ],
             # Enable server-side encryption
             encryption=s3.BucketEncryption.S3_MANAGED,
@@ -182,86 +182,86 @@ class TapStack(cdk.Stack):
         return table
 
     def _create_lambda_role(self) -> iam.Role:
-                """
-                Create IAM role with least-privilege access for Lambda function
-                """
-                role = iam.Role(
+        """
+        Create IAM role with least-privilege access for Lambda function
+        """
+        role = iam.Role(
                         self,
                         "TapLambdaRole",
                         role_name=f"{self.project_name}-{self.env_name}-lambda-role",
                         assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
                         description="IAM role for TAP Lambda function with least-privilege access",
                         managed_policies=[
-                # Basic Lambda execution permissions
-                iam.ManagedPolicy.from_aws_managed_policy_name(
+        # Basic Lambda execution permissions
+        iam.ManagedPolicy.from_aws_managed_policy_name(
                     "service-role/AWSLambdaBasicExecutionRole"
-                )
+        )
                         ]
-                )
+        )
 
-                # Grant specific S3 permissions
-                role.add_to_policy(
+        # Grant specific S3 permissions
+        role.add_to_policy(
                         iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=[
+        effect=iam.Effect.ALLOW,
+        actions=[
                     "s3:GetObject",
                     "s3:PutObject",
                     "s3:DeleteObject",
                     "s3:ListBucket"
-                ],
-                resources=[
+        ],
+        resources=[
                     self.s3_bucket.bucket_arn,
                     f"{self.s3_bucket.bucket_arn}/*"
-                ]
+        ]
                         )
-                )
+        )
 
-                # Grant specific DynamoDB permissions
-                role.add_to_policy(
+        # Grant specific DynamoDB permissions
+        role.add_to_policy(
                         iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=[
+        effect=iam.Effect.ALLOW,
+        actions=[
                     "dynamodb:GetItem",
                     "dynamodb:PutItem",
                     "dynamodb:UpdateItem",
                     "dynamodb:DeleteItem",
                     "dynamodb:Query",
                     "dynamodb:Scan"
-                ],
-                resources=[self.dynamodb_table.table_arn]
+        ],
+        resources=[self.dynamodb_table.table_arn]
                         )
-                )
+        )
 
-                return role
+        return role
 
     def _create_lambda_function(self) -> lambda_.Function:
-                """
-                Create Lambda function with access to S3 and DynamoDB
-                """
-                function_name = f"{self.project_name}-{self.env_name}-handler"
+        """
+        Create Lambda function with access to S3 and DynamoDB
+        """
+        function_name = f"{self.project_name}-{self.env_name}-handler"
 
-                # Inline Lambda code using dedent
-                lambda_code = textwrap.dedent("""
+        # Inline Lambda code using dedent
+        lambda_code = textwrap.dedent("""
                         import json
                         import boto3
                         import os
                         from datetime import datetime
 
                         def lambda_handler(event, context):
-                '''
-                Demo Lambda handler that interacts with S3 and DynamoDB
-                '''
+        '''
+        Demo Lambda handler that interacts with S3 and DynamoDB
+        '''
 
-                # Initialize AWS clients
-                s3_client = boto3.client('s3')
-                dynamodb = boto3.resource('dynamodb')
+        # Initialize AWS clients
+        s3_client = boto3.client('s3')
+        dynamodb = boto3.resource('dynamodb')
 
-                # Get environment variables
-                bucket_name = os.environ['S3_BUCKET_NAME']
-                table_name = os.environ['DYNAMODB_TABLE_NAME']
-                table = dynamodb.Table(table_name)
+        # Get environment variables
+        bucket_name = os.environ['S3_BUCKET_NAME']
+        table_name = os.environ['DYNAMODB_TABLE_NAME']
+        table = dynamodb.Table(table_name)
 
-                try:
+        try:
                     # Example: Store request info in DynamoDB
                     item_id = context.aws_request_id
                     timestamp = datetime.utcnow().isoformat()
@@ -291,7 +291,7 @@ class TapStack(cdk.Stack):
                         })
                     }
 
-                except Exception as e:
+        except Exception as e:
                     print(f"Error: {str(e)}")
                     response = {
                         'statusCode': 500,
@@ -301,10 +301,10 @@ class TapStack(cdk.Stack):
                         })
                     }
 
-                return response
-                """)
+        return response
+        """)
 
-                function = lambda_.Function(
+        function = lambda_.Function(
                         self,
                         "TapLambdaFunction",
                         function_name=function_name,
@@ -316,25 +316,25 @@ class TapStack(cdk.Stack):
                         timeout=Duration.seconds(30),
                         memory_size=256,
                         environment={
-                "S3_BUCKET_NAME": self.s3_bucket.bucket_name,
-                "DYNAMODB_TABLE_NAME": self.dynamodb_table.table_name,
-                "ENVIRONMENT": self.env_name
+        "S3_BUCKET_NAME": self.s3_bucket.bucket_name,
+        "DYNAMODB_TABLE_NAME": self.dynamodb_table.table_name,
+        "ENVIRONMENT": self.env_name
                         }
-                )
+        )
 
-                return function
+        return function
 
     @property
     def bucket_name(self) -> str:
-                """Get S3 bucket name"""
-                return self.s3_bucket.bucket_name
+        """Get S3 bucket name"""
+        return self.s3_bucket.bucket_name
 
     @property
     def table_name(self) -> str:
-                """Get DynamoDB table name"""
-                return self.dynamodb_table.table_name
+        """Get DynamoDB table name"""
+        return self.dynamodb_table.table_name
 
     @property
     def function_name(self) -> str:
-                """Get Lambda function name"""
-                return self.lambda_function.function_name
+        """Get Lambda function name"""
+        return self.lambda_function.function_name
