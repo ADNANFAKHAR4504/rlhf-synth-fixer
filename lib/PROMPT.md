@@ -26,7 +26,7 @@ RDS MySQL in private subnets that only accepts connections from the EC2 instance
 S3 buckets for static assets with versioning enabled. Environment prefix in bucket names for uniqueness.
 
 ### Security flow
-ALB security group allows web traffic from internet. EC2 security group only allows traffic from ALB. RDS security group only accepts MySQL connections from EC2 instances. This way traffic flows from internet to ALB to EC2 to RDS in a secure chain. All data encrypted with KMS.
+ALB security group permits HTTP and HTTPS on ports 80 and 443 from the internet. EC2 security group only accepts requests from the ALB security group. RDS security group restricts MySQL access to the EC2 security group only. Traffic flows in a controlled chain from internet to ALB to EC2 to RDS. KMS encrypts data at rest.
 
 ### Monitoring
 CloudWatch collects logs from EC2 and RDS. DynamoDB handles Terraform state locking.
