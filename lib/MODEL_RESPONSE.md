@@ -809,12 +809,12 @@ aws cloudformation describe-stacks \
 
 ## Security Compliance Features
 
-- ✅ **Encryption at rest** for all data storage
-- ✅ **Network segmentation** with security groups
-- ✅ **Audit logging** with CloudTrail
-- ✅ **Compliance monitoring** with Config rules
-- ✅ **Access control** with IAM roles
-- ✅ **Data versioning** for recovery
-- ✅ **Multi-AZ architecture** for availability
+- **Encryption at rest** for all data storage
+- **Network segmentation** with security groups
+- **Audit logging** with CloudTrail
+- **Compliance monitoring** with Config rules
+- **Access control** with IAM roles
+- **Data versioning** for recovery
+- **Multi-AZ architecture** for availability
 
 This template creates a production-ready, highly secure AWS infrastructure that meets enterprise security standards and compliance requirements.
