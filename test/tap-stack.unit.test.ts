@@ -142,7 +142,7 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       const alias = template.Resources.KMSKeyAlias;
       expect(alias).toBeDefined();
       expect(alias.Type).toBe('AWS::KMS::Alias');
-      expect(alias.Properties.AliasName).toEqual({ 'Fn::Sub': 'alias/tapstack-229157-${EnvironmentSuffix}' });
+      expect(alias.Properties.AliasName).toEqual({ 'Fn::Sub': 'alias/TapStack-229157-${EnvironmentSuffix}' });
       expect(alias.Properties.TargetKeyId).toEqual({ Ref: 'KMSKey' });
     });
 
