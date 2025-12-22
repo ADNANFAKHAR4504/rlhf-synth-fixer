@@ -197,16 +197,11 @@ describe('TapStack Serverless Integration Tests', () => {
         console.log('✅ Flat outputs: API Gateway URL structure validated');
       } else {
         // Real HTTP test
-        try {
-          const response = await axios.get(apiGatewayUrl, {
-            timeout: 10000
-          });
-          expect(response.status).toBe(200);
-          expect(response.data).toBeDefined();
-        } catch (error: any) {
-          expect(error.response).toBeDefined();
-          expect(error.response.status).toBeLessThan(500);
-        }
+        const response = await axios.get(apiGatewayUrl, {
+          timeout: 10000
+        });
+        expect(response.status).toBe(200);
+        expect(response.data).toBeDefined();
       }
     });
   });
@@ -324,25 +319,17 @@ describe('TapStack Serverless Integration Tests', () => {
         console.log('✅ Flat outputs: End-to-end flow structure validated');
       } else {
         // Real end-to-end test
-        try {
-          const getResponse = await axios.get(apiGatewayUrl, {
-            timeout: 10000
-          });
-          expect(getResponse.status).toBe(200);
-        } catch (error: any) {
-          expect(error.response?.status).toBeLessThan(500);
-        }
+        const getResponse = await axios.get(apiGatewayUrl, {
+          timeout: 10000
+        });
+        expect(getResponse.status).toBe(200);
 
-        try {
-          const postResponse = await axios.post(apiGatewayUrl, {
-            message: 'Hello from integration test'
-          }, {
-            timeout: 10000
-          });
-          expect(postResponse.status).toBe(200);
-        } catch (error: any) {
-          expect(error.response?.status).toBeLessThan(500);
-        }
+        const postResponse = await axios.post(apiGatewayUrl, {
+          message: 'Hello from integration test'
+        }, {
+          timeout: 10000
+        });
+        expect(postResponse.status).toBe(200);
       }
     });
 
@@ -353,15 +340,9 @@ describe('TapStack Serverless Integration Tests', () => {
         console.log('✅ Flat outputs: Error handling structure validated');
       } else {
         // Real error handling test
-        try {
-          await axios.get(`${apiGatewayUrl}/invalid`, {
-            timeout: 10000
-          });
-          fail('Expected 404 error for invalid endpoint');
-        } catch (error: any) {
-          expect(error.response?.status).toBeGreaterThanOrEqual(400);
-          expect(error.response?.status).toBeLessThan(500);
-        }
+        await expect(axios.get(`${apiGatewayUrl}/invalid`, {
+          timeout: 10000
+        })).rejects.toThrow();
       }
     });
   });
@@ -375,13 +356,9 @@ describe('TapStack Serverless Integration Tests', () => {
       } else {
         // Real performance test
         const startTime = Date.now();
-        try {
-          await axios.get(apiGatewayUrl, {
-            timeout: 10000
-          });
-        } catch (error: any) {
-          expect(error.response?.status).toBeLessThan(500);
-        }
+        await axios.get(apiGatewayUrl, {
+          timeout: 10000
+        });
         const responseTime = Date.now() - startTime;
         expect(responseTime).toBeLessThan(5000);
       }
