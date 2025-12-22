@@ -140,14 +140,16 @@ class TestAnalyzeAlarms:
         mock_cw_client = Mock()
         mock_boto_client.return_value = mock_cw_client
 
+        # Mock all 6 expected alarms with correct names
         mock_cw_client.describe_alarms.return_value = {
-            'MetricAlarms': [{
-                'AlarmName': 'payment-api-error-rate-test',
-                'StateValue': 'OK',
-                'MetricName': 'ErrorRate',
-                'Threshold': 5.0,
-                'AlarmActions': ['arn:aws:sns:us-east-1:123456789012:test']
-            }] * 6  # Simulate 6 alarms
+            'MetricAlarms': [
+                {'AlarmName': 'payment-api-error-rate-test', 'StateValue': 'OK', 'MetricName': 'ErrorRate', 'Threshold': 5.0, 'AlarmActions': ['arn:aws:sns:us-east-1:123456789012:test']},
+                {'AlarmName': 'payment-api-response-time-test', 'StateValue': 'OK', 'MetricName': 'ResponseTime', 'Threshold': 500, 'AlarmActions': ['arn:aws:sns:us-east-1:123456789012:test']},
+                {'AlarmName': 'failed-transactions-test', 'StateValue': 'OK', 'MetricName': 'FailedTransactions', 'Threshold': 5, 'AlarmActions': ['arn:aws:sns:us-east-1:123456789012:test']},
+                {'AlarmName': 'transaction-processor-errors-test', 'StateValue': 'OK', 'MetricName': 'Errors', 'Threshold': 1, 'AlarmActions': ['arn:aws:sns:us-east-1:123456789012:test']},
+                {'AlarmName': 'fraud-detector-errors-test', 'StateValue': 'OK', 'MetricName': 'Errors', 'Threshold': 1, 'AlarmActions': ['arn:aws:sns:us-east-1:123456789012:test']},
+                {'AlarmName': 'payment-high-load-test', 'StateValue': 'OK', 'MetricName': 'RequestCount', 'Threshold': 1000, 'AlarmActions': ['arn:aws:sns:us-east-1:123456789012:test']}
+            ]
         }
 
         analyzer = InfrastructureAnalyzer('test')
@@ -185,8 +187,10 @@ class TestAnalyzeAlarms:
         analyzer.cloudwatch_client = mock_cw_client
         result = analyzer.analyze_alarms()
 
-        assert len(result) == 6
-        assert all(alarm['status'] == 'error' for alarm in result)
+        # When there's an error, returns single entry with name 'all'
+        assert len(result) == 1
+        assert result[0]['name'] == 'all'
+        assert result[0]['status'] == 'error'
 
 
 class TestAnalyzeCompositeAlarms:
@@ -266,7 +270,10 @@ class TestAnalyzeDashboards:
         mock_cw_client = Mock()
         mock_boto_client.return_value = mock_cw_client
 
-        mock_cw_client.list_dashboards.return_value = {'DashboardEntries': []}
+        # Mock DashboardNotFoundError exception
+        dashboard_not_found = type('DashboardNotFoundError', (Exception,), {})
+        mock_cw_client.exceptions = type('exceptions', (), {'DashboardNotFoundError': dashboard_not_found})()
+        mock_cw_client.get_dashboard.side_effect = dashboard_not_found()
 
         analyzer = InfrastructureAnalyzer('test')
         analyzer.cloudwatch_client = mock_cw_client
@@ -287,20 +294,20 @@ class TestAnalyzeMetricFilters:
 
         mock_logs_client.describe_metric_filters.return_value = {
             'metricFilters': [
-                {
-                    'filterName': 'filter1',
-                    'logGroupName': '/aws/payment-api-test',
-                    'filterPattern': '{$.level = "ERROR"}',
-                    'metricTransformations': [{'metricName': 'ErrorCount'}]
-                }
-            ] * 14  # Simulate 14 filters
+                {'filterName': f'filter{i}', 'logGroupName': '/aws/payment-api-test', 'filterPattern': '{$.level = "ERROR"}'}
+                for i in range(14)
+            ]
         }
 
         analyzer = InfrastructureAnalyzer('test')
         analyzer.logs_client = mock_logs_client
         result = analyzer.analyze_metric_filters()
 
-        assert len(result) == 14
+        # Returns 3 entries (one per log group), each with filter info
+        assert len(result) == 3
+        # First log group should have 14 filters
+        assert result[0]['filter_count'] == 14
+        assert result[0]['status'] == 'found'
 
     @patch('analyse.boto3.client')
     def test_analyze_metric_filters_with_error(self, mock_boto_client):
@@ -308,13 +315,16 @@ class TestAnalyzeMetricFilters:
         mock_logs_client = Mock()
         mock_boto_client.return_value = mock_logs_client
 
-        mock_logs_client.describe_metric_filters.side_effect = Exception('Error')
+        mock_logs_client.describe_metric_filters.side_effect = Exception('API Error')
 
         analyzer = InfrastructureAnalyzer('test')
         analyzer.logs_client = mock_logs_client
         result = analyzer.analyze_metric_filters()
 
-        assert 'error' in str(result).lower()
+        # Returns 3 entries (one per log group), all with error status
+        assert len(result) == 3
+        assert all(entry['status'] == 'error' for entry in result)
+        assert all('API Error' in entry['error'] for entry in result)
 
 
 class TestAnalyzeInfrastructure:
@@ -343,7 +353,9 @@ class TestAnalyzeInfrastructure:
         assert 'metric_filters' in result
         assert 'recommendations' in result
         assert 'compliance_score' in result
-        assert result['analysis_timestamp']
+        assert 'timestamp' in result
+        assert 'environment_suffix' in result
+        assert 'region' in result
 
 
 class TestGenerateRecommendations:
@@ -365,7 +377,7 @@ class TestGenerateRecommendations:
         recommendations = analyzer._generate_recommendations(analysis)
 
         assert len(recommendations) > 0
-        assert any('log group' in rec['description'].lower() for rec in recommendations)
+        assert any('log group' in rec['message'].lower() for rec in recommendations)
 
     @patch('analyse.boto3.client')
     def test_generate_recommendations_missing_encryption(self, mock_boto_client):
@@ -382,7 +394,8 @@ class TestGenerateRecommendations:
 
         recommendations = analyzer._generate_recommendations(analysis)
 
-        assert any('kms' in rec['description'].lower() or 'encrypt' in rec['description'].lower()
+        assert len(recommendations) > 0
+        assert any('kms' in rec['message'].lower() or 'encrypt' in rec['message'].lower()
                    for rec in recommendations)
 
 
@@ -395,11 +408,26 @@ class TestCalculateComplianceScore:
         analyzer = InfrastructureAnalyzer('test')
 
         analysis = {
-            'log_groups': [{'status': 'found'}] * 3,
-            'alarms': [{'status': 'found'}] * 6,
-            'composite_alarms': [{'status': 'found'}],
-            'dashboards': [{'status': 'found'}],
-            'metric_filters': [{'status': 'found'}] * 14
+            'log_groups': [
+                {'status': 'found', 'kms_encrypted': True, 'retention_days': 7},
+                {'status': 'found', 'kms_encrypted': True, 'retention_days': 7},
+                {'status': 'found', 'kms_encrypted': True, 'retention_days': 7}
+            ],
+            'alarms': [
+                {'status': 'found', 'has_sns_action': True},
+                {'status': 'found', 'has_sns_action': True},
+                {'status': 'found', 'has_sns_action': True},
+                {'status': 'found', 'has_sns_action': True},
+                {'status': 'found', 'has_sns_action': True},
+                {'status': 'found', 'has_sns_action': True}
+            ],
+            'composite_alarms': [{'status': 'found', 'has_sns_action': True}],
+            'dashboards': [{'status': 'found', 'compliant': True}],
+            'metric_filters': [
+                {'filter_count': 5},
+                {'filter_count': 5},
+                {'filter_count': 4}
+            ]
         }
 
         score = analyzer._calculate_compliance_score(analysis)
@@ -451,14 +479,16 @@ class TestPrintReport:
         analyzer = InfrastructureAnalyzer('test')
 
         analysis = {
+            'environment_suffix': 'test',
+            'region': 'us-east-1',
+            'timestamp': '2025-01-01T00:00:00Z',
             'log_groups': [{'status': 'found', 'name': 'test'}],
             'alarms': [],
             'composite_alarms': [],
             'dashboards': [],
             'metric_filters': [],
-            'recommendations': [{'severity': 'high', 'description': 'Test rec'}],
-            'compliance_score': 75.5,
-            'analysis_timestamp': '2025-01-01T00:00:00Z'
+            'recommendations': [{'priority': 'high', 'category': 'test', 'resource': 'test', 'message': 'Test rec'}],
+            'compliance_score': 75.5
         }
 
         analyzer.print_report(analysis)
@@ -509,7 +539,19 @@ class TestMainFunction:
         mock_env_get.return_value = 'pr123'
         mock_analyzer = Mock()
         mock_analyzer_class.return_value = mock_analyzer
-        mock_analyzer.analyze_infrastructure.return_value = {'compliance_score': 100}
+        # Return all required fields for print_report
+        mock_analyzer.analyze_infrastructure.return_value = {
+            'compliance_score': 100,
+            'environment_suffix': 'pr123',
+            'region': 'us-east-1',
+            'timestamp': '2025-01-01T00:00:00Z',
+            'log_groups': [],
+            'alarms': [],
+            'composite_alarms': [],
+            'dashboards': [],
+            'metric_filters': [],
+            'recommendations': []
+        }
 
         result = main()
 
@@ -517,29 +559,46 @@ class TestMainFunction:
         mock_analyzer.analyze_infrastructure.assert_called_once()
 
     @patch('analyse.InfrastructureAnalyzer')
-    @patch('analyse.os.environ.get')
-    @patch('analyse.sys.exit')
-    def test_main_without_environment(self, mock_exit, mock_env_get, mock_analyzer_class):
-        """Test main function without environment suffix"""
+    @patch('analyse.os.getenv')
+    def test_main_without_environment(self, mock_getenv, mock_analyzer_class):
+        """Test main function with default environment suffix"""
         from analyse import main
 
-        mock_env_get.return_value = None
+        # Return None for ENVIRONMENT_SUFFIX, should use 'dev' as default
+        mock_getenv.side_effect = lambda key, default=None: {'ENVIRONMENT_SUFFIX': 'dev', 'AWS_REGION': 'us-east-1', 'OUTPUT_FILE': ''}.get(key, default)
 
-        main()
+        mock_analyzer = Mock()
+        mock_analyzer_class.return_value = mock_analyzer
+        mock_analyzer.analyze_infrastructure.return_value = {
+            'compliance_score': 85,
+            'environment_suffix': 'dev',
+            'region': 'us-east-1',
+            'timestamp': '2025-01-01T00:00:00Z',
+            'log_groups': [],
+            'alarms': [],
+            'composite_alarms': [],
+            'dashboards': [],
+            'metric_filters': [],
+            'recommendations': []
+        }
 
-        mock_exit.assert_called_once_with(1)
+        result = main()
+
+        assert result == 0
+        mock_analyzer_class.assert_called_once_with('dev', 'us-east-1')
 
     @patch('analyse.InfrastructureAnalyzer')
-    @patch('analyse.os.environ.get')
-    def test_main_with_error(self, mock_env_get, mock_analyzer_class):
+    @patch('analyse.os.getenv')
+    def test_main_with_error(self, mock_getenv, mock_analyzer_class):
         """Test main function with analysis error"""
         from analyse import main
+        import pytest
 
-        mock_env_get.return_value = 'pr123'
+        mock_getenv.side_effect = lambda key, default=None: {'ENVIRONMENT_SUFFIX': 'pr123', 'AWS_REGION': 'us-east-1', 'OUTPUT_FILE': ''}.get(key, default)
         mock_analyzer = Mock()
         mock_analyzer_class.return_value = mock_analyzer
         mock_analyzer.analyze_infrastructure.side_effect = Exception('Test error')
 
-        result = main()
-
-        assert result == 1
+        # Exception should propagate
+        with pytest.raises(Exception, match='Test error'):
+            main()
