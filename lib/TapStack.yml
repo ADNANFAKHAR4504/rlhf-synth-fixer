@@ -50,7 +50,10 @@ Mappings:
       AMI: ami-0e2a4b535ec045ef9 # Amazon Linux 2 AMI (HVM) - us-west-2
 
 Conditions:
-  HasCertificate: !Not [!Equals [!Ref pAcmCertificateArn, '']]
+  HasCertificate: !Not
+    - !Equals
+      - !Ref pAcmCertificateArn
+      - ''
 
 Resources:
   #
@@ -444,7 +447,6 @@ Resources:
         - !Ref PrivateSubnet3
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
-        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
       MinSize: '2'
       MaxSize: '6'
       DesiredCapacity: '2'
@@ -569,6 +571,9 @@ Outputs:
 
   ApplicationURL:
     Description: The URL of the application.
-    Value: !Sub 'https://${pHostedZoneName}'
+    Value: !If
+      - HasCertificate
+      - !Sub 'https://${pHostedZoneName}'
+      - !Sub 'http://${pHostedZoneName}'
     Export:
       Name: !Sub ${AWS::StackName}-App-URL
