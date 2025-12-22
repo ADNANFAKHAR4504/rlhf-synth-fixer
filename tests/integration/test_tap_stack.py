@@ -86,6 +86,10 @@ class TestTapStackIntegration(unittest.TestCase):
 
     @mark.it("RDS instance endpoint exists")
     def test_rds_instance_exists(self):
+        # Skip test if on LocalStack (RDS not supported)
+        if IS_LOCALSTACK:
+            self.skipTest("RDS is not supported in LocalStack")
+
         db_endpoint = flat_outputs.get("DatabaseEndpoint")
         self.assertIsNotNone(db_endpoint, "DatabaseEndpoint output is missing")
         rds = boto3.client("rds", region_name=REGION)
@@ -95,12 +99,8 @@ class TestTapStackIntegration(unittest.TestCase):
                 db.get("Endpoint", {}).get("Address") == db_endpoint
                 for db in instances["DBInstances"]
             )
-            if not found and IS_LOCALSTACK:
-                self.skipTest(f"RDS instance validation skipped in LocalStack")
             self.assertTrue(found, f"RDS instance with endpoint '{db_endpoint}' not found")
         except ClientError as e:
-            if IS_LOCALSTACK:
-                self.skipTest(f"RDS instance validation skipped in LocalStack: {e}")
             self.fail(f"RDS instance with endpoint '{db_endpoint}' does not exist: {e}")
 
     @mark.it("SNS alert topic exists")
@@ -119,15 +119,18 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("KMS keys exist")
     def test_kms_keys_exist(self):
         s3_kms_key_id = flat_outputs.get("S3KmsKeyId")
-        rds_kms_key_id = flat_outputs.get("RdsKmsKeyId")
         self.assertIsNotNone(s3_kms_key_id, "S3KmsKeyId output is missing")
-        self.assertIsNotNone(rds_kms_key_id, "RdsKmsKeyId output is missing")
         kms = boto3.client("kms", region_name=REGION)
         try:
             s3_key = kms.describe_key(KeyId=s3_kms_key_id)
             self.assertEqual(s3_key["KeyMetadata"]["KeyId"], s3_kms_key_id)
-            rds_key = kms.describe_key(KeyId=rds_kms_key_id)
-            self.assertEqual(rds_key["KeyMetadata"]["KeyId"], rds_kms_key_id)
+
+            # Only check RDS KMS key if not on LocalStack
+            if not IS_LOCALSTACK:
+                rds_kms_key_id = flat_outputs.get("RdsKmsKeyId")
+                self.assertIsNotNone(rds_kms_key_id, "RdsKmsKeyId output is missing")
+                rds_key = kms.describe_key(KeyId=rds_kms_key_id)
+                self.assertEqual(rds_key["KeyMetadata"]["KeyId"], rds_kms_key_id)
         except ClientError as e:
             if IS_LOCALSTACK:
                 self.skipTest(f"KMS key validation skipped in LocalStack: {e}")
