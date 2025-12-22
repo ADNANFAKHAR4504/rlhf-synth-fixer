@@ -697,7 +697,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${Project}-database'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.40'
       MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
       AllocatedStorage: 20
