@@ -24,7 +24,7 @@ VPC flow logs need to be enabled on all VPCs for security monitoring and inciden
 
 The scanner should generate a structured JSON report with all findings. Include resource IDs, violation type, severity level, and timestamp for each issue discovered. Organize findings by resource type and compliance check category. Output can go to an S3 bucket or local file system depending on how it's deployed.
 
-Export compliance metrics to CloudWatch so ops can build dashboards and set up alerts. Calculate compliance percentage by resource type - like what percent of EC2 instances have encrypted volumes, what percent have all required tags, etc. Track total resources scanned, violations found, and overall compliance rate. This gives leadership visibility into our security posture over time.
+Export compliance metrics to CloudWatch so ops can build dashboards and set up alerts. Calculate compliance percentage by resource type - like what percent of EC2 instances have encrypted volumes, what percent have all required tags, and so on. Track total resources scanned, violations found, and overall compliance rate. This gives leadership visibility into our security posture over time.
 
 Build this with Pulumi and TypeScript, using AWS SDK v3 for all the resource queries. Default to us-east-1 but make the region configurable. Any resources created for the scanner itself should include an environmentSuffix parameter in the name for uniqueness across environments. Keep the infrastructure minimal since this is mainly a scanning tool, not a deployment.
 
