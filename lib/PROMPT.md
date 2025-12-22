@@ -1,48 +1,42 @@
 Hey team,
 
-We're in a bit of a mess with our infrastructure right now. We've been manually spinning up resources for dev, staging, and prod environments, and surprise surprise - they're all slightly different now. Last week staging had a different subnet configuration than prod, and dev was missing a security group that the other two had. This is getting ridiculous.
+We're in a complete mess with our infrastructure. We've been manually spinning up resources for dev, staging, and prod, and they're all different now. Last week staging had a different subnet config than prod, and dev was missing a security group. This is getting out of hand.
 
-I need to build something that deploys the exact same infrastructure to all three environments. Same VPC layout, same EC2 setup with auto-scaling, same RDS database, same load balancer - everything identical. The only differences should be the sizing (dev can use tiny instances, prod needs beefier ones) and maybe some scaling parameters.
+I need to automate this with Terraform so we deploy identical infrastructure to all three environments. The only differences should be instance sizes - dev can use tiny t3.micro instances, staging needs t3.small, and prod should run on t3.medium or bigger.
 
-The goal is to define this infrastructure once in Terraform and be able to deploy it to any environment just by swapping out a tfvars file. No more drift, no more "but it works in staging" problems.
+Here's what we need to build:
 
-Here's what I'm thinking we need:
+Start with a VPC that has both public and private subnets spread across two availability zones. The public subnets will host our load balancer, and the private subnets will hold our EC2 instances and RDS database. We'll need an internet gateway attached to the VPC so the load balancer can accept traffic from the internet.
 
-**Network layer**: VPC with public and private subnets spread across multiple AZs. Nothing fancy, just standard AWS networking with an internet gateway for the public subnets and NAT gateways for the private ones.
+For the compute layer, set up an Auto Scaling group with EC2 instances running in the private subnets. These instances will run our application code. Put an Application Load Balancer in the public subnets that forwards incoming HTTP traffic to the EC2 instances. The ALB needs to do health checks on the instances so it only sends traffic to healthy ones.
 
-**Compute**: EC2 instances behind an Application Load Balancer. We'll need an Auto Scaling group so we can handle traffic spikes. Dev can use t3.micro, staging maybe t3.small, and prod should be t3.medium or larger depending on what we see in testing.
+The EC2 instances need to talk to a MySQL RDS database. The database should sit in the private subnets alongside the app servers. Configure the security groups so that only the EC2 instances can connect to the database on port 3306 - no one else should have access.
 
-**Database**: RDS MySQL instance. Dev can be single-AZ to save costs, but staging and especially prod need multi-AZ for reliability. I'm thinking MySQL 8.0, and we should make sure backups are configured properly for prod.
+We also need an S3 bucket for storing application data like uploaded files. The EC2 instances need read and write access to this bucket. Set up an IAM role for the EC2 instances that grants them permissions to read from and write to the S3 bucket, plus permissions to send logs to CloudWatch.
 
-**Storage**: S3 bucket for application data. Should have versioning enabled and maybe some lifecycle rules to transition old stuff to cheaper storage.
+For networking, the private subnets need NAT gateways so the EC2 instances can make outbound connections to download packages and hit external APIs. Each private subnet should route through its own NAT gateway for redundancy.
 
-**Security**: Proper security groups - ALB should accept traffic from the internet on 80/443, EC2 instances should only accept traffic from the ALB, and RDS should only talk to the EC2 instances. Standard stuff but let's get it right this time.
+Security group setup:
+- ALB security group allows inbound traffic on ports 80 and 443 from anywhere on the internet
+- EC2 security group only allows inbound traffic on port 80 from the ALB security group
+- RDS security group only allows inbound traffic on port 3306 from the EC2 security group
+- All outbound traffic allowed for now since we're just getting this working
 
-**IAM**: The EC2 instances need permissions to write to CloudWatch logs and read/write to the S3 bucket. Nothing more, nothing less.
+Make sure every resource gets tagged with Environment, Project, and ManagedBy tags. Also add an environment suffix to all resource names so we can run multiple environments without name collisions. Something like "alb-dev-pr8643" or "rds-prod-pr8643".
 
-Some critical points:
-- Everything needs to include an environment suffix in the name (like "alb-dev-pr8643" or "rds-prod-pr8643") so we don't have naming collisions
-- Tag everything with Environment, Project, and ManagedBy tags so we know what's what
-- Deploy to us-east-1 for everything
-- Make sure we can actually destroy these resources when we're done testing - no deletion protection anywhere
-- Use Terraform with HCL (not CDK, not Pulumi, just straight Terraform)
+For the three environments:
+- Dev should use t3.micro EC2 instances and a db.t3.micro RDS with 1-2 instances in the auto scaling group, single AZ to save money
+- Staging needs t3.small EC2 and db.t3.small RDS with 2-4 instances, should be multi-AZ so we can test failover
+- Prod requires t3.medium or larger EC2 and db.t3.medium RDS with 3-10 instances, definitely multi-AZ for reliability
 
-For the environment configs, I'm thinking:
-- **dev.tfvars**: t3.micro instances, db.t3.micro RDS, minimal scaling (1-2 instances), single AZ where possible
-- **staging.tfvars**: t3.small instances, db.t3.small RDS, moderate scaling (2-4 instances), multi-AZ
-- **prod.tfvars**: t3.medium+ instances, db.t3.medium RDS, production scaling (3-10 instances), multi-AZ everywhere
+Put everything in us-east-1. Use gp2 storage for RDS since we're testing with LocalStack and gp3 might not work. Make absolutely sure there's no deletion protection on anything - we need to be able to destroy these environments cleanly for testing.
 
-The infrastructure code should live in tap_stack.tf (or main.tf, whatever), variables in variables.tf, provider config in provider.tf, and then the three environment-specific tfvars files.
+The Terraform setup should have:
+- variables.tf with all the configurable parameters
+- provider.tf with the AWS provider configured
+- tap_stack.tf with all the actual resource definitions
+- dev.tfvars, staging.tfvars, and prod.tfvars with environment-specific values
 
-When this is done, I should be able to run:
-```
-terraform init
-terraform plan -var-file=dev.tfvars
-terraform apply -var-file=dev.tfvars
-```
+When I run terraform apply with dev.tfvars, I should get a complete working dev environment with the load balancer routing traffic to the app servers, the app servers connecting to the database, and everything properly tagged and named. Same thing with the other tfvars files.
 
-And get a complete, working dev environment. Same commands with staging.tfvars or prod.tfvars should give me identical infrastructure, just with different sizes.
-
-One more thing - since we're testing with LocalStack, keep things simple. Use gp2 storage for RDS (not gp3), don't enable any exotic features that LocalStack might not support, and keep the configuration as straightforward as possible.
-
-Can you put this together? Let me know if you need any clarification on the architecture or the requirements.
+Can you build this out? Let me know if anything's unclear.
