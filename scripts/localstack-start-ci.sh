@@ -58,15 +58,18 @@ if docker ps -a | grep -q localstack; then
     docker rm localstack 2>/dev/null || true
 fi
 
-# Optimize services list - only load commonly needed services for faster startup
-# Can be overridden via LOCALSTACK_SERVICES environment variable
+# LocalStack Pro 4.12+ requires explicit service configuration
+# Enable core services needed for CDK/CloudFormation deployments
 if [ -n "$LOCALSTACK_SERVICES" ]; then
     SERVICES="$LOCALSTACK_SERVICES"
-    echo -e "${BLUE}📋 Services to enable (custom): ${SERVICES}${NC}"
+    echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
 else
-    # Default optimized list of commonly used services
-    SERVICES="s3,lambda,dynamodb,cloudformation,iam,sqs,sns,events,logs,cloudwatch,apigateway,secretsmanager,ssm,stepfunctions,kinesis,kms,sts"
-    echo -e "${BLUE}📋 Services to enable (optimized default): ${SERVICES}${NC}"
+    # Default services for CDK/CFN/Terraform/Pulumi deployments
+    # Include all commonly needed services to avoid "service not enabled" errors
+    # elasticloadbalancing is separate from elb and elbv2 in LocalStack
+    SERVICES="acm,apigateway,cloudformation,cloudfront,cloudwatch,dynamodb,ec2,ecr,ecs,elb,elbv2,events,iam,kms,lambda,logs,rds,route53,s3,secretsmanager,sns,sqs,ssm,sts,autoscaling,wafv2"
+    echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
+    echo -e "${YELLOW}💡 To customize, set LOCALSTACK_SERVICES environment variable${NC}"
 fi
 
 # Check for LocalStack API Key
@@ -82,18 +85,30 @@ echo -e "${YELLOW}🔧 Starting LocalStack container...${NC}"
 
 # Build docker run command
 # Using LocalStack Pro image with latest version for full AWS service parity
-# CI-optimized settings for GitHub Actions with performance optimizations
+# CI-optimized settings for GitHub Actions
 DOCKER_CMD="docker run -d \
   --name localstack \
   -p 4566:4566 \
-  -e DEBUG=${LOCALSTACK_DEBUG:-0} \
+  -e DEBUG=1 \
   -e DATA_DIR=/tmp/localstack/data \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
   -e ENFORCE_IAM=0 \
-  -e EAGER_SERVICE_LOADING=1 \
-  -e SKIP_INFRA_DOWNLOADS=1 \
-  -e SKIP_SSL_CERT_DOWNLOAD=1 \
+  -e RDS_MYSQL_DOCKER=0 \
+  -e RDS_PG_DOCKER=0 \
+  -e LAMBDA_EXECUTOR=local \
+  -e LAMBDA_REMOVE_CONTAINERS=1 \
+  -e CFN_PER_RESOURCE_TIMEOUT=600 \
+  -e CFN_MAX_RESOURCE_RETRIES=30 \
+  -e EC2_EBS_MAX_VOLUME_SIZE=500 \
+  -e EC2_DOWNLOAD_DEFAULT_IMAGES=0 \
+  -e DISABLE_CORS_CHECKS=1 \
+  -e SKIP_INFRA_DOWNLOADS=1"
+
+# Add SERVICES only if explicitly set
+if [ -n "$SERVICES" ]; then
+    DOCKER_CMD="$DOCKER_CMD \
   -e SERVICES=\"${SERVICES}\""
+fi
 
 # Add API key if available (required for Pro features)
 if [ -n "$LOCALSTACK_API_KEY" ]; then
@@ -124,9 +139,9 @@ if ! command -v curl &> /dev/null; then
     sudo apt-get update && sudo apt-get install -y curl || true
 fi
 
-# Give LocalStack time to start (reduced from 60s for faster CI)
-echo -e "${BLUE}⏱️  Waiting 30 seconds for LocalStack to initialize...${NC}"
-sleep 30
+# Give LocalStack more time to start before checking (Pro image needs more initialization time)
+echo -e "${BLUE}⏱️  Waiting 60 seconds for LocalStack to initialize...${NC}"
+sleep 60
 
 while [ $attempt -lt $max_attempts ]; do
     # Show logs on first attempt to debug CI issues immediately

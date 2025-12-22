@@ -1,0 +1,42 @@
+2025-12-19 16:32:54,008 - INFO - Starting Kinesis analysis...
+2025-12-19 16:32:54,026 - ERROR - Error gathering firehose streams: Operation cannot be paginated: list_delivery_streams
+2025-12-19 16:32:54,026 - INFO - Analyzing data stream: production-orders-stream
+2025-12-19 16:32:54,039 - ERROR - Error analyzing stream production-orders-stream: 'StreamModeDetails'
+2025-12-19 16:32:54,039 - INFO - Analyzing data stream: customer-data-stream
+2025-12-19 16:32:54,049 - ERROR - Error analyzing stream customer-data-stream: 'StreamModeDetails'
+2025-12-19 16:32:54,049 - INFO - Analyzing data stream: analytics-stream
+2025-12-19 16:32:54,059 - ERROR - Error analyzing stream analytics-stream: 'StreamModeDetails'
+2025-12-19 16:32:54,059 - INFO - Analyzing data stream: payment-transaction-stream
+2025-12-19 16:32:54,069 - ERROR - Error analyzing stream payment-transaction-stream: 'StreamModeDetails'
+2025-12-19 16:32:54,069 - INFO - Analyzing data stream: excluded-stream
+2025-12-19 16:32:54,079 - ERROR - Error analyzing stream excluded-stream: 'StreamModeDetails'
+2025-12-19 16:32:54,079 - INFO - Analyzing data stream: ondemand-stream
+2025-12-19 16:32:54,088 - ERROR - Error analyzing stream ondemand-stream: 'StreamModeDetails'
+2025-12-19 16:32:54,089 - INFO - Saved analysis results to kinesis_analysis.json
+2025-12-19 16:32:54,089 - WARNING - Plotly not available, skipping HTML dashboard generation
+2025-12-19 16:32:54,090 - INFO - Saved optimization plan to shard_optimization_plan.json
+2025-12-19 16:32:54,090 - INFO - Analysis complete!
+
+================================================================================
+KINESIS ARCHITECTURE ANALYSIS REPORT
+================================================================================
+
++---------------------------+---------------------+
+| Metric                    | Value               |
++===========================+=====================+
+| Region                    | us-east-1           |
++---------------------------+---------------------+
+| Analysis Date             | 2025-12-19 16:32:54 |
++---------------------------+---------------------+
+| Data Streams Analyzed     | 0                   |
++---------------------------+---------------------+
+| Firehose Streams Analyzed | 0                   |
++---------------------------+---------------------+
+| Average Health Score      | 100.0/100           |
++---------------------------+---------------------+
+| High Priority Issues      | 0                   |
++---------------------------+---------------------+
+| Estimated Monthly Savings | $0.00               |
++---------------------------+---------------------+
+
+================================================================================

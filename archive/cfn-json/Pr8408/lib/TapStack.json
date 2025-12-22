@@ -1,0 +1,416 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CI/CD Pipeline for Educational Content Delivery Platform",
+  "Parameters": {
+    "Environment": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Unique suffix for resource naming to enable multiple deployments",
+      "AllowedPattern": "[a-zA-Z0-9-]+",
+      "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
+    }
+  },
+  "Resources": {
+    "ArtifactBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "cicd-artifacts-${Environment}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        }
+      }
+    },
+    "SourceRepository": {
+      "Type": "AWS::CodeCommit::Repository",
+      "Properties": {
+        "RepositoryName": {
+          "Fn::Sub": "education-platform-${Environment}"
+        },
+        "RepositoryDescription": "Source repository for educational content delivery platform"
+      }
+    },
+    "BuildLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/codebuild/education-build-${Environment}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "CodeBuildServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "codebuild-service-role-${Environment}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "CodeBuildBasePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:*"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "BuildProject": {
+      "Type": "AWS::CodeBuild::Project",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "education-build-${Environment}"
+        },
+        "ServiceRole": {
+          "Fn::GetAtt": ["CodeBuildServiceRole", "Arn"]
+        },
+        "Artifacts": {
+          "Type": "CODEPIPELINE"
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": "aws/codebuild/standard:5.0",
+          "EnvironmentVariables": [
+            {
+              "Name": "ARTIFACT_BUCKET",
+              "Value": {
+                "Ref": "ArtifactBucket"
+              }
+            }
+          ]
+        },
+        "Source": {
+          "Type": "CODEPIPELINE",
+          "BuildSpec": "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo Build started on `date`\n  build:\n    commands:\n      - echo Building application\n      - npm install || echo 'No package.json found'\n      - npm test || echo 'No tests defined'\n  post_build:\n    commands:\n      - echo Build completed on `date`\nartifacts:\n  files:\n    - '**/*'\n"
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {
+              "Ref": "BuildLogGroup"
+            }
+          }
+        }
+      }
+    },
+    "PipelineNotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "pipeline-notifications-${Environment}"
+        },
+        "DisplayName": "CI/CD Pipeline Notifications"
+      }
+    },
+    "CodePipelineServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "codepipeline-service-role-${Environment}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codepipeline.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CodePipelineBasePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codecommit:*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codebuild:*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:*"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Pipeline": {
+      "Type": "AWS::CodePipeline::Pipeline",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "education-pipeline-${Environment}"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": ["CodePipelineServiceRole", "Arn"]
+        },
+        "ArtifactStore": {
+          "Type": "S3",
+          "Location": {
+            "Ref": "ArtifactBucket"
+          }
+        },
+        "Stages": [
+          {
+            "Name": "Source",
+            "Actions": [
+              {
+                "Name": "SourceAction",
+                "ActionTypeId": {
+                  "Category": "Source",
+                  "Owner": "AWS",
+                  "Provider": "CodeCommit",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "RepositoryName": {
+                    "Fn::GetAtt": ["SourceRepository", "Name"]
+                  },
+                  "BranchName": "main",
+                  "PollForSourceChanges": false
+                },
+                "OutputArtifacts": [
+                  {
+                    "Name": "SourceOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "Build",
+            "Actions": [
+              {
+                "Name": "BuildAction",
+                "ActionTypeId": {
+                  "Category": "Build",
+                  "Owner": "AWS",
+                  "Provider": "CodeBuild",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ProjectName": {
+                    "Ref": "BuildProject"
+                  }
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "SourceOutput"
+                  }
+                ],
+                "OutputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "PipelineEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "pipeline-event-rule-${Environment}"
+        },
+        "Description": "Trigger notifications on pipeline state changes",
+        "EventPattern": {
+          "source": ["aws.codepipeline"],
+          "detail-type": ["CodePipeline Pipeline Execution State Change"],
+          "detail": {
+            "pipeline": [
+              {
+                "Ref": "Pipeline"
+              }
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "PipelineNotificationTopic"
+            },
+            "Id": "PipelineNotificationTarget"
+          }
+        ]
+      }
+    },
+    "EventRuleTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "Topics": [
+          {
+            "Ref": "PipelineNotificationTopic"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sns:Publish",
+              "Resource": {
+                "Ref": "PipelineNotificationTopic"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "RepositoryCloneUrlHttp": {
+      "Description": "HTTP clone URL for the CodeCommit repository",
+      "Value": {
+        "Fn::GetAtt": ["SourceRepository", "CloneUrlHttp"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RepoCloneUrlHttp"
+        }
+      }
+    },
+    "RepositoryCloneUrlSsh": {
+      "Description": "SSH clone URL for the CodeCommit repository",
+      "Value": {
+        "Fn::GetAtt": ["SourceRepository", "CloneUrlSsh"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RepoCloneUrlSsh"
+        }
+      }
+    },
+    "BuildProjectName": {
+      "Description": "Name of the CodeBuild project",
+      "Value": {
+        "Ref": "BuildProject"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BuildProject"
+        }
+      }
+    },
+    "PipelineName": {
+      "Description": "Name of the CodePipeline",
+      "Value": {
+        "Ref": "Pipeline"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-Pipeline"
+        }
+      }
+    },
+    "ArtifactBucketName": {
+      "Description": "Name of the S3 bucket for pipeline artifacts",
+      "Value": {
+        "Ref": "ArtifactBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ArtifactBucket"
+        }
+      }
+    },
+    "BuildLogGroupName": {
+      "Description": "Name of the CloudWatch log group for CodeBuild",
+      "Value": {
+        "Ref": "BuildLogGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BuildLogGroup"
+        }
+      }
+    },
+    "NotificationTopicArn": {
+      "Description": "ARN of the SNS topic for pipeline notifications",
+      "Value": {
+        "Ref": "PipelineNotificationTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-NotificationTopic"
+        }
+      }
+    }
+  }
+}

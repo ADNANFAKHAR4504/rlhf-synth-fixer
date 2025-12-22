@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr641",
+  "team": "synth-2",
+  "startedAt": "2025-08-12T03:01:38+01:00",
+  "provider": "localstack",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "CloudTrail",
+    "EC2",
+    "IAM",
+    "KMS",
+    "CloudWatch Logs",
+    "RDS",
+    "S3",
+    "VPC"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}
