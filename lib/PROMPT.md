@@ -14,23 +14,23 @@
 A fintech startup needs centralized monitoring for their payment processing infrastructure. They require real-time alerts, custom metrics tracking, and dashboard visualization to ensure transaction reliability and performance SLA compliance. The infrastructure team needs an analysis tool to validate that all monitoring resources are properly deployed and configured.
 
 ## Problem Statement
-Create a Python analysis script (analyse.py) to validate and report on CloudWatch monitoring infrastructure for payment processing services. The script must analyze:
+Create a Python analysis script called analyse.py to validate and report on CloudWatch monitoring infrastructure for payment processing services. The script must analyze:
 
-1. CloudWatch Log Groups for 'payment-api', 'transaction-processor', and 'fraud-detector' services - verify they exist with KMS encryption and 7-day retention
+1. CloudWatch Log Groups for payment-api, transaction-processor, and fraud-detector services - verify they exist with KMS encryption and 7-day retention
 2. Metric Filters - verify they are configured to extract error rates, response times, and transaction amounts from JSON logs
-3. CloudWatch Alarms - verify alarms exist for API error rate > 1%, response time > 500ms, and failed transactions > 5 per minute
+3. CloudWatch Alarms - verify alarms exist for API error rate over 1%, response time over 500ms, and failed transactions over 5 per minute
 4. Composite Alarm - verify it triggers when 2 or more service alarms are in ALARM state
 5. SNS Topic - verify it exists with email subscription for alert notifications
-6. CloudWatch Dashboard - verify it has widgets showing service health, transaction volume trends, and error distribution (9 widgets in 3-column layout)
-7. Custom Metrics - verify namespaces follow pattern 'FinTech/Service/Environment'
+6. CloudWatch Dashboard - verify it has widgets showing service health, transaction volume trends, and error distribution with 9 widgets in 3-column layout
+7. Custom Metrics - verify namespaces follow pattern FinTech/Service/Environment
 8. CloudWatch Logs Insights queries - verify saved searches exist for incident investigation
 
-Expected output: A Python analysis script that connects to AWS using boto3, validates all monitoring resources, generates recommendations for missing or misconfigured resources, calculates a compliance score (0-100%), and outputs a detailed report.
+Expected output: A Python analysis script that connects to AWS using boto3, validates all monitoring resources, generates recommendations for missing or misconfigured resources, calculates a compliance score from 0-100%, and outputs a detailed report.
 
 ## Constraints and Requirements
 - Analysis script must use boto3 for AWS API calls
 - All CloudWatch alarms must be checked for SNS topic notification routing
-- Custom metrics namespaces must follow pattern 'FinTech/Service/Environment'
+- Custom metrics namespaces must follow pattern FinTech/Service/Environment
 - Dashboard widgets must be verified to be in a 3-column layout with 9 widgets
 - Log groups must be verified to have 7-day retention and KMS encryption
 - Composite alarm must be verified to combine at least 3 individual alarm states
@@ -48,7 +48,7 @@ Production monitoring infrastructure deployed in us-east-1 for a payment process
 - Use Python 3.12+ as the analysis platform
 - All code must be written in Python
 - Use boto3 for AWS SDK interactions
-- Ensure all resource name lookups use the `environment_suffix` variable for naming
+- Ensure all resource name lookups use the environment_suffix variable for naming
 
 ### Security and Compliance
 - Analysis script must verify KMS encryption is enabled for all log groups
@@ -56,59 +56,60 @@ Production monitoring infrastructure deployed in us-east-1 for a payment process
 - Check that all resources have proper tagging
 
 ### Testing
-- Write unit tests with good coverage (90%+ target)
+- Write unit tests with good coverage, target 90%+
 - Unit tests must use mocking for AWS API calls
 - Integration tests must validate against deployed resources using Moto or real AWS
 - Analysis tests run against mocked AWS services
 
 ### Script Requirements
-- Analysis script must be named `analyse.py` in the `lib/` directory
+- Analysis script must be named analyse.py in the lib/ directory
 - Script must use boto3 for all AWS interactions
 - Script must accept ENVIRONMENT_SUFFIX from environment variable
-- Script must output a compliance score (0-100%)
+- Script must output a compliance score from 0 to 100%
 - Script must generate recommendations for non-compliant resources
 - Script must support JSON report export
 
-## Analysis Script Requirements (CRITICAL)
+## Analysis Script Requirements
 
 ### Resource Naming Validation
-- **MANDATORY**: All resource lookups MUST include `environment_suffix` in their names
-- Pattern: `{resource-name}-{environment_suffix}`
-- Examples:
-  - Log Group: `/aws/payment-api-{environment_suffix}`
-  - Alarm: `payment-api-error-rate-{environment_suffix}`
-  - Dashboard: `payment-monitoring-{environment_suffix}`
-- **Validation**: Script must check resources using the environment suffix pattern
+All resource lookups MUST include environment_suffix in their names. The pattern should be resource-name-environment_suffix. For example:
+- Log Group: /aws/payment-api-pr8478
+- Alarm: payment-api-error-rate-pr8478
+- Dashboard: payment-monitoring-pr8478
+
+The script must check resources using this environment suffix pattern.
 
 ### Expected Resources to Validate
 
-#### CloudWatch Log Groups (3 expected)
-- `/aws/payment-api-{environment_suffix}`
-- `/aws/transaction-processor-{environment_suffix}`
-- `/aws/fraud-detector-{environment_suffix}`
+#### CloudWatch Log Groups - expect 3 total
+- /aws/payment-api-SUFFIX
+- /aws/transaction-processor-SUFFIX
+- /aws/fraud-detector-SUFFIX
 
-#### CloudWatch Alarms (6 expected)
-- `payment-api-error-rate-{environment_suffix}`
-- `payment-api-response-time-{environment_suffix}`
-- `failed-transactions-{environment_suffix}`
-- `transaction-processor-errors-{environment_suffix}`
-- `fraud-detector-errors-{environment_suffix}`
-- `payment-high-load-{environment_suffix}`
+#### CloudWatch Alarms - expect 6 total
+- payment-api-error-rate-SUFFIX
+- payment-api-response-time-SUFFIX
+- failed-transactions-SUFFIX
+- transaction-processor-errors-SUFFIX
+- fraud-detector-errors-SUFFIX
+- payment-high-load-SUFFIX
 
-#### Composite Alarm (1 expected)
-- `multi-service-failure-{environment_suffix}`
+#### Composite Alarm - expect 1
+- multi-service-failure-SUFFIX
 
-#### CloudWatch Dashboard (1 expected)
-- `payment-monitoring-{environment_suffix}` with 9 widgets
+#### CloudWatch Dashboard - expect 1
+- payment-monitoring-SUFFIX with 9 widgets
+
+Note: SUFFIX represents the environment suffix from the ENVIRONMENT_SUFFIX variable.
 
 ### Compliance Scoring
 - Each resource type contributes to overall score
 - Missing resources reduce score
-- Misconfigured resources (wrong retention, missing encryption) reduce score
-- Score ranges: 80-100% (compliant), 50-79% (warnings), 0-49% (non-compliant)
+- Misconfigured resources like wrong retention or missing encryption also reduce score
+- Score ranges: 80-100% means compliant, 50-79% means warnings, 0-49% means non-compliant
 
 ## Target Region
-Analyze resources in: **us-east-1**
+All analysis must target the us-east-1 region
 
 ## Success Criteria
 - Analysis script runs successfully against deployed resources
