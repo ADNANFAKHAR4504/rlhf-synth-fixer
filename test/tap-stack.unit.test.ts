@@ -1,43 +1,83 @@
-// Mock Pulumi before importing
-jest.mock('@pulumi/pulumi', () => ({
-  ComponentResource: class MockComponentResource {
-    public type: string;
-    public name: string;
-    public args: any;
-    public opts: any;
-    
-    constructor(type: string, name: string, args: any, opts?: any) {
-      this.type = type;
-      this.name = name;
-      this.args = args;
-      this.opts = opts;
-    }
-    registerOutputs(outputs: any) {
-      Object.assign(this, outputs);
-    }
-  },
-  all: jest.fn().mockImplementation(values => ({
-    apply: jest.fn().mockImplementation(fn => {
-      const result = fn(values);
-      return {
-        apply: jest.fn().mockImplementation(fn2 => fn2(result))
-      };
-    })
-  })),
-  Output: jest.fn().mockImplementation(value => ({
+// Helper function to create a mock Output (used by both Pulumi and AWS mocks)
+const createMockOutput = (value: any) => {
+  const output: any = {
+    _value: value, // Store the actual value for direct access
     promise: () => Promise.resolve(value),
-    apply: (fn: any) => fn(value),
-  })),
-  Config: jest.fn().mockImplementation(() => ({
-    get: jest.fn().mockReturnValue(undefined),
-    getNumber: jest.fn().mockReturnValue(undefined),
-    getObject: jest.fn().mockReturnValue(undefined),
-  })),
-  interpolate: jest.fn((template: string) => template),
-  output: jest.fn().mockImplementation(value => ({
-    apply: jest.fn().mockImplementation(fn => fn(value))
-  })),
-}));
+    apply: (fn: any) => {
+      const result = fn(value);
+      // If result is already an Output-like object, return it; otherwise wrap it
+      if (result && typeof result === 'object' && 'apply' in result && result !== output) {
+        return result;
+      }
+      return createMockOutput(result);
+    },
+  };
+  return output;
+};
+
+// Mock Pulumi before importing
+jest.mock('@pulumi/pulumi', () => {
+
+  return {
+    ComponentResource: class MockComponentResource {
+      public type: string;
+      public name: string;
+      public args: any;
+      public opts: any;
+      
+      constructor(type: string, name: string, args: any, opts?: any) {
+        this.type = type;
+        this.name = name;
+        this.args = args;
+        this.opts = opts;
+      }
+      registerOutputs(outputs: any) {
+        // Resolve Output objects when registering outputs
+        const resolveOutput = (output: any): any => {
+          if (output && typeof output === 'object' && '_value' in output) {
+            // Direct access to stored value
+            return output._value;
+          }
+          if (output && typeof output === 'object' && 'apply' in output) {
+            // Call apply with identity to get the value
+            const result = output.apply((v: any) => v);
+            // If result is still an Output, recurse
+            if (result && typeof result === 'object' && ('_value' in result || 'apply' in result)) {
+              return resolveOutput(result);
+            }
+            return result;
+          }
+          return output;
+        };
+
+        const resolved: any = {};
+        for (const [key, value] of Object.entries(outputs)) {
+          resolved[key] = resolveOutput(value);
+        }
+        Object.assign(this, resolved);
+      }
+    },
+    all: jest.fn().mockImplementation(values => {
+      const resolvedValues = Array.isArray(values) 
+        ? values.map(v => v && typeof v === 'object' && 'apply' in v ? (v as any).apply((x: any) => x) : v)
+        : Object.fromEntries(
+            Object.entries(values).map(([k, v]) => [
+              k,
+              v && typeof v === 'object' && 'apply' in v ? (v as any).apply((x: any) => x) : v
+            ])
+          );
+      return createMockOutput(resolvedValues);
+    }),
+    Output: jest.fn().mockImplementation((value) => createMockOutput(value)),
+    Config: jest.fn().mockImplementation(() => ({
+      get: jest.fn().mockReturnValue(undefined),
+      getNumber: jest.fn().mockReturnValue(undefined),
+      getObject: jest.fn().mockReturnValue(undefined),
+    })),
+    interpolate: jest.fn((template: string) => template),
+    output: jest.fn().mockImplementation((value) => createMockOutput(value)),
+  };
+});
 
 // Mock AWS provider
 jest.mock('@pulumi/aws', () => ({
@@ -48,16 +88,19 @@ jest.mock('@pulumi/aws', () => ({
     state: 'available',
   }),
   ec2: {
-    Vpc: jest.fn().mockImplementation(() => ({ id: 'vpc-12345' })),
-    InternetGateway: jest.fn().mockImplementation(() => ({ id: 'igw-12345' })),
-    Subnet: jest.fn().mockImplementation(() => ({ id: 'subnet-12345' })),
-    RouteTable: jest.fn().mockImplementation(() => ({ id: 'rt-12345' })),
+    Vpc: jest.fn().mockImplementation(() => ({ id: createMockOutput('vpc-12345') })),
+    InternetGateway: jest.fn().mockImplementation(() => ({ id: createMockOutput('igw-12345') })),
+    Subnet: jest.fn().mockImplementation(() => ({ id: createMockOutput('subnet-12345') })),
+    RouteTable: jest.fn().mockImplementation(() => ({ id: createMockOutput('rt-12345') })),
     RouteTableAssociation: jest.fn(),
-    NatGateway: jest.fn().mockImplementation(() => ({ id: 'nat-12345' })),
-    Eip: jest.fn().mockImplementation(() => ({ id: 'eip-12345' })),
-    SecurityGroup: jest.fn().mockImplementation(() => ({ id: 'sg-12345' })),
+    NatGateway: jest.fn().mockImplementation(() => ({ id: createMockOutput('nat-12345') })),
+    Eip: jest.fn().mockImplementation(() => ({ id: createMockOutput('eip-12345') })),
+    SecurityGroup: jest.fn().mockImplementation(() => ({ id: createMockOutput('sg-12345') })),
     SecurityGroupRule: jest.fn(),
-    LaunchTemplate: jest.fn().mockImplementation(() => ({ id: 'lt-12345' })),
+    LaunchTemplate: jest.fn().mockImplementation(() => ({ 
+      id: createMockOutput('lt-12345'),
+      name: createMockOutput('app-launch-template-test')
+    })),
     FlowLog: jest.fn(),
     getAmi: jest.fn().mockResolvedValue({
       id: 'ami-12345678',
@@ -66,52 +109,52 @@ jest.mock('@pulumi/aws', () => ({
   },
   iam: {
     Role: jest.fn().mockImplementation(() => ({ 
-      id: 'role-12345',
-      name: 'mock-role',
-      arn: 'arn:aws:iam::123456789012:role/mock-role'
+      id: createMockOutput('role-12345'),
+      name: createMockOutput('mock-role'),
+      arn: createMockOutput('arn:aws:iam::123456789012:role/mock-role')
     })),
     RolePolicy: jest.fn(),
     RolePolicyAttachment: jest.fn(),
-    InstanceProfile: jest.fn().mockImplementation(() => ({ name: 'mock-profile' })),
-    Policy: jest.fn().mockImplementation(() => ({ arn: 'arn:aws:iam::123456789012:policy/mock-policy' })),
+    InstanceProfile: jest.fn().mockImplementation(() => ({ name: createMockOutput('mock-profile') })),
+    Policy: jest.fn().mockImplementation(() => ({ arn: createMockOutput('arn:aws:iam::123456789012:policy/mock-policy') })),
   },
   kms: {
     Key: jest.fn().mockImplementation(() => ({ 
-      id: 'key-12345',
-      arn: 'arn:aws:kms:ap-south-1:123456789012:key/12345'
+      id: createMockOutput('key-12345'),
+      arn: createMockOutput('arn:aws:kms:ap-south-1:123456789012:key/12345')
     })),
   },
   rds: {
-    SubnetGroup: jest.fn().mockImplementation(() => ({ name: 'mock-subnet-group' })),
+    SubnetGroup: jest.fn().mockImplementation(() => ({ name: createMockOutput('mock-subnet-group') })),
     Instance: jest.fn().mockImplementation(() => ({ 
-      id: 'db-12345',
-      endpoint: 'mock-db.ap-south-1.rds.amazonaws.com'
+      id: createMockOutput('db-12345'),
+      endpoint: createMockOutput('mock-db.ap-south-1.rds.amazonaws.com')
     })),
   },
   lb: {
     LoadBalancer: jest.fn().mockImplementation(() => ({ 
-      id: 'alb-12345',
-      arn: 'arn:aws:elasticloadbalancing:ap-south-1:123456789012:loadbalancer/app/mock-alb/12345',
-      dnsName: 'mock-alb-12345.ap-south-1.elb.amazonaws.com'
+      id: createMockOutput('alb-12345'),
+      arn: createMockOutput('arn:aws:elasticloadbalancing:ap-south-1:123456789012:loadbalancer/app/mock-alb/12345'),
+      arnSuffix: createMockOutput('loadbalancer/app/mock-alb/12345'),
+      dnsName: createMockOutput('mock-alb-12345.ap-south-1.elb.amazonaws.com')
     })),
     TargetGroup: jest.fn().mockImplementation(() => ({ 
-      id: 'tg-12345',
-      arn: 'arn:aws:elasticloadbalancing:ap-south-1:123456789012:targetgroup/mock-tg/12345',
-      arnSuffix: 'targetgroup/mock-tg/12345'
+      id: createMockOutput('tg-12345'),
+      arn: createMockOutput('arn:aws:elasticloadbalancing:ap-south-1:123456789012:targetgroup/mock-tg/12345'),
+      arnSuffix: createMockOutput('targetgroup/mock-tg/12345'),
+      name: createMockOutput('app-target-group-test')
     })),
-    Listener: jest.fn().mockImplementation(() => ({ arn: 'arn:aws:elasticloadbalancing:ap-south-1:123456789012:listener/app/mock-alb/12345/12345' })),
+    Listener: jest.fn().mockImplementation(() => ({ arn: createMockOutput('arn:aws:elasticloadbalancing:ap-south-1:123456789012:listener/app/mock-alb/12345/12345') })),
     ListenerRule: jest.fn(),
   },
   autoscaling: {
-    Group: jest.fn().mockImplementation(() => ({ name: 'mock-asg' })),
-    Policy: jest.fn().mockImplementation(() => ({ arn: 'arn:aws:autoscaling:ap-south-1:123456789012:scalingPolicy:12345' })),
+    Group: jest.fn().mockImplementation(() => ({ name: createMockOutput('mock-asg') })),
+    Policy: jest.fn().mockImplementation(() => ({ arn: createMockOutput('arn:aws:autoscaling:ap-south-1:123456789012:scalingPolicy:12345') })),
   },
   s3: {
     Bucket: jest.fn().mockImplementation(() => ({ 
-      id: 'mock-bucket',
-      bucket: {
-        apply: jest.fn().mockImplementation(fn => fn('mock-bucket-name'))
-      }
+      id: createMockOutput('mock-bucket'),
+      bucket: createMockOutput('mock-bucket-name')
     })),
     BucketVersioning: jest.fn(),
     BucketPublicAccessBlock: jest.fn(),
@@ -121,23 +164,23 @@ jest.mock('@pulumi/aws', () => ({
   },
   secretsmanager: {
     Secret: jest.fn().mockImplementation(() => ({
-      id: 'secret-12345',
-      arn: 'arn:aws:secretsmanager:ap-south-1:123456789012:secret:mock-secret'
+      id: createMockOutput('secret-12345'),
+      arn: createMockOutput('arn:aws:secretsmanager:ap-south-1:123456789012:secret:mock-secret'),
+      name: createMockOutput('test-db-secret')
     })),
     SecretVersion: jest.fn(),
   },
   cloudwatch: {
     LogGroup: jest.fn().mockImplementation(() => ({ 
-      arn: {
-        apply: jest.fn().mockImplementation(fn => fn('arn:aws:logs:ap-south-1:123456789012:log-group:/aws/mock-log-group'))
-      }
+      arn: createMockOutput('arn:aws:logs:ap-south-1:123456789012:log-group:/aws/mock-log-group'),
+      name: createMockOutput('/aws/vpc/flowlogs-test')
     })),
     MetricAlarm: jest.fn(),
   },
   cloudfront: {
     Distribution: jest.fn().mockImplementation(() => ({ 
-      id: 'dist-12345',
-      domainName: 'mock-dist.cloudfront.net'
+      id: createMockOutput('dist-12345'),
+      domainName: createMockOutput('mock-dist.cloudfront.net')
     })),
   },
   wafv2: {
