@@ -744,7 +744,7 @@ describe('TapStack Integration Tests', () => {
       const response = await kmsClient.send(command);
       const aliases = response.Aliases || [];
 
-      const expectedAlias = `alias/tapstack-229157-${environmentSuffix}`;
+      const expectedAlias = `alias/TapStack-229157-${environmentSuffix}`;
       const alias = aliases.find((a: any) => a.AliasName === expectedAlias);
       expect(alias).toBeDefined();
     });
