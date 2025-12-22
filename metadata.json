@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291563",
+  "team": "5",
+  "startedAt": "2025-08-19T01:48:41.014Z",
+  "provider": "localstack",
+  "subtask": [
+    "Application Deployment"
+  ],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "Lambda",
+    "Gateway",
+    "IAM",
+    "SAM",
+    "Logs",
+    "CloudWatch",
+    "SQS",
+    "DynamoDB"
+  ]
+}

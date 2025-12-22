@@ -128,7 +128,7 @@ CREATE_RESULT=$(awslocal cloudformation create-stack \
     --stack-name $STACK_NAME \
     --template-body file://$TEMPLATE_FILE \
     --parameters ParameterKey=Environment,ParameterValue=$ENVIRONMENT_SUFFIX \
-    --capabilities CAPABILITY_IAM \
+    --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
     --output json)
 
 if [ $? -eq 0 ]; then
