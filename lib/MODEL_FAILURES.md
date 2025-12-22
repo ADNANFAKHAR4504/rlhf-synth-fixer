@@ -38,12 +38,12 @@ Error: expected length of rule_name to be in the range (1 - 32), got payment-tra
 ```hcl
 resource "aws_xray_sampling_rule" "payment_transactions" {
   rule_name      = "pay-txn-${var.environment_suffix}"
-  # Result: "pay-txn-synth101912462" = 23 characters ✓
+  # Result: "pay-txn-synth101912462" = 23 characters (VALID)
 }
 
 resource "aws_xray_sampling_rule" "default_sampling" {
   rule_name      = "def-${var.environment_suffix}"
-  # Result: "def-synth101912462" = 19 characters ✓
+  # Result: "def-synth101912462" = 19 characters (VALID)
 }
 ```
 
@@ -76,7 +76,7 @@ vs. 32 character AWS limit
 = FAILURE (exceeds by 3 chars)
 
 Therefore: Use shorter prefix like "pay-txn-" (8 chars)
-8 + 14 = 22 characters ✓ PASSES
+8 + 14 = 22 characters (PASSES)
 ```
 
 ## Summary

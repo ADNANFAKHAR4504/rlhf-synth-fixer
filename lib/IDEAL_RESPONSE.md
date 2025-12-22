@@ -94,11 +94,11 @@ Examples:
 The MODEL_RESPONSE was excellent and comprehensive. The only issue was AWS X-Ray's 32-character limit on rule names. With suffixes like "synth101912462", the original names exceeded this limit:
 
 ```
-payment-transactions-synth101912462  = 36 chars (TOO LONG ❌)
-pay-txn-synth101912462              = 23 chars (WORKS ✓)
+payment-transactions-synth101912462  = 36 chars (TOO LONG)
+pay-txn-synth101912462              = 23 chars (WORKS)
 
-default-sampling-synth101912462     = 34 chars (TOO LONG ❌)  
-def-synth101912462                  = 19 chars (WORKS ✓)
+default-sampling-synth101912462     = 34 chars (TOO LONG)
+def-synth101912462                  = 19 chars (WORKS)
 ```
 
 This single fix enabled successful deployment of an enterprise-grade observability platform.
