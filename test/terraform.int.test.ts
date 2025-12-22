@@ -192,7 +192,7 @@ describe('Infrastructure Integration Tests', () => {
 
       test('should have valid subnet configurations', () => {
         // Test public subnets
-        const publicSubnets = JSON.parse(outputs.public_subnet_ids);
+        const publicSubnets = outputs.public_subnet_ids;
         expect(Array.isArray(publicSubnets)).toBe(true);
         expect(publicSubnets.length).toBeGreaterThan(0);
         publicSubnets.forEach((subnetId: string) => {
@@ -200,7 +200,7 @@ describe('Infrastructure Integration Tests', () => {
         });
 
         // Test private subnets
-        const privateSubnets = JSON.parse(outputs.private_subnet_ids);
+        const privateSubnets = outputs.private_subnet_ids;
         expect(Array.isArray(privateSubnets)).toBe(true);
         expect(privateSubnets.length).toBeGreaterThan(0);
         privateSubnets.forEach((subnetId: string) => {
@@ -208,7 +208,7 @@ describe('Infrastructure Integration Tests', () => {
         });
 
         // Test database subnets
-        const dbSubnets = JSON.parse(outputs.database_subnet_ids);
+        const dbSubnets = outputs.database_subnet_ids;
         expect(Array.isArray(dbSubnets)).toBe(true);
         expect(dbSubnets.length).toBeGreaterThan(0);
         dbSubnets.forEach((subnetId: string) => {
