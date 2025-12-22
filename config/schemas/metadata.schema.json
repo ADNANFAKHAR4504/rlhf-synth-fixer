@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Infrastructure Task Data Schema",
+  "title": "IAC Automation Metadata Schema",
   "type": "object",
   "required": [
     "platform",
@@ -13,7 +13,8 @@
     "subtask",
     "provider",
     "subject_labels",
-    "aws_services"
+    "aws_services",
+    "wave"
   ],
   "additionalProperties": false,
   "properties": {
@@ -62,7 +63,7 @@
     "po_id": {
       "type": "string",
       "minLength": 1,
-      "description": "Purchase Order ID or Project Identifier"
+      "description": "Task Identifier"
     },
     "team": {
       "type": "string",
@@ -129,6 +130,13 @@
         "type": "string"
       },
       "description": "List of AWS services used, e.g., VPC, Lambda, S3"
+    },
+    "wave": {
+      "type": "string",
+      "enum": [
+        "P0",
+        "P1"
+      ]
     }
   }
 }
