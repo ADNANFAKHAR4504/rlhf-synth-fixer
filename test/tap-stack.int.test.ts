@@ -1,28 +1,4 @@
 import {
-  EC2Client,
-  DescribeInstancesCommand,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-} from '@aws-sdk/client-s3';
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-} from '@aws-sdk/client-secrets-manager';
-import {
-  SSMClient,
-  DescribeInstanceInformationCommand,
-} from '@aws-sdk/client-ssm';
-import {
   ApplicationInsightsClient,
   DescribeApplicationCommand,
 } from '@aws-sdk/client-application-insights';
@@ -30,9 +6,33 @@ import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeInstancesCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import {
+  DescribeInstanceInformationCommand,
+  SSMClient,
+} from '@aws-sdk/client-ssm';
 import * as fs from 'fs';
-import * as path from 'path';
 import fetch from 'node-fetch';
+import * as path from 'path';
 
 // Load the deployed outputs
 const outputsPath = path.join(
@@ -60,6 +60,10 @@ describe('TapStack Integration Tests', () => {
   // Skip tests if no outputs are available
   const skipIfNoOutputs =
     outputs && Object.keys(outputs).length > 0 ? test : test.skip;
+
+  // Skip RDS tests if DatabaseEndpoint is not available (LocalStack mode)
+  const skipIfNoRdsOutputs =
+    outputs && outputs.DatabaseEndpoint ? test : test.skip;
 
   describe('VPC and Networking', () => {
     skipIfNoOutputs('VPC exists and has correct CIDR block', async () => {
@@ -154,15 +158,19 @@ describe('TapStack Integration Tests', () => {
       });
       const sgResponse = await ec2Client.send(sgCommand);
 
-      const webServerSg = sgResponse.SecurityGroups![0];
-      const httpRule = webServerSg.IpPermissions?.find(
-        rule => rule.FromPort === 80
+      // Collect all ingress rules from all security groups attached to the instance
+      const allIpPermissions = sgResponse.SecurityGroups?.flatMap(
+        sg => sg.IpPermissions || []
+      ) || [];
+
+      const httpRule = allIpPermissions.find(
+        rule => rule.FromPort === 80 && rule.ToPort === 80
       );
-      const httpsRule = webServerSg.IpPermissions?.find(
-        rule => rule.FromPort === 443
+      const httpsRule = allIpPermissions.find(
+        rule => rule.FromPort === 443 && rule.ToPort === 443
       );
-      const sshRule = webServerSg.IpPermissions?.find(
-        rule => rule.FromPort === 22
+      const sshRule = allIpPermissions.find(
+        rule => rule.FromPort === 22 && rule.ToPort === 22
       );
 
       expect(httpRule).toBeDefined();
@@ -182,7 +190,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('RDS Database', () => {
-    skipIfNoOutputs('RDS instance is available', async () => {
+    skipIfNoRdsOutputs('RDS instance is available', async () => {
       const dbInstanceId = outputs.DatabaseEndpoint.split('.')[0];
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbInstanceId,
@@ -198,7 +206,7 @@ describe('TapStack Integration Tests', () => {
       expect(dbInstance.PubliclyAccessible).toBe(false);
     });
 
-    skipIfNoOutputs('RDS has automated backups enabled', async () => {
+    skipIfNoRdsOutputs('RDS has automated backups enabled', async () => {
       const dbInstanceId = outputs.DatabaseEndpoint.split('.')[0];
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbInstanceId,
@@ -210,7 +218,7 @@ describe('TapStack Integration Tests', () => {
       expect(dbInstance.PreferredBackupWindow).toBeDefined();
     });
 
-    skipIfNoOutputs(
+    skipIfNoRdsOutputs(
       'Database credentials secret exists and is accessible',
       async () => {
         const command = new GetSecretValueCommand({
@@ -341,7 +349,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Migration Workflow Validation', () => {
-    skipIfNoOutputs('EC2 instance can connect to RDS database', async () => {
+    skipIfNoRdsOutputs('EC2 instance can connect to RDS database', async () => {
       // Get the database security group
       const dbInstanceId = outputs.DatabaseEndpoint.split('.')[0];
       const rdsCommand = new DescribeDBInstancesCommand({
@@ -378,7 +386,7 @@ describe('TapStack Integration Tests', () => {
       expect(mysqlRule).toBeDefined();
     });
 
-    skipIfNoOutputs(
+    skipIfNoRdsOutputs(
       'Infrastructure components are in the same VPC',
       async () => {
         // Check EC2 instance VPC
