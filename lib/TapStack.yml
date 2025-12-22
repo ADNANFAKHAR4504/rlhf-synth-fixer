@@ -26,9 +26,9 @@ Parameters:
     Description: EC2 instance type for Auto Scaling Group
 
   LatestAmiId:
-    Type: String
+    Type: AWS::EC2::Image::Id
     Default: ami-0c02fb55956c7d316
-    Description: AMI ID for EC2 instance (SSM lookup disabled for LocalStack compatibility)
+    Description: AMI ID for EC2 instance
 
   EnableEC2:
     Type: String
@@ -697,9 +697,9 @@ Resources:
       DBInstanceIdentifier: !Sub '${Project}-database'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: 8.0.35
-      MasterUsername: admin
-      MasterUserPassword: LocalStack123!
+      EngineVersion: '8.0'
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
