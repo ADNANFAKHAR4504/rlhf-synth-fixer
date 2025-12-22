@@ -4,6 +4,7 @@
   "complexity": "hard",
   "po_id": "101000886",
   "team": "synth",
+  "turn_type": "single",
   "startedAt": "2025-11-10T08:52:19+00:00",
   "subtask": "Application Deployment",
   "subject_labels": [
