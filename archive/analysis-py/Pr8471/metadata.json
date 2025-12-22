@@ -1,0 +1,33 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "536932",
+  "team": "synth",
+  "startedAt": "2025-11-27T09:30:04.801Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "General Infrastructure Tooling QA"
+  ],
+  "provider": "localstack",
+  "aws_services": [
+    "KDS",
+    "KDF",
+    "CloudWatch",
+    "Lambda",
+    "S3",
+    "KMS",
+    "Redshift",
+    "Elasticsearch",
+    "VPC Endpoint"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

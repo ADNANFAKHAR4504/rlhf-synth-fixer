@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291733",
+  "team": "3",
+  "startedAt": "2025-08-14T16:33:11.968Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "ElastiCache",
+    "S3",
+    "ELB",
+    "AutoScaling",
+    "IAM",
+    "CloudWatch"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

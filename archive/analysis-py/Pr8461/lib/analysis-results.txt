@@ -1,0 +1,117 @@
+2025-12-19 14:42:43,706 - INFO - Starting CloudWatch Logs analysis...
+2025-12-19 14:42:43,724 - INFO - Found 7 total log groups
+2025-12-19 14:42:43,746 - INFO - Analyzing 5 log groups after filtering
+2025-12-19 14:42:55,160 - WARNING - Error checking saved queries for /aws/ecs/my-service: An error occurred (500) when calling the DescribeQueryDefinitions operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-19 14:43:02,185 - WARNING - Error checking saved queries for /aws/lambda/audit-service: An error occurred (500) when calling the DescribeQueryDefinitions operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-19 14:43:09,683 - WARNING - Error checking saved queries for /aws/lambda/debug-function: An error occurred (500) when calling the DescribeQueryDefinitions operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-19 14:43:15,602 - WARNING - Error checking saved queries for /aws/lambda/my-app: An error occurred (500) when calling the DescribeQueryDefinitions operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-19 14:43:15,658 - INFO - JSON output saved to aws_audit_results.json
+2025-12-19 14:43:15,658 - WARNING - Matplotlib/Pandas not available - skipping chart generation. Install with: pip install matplotlib pandas
+2025-12-19 14:43:15,658 - INFO - CSV report saved to monitoring_coverage_report.csv
+2025-12-19 14:43:15,658 - INFO - Analysis complete!
+
+========================================================================================================================
+CLOUDWATCH LOGS COST AND MONITORING ANALYSIS
+========================================================================================================================
+
+📊 SUMMARY:
+   Total Log Groups Analyzed: 5
+   Total Monthly Cost: $0.00
+   Potential Monthly Savings: $0.00
+   Optimized Monthly Cost: $0.00
+
+------------------------------------------------------------------------------------------------------------------------
+
+💰 TOP 10 MOST EXPENSIVE LOG GROUPS:
++----------------------------+-----------+-------------+-------------+--------------+----------+-----------+
+| Log Group                  | Storage   | Ingestion   | Retention   | Cost/Month   | Issues   | Savings   |
++============================+===========+=============+=============+==============+==========+===========+
+| vpc-flow-logs/vpc-12345    | 0.00 GB   | 0.0 MB/day  | Never       | $0.00        | 2 issues | $0.00     |
++----------------------------+-----------+-------------+-------------+--------------+----------+-----------+
+| /aws/ecs/my-service        | 0.00 GB   | 0.0 MB/day  | 60          | $0.00        | 1 issues | $0.00     |
++----------------------------+-----------+-------------+-------------+--------------+----------+-----------+
+| /aws/lambda/audit-service  | 0.00 GB   | 0.0 MB/day  | 30          | $0.00        | 2 issues | $0.00     |
++----------------------------+-----------+-------------+-------------+--------------+----------+-----------+
+| /aws/lambda/debug-function | 0.00 GB   | 0.0 MB/day  | 90          | $0.00        | 2 issues | $0.00     |
++----------------------------+-----------+-------------+-------------+--------------+----------+-----------+
+| /aws/lambda/my-app         | 0.00 GB   | 0.0 MB/day  | 60          | $0.00        | 3 issues | $0.00     |
++----------------------------+-----------+-------------+-------------+--------------+----------+-----------+
+
+🔍 ISSUES SUMMARY:
+
+📌 Missing Metric Filters (4 log groups affected):
++----------------------------+------------+---------------------+-----------------------------------------------------------------+
+| Log Group Name             | Severity   | Potential Savings   | Description                                                     |
++============================+============+=====================+=================================================================+
+| /aws/ecs/my-service        | Medium     | -                   | Application log group without metric filters for error tracking |
++----------------------------+------------+---------------------+-----------------------------------------------------------------+
+| /aws/lambda/audit-service  | Medium     | -                   | Application log group without metric filters for error tracking |
++----------------------------+------------+---------------------+-----------------------------------------------------------------+
+| /aws/lambda/debug-function | Medium     | -                   | Application log group without metric filters for error tracking |
++----------------------------+------------+---------------------+-----------------------------------------------------------------+
+| /aws/lambda/my-app         | Medium     | -                   | Application log group without metric filters for error tracking |
++----------------------------+------------+---------------------+-----------------------------------------------------------------+
+
+📌 Indefinite Retention (1 log groups affected):
++-------------------------+------------+---------------------+-------------------------------------------+
+| Log Group Name          | Severity   | Potential Savings   | Description                               |
++=========================+============+=====================+===========================================+
+| vpc-flow-logs/vpc-12345 | High       | -                   | Log group retention set to "Never Expire" |
++-------------------------+------------+---------------------+-------------------------------------------+
+
+📌 No Cross Region Backup (1 log groups affected):
++-------------------------+------------+---------------------+--------------------------------------------------+
+| Log Group Name          | Severity   | Potential Savings   | Description                                      |
++=========================+============+=====================+==================================================+
+| vpc-flow-logs/vpc-12345 | High       | -                   | Critical logs without cross-region backup for DR |
++-------------------------+------------+---------------------+--------------------------------------------------+
+
+📌 Excessive Audit Retention (1 log groups affected):
++---------------------------+------------+---------------------+-------------------------------------------+
+| Log Group Name            | Severity   | Potential Savings   | Description                               |
++===========================+============+=====================+===========================================+
+| /aws/lambda/audit-service | High       | $0.00               | Audit logs retained for 30 days (>7 days) |
++---------------------------+------------+---------------------+-------------------------------------------+
+
+📌 Excessive Debug Retention (1 log groups affected):
++----------------------------+------------+---------------------+--------------------------------------------+
+| Log Group Name             | Severity   | Potential Savings   | Description                                |
++============================+============+=====================+============================================+
+| /aws/lambda/debug-function | Medium     | $0.00               | Debug logs retained for 90 days (>30 days) |
++----------------------------+------------+---------------------+--------------------------------------------+
+
+📌 No Encryption (1 log groups affected):
++--------------------+------------+---------------------+------------------------------------------+
+| Log Group Name     | Severity   | Potential Savings   | Description                              |
++====================+============+=====================+==========================================+
+| /aws/lambda/my-app | High       | -                   | Confidential data without KMS encryption |
++--------------------+------------+---------------------+------------------------------------------+
+
+📌 Duplicate Logging (1 log groups affected):
++--------------------+------------+---------------------+-------------------------------------------------------+
+| Log Group Name     | Severity   | Potential Savings   | Description                                           |
++====================+============+=====================+=======================================================+
+| /aws/lambda/my-app | Low        | $0.00               | Potential duplicate logging with: /aws/ecs/my-service |
++--------------------+------------+---------------------+-------------------------------------------------------+
+
+💡 Total Potential Savings from All Issues: $0.00

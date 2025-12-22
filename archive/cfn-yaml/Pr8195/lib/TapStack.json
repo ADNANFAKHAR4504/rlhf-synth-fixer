@@ -1,0 +1,903 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "EKS Cluster with Managed Node Groups and Advanced Networking",
+    "Parameters": {
+        "environmentSuffix": {
+            "Type": "String",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "Default": "dev",
+            "AllowedPattern": "^[a-z0-9-]+$",
+            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+        },
+        "KubernetesVersion": {
+            "Type": "String",
+            "Description": "Kubernetes version for EKS cluster",
+            "Default": "1.28",
+            "AllowedValues": [
+                "1.28",
+                "1.27",
+                "1.26"
+            ]
+        },
+        "NodeInstanceType": {
+            "Type": "String",
+            "Description": "EC2 instance type for worker nodes",
+            "Default": "t3.medium",
+            "AllowedValues": [
+                "t3.medium",
+                "t3.large",
+                "m5.large",
+                "m5.xlarge"
+            ]
+        },
+        "NodeGroupMinSize": {
+            "Type": "Number",
+            "Description": "Minimum number of nodes in the node group",
+            "Default": 2,
+            "MinValue": 1
+        },
+        "NodeGroupMaxSize": {
+            "Type": "Number",
+            "Description": "Maximum number of nodes in the node group",
+            "Default": 4,
+            "MinValue": 1
+        },
+        "NodeGroupDesiredSize": {
+            "Type": "Number",
+            "Description": "Desired number of nodes in the node group",
+            "Default": 2,
+            "MinValue": 1
+        },
+        "VpcCIDR": {
+            "Type": "String",
+            "Description": "CIDR block for the VPC",
+            "Default": "10.0.0.0/16",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
+        },
+        "CreateNodeGroup": {
+            "Type": "String",
+            "Description": "Whether to create the EKS Node Group (set to false for LocalStack)",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        },
+        "CreateNATGateways": {
+            "Type": "String",
+            "Description": "Whether to create NAT Gateways (set to false for LocalStack due to EIP attribute issues)",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        }
+    },
+    "Conditions": {
+        "ShouldCreateNodeGroup": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateNodeGroup"
+                },
+                "true"
+            ]
+        },
+        "ShouldCreateNATGateways": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateNATGateways"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "EKSVpc": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCIDR"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-vpc-${environmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "environmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-igw-${environmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EKSVpc"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EKSVpc"
+                },
+                "CidrBlock": "10.0.0.0/20",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-public-subnet-1-${environmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "kubernetes.io/role/elb",
+                        "Value": "1"
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EKSVpc"
+                },
+                "CidrBlock": "10.0.16.0/20",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-public-subnet-2-${environmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "kubernetes.io/role/elb",
+                        "Value": "1"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EKSVpc"
+                },
+                "CidrBlock": "10.0.32.0/20",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-private-subnet-1-${environmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "kubernetes.io/role/internal-elb",
+                        "Value": "1"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EKSVpc"
+                },
+                "CidrBlock": "10.0.48.0/20",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-private-subnet-2-${environmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "kubernetes.io/role/internal-elb",
+                        "Value": "1"
+                    }
+                ]
+            }
+        },
+        "NATGateway1EIP": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "ShouldCreateNATGateways",
+            "DependsOn": "VPCGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-nat-eip-1-${environmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "NATGateway2EIP": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "ShouldCreateNATGateways",
+            "DependsOn": "VPCGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-nat-eip-2-${environmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "NATGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "ShouldCreateNATGateways",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGateway1EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-nat-gateway-1-${environmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "NATGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "ShouldCreateNATGateways",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGateway2EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-nat-gateway-2-${environmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EKSVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-public-rt-${environmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "VPCGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EKSVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-private-rt-1-${environmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRoute1": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "ShouldCreateNATGateways",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway1"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                }
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EKSVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-private-rt-2-${environmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRoute2": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "ShouldCreateNATGateways",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway2"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                }
+            }
+        },
+        "ClusterSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for EKS cluster control plane",
+                "VpcId": {
+                    "Ref": "EKSVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-cluster-sg-${environmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "NodeSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for EKS worker nodes",
+                "VpcId": {
+                    "Ref": "EKSVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-node-sg-${environmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "NodeSecurityGroupIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "Description": "Allow nodes to communicate with each other",
+                "GroupId": {
+                    "Ref": "NodeSecurityGroup"
+                },
+                "SourceSecurityGroupId": {
+                    "Ref": "NodeSecurityGroup"
+                },
+                "IpProtocol": -1
+            }
+        },
+        "NodeSecurityGroupFromClusterIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "Description": "Allow worker Kubelets and pods to receive communication from the cluster control plane",
+                "GroupId": {
+                    "Ref": "NodeSecurityGroup"
+                },
+                "SourceSecurityGroupId": {
+                    "Ref": "ClusterSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 1025,
+                "ToPort": 65535
+            }
+        },
+        "ClusterSecurityGroupFromNodeIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "Description": "Allow pods to communicate with the cluster API Server",
+                "GroupId": {
+                    "Ref": "ClusterSecurityGroup"
+                },
+                "SourceSecurityGroupId": {
+                    "Ref": "NodeSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "ToPort": 443,
+                "FromPort": 443
+            }
+        },
+        "NodeSecurityGroupEgress": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "Description": "Allow all outbound traffic",
+                "GroupId": {
+                    "Ref": "NodeSecurityGroup"
+                },
+                "CidrIp": "0.0.0.0/0",
+                "IpProtocol": -1
+            }
+        },
+        "EKSKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for EKS cluster ${environmentSuffix}"
+                },
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow EKS to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "eks.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:CreateGrant"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "EKSKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/eks-${environmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "EKSKMSKey"
+                }
+            }
+        },
+        "EKSClusterRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "eks-cluster-role-${environmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "eks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+                    "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
+                ]
+            }
+        },
+        "EKSNodeRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "eks-node-role-${environmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+                    "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+                    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ]
+            }
+        },
+        "EKSClusterLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/eks/cluster-${environmentSuffix}/cluster"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "EKSCluster": {
+            "Type": "AWS::EKS::Cluster",
+            "DependsOn": [
+                "EKSClusterLogGroup"
+            ],
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "eks-cluster-${environmentSuffix}"
+                },
+                "Version": {
+                    "Ref": "KubernetesVersion"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "EKSClusterRole",
+                        "Arn"
+                    ]
+                },
+                "ResourcesVpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "ClusterSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        },
+                        {
+                            "Ref": "PublicSubnet1"
+                        },
+                        {
+                            "Ref": "PublicSubnet2"
+                        }
+                    ],
+                    "EndpointPrivateAccess": true,
+                    "EndpointPublicAccess": true
+                },
+                "EncryptionConfig": [
+                    {
+                        "Resources": [
+                            "secrets"
+                        ],
+                        "Provider": {
+                            "KeyArn": {
+                                "Fn::GetAtt": [
+                                    "EKSKMSKey",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eks-cluster-${environmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "environmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "EKSNodeGroup": {
+            "Type": "AWS::EKS::Nodegroup",
+            "Condition": "ShouldCreateNodeGroup",
+            "Properties": {
+                "NodegroupName": {
+                    "Fn::Sub": "eks-nodegroup-${environmentSuffix}"
+                },
+                "ClusterName": {
+                    "Ref": "EKSCluster"
+                },
+                "NodeRole": {
+                    "Fn::GetAtt": [
+                        "EKSNodeRole",
+                        "Arn"
+                    ]
+                },
+                "Subnets": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "ScalingConfig": {
+                    "MinSize": {
+                        "Ref": "NodeGroupMinSize"
+                    },
+                    "MaxSize": {
+                        "Ref": "NodeGroupMaxSize"
+                    },
+                    "DesiredSize": {
+                        "Ref": "NodeGroupDesiredSize"
+                    }
+                },
+                "InstanceTypes": [
+                    {
+                        "Ref": "NodeInstanceType"
+                    }
+                ],
+                "AmiType": "AL2_x86_64",
+                "Tags": {
+                    "Name": {
+                        "Fn::Sub": "eks-nodegroup-${environmentSuffix}"
+                    },
+                    "Environment": {
+                        "Ref": "environmentSuffix"
+                    }
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "VpcId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "EKSVpc"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VpcId"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet1Id"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet2Id"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet1Id"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet2Id"
+                }
+            }
+        },
+        "ClusterSecurityGroupId": {
+            "Description": "Security Group ID for the EKS cluster",
+            "Value": {
+                "Ref": "ClusterSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ClusterSecurityGroupId"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "KMS Key ID for EKS encryption",
+            "Value": {
+                "Ref": "EKSKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+                }
+            }
+        },
+        "ClusterLogGroupName": {
+            "Description": "CloudWatch Log Group for EKS cluster logs",
+            "Value": {
+                "Ref": "EKSClusterLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ClusterLogGroupName"
+                }
+            }
+        },
+        "ClusterName": {
+            "Description": "EKS Cluster Name",
+            "Value": {
+                "Ref": "EKSCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ClusterName"
+                }
+            }
+        },
+        "NodeGroupName": {
+            "Description": "EKS Node Group Name",
+            "Condition": "ShouldCreateNodeGroup",
+            "Value": {
+                "Ref": "EKSNodeGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NodeGroupName"
+                }
+            }
+        }
+    }
+}

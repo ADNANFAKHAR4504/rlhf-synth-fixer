@@ -1,0 +1,253 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Production-ready serverless API stack with HA, security, and observability",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix (e.g., dev, prod, staging)"
+    },
+    "Name": {
+      "Type": "String",
+      "Default": "tapstack",
+      "Description": "Application name"
+    },
+    "Team": {
+      "Type": "String",
+      "Default": "team",
+      "Description": "Team name"
+    },
+    "Region": {
+      "Type": "String",
+      "Default": "us-east-1",
+      "Description": "AWS region for deployment"
+    }
+  },
+  "Resources": {
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "DynamoDBTable",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "MyLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${EnvironmentSuffix}-${Name}-lambda-${Team}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 512,
+        "Timeout": 15,
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "DynamoDBTable"
+            }
+          }
+        },
+        "TracingConfig": {
+          "Mode": "Active"
+        },
+        "Code": {
+          "ZipFile": "import json\n\ndef handler(event, context):\n    return {\n        'statusCode': 200,\n        'body': json.dumps('Hello from Lambda!')\n    }\n"
+        }
+      }
+    },
+    "DynamoDBTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${EnvironmentSuffix}-${Name}-table-${Team}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ]
+      }
+    },
+    "ApiGateway": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-${Name}-api-${Team}"
+        },
+        "Description": "Serverless API",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    },
+    "ApiGatewayRootMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Fn::GetAtt": [
+            "ApiGateway",
+            "RootResourceId"
+          ]
+        },
+        "HttpMethod": "ANY",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${MyLambdaFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "ApiGatewayDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": "ApiGatewayRootMethod",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "StageName": {
+          "Ref": "EnvironmentSuffix"
+        }
+      }
+    },
+    "LambdaApiInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "MyLambdaFunction",
+            "Arn"
+          ]
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+        }
+      }
+    },
+    "LogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/apigateway/${EnvironmentSuffix}-${Name}-api-${Team}"
+        },
+        "RetentionInDays": 14
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${EnvironmentSuffix}-${Name}-lambda-errors-${Team}"
+        },
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "AlarmActions": [],
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "MyLambdaFunction"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ApiEndpoint": {
+      "Description": "API Gateway endpoint",
+      "Value": {
+        "Fn::Sub": "https://${ApiGateway}.execute-api.${Region}.amazonaws.com/${EnvironmentSuffix}"
+      }
+    },
+    "LambdaArn": {
+      "Description": "Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "MyLambdaFunction",
+          "Arn"
+        ]
+      }
+    },
+    "DynamoDBTable": {
+      "Description": "DynamoDB table name",
+      "Value": {
+        "Ref": "DynamoDBTable"
+      }
+    },
+    "LogGroupName": {
+      "Description": "CloudWatch log group",
+      "Value": {
+        "Ref": "LogGroup"
+      }
+    },
+    "AlarmName": {
+      "Description": "CloudWatch alarm name",
+      "Value": {
+        "Fn::Sub": "${EnvironmentSuffix}-${Name}-lambda-errors-${Team}"
+      }
+    }
+  }
+}
