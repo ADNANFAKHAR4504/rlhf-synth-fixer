@@ -1,0 +1,21 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr877",
+  "team": "synth",
+  "startedAt": "2025-08-17T20:52:48+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "AWS CloudWatch Logs"
+  ],
+  "provider": "localstack"
+}
