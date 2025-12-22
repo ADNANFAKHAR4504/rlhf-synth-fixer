@@ -39,4 +39,4 @@ The Terraform setup should have:
 
 When I run terraform apply with dev.tfvars, I should get a complete working dev environment with the load balancer routing traffic to the app servers, the app servers connecting to the database, and everything properly tagged and named. Same thing with the other tfvars files.
 
-Can you build this out? Let me know if anything's unclear.
+Can you build this out? Let me know if anything's unclear
