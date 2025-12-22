@@ -632,7 +632,7 @@ Outputs:
 
 ## Key Features and Security Implementations
 
-### 🔒 **Security Highlights**
+### **Security Highlights**
 
 1. **CloudTrail Logging**: Complete API call logging with encrypted storage and log file validation
 2. **Encryption at Rest**: All S3 buckets and RDS instances use server-side encryption
@@ -645,7 +645,7 @@ Outputs:
 9. **HTTPS-Only S3**: Bucket policies explicitly deny HTTP requests
 10. **MFA Enforcement**: IAM roles require MFA for assumption
 
-### 📋 **Deployment Instructions**
+### **Deployment Instructions**
 
 1. **Prerequisites**:
    - AWS CLI configured with appropriate permissions
@@ -668,7 +668,7 @@ Outputs:
      --template-body file://corp-sec-template.yaml
    ```
 
-### 🛡️ **Security Best Practices Implemented**
+### **Security Best Practices Implemented**
 
 - **Defense in Depth**: Multiple layers of security controls
 - **Principle of Least Privilege**: Minimal required permissions
