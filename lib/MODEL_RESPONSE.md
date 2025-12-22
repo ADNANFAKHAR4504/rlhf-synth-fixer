@@ -353,25 +353,25 @@ Outputs:
 
 ## Key Features Explained
 
-### 🏗️ **SAM Transform & Structure**
+### **SAM Transform & Structure**
 
 - Uses `AWS::Serverless-2016-10-31` transform for SAM functionality
 - Leverages SAM's simplified syntax for Lambda and API Gateway resources
 
-### 🔧 **Environment Configuration**
+### **Environment Configuration**
 
 - **Parameters**: Environment parameter with validation for dev/staging/prod
 - **Environment Variables**: Each Lambda gets environment-specific configuration
 - **Conditional Logic**: Different log levels based on environment
 
-### 🚀 **Lambda Functions**
+### **Lambda Functions**
 
 - **Proper IAM Role**: Custom execution role with DynamoDB permissions
 - **Environment Variables**: ENVIRONMENT, DYNAMODB_TABLE, LOG_LEVEL, FUNCTION_NAME
 - **Dead Letter Queues**: Error handling with SQS DLQs
 - **Versioning**: Lambda versions and aliases for rollback capability
 
-### 🌐 **API Gateway Routes**
+### **API Gateway Routes**
 
 - **POST /user** → CreateUserFunction
 - **GET /user/{id}** → GetUserFunction
@@ -379,20 +379,20 @@ Outputs:
 - **Access Logging**: Detailed request/response logging
 - **Tracing**: X-Ray tracing enabled
 
-### 📊 **Monitoring & Logging**
+### **Monitoring & Logging**
 
 - **CloudWatch Log Groups**: Organized log retention
 - **CloudWatch Alarms**: Error monitoring for both functions
 - **Metrics**: API Gateway metrics enabled
 - **X-Ray Tracing**: Distributed tracing for performance monitoring
 
-### 🏷️ **Tagging & Naming**
+### **Tagging & Naming**
 
 - **Consistent Tagging**: All resources tagged with 'Project:ServerlessApp'
 - **Environment-based Naming**: Resources prefixed with environment name
 - **Export Values**: Key outputs exported for cross-stack references
 
-### 🔄 **CI/CD Ready**
+### **CI/CD Ready**
 
 - **Versioning Support**: Lambda versions and aliases for blue-green deployments
 - **Parameter-driven**: Easy environment promotion
