@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000851",
+  "team": "synth",
+  "startedAt": "2025-11-06T13:48:56+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "WAF",
+    "Lambda",
+    "DynamoDB",
+    "Secrets Manager",
+    "KMS",
+    "SNS",
+    "CloudWatch",
+    "Systems Manager",
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Tables",
+    "Security Groups",
+    "IAM"
+  ],
+  "provider": "localstack"
+}
