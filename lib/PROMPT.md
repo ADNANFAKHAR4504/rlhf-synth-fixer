@@ -1,27 +1,15 @@
-You are an expert cloud infrastructure engineer. Create a secure, scalable, and cost-effective web application environment on AWS using a CloudFormation template in YAML format. Deploy everything in the us-east-1 region.
+You are an expert cloud infrastructure engineer. Create a secure, scalable web application environment on AWS using CloudFormation YAML. Deploy in us-east-1.
 
-Requirements:
+I need a three-tier web application where an Application Load Balancer routes HTTPS traffic on port 443 to EC2 instances running in private subnets. The EC2 instances connect to an RDS MySQL database through security group rules that only allow database traffic from the application tier. The database sits in isolated private subnets with no internet access.
 
-Security & Networking:
-- Create a VPC for the environment
-- Only allow HTTPS traffic (port 443) to EC2 instances
-- RDS instances must not be publicly accessible
-- Encrypt all sensitive data in S3 and RDS using KMS
-- Use IAM Roles with granular policies for S3 access, following least privilege
-- Set up VPC Peering to connect with an existing VPC (CIDR: 10.0.0.0/16)
+For static content delivery, an S3 bucket stores frontend assets and CloudFront distribution caches and serves this content globally to users. EC2 instances assume an IAM role with least-privilege permissions to read application config from S3 and write logs to a separate logging bucket.
 
-Scalability & Performance:
-- Implement Auto Scaling Group for EC2 instances
-- Use CloudFront as CDN with S3 bucket as origin for static content
+The Auto Scaling Group monitors CloudWatch CPU utilization alarms and automatically scales EC2 instances when average CPU exceeds 70%. CloudWatch also tracks RDS burst balance metrics to alert before database performance degrades.
 
-Monitoring & Management:
-- Set up CloudWatch alarms for:
-  - EC2 CPU usage
-  - RDS burst balance
-- Tag all resources with Environment and Owner keys for cost tracking
+All data at rest must be encrypted - S3 buckets use KMS-managed keys, and RDS storage encryption uses the same KMS key for consistent key management across the stack.
 
-Output requirements:
-- Generate a complete, deployable CloudFormation YAML template
-- Include all necessary AWS resources for the above requirements
-- Use clear resource names and add comments where helpful
-- Provide only the YAML template without additional explanation
+Set up VPC Peering to connect this new VPC with CIDR 10.1.0.0/16 to an existing VPC at 10.0.0.0/16, allowing the application to communicate with legacy services in the peer VPC through route table entries.
+
+Tag all resources with Environment and Owner keys for cost allocation tracking.
+
+Generate a complete, deployable CloudFormation YAML template with clear resource names and helpful comments.
