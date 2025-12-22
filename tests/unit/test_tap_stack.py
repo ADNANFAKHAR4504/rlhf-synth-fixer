@@ -1,4 +1,6 @@
+import os
 import unittest
+from unittest.mock import patch
 
 import aws_cdk as cdk
 from aws_cdk.assertions import Template
@@ -77,3 +79,24 @@ class TestTapStack(unittest.TestCase):
         self.assertIn("LogsBucketName", outputs)
         self.assertIn("S3KmsKeyId", outputs)
         self.assertIn("RdsKmsKeyId", outputs)
+
+    @mark.it("skips RDS resources when running on LocalStack")
+    @patch.dict(os.environ, {"AWS_ENDPOINT_URL": "http://localhost:4566"})
+    def test_localstack_skips_rds(self):
+        stack = TapStack(self.app, "TapStackLocalStackTest")
+        template = Template.from_stack(stack)
+        template.resource_count_is("AWS::RDS::DBInstance", 0)
+        template.resource_count_is("AWS::RDS::DBSubnetGroup", 0)
+        template.resource_count_is("AWS::KMS::Key", 1)  # Only S3 KMS key
+
+    @mark.it("does not output RDS resources when on LocalStack")
+    @patch.dict(os.environ, {"AWS_ENDPOINT_URL": "http://localhost:4566"})
+    def test_localstack_outputs_no_rds(self):
+        stack = TapStack(self.app, "TapStackLocalStackOutputsTest")
+        template = Template.from_stack(stack)
+        outputs = template.to_json().get("Outputs", {})
+        self.assertIn("VpcId", outputs)
+        self.assertNotIn("DatabaseEndpoint", outputs)
+        self.assertNotIn("RdsKmsKeyId", outputs)
+        self.assertIn("AlbDnsName", outputs)
+        self.assertIn("S3KmsKeyId", outputs)
