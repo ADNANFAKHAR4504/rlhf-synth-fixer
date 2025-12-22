@@ -7,7 +7,7 @@ const app = new cdk.App();
 
 // Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
-const stackName = `ServerlessStack${environmentSuffix}`;
+const stackName = `TapStack-${environmentSuffix}`;
 
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
