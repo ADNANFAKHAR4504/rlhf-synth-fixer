@@ -840,12 +840,7 @@
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "EC2LaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
+                    "Version": "$Latest"
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet"
@@ -877,99 +872,54 @@
                     "GenerateRandomSuffix",
                     "RandomSuffix"
                 ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-RandomSuffix"
-                }
             }
         },
         "S3BucketName": {
             "Description": "Name of the secure S3 bucket",
             "Value": {
                 "Ref": "SecureS3Bucket"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-S3BucketName"
-                }
             }
         },
         "S3AccessLogsBucketName": {
             "Description": "Name of the S3 access logs bucket",
             "Value": {
                 "Ref": "S3AccessLogsBucket"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-S3AccessLogsBucketName"
-                }
             }
         },
         "EC2InstanceId": {
             "Description": "Instance ID of the EC2 instance",
             "Value": {
                 "Ref": "EC2Instance"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EC2InstanceId"
-                }
             }
         },
         "EC2LaunchTemplateId": {
             "Description": "ID of the EC2 Launch Template",
             "Value": {
                 "Ref": "EC2LaunchTemplate"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EC2LaunchTemplateId"
-                }
             }
         },
         "VPCId": {
             "Description": "VPC ID",
             "Value": {
                 "Ref": "VPC"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-VPCId"
-                }
             }
         },
         "PublicSubnetId": {
             "Description": "Public Subnet ID",
             "Value": {
                 "Ref": "PublicSubnet"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-PublicSubnetId"
-                }
             }
         },
         "SecurityGroupId": {
             "Description": "Security Group ID",
             "Value": {
                 "Ref": "EC2SecurityGroup"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-SecurityGroupId"
-                }
             }
         },
         "InternetGatewayId": {
             "Description": "Internet Gateway ID",
             "Value": {
                 "Ref": "InternetGateway"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-InternetGatewayId"
-                }
             }
         },
         "EC2RoleArn": {
@@ -979,11 +929,6 @@
                     "EC2Role",
                     "Arn"
                 ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EC2RoleArn"
-                }
             }
         },
         "EC2InstanceProfileArn": {
@@ -993,66 +938,36 @@
                     "EC2InstanceProfile",
                     "Arn"
                 ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EC2InstanceProfileArn"
-                }
             }
         },
         "EC2LogGroupName": {
             "Description": "Name of the EC2 CloudWatch Log Group",
             "Value": {
                 "Ref": "EC2LogGroup"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EC2LogGroupName"
-                }
             }
         },
         "S3LogGroupName": {
             "Description": "Name of the S3 CloudWatch Log Group",
             "Value": {
                 "Ref": "S3LogGroup"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-S3LogGroupName"
-                }
             }
         },
         "VPCFlowLogsGroupName": {
             "Description": "Name of the VPC Flow Logs CloudWatch Log Group",
             "Value": {
                 "Ref": "VPCFlowLogsGroup"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-VPCFlowLogsGroupName"
-                }
             }
         },
         "KMSKeyId": {
             "Description": "KMS Key ID for encryption",
             "Value": {
                 "Ref": "KMSKey"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-KMSKeyId"
-                }
             }
         },
         "KMSKeyAlias": {
             "Description": "KMS Key Alias",
             "Value": {
                 "Ref": "KMSKeyAlias"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-KMSKeyAlias"
-                }
             }
         },
         "RandomSuffixGeneratorArn": {
@@ -1062,33 +977,18 @@
                     "RandomSuffixGenerator",
                     "Arn"
                 ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-RandomSuffixGeneratorArn"
-                }
             }
         },
         "StackName": {
             "Description": "Name of this CloudFormation stack",
             "Value": {
                 "Ref": "AWS::StackName"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-StackName"
-                }
             }
         },
         "EnvironmentSuffix": {
             "Description": "Environment suffix used for this deployment",
             "Value": {
                 "Ref": "EnvironmentSuffix"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
-                }
             }
         }
     }

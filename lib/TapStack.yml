@@ -567,7 +567,7 @@ Resources:
     Properties:
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
-        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+        Version: $Latest
       SubnetId: !Ref PublicSubnet
       Tags:
         - Key: Name

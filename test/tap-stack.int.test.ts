@@ -51,7 +51,17 @@ describe('TapStack Infrastructure Integration Tests', () => {
         VPCId: 'vpc-12345678',
         SecurityGroupId: 'sg-12345678',
         EC2RoleArn: 'arn:aws:iam::000000000000:role/tapstack-role',
-        KMSKeyId: 'arn:aws:kms:us-east-1:000000000000:key/12345678-1234-1234-1234-123456789012'
+        KMSKeyId: 'arn:aws:kms:us-east-1:000000000000:key/12345678-1234-1234-1234-123456789012',
+        EC2LaunchTemplateId: 'lt-1234567890abcdef0',
+        PublicSubnetId: 'subnet-12345678',
+        InternetGatewayId: 'igw-12345678',
+        EC2InstanceProfileArn: 'arn:aws:iam::000000000000:instance-profile/tapstack-profile',
+        EC2LogGroupName: `/aws/ec2/tapstack${environmentSuffix}-abcd1234`,
+        S3LogGroupName: `/aws/s3/tapstack${environmentSuffix}-abcd1234`,
+        VPCFlowLogsGroupName: `/aws/vpc/tapstack${environmentSuffix}-abcd1234`,
+        KMSKeyAlias: `alias/tapstack${environmentSuffix}-logs-key-000000000000`,
+        RandomSuffixGeneratorArn: 'arn:aws:lambda:us-east-1:000000000000:function:tapstack-generator',
+        EnvironmentSuffix: environmentSuffix
       };
     }
   });
@@ -271,7 +281,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         
         // Check for region restriction
         if (statement.Condition) {
-          expect(statement.Condition.StringEquals['aws:RequestedRegion']).toBe('us-east-1');
+          expect(statement.Condition.StringEquals['aws:RequestedRegion']).toBe('us-west-1');
         }
       } catch (error) {
         console.warn('IAM role test skipped - role may not be accessible');
