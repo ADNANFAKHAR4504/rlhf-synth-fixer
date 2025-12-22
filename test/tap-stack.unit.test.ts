@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -338,12 +338,12 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('all outputs should have proper export names', () => {
+    test('all outputs should have descriptions and values', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`
-        });
+        expect(output.Description).toBeDefined();
+        expect(output.Value).toBeDefined();
+        // Export sections removed for LocalStack compatibility
       });
     });
 
