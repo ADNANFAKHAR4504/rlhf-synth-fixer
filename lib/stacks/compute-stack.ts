@@ -217,6 +217,7 @@ export class ComputeStack extends cdk.Stack {
       {
         vpc,
         launchTemplate: this.webAppLaunchTemplate,
+        autoScalingGroupName: `tf-web-app-asg-${environmentSuffix}`, // Explicit name for cross-stack references
         minCapacity: 1,
         maxCapacity: 6,
         desiredCapacity: 2,
