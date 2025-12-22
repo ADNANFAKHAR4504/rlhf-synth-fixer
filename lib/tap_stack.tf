@@ -824,6 +824,18 @@ resource "aws_launch_template" "main" {
     }
   }
 
+  block_device_mappings {
+    device_name = "/dev/xvdf"
+
+    ebs {
+      volume_size           = 10
+      volume_type           = "gp3"
+      encrypted             = true
+      kms_key_id            = aws_kms_key.main.arn
+      delete_on_termination = true
+    }
+  }
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-launch-template"
   })
