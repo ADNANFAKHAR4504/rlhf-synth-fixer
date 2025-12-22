@@ -46,10 +46,11 @@ output "security_alerts_topic_arn" {
   value       = aws_sns_topic.security_alerts.arn
 }
 
-output "dashboard_name" {
-  description = "CloudWatch dashboard name for payment operations"
-  value       = aws_cloudwatch_dashboard.payment_operations.dashboard_name
-}
+# Dashboard output commented out while dashboard resource is disabled
+# output "dashboard_name" {
+#   description = "CloudWatch dashboard name for payment operations"
+#   value       = aws_cloudwatch_dashboard.payment_operations.dashboard_name
+# }
 
 output "kms_key_id" {
   description = "KMS key ID for observability platform encryption"
