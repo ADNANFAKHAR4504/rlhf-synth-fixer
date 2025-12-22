@@ -611,6 +611,7 @@ export class SecurityStack extends cdk.Stack {
     this.ec2Role = new iam.Role(this, `tf-ec2-role-${environmentSuffix}`, {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for EC2 instances with least privilege',
+      roleName: cdk.PhysicalName.GENERATE_IF_NEEDED, // Required for cross-stack references
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'CloudWatchAgentServerPolicy'
