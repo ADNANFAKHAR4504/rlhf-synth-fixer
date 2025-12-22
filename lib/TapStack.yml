@@ -25,6 +25,9 @@ Parameters:
 # Mappings for dynamic AMI lookup
 Mappings:
   RegionMap:
+    us-east-1:
+      # Amazon Linux 2023 AMI ID for us-east-1
+      AMI: 'ami-0c02fb55956c7d316'
     us-east-2:
       # Amazon Linux 2023 AMI ID for us-east-2
       AMI: 'ami-0c02fb55956c7d316'
