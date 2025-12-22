@@ -47,9 +47,9 @@
 
 | Requirement                                        | Status  | Reason for Failure                                                                                             |
 | -------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
-| **No Hardcoded Resource Names** | ❌ Fail | All major resources have hardcoded physical names, preventing multi-region/multi-stack deployments.            |
-| **Least Privilege: `ProcessPatientDataRole`** | ❌ Fail | The role has an extra, unneeded permission (`sqs:GetQueueAttributes`).                                          |
-| **Least Privilege: CloudWatch Logs** | ❌ Fail | Uses the overly permissive `AWSLambdaBasicExecutionRole` instead of a specific, inline policy for logging.       |
-| **Pass `cfn-lint` without security warnings** | ❌ Fail | The use of the managed logging policy and hardcoded names would generate multiple warnings and errors.         |
+| **No Hardcoded Resource Names** | FAIL | All major resources have hardcoded physical names, preventing multi-region/multi-stack deployments.            |
+| **Least Privilege: `ProcessPatientDataRole`** | FAIL | The role has an extra, unneeded permission (`sqs:GetQueueAttributes`).                                          |
+| **Least Privilege: CloudWatch Logs** | FAIL | Uses the overly permissive `AWSLambdaBasicExecutionRole` instead of a specific, inline policy for logging.       |
+| **Pass `cfn-lint` without security warnings** | FAIL | The use of the managed logging policy and hardcoded names would generate multiple warnings and errors.         |
 
 **Conclusion:** The template must be refactored to remove all hardcoded names and to scope down IAM permissions to the absolute minimum required.
