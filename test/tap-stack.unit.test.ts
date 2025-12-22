@@ -408,6 +408,84 @@ describe('TapStack Unit Tests', () => {
         LogGroupName: `/aws/ec2/migration-app-${environmentSuffix}`,
       });
     });
+
+    describe('when enableApplicationInsights is true', () => {
+      let appInsightsStack: TapStack;
+      let appInsightsTemplate: Template;
+
+      beforeEach(() => {
+        const appInsightsApp = new cdk.App();
+        appInsightsStack = new TapStack(appInsightsApp, 'TapStackWithAppInsights', {
+          environmentSuffix,
+          enableApplicationInsights: true,
+        });
+        appInsightsTemplate = Template.fromStack(appInsightsStack);
+      });
+
+      test('Resource Group is created with correct properties', () => {
+        appInsightsTemplate.hasResourceProperties('AWS::ResourceGroups::Group', {
+          Name: `migration-resources-${environmentSuffix}`,
+          Description: 'Resource group for migration application monitoring',
+          ResourceQuery: Match.objectLike({
+            Type: 'TAG_FILTERS_1_0',
+            Query: Match.objectLike({
+              ResourceTypeFilters: ['AWS::AllSupported'],
+              TagFilters: Match.arrayWith([
+                Match.objectLike({
+                  Key: 'Environment',
+                  Values: [environmentSuffix],
+                }),
+              ]),
+            }),
+          }),
+          Tags: Match.arrayWith([
+            Match.objectLike({
+              Key: 'Environment',
+              Value: environmentSuffix,
+            }),
+            Match.objectLike({
+              Key: 'Application',
+              Value: 'Migration',
+            }),
+          ]),
+        });
+      });
+
+      test('Application Insights Application is created with correct properties', () => {
+        appInsightsTemplate.hasResourceProperties('AWS::ApplicationInsights::Application', {
+          ResourceGroupName: `migration-resources-${environmentSuffix}`,
+          AutoConfigurationEnabled: true,
+          CWEMonitorEnabled: true,
+          OpsCenterEnabled: true,
+          Tags: Match.arrayWith([
+            Match.objectLike({
+              Key: 'Environment',
+              Value: environmentSuffix,
+            }),
+            Match.objectLike({
+              Key: 'Application',
+              Value: 'Migration',
+            }),
+          ]),
+        });
+      });
+
+      test('Application Insights depends on Resource Group', () => {
+        const resources = appInsightsTemplate.toJSON().Resources;
+        const appInsightsResource = Object.entries(resources).find(
+          ([, value]: [string, any]) => value.Type === 'AWS::ApplicationInsights::Application'
+        );
+        expect(appInsightsResource).toBeDefined();
+        const [, appInsights] = appInsightsResource!;
+        expect((appInsights as any).DependsOn).toBeDefined();
+      });
+
+      test('Application Insights resource group output is created', () => {
+        appInsightsTemplate.hasOutput('ApplicationInsightsResourceGroupName', {
+          Description: 'CloudWatch Application Insights resource group name',
+        });
+      });
+    });
   });
 
   describe('CloudFormation Outputs', () => {
