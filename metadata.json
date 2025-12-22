@@ -20,5 +20,6 @@
     "CloudWatch Logs"
   ],
   "po_id": "101912477",
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": "P0"
 }
