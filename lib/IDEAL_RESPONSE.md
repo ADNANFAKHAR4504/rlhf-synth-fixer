@@ -47,7 +47,7 @@ HelloWorldFunction:
 ### 5. **Enhanced Template Structure**
 **Issue**: Template lacked proper organization and user interface.
 
-**Solution**: Added comprehensive metadata interface and improved parameter organization:
+**Solution**: Added comprehensive metadata section and improved parameter organization:
 ```yaml
 Metadata:
   AWS::CloudFormation::Interface:
@@ -73,7 +73,7 @@ The ideal template (`lib/TapStack.yml`) includes:
 - **Environment-specific mappings** for resource sizing and naming (`tap-app-{env}` prefixes)
 - **Conditional resources** (access logs bucket for production only)
 - **Comprehensive tagging** for resource management
-- **Metadata interface** for better parameter organization
+- **Metadata section** for better parameter organization
 
 ### Advanced Features
 - **Custom resource validation** for artifact existence before Lambda deployment
