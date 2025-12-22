@@ -10,7 +10,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "review": "adnan-turing",
   "aws_services": [
     "S3",
     "KMS",
@@ -21,5 +20,6 @@
     "SNS",
     "CloudWatch"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": "P1"
 }
