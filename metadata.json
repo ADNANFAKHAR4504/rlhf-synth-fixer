@@ -10,5 +10,10 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
+  "aws_services": [
+    "S3",
+    "SNS", 
+    "cloudTrail", 
+    "CloudWatch"],
   "provider": "localstack"
 }
