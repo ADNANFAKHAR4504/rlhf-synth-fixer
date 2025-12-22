@@ -1,5 +1,5 @@
 {
-  "platform": "pulumi",
+  "platform": "analysis",
   "language": "py",
   "complexity": "hard",
   "turn_type": "single",
@@ -8,7 +8,7 @@
   "startedAt": "2025-12-03T18:10:45-00:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Cloud Environment Setup"
+    "General Infrastructure Tooling QA"
   ],
   "aws_services": [
     "S3",
