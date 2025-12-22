@@ -58,16 +58,6 @@ output "ecs_service_name" {
   value       = aws_ecs_service.app.name
 }
 
-output "dms_replication_instance_arn" {
-  description = "DMS replication instance ARN"
-  value       = aws_dms_replication_instance.main.replication_instance_arn
-}
-
-output "dms_task_arn" {
-  description = "DMS replication task ARN"
-  value       = aws_dms_replication_task.main.replication_task_arn
-}
-
 output "route53_zone_id" {
   description = "Route53 hosted zone ID"
   value       = aws_route53_zone.main.zone_id
@@ -91,16 +81,6 @@ output "sns_alerts_topic_arn" {
 output "sns_status_topic_arn" {
   description = "SNS status topic ARN"
   value       = aws_sns_topic.migration_status.arn
-}
-
-output "backup_vault_name" {
-  description = "AWS Backup vault name"
-  value       = aws_backup_vault.main.name
-}
-
-output "backup_plan_id" {
-  description = "AWS Backup plan ID"
-  value       = aws_backup_plan.main.id
 }
 
 output "lambda_rollback_function_name" {

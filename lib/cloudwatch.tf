@@ -101,28 +101,6 @@ resource "aws_cloudwatch_log_group" "rollback_lambda" {
 
 # CloudWatch Alarms for Migration Status
 
-# DMS Replication Lag Alarm
-resource "aws_cloudwatch_metric_alarm" "dms_lag" {
-  alarm_name          = "dms-replication-lag-${var.environment_suffix}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "CDCLatencySource"
-  namespace           = "AWS/DMS"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 60
-  alarm_description   = "DMS replication lag exceeds 60 seconds"
-  alarm_actions       = [aws_sns_topic.migration_alerts.arn]
-
-  dimensions = {
-    ReplicationInstanceIdentifier = aws_dms_replication_instance.main.replication_instance_id
-  }
-
-  tags = {
-    Name = "dms-lag-alarm-${var.environment_suffix}"
-  }
-}
-
 # ECS CPU Utilization Alarm
 resource "aws_cloudwatch_metric_alarm" "ecs_cpu_high" {
   alarm_name          = "ecs-cpu-high-${var.environment_suffix}"
