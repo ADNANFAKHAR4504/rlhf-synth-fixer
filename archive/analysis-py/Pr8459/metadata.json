@@ -1,0 +1,28 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "482221",
+  "team": "synth",
+  "startedAt": "2025-11-16T09:01:54.998Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "ECS",
+    "EKS",
+    "CloudWatch",
+    "EC2",
+    "Auto Scaling"
+  ],
+  "provider": "localstack",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,394 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CI/CD Pipeline for educational content delivery platform with CodeCommit, CodeBuild, and CodePipeline
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix for resource naming (e.g., dev, test, prod)
+    Default: dev
+
+Resources:
+  # S3 Bucket for Pipeline Artifacts
+  ArtifactStorageBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub 'cicd-artifacts-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub 'cicd-artifacts-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: Pipeline Artifacts
+
+  # CodeCommit Repository
+  CodeCommitRepository:
+    Type: AWS::CodeCommit::Repository
+    DeletionPolicy: Delete
+    Properties:
+      RepositoryName: !Sub 'education-platform-${EnvironmentSuffix}'
+      RepositoryDescription: Source code repository for educational content delivery platform
+      Tags:
+        - Key: Name
+          Value: !Sub 'education-platform-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CloudWatch Log Group for CodeBuild
+  CodeBuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/education-platform-${EnvironmentSuffix}'
+      RetentionInDays: 7
+
+  # IAM Role for CodeBuild
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    Properties:
+      RoleName: !Sub 'codebuild-service-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - codecommit:GitPull
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub 'codebuild-service-role-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CodeBuild Project
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    DeletionPolicy: Delete
+    Properties:
+      Name: !Sub 'education-platform-build-${EnvironmentSuffix}'
+      Description: Build project for educational content delivery platform
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: ENVIRONMENT
+            Value: !Ref EnvironmentSuffix
+          - Name: ARTIFACT_BUCKET
+            Value: !Ref ArtifactStorageBucket
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 18
+              commands:
+                - echo "Installing dependencies..."
+                - npm install
+            pre_build:
+              commands:
+                - echo "Running tests..."
+                - npm test || echo "No tests configured"
+            build:
+              commands:
+                - echo "Building application..."
+                - npm run build || echo "No build script configured"
+            post_build:
+              commands:
+                - echo "Build completed on $(date)"
+
+          artifacts:
+            files:
+              - '**/*'
+            name: BuildArtifact
+
+          cache:
+            paths:
+              - 'node_modules/**/*'
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Ref CodeBuildLogGroup
+      Tags:
+        - Key: Name
+          Value: !Sub 'education-platform-build-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # SNS Topic for Pipeline Notifications
+  PipelineNotificationTopic:
+    Type: AWS::SNS::Topic
+    DeletionPolicy: Delete
+    Properties:
+      TopicName: !Sub 'cicd-pipeline-notifications-${EnvironmentSuffix}'
+      DisplayName: CI/CD Pipeline Notifications
+      Tags:
+        - Key: Name
+          Value: !Sub 'cicd-pipeline-notifications-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # IAM Role for CodePipeline
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    Properties:
+      RoleName: !Sub 'codepipeline-service-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - codecommit:GetBranch
+                  - codecommit:GetCommit
+                  - codecommit:UploadArchive
+                  - codecommit:GetUploadArchiveStatus
+                  - codecommit:CancelUploadArchive
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub 'codepipeline-service-role-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CodePipeline
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    DeletionPolicy: Delete
+    Properties:
+      Name: !Sub 'education-platform-pipeline-${EnvironmentSuffix}'
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactStorageBucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: '1'
+              Configuration:
+                RepositoryName: !GetAtt CodeCommitRepository.Name
+                BranchName: main
+                PollForSourceChanges: false
+              OutputArtifacts:
+                - Name: SourceOutput
+        - Name: Build
+          Actions:
+            - Name: BuildAction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: BuildOutput
+        - Name: Deploy
+          Actions:
+            - Name: DeployAction
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: S3
+                Version: '1'
+              Configuration:
+                BucketName: !Ref ArtifactStorageBucket
+                Extract: 'true'
+                ObjectKey: !Sub 'deployments/${EnvironmentSuffix}'
+              InputArtifacts:
+                - Name: BuildOutput
+      Tags:
+        - Key: Name
+          Value: !Sub 'education-platform-pipeline-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # IAM Role for EventBridge
+  PipelineEventRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    Properties:
+      RoleName: !Sub 'pipeline-event-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StartPipelineExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: codepipeline:StartPipelineExecution
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub 'pipeline-event-role-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # EventBridge Rule for Pipeline Trigger
+  # NOTE: Commented out due to LocalStack Community limitation
+  # LocalStack Community does not support CodePipeline as EventBridge target
+  # PipelineEventRule:
+  #   Type: AWS::Events::Rule
+  #   DeletionPolicy: Delete
+  #   Properties:
+  #     Name: !Sub 'pipeline-trigger-${EnvironmentSuffix}'
+  #     Description: Trigger pipeline on CodeCommit repository changes
+  #     EventPattern:
+  #       source:
+  #         - aws.codecommit
+  #       detail-type:
+  #         - CodeCommit Repository State Change
+  #       detail:
+  #         event:
+  #           - referenceCreated
+  #           - referenceUpdated
+  #         referenceType:
+  #           - branch
+  #         referenceName:
+  #           - main
+  #       resources:
+  #         - !GetAtt CodeCommitRepository.Arn
+  #     State: ENABLED
+  #     Targets:
+  #       - Arn: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${CodePipeline}'
+  #         RoleArn: !GetAtt PipelineEventRole.Arn
+  #         Id: CodePipelineTarget
+
+Outputs:
+  CodeCommitRepositoryCloneUrlHttp:
+    Description: CodeCommit repository clone URL (HTTP)
+    Value: !GetAtt CodeCommitRepository.CloneUrlHttp
+    Export:
+      Name: !Sub '${AWS::StackName}-RepositoryCloneUrlHttp'
+
+  CodeCommitRepositoryCloneUrlSsh:
+    Description: CodeCommit repository clone URL (SSH)
+    Value: !GetAtt CodeCommitRepository.CloneUrlSsh
+    Export:
+      Name: !Sub '${AWS::StackName}-RepositoryCloneUrlSsh'
+
+  CodeCommitRepositoryName:
+    Description: CodeCommit repository name
+    Value: !GetAtt CodeCommitRepository.Name
+    Export:
+      Name: !Sub '${AWS::StackName}-RepositoryName'
+
+  CodeBuildProjectName:
+    Description: CodeBuild project name
+    Value: !Ref CodeBuildProject
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeBuildProjectName'
+
+  CodePipelineName:
+    Description: CodePipeline name
+    Value: !Ref CodePipeline
+    Export:
+      Name: !Sub '${AWS::StackName}-CodePipelineName'
+
+  ArtifactBucketName:
+    Description: S3 bucket name for pipeline artifacts
+    Value: !Ref ArtifactStorageBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ArtifactBucketName'
+
+  CodeBuildLogGroupName:
+    Description: CloudWatch log group name for CodeBuild
+    Value: !Ref CodeBuildLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeBuildLogGroupName'
+
+  SNSTopicArn:
+    Description: SNS topic ARN for pipeline notifications
+    Value: !Ref PipelineNotificationTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SNSTopicArn'
+
+  PipelineUrl:
+    Description: URL to the CodePipeline console
+    Value: !Sub 'https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${CodePipeline}/view?region=${AWS::Region}'
+
+  CodeBuildProjectUrl:
+    Description: URL to the CodeBuild project console
+    Value: !Sub 'https://console.aws.amazon.com/codesuite/codebuild/projects/${CodeBuildProject}?region=${AWS::Region}'

@@ -1,0 +1,28 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "350152",
+  "team": "synth",
+  "startedAt": "2025-11-19T10:29:35.119Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "WAF",
+    "CloudWatch",
+    "Lambda"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
