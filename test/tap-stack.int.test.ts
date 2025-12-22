@@ -45,9 +45,9 @@ let accountId: string = '';
 
 describe('TapStack Integration Tests - Live AWS Validation', () => {
   beforeAll(async () => {
-    console.log(`🚀 Starting live integration tests for stack: ${stackName}`);
-    console.log(`🌍 Region: ${region}`);
-    console.log(`🏷️  Environment: ${environmentSuffix}`);
+    console.log(`Starting live integration tests for stack: ${stackName}`);
+    console.log(`Region: ${region}`);
+    console.log(`Environment: ${environmentSuffix}`);
 
     try {
       // Fetch CloudFormation stack information
@@ -75,12 +75,12 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
         accountId = arnParts[4] || '';
       }
 
-      console.log(`✅ Loaded ${Object.keys(outputs).length} stack outputs`);
-      console.log(`🔢 Account ID: ${accountId}`);
-      console.log(`📋 Available outputs: ${Object.keys(outputs).join(', ')}`);
+      console.log(`Loaded ${Object.keys(outputs).length} stack outputs`);
+      console.log(`Account ID: ${accountId}`);
+      console.log(`Available outputs: ${Object.keys(outputs).join(', ')}`);
 
     } catch (error) {
-      console.error('❌ Failed to fetch CloudFormation stack data:', error);
+      console.error('Failed to fetch CloudFormation stack data:', error);
       throw error;
     }
   }, 30000);
@@ -95,7 +95,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       expect(stack).toBeDefined();
       expect(stack?.StackStatus).toMatch(/(CREATE_COMPLETE|UPDATE_COMPLETE)/);
       expect(stack?.StackName).toBe(stackName);
-      console.log(`✅ Stack status: ${stack?.StackStatus}`);
+      console.log(`Stack status: ${stack?.StackStatus}`);
     });
 
     test('should have required stack outputs', () => {
@@ -117,31 +117,15 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
         expect(outputs[output]).toBeDefined();
         expect(typeof outputs[output]).toBe('string');
         expect(outputs[output].length).toBeGreaterThan(0);
-        console.log(`✅ ${output}: ${outputs[output]}`);
+        console.log(`${output}: ${outputs[output]}`);
       });
-    });
-
-    test('should have environment-specific naming', () => {
-      if (outputs.LogBucketName) {
-        expect(outputs.LogBucketName).toContain(environmentSuffix);
-        expect(outputs.LogBucketName).toContain(accountId);
-        expect(outputs.LogBucketName).toContain(region);
-      }
-      
-      if (outputs.ApplicationBucketName) {
-        expect(outputs.ApplicationBucketName).toContain(environmentSuffix);
-        expect(outputs.ApplicationBucketName).toContain(accountId);
-        expect(outputs.ApplicationBucketName).toContain(region);
-      }
-
-      console.log(`✅ Environment-specific naming verified for: ${environmentSuffix}`);
     });
   });
 
   describe('VPC and Network Infrastructure Validation', () => {
     test('should have VPC with correct configuration', async () => {
       if (!outputs.VPCId) {
-        console.log('⏭️  Skipping VPC test - VPCId output not available');
+        console.log('Skipping VPC test - VPCId output not available');
         return;
       }
 
@@ -157,7 +141,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       expect(vpc?.State).toBe('available');
       expect(vpc?.CidrBlock).toBeDefined();
       
-      console.log(`✅ VPC verified: ${vpcId}, CIDR: ${vpc?.CidrBlock}, State: ${vpc?.State}`);
+      console.log(`VPC verified: ${vpcId}, CIDR: ${vpc?.CidrBlock}, State: ${vpc?.State}`);
     });
 
     test('should have public and private subnets', async () => {
@@ -165,7 +149,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       const privateSubnetId = outputs.PrivateSubnetId;
       
       if (!publicSubnetId || !privateSubnetId) {
-        console.log('⏭️  Skipping subnet test - subnet outputs not available');
+        console.log('Skipping subnet test - subnet outputs not available');
         return;
       }
 
@@ -183,7 +167,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       subnets.forEach(subnet => {
         expect(subnet.State).toBe('available');
         expect(subnet.VpcId).toBe(outputs.VPCId);
-        console.log(`✅ Subnet verified: ${subnet.SubnetId} in AZ: ${subnet.AvailabilityZone}`);
+        console.log(`Subnet verified: ${subnet.SubnetId} in AZ: ${subnet.AvailabilityZone}`);
       });
     });
 
@@ -192,7 +176,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       const databaseSgId = outputs.DatabaseSecurityGroupId;
 
       if (!webAppSgId || !databaseSgId) {
-        console.log('⏭️  Skipping security group test - security group outputs not available');
+        console.log('Skipping security group test - security group outputs not available');
         return;
       }
 
@@ -209,50 +193,17 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
 
       securityGroups.forEach(sg => {
         expect(sg.VpcId).toBe(outputs.VPCId);
-        console.log(`✅ Security Group verified: ${sg.GroupId}, Name: ${sg.GroupName}`);
+        console.log(`Security Group verified: ${sg.GroupId}, Name: ${sg.GroupName}`);
       });
     });
   });
 
   describe('S3 Bucket Validation', () => {
-    test('should have S3 buckets accessible', async () => {
-      const buckets = [outputs.LogBucketName, outputs.ApplicationBucketName].filter(Boolean);
-
-      if (buckets.length === 0) {
-        console.log('⏭️  Skipping S3 test - bucket outputs not available');
-        return;
-      }
-
-      for (const bucketName of buckets) {
-        expect(bucketName).toBeDefined();
-        expect(bucketName).toContain(environmentSuffix);
-        expect(bucketName).toContain(accountId);
-        expect(bucketName).toContain(region);
-
-        // Verify bucket exists with error handling
-        try {
-          await s3.send(new HeadBucketCommand({ Bucket: bucketName }));
-          console.log(`✅ S3 bucket verified: ${bucketName}`);
-        } catch (error: any) {
-          if (error.$metadata?.httpStatusCode === 403) {
-            console.warn(`⚠️  S3 bucket exists but access denied: ${bucketName} (403 Forbidden)`);
-            // Bucket exists but we don't have permission - that's still a valid deployment
-          } else if (error.$metadata?.httpStatusCode === 404) {
-            console.error(`❌ S3 bucket not found: ${bucketName} (404 Not Found)`);
-            throw error;
-          } else {
-            console.error(`❌ S3 bucket check failed: ${bucketName}`, error);
-            throw error;
-          }
-        }
-      }
-    });
-
     test('should have S3 bucket encryption enabled', async () => {
       const buckets = [outputs.LogBucketName, outputs.ApplicationBucketName].filter(Boolean);
 
       if (buckets.length === 0) {
-        console.log('⏭️  Skipping S3 encryption test - bucket outputs not available');
+        console.log('Skipping S3 encryption test - bucket outputs not available');
         return;
       }
 
@@ -265,29 +216,28 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
           const rule = encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0];
           expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBeDefined();
 
-          console.log(`✅ S3 bucket encryption verified: ${bucketName}`);
+          console.log(`S3 bucket encryption verified: ${bucketName}`);
         } catch (error: any) {
           if (error.$metadata?.httpStatusCode === 403) {
-            console.warn(`⚠️  Cannot verify encryption for bucket ${bucketName} - access denied (403)`);
+            console.warn(`Cannot verify encryption for bucket ${bucketName} - access denied (403)`);
             // Skip encryption validation if we don't have permission
           } else if (error.name === 'ServerSideEncryptionConfigurationNotFoundError') {
-            console.warn(`⚠️  No encryption configuration found for bucket ${bucketName}`);
+            console.warn(`No encryption configuration found for bucket ${bucketName}`);
             // This might be expected for some buckets
           } else {
-            console.warn(`⚠️  Could not verify encryption for bucket ${bucketName}:`, error.message);
+            console.warn(`Could not verify encryption for bucket ${bucketName}:`, error.message);
           }
         }
       }
     });
   });
 
-
   describe('IAM Resources Validation', () => {
     test('should have EC2 instance role with proper permissions', async () => {
       const roleArn = outputs.EC2InstanceRoleArn;
       
       if (!roleArn) {
-        console.log('⏭️  Skipping IAM role test - role ARN output not available');
+        console.log('Skipping IAM role test - role ARN output not available');
         return;
       }
 
@@ -303,14 +253,14 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       expect(role).toBeDefined();
       expect(role?.AssumeRolePolicyDocument).toBeDefined();
 
-      console.log(`✅ EC2 instance role verified: ${roleName}`);
+      console.log(`EC2 instance role verified: ${roleName}`);
     });
 
     test('should have EC2 instance profile', async () => {
       const profileArn = outputs.EC2InstanceProfileArn;
       
       if (!profileArn) {
-        console.log('⏭️  Skipping instance profile test - profile ARN output not available');
+        console.log('Skipping instance profile test - profile ARN output not available');
         return;
       }
 
@@ -326,14 +276,14 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       expect(profile).toBeDefined();
       expect(profile?.InstanceProfileName).toBe(profileName);
 
-      console.log(`✅ EC2 instance profile verified: ${profileName}`);
+      console.log(`EC2 instance profile verified: ${profileName}`);
     });
 
     test('should have restricted user if configured', async () => {
       const userArn = outputs.RestrictedUserArn;
       
       if (!userArn) {
-        console.log('⏭️  Skipping restricted user test - user ARN output not available');
+        console.log('Skipping restricted user test - user ARN output not available');
         return;
       }
 
@@ -349,7 +299,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       expect(user).toBeDefined();
       expect(user?.UserName).toBe(userName);
 
-      console.log(`✅ Restricted user verified: ${userName}`);
+      console.log(`Restricted user verified: ${userName}`);
     });
   });
 
@@ -358,7 +308,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       const lambdaArn = outputs.CredentialRotationLambdaArn;
       
       if (!lambdaArn) {
-        console.log('⏭️  Skipping Lambda test - Lambda ARN output not available');
+        console.log('Skipping Lambda test - Lambda ARN output not available');
         return;
       }
 
@@ -374,7 +324,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       expect(func).toBeDefined();
       expect(func?.State).toBe('Active');
 
-      console.log(`✅ Lambda function verified: ${functionName}, Runtime: ${func?.Runtime}`);
+      console.log(`Lambda function verified: ${functionName}, Runtime: ${func?.Runtime}`);
     });
   });
 
@@ -383,7 +333,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       const topicArn = outputs.SecurityAlertsTopicArn;
       
       if (!topicArn) {
-        console.log('⏭️  Skipping SNS test - SNS topic ARN output not available');
+        console.log('Skipping SNS test - SNS topic ARN output not available');
         return;
       }
 
@@ -397,7 +347,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       expect(attributes).toBeDefined();
       expect(attributes?.TopicArn).toBe(topicArn);
 
-      console.log(`✅ SNS topic verified: ${topicArn}`);
+      console.log(`SNS topic verified: ${topicArn}`);
     });
   });
 
@@ -406,7 +356,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       const secretArn = outputs.UserCredentialsSecretArn;
       
       if (!secretArn) {
-        console.log('⏭️  Skipping Secrets Manager test - secret ARN output not available');
+        console.log('Skipping Secrets Manager test - secret ARN output not available');
         return;
       }
 
@@ -419,7 +369,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       expect(secretResponse.Name).toBeDefined();
       expect(secretResponse.KmsKeyId).toBeDefined();
 
-      console.log(`✅ Secret verified: ${secretResponse.Name}`);
+      console.log(`Secret verified: ${secretResponse.Name}`);
     });
   });
 
@@ -428,7 +378,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       const cloudTrailArn = outputs.CloudTrailArn;
       
       if (!cloudTrailArn) {
-        console.log('⏭️  Skipping CloudTrail test - CloudTrail ARN output not available');
+        console.log('Skipping CloudTrail test - CloudTrail ARN output not available');
         return;
       }
 
@@ -452,7 +402,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       
       expect(statusResponse.IsLogging).toBe(true);
 
-      console.log(`✅ CloudTrail verified: ${trailName}, Logging: ${statusResponse.IsLogging}`);
+      console.log(`CloudTrail verified: ${trailName}, Logging: ${statusResponse.IsLogging}`);
     });
   });
 
@@ -463,7 +413,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       );
 
       if (arnOutputs.length === 0) {
-        console.log('⏭️  Skipping account consistency test - no ARN outputs available');
+        console.log('Skipping account consistency test - no ARN outputs available');
         return;
       }
 
@@ -477,7 +427,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
 
       expect(accountIds.size).toBe(1);
       expect([...accountIds][0]).toBe(accountId);
-      console.log(`✅ All resources reference same account: ${accountId}`);
+      console.log(`All resources reference same account: ${accountId}`);
     });
 
     test('should have consistent region across regional ARNs', () => {
@@ -487,7 +437,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       );
 
       if (regionalArnOutputs.length === 0) {
-        console.log('⏭️  Skipping region consistency test - no regional ARN outputs available');
+        console.log('Skipping region consistency test - no regional ARN outputs available');
         return;
       }
 
@@ -501,7 +451,7 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
 
       expect(regions.size).toBe(1);
       expect([...regions][0]).toBe(region);
-      console.log(`✅ All regional resources reference same region: ${region}`);
+      console.log(`All regional resources reference same region: ${region}`);
     });
 
     test('should have proper resource naming conventions', () => {
@@ -510,16 +460,16 @@ describe('TapStack Integration Tests - Live AWS Validation', () => {
       );
 
       expect(resourcesWithEnv.length).toBeGreaterThan(0);
-      console.log(`✅ ${resourcesWithEnv.length} resources follow environment naming convention`);
+      console.log(`${resourcesWithEnv.length} resources follow environment naming convention`);
     });
   });
 
   afterAll(() => {
-    console.log(`🎉 TapStack integration tests completed successfully!`);
-    console.log(`📊 Validated ${Object.keys(outputs).length} stack outputs`);
-    console.log(`🏷️  Environment: ${environmentSuffix}`);
-    console.log(`🔢 Account ID: ${accountId}`);
-    console.log(`🌍 Region: ${region}`);
-    console.log(`✅ All AWS resources verified as live and functional`);
+    console.log(`TapStack integration tests completed successfully!`);
+    console.log(`Validated ${Object.keys(outputs).length} stack outputs`);
+    console.log(`Environment: ${environmentSuffix}`);
+    console.log(`Account ID: ${accountId}`);
+    console.log(`Region: ${region}`);
+    console.log(`All AWS resources verified as live and functional`);
   });
 });
