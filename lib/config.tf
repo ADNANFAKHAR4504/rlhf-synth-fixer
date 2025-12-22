@@ -126,6 +126,8 @@ data "aws_iam_policy_document" "config_bucket_policy" {
 
 # AWS Config Recorder
 resource "aws_config_configuration_recorder" "main" {
+  count = var.enable_aws_config ? 1 : 0
+
   name     = "${local.resource_prefix}-recorder-${local.suffix}"
   role_arn = aws_iam_role.config_role.arn
 
@@ -140,6 +142,8 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_config_delivery_channel" "main" {
+  count = var.enable_aws_config ? 1 : 0
+
   name           = "${local.resource_prefix}-delivery-${local.suffix}"
   s3_bucket_name = aws_s3_bucket.config_bucket.id
 
@@ -151,7 +155,9 @@ resource "aws_config_delivery_channel" "main" {
 }
 
 resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
+  count = var.enable_aws_config ? 1 : 0
+
+  name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
 
   depends_on = [aws_config_delivery_channel.main]
@@ -163,6 +169,8 @@ resource "aws_config_configuration_recorder_status" "main" {
 
 # Config Rule 1: Ensure KMS keys have rotation enabled (custom rule)
 resource "aws_config_config_rule" "kms_rotation_enabled" {
+  count = var.enable_aws_config ? 1 : 0
+
   name = "${local.resource_prefix}-kms-rotation-${local.suffix}"
 
   source {
@@ -295,6 +303,8 @@ resource "aws_lambda_permission" "config_kms_rotation" {
 
 # Config Rule 2: Ensure secrets are encrypted with KMS
 resource "aws_config_config_rule" "secrets_encrypted" {
+  count = var.enable_aws_config ? 1 : 0
+
   name = "${local.resource_prefix}-secrets-encrypted-${local.suffix}"
 
   source {
@@ -311,6 +321,8 @@ resource "aws_config_config_rule" "secrets_encrypted" {
 
 # Config Rule 3: Ensure CloudWatch logs are encrypted
 resource "aws_config_config_rule" "cloudwatch_logs_encrypted" {
+  count = var.enable_aws_config ? 1 : 0
+
   name = "${local.resource_prefix}-cw-logs-encrypted-${local.suffix}"
 
   source {
@@ -327,6 +339,8 @@ resource "aws_config_config_rule" "cloudwatch_logs_encrypted" {
 
 # Config Rule 4: Ensure S3 buckets have encryption enabled
 resource "aws_config_config_rule" "s3_bucket_encrypted" {
+  count = var.enable_aws_config ? 1 : 0
+
   name = "${local.resource_prefix}-s3-encrypted-${local.suffix}"
 
   source {
@@ -343,6 +357,8 @@ resource "aws_config_config_rule" "s3_bucket_encrypted" {
 
 # Config Rule 5: Ensure IAM roles require MFA
 resource "aws_config_config_rule" "iam_mfa_required" {
+  count = var.enable_aws_config ? 1 : 0
+
   name = "${local.resource_prefix}-iam-mfa-${local.suffix}"
 
   source {
@@ -359,6 +375,8 @@ resource "aws_config_config_rule" "iam_mfa_required" {
 
 # Config Rule 6: Custom rule for VPC endpoint usage
 resource "aws_config_config_rule" "vpc_endpoint_service_enabled" {
+  count = var.enable_aws_config ? 1 : 0
+
   name = "${local.resource_prefix}-vpc-endpoint-${local.suffix}"
 
   source {
@@ -379,6 +397,8 @@ resource "aws_config_config_rule" "vpc_endpoint_service_enabled" {
 
 # Config Rule 7: Ensure resources are tagged
 resource "aws_config_config_rule" "required_tags" {
+  count = var.enable_aws_config ? 1 : 0
+
   name = "${local.resource_prefix}-required-tags-${local.suffix}"
 
   source {

@@ -10,12 +10,12 @@ output "kms_primary_key_arn" {
 
 output "kms_replica_eu_west_1_id" {
   description = "KMS replica key ID in eu-west-1"
-  value       = aws_kms_replica_key.eu_west_1.id
+  value       = var.enable_kms_replicas ? aws_kms_replica_key.eu_west_1[0].id : null
 }
 
 output "kms_replica_ap_southeast_1_id" {
   description = "KMS replica key ID in ap-southeast-1"
-  value       = aws_kms_replica_key.ap_southeast_1.id
+  value       = var.enable_kms_replicas ? aws_kms_replica_key.ap_southeast_1[0].id : null
 }
 
 output "secret_arn" {
@@ -93,10 +93,10 @@ output "resource_summary" {
   value = {
     kms_keys = {
       primary = aws_kms_key.primary.id
-      replicas = [
-        aws_kms_replica_key.eu_west_1.id,
-        aws_kms_replica_key.ap_southeast_1.id
-      ]
+      replicas = var.enable_kms_replicas ? [
+        aws_kms_replica_key.eu_west_1[0].id,
+        aws_kms_replica_key.ap_southeast_1[0].id
+      ] : []
     }
     secrets = [
       aws_secretsmanager_secret.database_credentials.name
@@ -111,14 +111,14 @@ output "resource_summary" {
       aws_vpc_endpoint.kms.id,
       aws_vpc_endpoint.ec2.id
     ]
-    config_rules = [
-      aws_config_config_rule.kms_rotation_enabled.name,
-      aws_config_config_rule.secrets_encrypted.name,
-      aws_config_config_rule.cloudwatch_logs_encrypted.name,
-      aws_config_config_rule.s3_bucket_encrypted.name,
-      aws_config_config_rule.iam_mfa_required.name,
-      aws_config_config_rule.vpc_endpoint_service_enabled.name,
-      aws_config_config_rule.required_tags.name
-    ]
+    config_rules = var.enable_aws_config ? [
+      aws_config_config_rule.kms_rotation_enabled[0].name,
+      aws_config_config_rule.secrets_encrypted[0].name,
+      aws_config_config_rule.cloudwatch_logs_encrypted[0].name,
+      aws_config_config_rule.s3_bucket_encrypted[0].name,
+      aws_config_config_rule.iam_mfa_required[0].name,
+      aws_config_config_rule.vpc_endpoint_service_enabled[0].name,
+      aws_config_config_rule.required_tags[0].name
+    ] : []
   }
 }

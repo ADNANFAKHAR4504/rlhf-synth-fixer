@@ -29,6 +29,8 @@ resource "aws_kms_alias" "primary" {
 
 # Replica key in eu-west-1
 resource "aws_kms_replica_key" "eu_west_1" {
+  count = var.enable_kms_replicas ? 1 : 0
+
   provider = aws.eu_west_1
 
   description             = "${local.resource_prefix}-replica-eu-west-1-${local.suffix}"
@@ -48,10 +50,12 @@ resource "aws_kms_replica_key" "eu_west_1" {
 }
 
 resource "aws_kms_alias" "eu_west_1" {
+  count = var.enable_kms_replicas ? 1 : 0
+
   provider = aws.eu_west_1
 
   name          = "alias/${local.resource_prefix}-replica-eu-west-1-${local.suffix}"
-  target_key_id = aws_kms_replica_key.eu_west_1.key_id
+  target_key_id = aws_kms_replica_key.eu_west_1[0].key_id
 
   lifecycle {
     prevent_destroy = false
@@ -60,6 +64,8 @@ resource "aws_kms_alias" "eu_west_1" {
 
 # Replica key in ap-southeast-1
 resource "aws_kms_replica_key" "ap_southeast_1" {
+  count = var.enable_kms_replicas ? 1 : 0
+
   provider = aws.ap_southeast_1
 
   description             = "${local.resource_prefix}-replica-ap-southeast-1-${local.suffix}"
@@ -79,10 +85,12 @@ resource "aws_kms_replica_key" "ap_southeast_1" {
 }
 
 resource "aws_kms_alias" "ap_southeast_1" {
+  count = var.enable_kms_replicas ? 1 : 0
+
   provider = aws.ap_southeast_1
 
   name          = "alias/${local.resource_prefix}-replica-ap-southeast-1-${local.suffix}"
-  target_key_id = aws_kms_replica_key.ap_southeast_1.key_id
+  target_key_id = aws_kms_replica_key.ap_southeast_1[0].key_id
 
   lifecycle {
     prevent_destroy = false

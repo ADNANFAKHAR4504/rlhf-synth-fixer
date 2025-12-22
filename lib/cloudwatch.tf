@@ -93,10 +93,12 @@ data "aws_iam_policy_document" "vpc_flow_logs_policy" {
 resource "aws_flow_log" "security_vpc" {
   count = var.vpc_id == "" ? 1 : 0
 
-  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.security[0].id
+  iam_role_arn             = aws_iam_role.vpc_flow_logs.arn
+  log_destination          = aws_cloudwatch_log_group.vpc_flow_logs.arn
+  log_destination_type     = "cloud-watch-logs"
+  traffic_type             = "ALL"
+  vpc_id                   = aws_vpc.security[0].id
+  max_aggregation_interval = 60 # LocalStack compatible value (60 or 600 supported, using 60 for LocalStack)
 
   tags = merge(local.common_tags, {
     Name               = "${local.resource_prefix}-flow-log-${local.suffix}"

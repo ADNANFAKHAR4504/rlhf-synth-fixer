@@ -79,3 +79,15 @@ variable "data_classifications" {
   type        = list(string)
   default     = ["PII", "Confidential", "Public"]
 }
+
+variable "enable_aws_config" {
+  description = "Enable AWS Config (disable for LocalStack as it's not fully supported)"
+  type        = bool
+  default     = false # Disabled by default for LocalStack compatibility
+}
+
+variable "enable_kms_replicas" {
+  description = "Enable KMS multi-region replica keys (disable for LocalStack due to timeout issues)"
+  type        = bool
+  default     = false # Disabled by default for LocalStack compatibility
+}
