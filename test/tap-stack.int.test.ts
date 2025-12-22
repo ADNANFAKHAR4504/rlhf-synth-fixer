@@ -14,8 +14,8 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Set AWS region
-const region = 'us-west-2';
+// Set AWS region - use environment variable or default to us-east-1 for LocalStack
+const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 
 // LocalStack endpoint configuration
 const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('4566');
