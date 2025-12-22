@@ -67,8 +67,8 @@ describe('Terraform HCL presence checks (unit)', () => {
     // NAT gateway count uses ternary on var.enable_nat_gateway
     expect(mainTf.includes('var.enable_nat_gateway ? 1 : 0')).toBe(true);
 
-    // RDS engine is postgres
-    expect(mainTf.includes('engine                  = "postgres"')).toBe(true);
+    // RDS engine is postgres (flexible whitespace matching)
+    expect(/engine\s+=\s+"postgres"/.test(mainTf)).toBe(true);
   });
 
   test('backend.tf uses a non-production (local) backend for tests or placeholders are commented', () => {
