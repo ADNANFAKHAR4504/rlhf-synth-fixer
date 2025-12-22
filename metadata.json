@@ -4,16 +4,16 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "292041",
-  "team": "1",
+  "team": "synth-2",
   "startedAt": "2025-08-18T17:52:07.730Z",
-  "subtask": "General Infrastructure Provisioning",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Network Configuration",
-    "Database Management",
-    "Security Configuration",
-    "Monitoring Setup",
-    "Resource Scaling"
+    "Cloud Environment Setup",
+    "Cloud Environment Setup",
+    "Security Configuration as Code",
+    "Infrastructure Analysis/Monitoring",
+    "IaC Optimization"
   ],
   "aws_services": [
     "S3",
