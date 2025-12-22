@@ -52,3 +52,8 @@ variable "cloudwatch_log_group_name" {
   description = "CloudWatch log group name"
   type        = string
 }
+
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+}

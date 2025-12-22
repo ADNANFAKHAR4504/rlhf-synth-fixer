@@ -117,6 +117,7 @@ module "ecs" {
   task_memory               = var.ecs_task_memory
   desired_count             = var.ecs_desired_count
   cloudwatch_log_group_name = module.cloudwatch.log_group_name
+  aws_region                = var.aws_region
 }
 
 # CloudWatch Module
