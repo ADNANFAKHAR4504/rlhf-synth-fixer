@@ -66,15 +66,7 @@ jobs:
         continue-on-error: false
 
       - name: Encrypt artifacts with KMS
-        run: |
-          # Create tarball of artifacts
-          tar -czf cdk-outputs.tar.gz -C cdk.out .
-          # Encrypt with AWS KMS
-          aws kms encrypt \
-            --key-id alias/github-actions-artifacts \
-            --plaintext fileb://cdk-outputs.tar.gz \
-            --output text \
-            --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
+        run: ./lib/encrypt-artifacts-kms.sh
       - name: Upload encrypted artifacts
         uses: actions/upload-artifact@v4
         with:
