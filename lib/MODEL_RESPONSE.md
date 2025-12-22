@@ -357,26 +357,26 @@ Outputs:
 
 ## Key Security Features Implemented
 
-### 🔒 **Network Security**
+### **Network Security**
 
 - **Multi-AZ Architecture**: Resources deployed across us-east-1a and us-east-1b for high availability
 - **Strict Security Groups**: Public SG only allows HTTPS (443), Private SG denies internet inbound
 - **No Auto-Assign Public IPs**: Disabled on public subnets for enhanced security
 - **Controlled Routing**: Separate route tables for public and private subnets
 
-### 🛡️ **IAM Security (Least Privilege)**
+### **IAM Security (Least Privilege)**
 
 - **Minimal Permissions**: IAM role only grants necessary SSM permissions
 - **Regional Restrictions**: Policies include region-based conditions
 - **Service-Specific**: Role can only be assumed by EC2 service
 
-### 🔐 **Encryption Readiness**
+### **Encryption Readiness**
 
 - Template is designed to support encryption requirements
 - All future EBS volumes in this VPC should use `Encrypted: true`
 - Ready for AWS KMS integration
 
-### 📊 **Monitoring & Compliance**
+### **Monitoring and Compliance**
 
 - Comprehensive tagging strategy for resource tracking
 - Exported outputs for integration with other stacks
@@ -405,11 +405,11 @@ Outputs:
 
 This template has been designed to pass all CloudFormation validation checks and includes:
 
-- ✅ Proper resource dependencies
-- ✅ Valid CIDR block calculations
-- ✅ Correct IAM policy syntax
-- ✅ Appropriate resource naming
-- ✅ Complete tagging strategy
-- ✅ Security best practices
+- Proper resource dependencies
+- Valid CIDR block calculations
+- Correct IAM policy syntax
+- Appropriate resource naming
+- Complete tagging strategy
+- Security best practices
 
 The infrastructure created by this template provides a solid, secure foundation for deploying applications while maintaining the highest security standards and operational excellence.
