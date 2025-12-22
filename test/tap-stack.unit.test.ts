@@ -240,7 +240,10 @@ describe('TapStack', () => {
   });
 
   describe('GuardDuty Configuration', () => {
-    test('GuardDuty custom resource is present and configured', () => {
+    // GuardDuty has been disabled for LocalStack compatibility
+    // The CustomResource requires Lambda functions uploaded to S3 which causes
+    // XML parsing errors in LocalStack S3 implementation
+    test.skip('GuardDuty custom resource is present and configured', () => {
       // Find GuardDuty custom resource
       const customResources = template.findResources('Custom::AWS');
       const customResourceKeys = Object.keys(customResources);
@@ -483,13 +486,15 @@ describe('TapStack', () => {
         },
       });
 
-      // GuardDuty output
-      template.hasOutput('GuardDutyDetectorId', {
-        Description: 'GuardDuty detector ID for primary region',
-        Export: {
-          Name: `Tap${environmentSuffix}GuardDutyDetectorId`,
-        },
-      });
+      // GuardDuty output - disabled for LocalStack compatibility
+      // GuardDuty CustomResource requires Lambda functions uploaded to S3
+      // which causes XML parsing errors in LocalStack S3 implementation
+      // template.hasOutput('GuardDutyDetectorId', {
+      //   Description: 'GuardDuty detector ID for primary region',
+      //   Export: {
+      //     Name: `Tap${environmentSuffix}GuardDutyDetectorId`,
+      //   },
+      // });
     });
   });
 
