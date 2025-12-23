@@ -10,5 +10,5 @@
   "subtask": "Application Deployment",
   "subject_labels": ["Web Application Deployment"],
   "aws_services": ["VPC", "EC2", "RDS", "S3", "KMS", "IAM", "CloudFront", "CloudWatch", "Auto Scaling", "VPC Peering"],
-  "wave": "P0"
+  "wave": "P1"
 }
