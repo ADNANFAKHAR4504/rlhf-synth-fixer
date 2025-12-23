@@ -10,13 +10,11 @@ terraform {
     }
   }
 
-  backend "s3" {
-    bucket         = "terraform-state-dr-payments"
-    key            = "dr-payment-system/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "terraform-state-lock-dr"
-  }
+  # Backend configuration will be provided by CI/CD for LocalStack testing
+  # For production: terraform init -backend-config="bucket=terraform-state-dr-payments" \
+  #                 -backend-config="key=dr-payment-system/terraform.tfstate" \
+  #                 -backend-config="region=us-east-1" \
+  #                 -backend-config="dynamodb_table=terraform-state-lock-dr"
 }
 
 # Primary AWS provider for general resources
