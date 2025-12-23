@@ -22,5 +22,6 @@
     "ACM",
     "NAT"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": "P1"
 }
