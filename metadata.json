@@ -32,7 +32,7 @@
     "branches": 100
   },
   "author": "harshita-turing",
-  "dockerS3Location": """migrated_from": {
+  "migrated_from": {
     "po_id": "barun-turing",
     "pr": "Pr2037"
   }
