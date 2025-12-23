@@ -42,7 +42,7 @@ Complete Terraform configuration that deploys a production-ready serverless frau
 
 ## Critical Implementation Notes
 
-1. **Resource Naming**: ALL named resources must include var.environment_suffix suffix
+1. **Naming Convention**: ALL named resources must include var.environment_suffix suffix
 2. **Destroyability**: No retention policies that prevent stack deletion
 3. **Security**:
    - S3 buckets must have SSE-S3 or SSE-KMS encryption
