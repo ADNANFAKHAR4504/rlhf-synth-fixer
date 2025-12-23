@@ -67,7 +67,7 @@ Create a multi-region disaster recovery infrastructure using **Terraform with HC
 - Resource names must include environmentSuffix for uniqueness
 - Follow naming convention where resource names combine the resource type with the environmentSuffix
 - Deploy to us-east-1 primary region and us-west-2 secondary region
-- All resources must be destroyable (no Retain policies)
+- All resources must be destroyable without Retain policies
 
 ### Constraints
 
@@ -79,9 +79,9 @@ Create a multi-region disaster recovery infrastructure using **Terraform with HC
 - Terraform state must be stored in S3 with DynamoDB locking and versioning enabled
 - Each Aurora cluster must have at least 2 read replicas distributed across different AZs
 - SNS topics must have dead letter queues configured with maximum receive count of 3
-- All resources must support destruction for testing purposes (FORBIDDEN: RemovalPolicy RETAIN)
+- All resources must support destruction for testing purposes - FORBIDDEN: RemovalPolicy RETAIN
 
-## Deployment Requirements (CRITICAL)
+## Critical Deployment Requirements
 
 - All resource names MUST include the environmentSuffix parameter for uniqueness
 - Use naming pattern where resource names combine the resource type with environmentSuffix for all resources
