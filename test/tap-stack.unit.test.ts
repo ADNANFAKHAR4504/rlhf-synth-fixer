@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = 'test';
@@ -30,14 +30,14 @@ describe('TapStack', () => {
 
     test('creates public subnets across 2 availability zones', () => {
       template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private
-      
+
       // Check public subnets
       template.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: true,
         Tags: Match.arrayWith([
-          Match.objectLike({ 
-            Key: 'aws-cdk:subnet-name', 
-            Value: 'PublicSubnet-Development-trainr70-test' 
+          Match.objectLike({
+            Key: 'aws-cdk:subnet-name',
+            Value: 'PublicSubnet-Development-trainr70-test'
           })
         ])
       });
@@ -47,13 +47,13 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: false,
         Tags: Match.arrayWith([
-          Match.objectLike({ 
-            Key: 'aws-cdk:subnet-name', 
-            Value: 'PrivateSubnet-Development-trainr70-test' 
+          Match.objectLike({
+            Key: 'aws-cdk:subnet-name',
+            Value: 'PrivateSubnet-Development-trainr70-test'
           })
         ])
       });
-      
+
       // Check NAT Gateway exists
       template.resourceCountIs('AWS::EC2::NatGateway', 1);
     });
@@ -100,10 +100,10 @@ describe('TapStack', () => {
   describe('IAM Roles and Policies', () => {
     test('creates EC2 role with correct name and policies', () => {
       const resources = template.findResources('AWS::IAM::Role');
-      const ec2RoleResource = Object.values(resources).find((resource: any) => 
+      const ec2RoleResource = Object.values(resources).find((resource: any) =>
         resource.Properties?.RoleName === 'EC2Role-Development-trainr70-test'
       );
-      
+
       expect(ec2RoleResource).toBeDefined();
       expect(ec2RoleResource?.Properties?.AssumeRolePolicyDocument?.Statement).toEqual(
         expect.arrayContaining([
@@ -172,9 +172,9 @@ describe('TapStack', () => {
         UpdateReplacePolicy: 'Delete',
         Properties: Match.objectLike({
           Tags: Match.arrayWith([
-            Match.objectLike({ 
-              Key: 'aws-cdk:auto-delete-objects', 
-              Value: 'true' 
+            Match.objectLike({
+              Key: 'aws-cdk:auto-delete-objects',
+              Value: 'true'
             })
           ])
         })
@@ -205,9 +205,9 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::EC2::Instance', {
         InstanceType: 't3.micro',
         Tags: Match.arrayWith([
-          Match.objectLike({ 
-            Key: 'Name', 
-            Value: 'EC2Instance-Development-trainr70-test' 
+          Match.objectLike({
+            Key: 'Name',
+            Value: 'EC2Instance-Development-trainr70-test'
           })
         ])
       });
@@ -420,9 +420,9 @@ describe('TapStack', () => {
         Object.values(resources).forEach(resource => {
           expect(resource.Properties?.Tags).toEqual(
             expect.arrayContaining([
-              expect.objectContaining({ 
-                Key: 'Environment', 
-                Value: 'Development' 
+              expect.objectContaining({
+                Key: 'Environment',
+                Value: 'Development'
               })
             ])
           );
@@ -436,8 +436,8 @@ describe('TapStack', () => {
       // Check VPC name
       template.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
-          Match.objectLike({ 
-            Key: 'Name', 
+          Match.objectLike({
+            Key: 'Name',
             Value: Match.stringLikeRegexp('VPC-Development-trainr70-.*')
           })
         ])
@@ -465,8 +465,8 @@ describe('TapStack', () => {
       // Verify that 'dev' is used as default suffix in resource names
       templateWithoutSuffix.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
-          Match.objectLike({ 
-            Key: 'Name', 
+          Match.objectLike({
+            Key: 'Name',
             Value: 'VPC-Development-trainr70-dev'
           })
         ])
@@ -520,7 +520,7 @@ describe('TapStack', () => {
         EnableDnsHostnames: true,
         EnableDnsSupport: true
       });
-      
+
       // Verify VPC uses private IP range
       template.hasResourceProperties('AWS::EC2::VPC', {
         CidrBlock: '10.0.0.0/16'
@@ -602,11 +602,11 @@ describe('TapStack', () => {
     test('subnet configuration supports high availability', () => {
       // Verify we have exactly 4 subnets (2 public + 2 private across 2 AZs)
       template.resourceCountIs('AWS::EC2::Subnet', 4);
-      
+
       // Verify route tables for proper network segmentation - CDK creates more route tables for proper isolation
       const routeTables = template.findResources('AWS::EC2::RouteTable');
       expect(Object.keys(routeTables).length).toBeGreaterThanOrEqual(3);
-      
+
       // Verify NAT Gateway for private subnet internet access
       template.resourceCountIs('AWS::EC2::NatGateway', 1);
       template.resourceCountIs('AWS::EC2::EIP', 1); // For NAT Gateway
@@ -615,7 +615,7 @@ describe('TapStack', () => {
     test('internet gateway configuration is correct', () => {
       template.resourceCountIs('AWS::EC2::InternetGateway', 1);
       template.resourceCountIs('AWS::EC2::VPCGatewayAttachment', 1);
-      
+
       // Verify IGW is attached to VPC
       template.hasResourceProperties('AWS::EC2::VPCGatewayAttachment', {
         VpcId: Match.anyValue(),
@@ -627,7 +627,7 @@ describe('TapStack', () => {
       // Verify firewall is attached to public subnets (where it should be)
       const firewallProps = template.findResources('AWS::NetworkFirewall::Firewall');
       expect(Object.keys(firewallProps)).toHaveLength(1);
-      
+
       const firewall = Object.values(firewallProps)[0];
       expect(firewall.Properties.SubnetMappings).toHaveLength(2); // One per public subnet
     });
@@ -647,7 +647,7 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
         TopicName: Match.stringLikeRegexp('AlarmTopic-Development-trainr70-.*')
       });
-      
+
       // Verify alarm action is linked to SNS topic
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
         AlarmActions: [
@@ -703,7 +703,7 @@ describe('TapStack', () => {
     test('all resources have consistent tagging', () => {
       const resourceTypesToCheck = [
         'AWS::EC2::VPC',
-        'AWS::EC2::SecurityGroup', 
+        'AWS::EC2::SecurityGroup',
         'AWS::S3::Bucket',
         'AWS::SNS::Topic',
         'AWS::NetworkFirewall::RuleGroup',
@@ -714,9 +714,9 @@ describe('TapStack', () => {
       resourceTypesToCheck.forEach(resourceType => {
         template.hasResourceProperties(resourceType, {
           Tags: Match.arrayWith([
-            Match.objectLike({ 
-              Key: 'Environment', 
-              Value: 'Development' 
+            Match.objectLike({
+              Key: 'Environment',
+              Value: 'Development'
             })
           ])
         });
@@ -743,7 +743,7 @@ describe('TapStack', () => {
   describe('Error Handling and Edge Cases', () => {
     test('stack can be created with minimal valid configuration', () => {
       const minimalApp = new cdk.App();
-      
+
       // Should not throw when creating with minimal props
       expect(() => {
         new TapStack(minimalApp, 'MinimalStack', {});
@@ -755,7 +755,7 @@ describe('TapStack', () => {
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
       expect(Object.keys(securityGroups).length).toBeLessThan(100); // Well under VPC limit of 2500
       template.resourceCountIs('AWS::EC2::Subnet', 4); // Well under VPC limit of 200
-      
+
       // CDK may create additional roles for services, so check that total is reasonable
       const roles = template.findResources('AWS::IAM::Role');
       expect(Object.keys(roles).length).toBeLessThan(10); // Well under account limit

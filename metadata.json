@@ -6,10 +6,10 @@
   "po_id": "Pr925",
   "team": "synth-2",
   "startedAt": "2025-08-11T15:20:44-05:00",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "EC2",
@@ -18,5 +18,6 @@
     "IAM",
     "CloudWatch",
     "SNS"
-  ]
+  ],
+  "wave": "P0"
 }
