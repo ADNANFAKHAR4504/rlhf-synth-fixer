@@ -1,0 +1,19 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "provider": "localstack",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291549",
+  "team": "synth-2",
+  "wave": "P1",
+  "startedAt": "2025-08-19T13:42:51.870Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "S3"
+  ]
+}
