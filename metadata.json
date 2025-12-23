@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr32",
+  "team": "synth-2",
+  "startedAt": "2025-08-08T13:13:26-05:00",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch Logs",
+    "WAFv2"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr32",
+    "pr": "Pr783"
+  }
+}
