@@ -827,6 +827,10 @@ deploy_terraform() {
     # Initialize Terraform
     print_status $YELLOW "🔧 Initializing Terraform..."
     
+    # Unset conflicting endpoint variable to prevent backend parameter conflict
+    # AWS_ENDPOINT_URL is sufficient; AWS_ENDPOINT_URL_S3 causes tflocal to generate both endpoint and endpoints.s3
+    unset AWS_ENDPOINT_URL_S3
+    
     # Check if backend is configured - if S3 backend, create bucket first and configure for LocalStack
     if grep -q 'backend "s3"' *.tf 2>/dev/null; then
         local state_bucket="terraform-state-${ENVIRONMENT_SUFFIX:-dev}"
