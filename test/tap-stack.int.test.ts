@@ -220,7 +220,7 @@ describe('TapStack Integration Tests - Secure Financial Data Processing', () => 
       await expect(s3Client.send(command)).resolves.not.toThrow();
     });
 
-    test.skipIf(isLocalStack)(
+    (isLocalStack ? test.skip : test)(
       'input bucket should have KMS encryption enabled',
       async () => {
         const command = new GetBucketEncryptionCommand({
@@ -244,7 +244,7 @@ describe('TapStack Integration Tests - Secure Financial Data Processing', () => 
       }
     );
 
-    test.skipIf(isLocalStack)(
+    (isLocalStack ? test.skip : test)(
       'output bucket should have KMS encryption enabled',
       async () => {
         const command = new GetBucketEncryptionCommand({
@@ -283,7 +283,7 @@ describe('TapStack Integration Tests - Secure Financial Data Processing', () => 
       expect(response.Status).toBe('Enabled');
     });
 
-    test.skipIf(isLocalStack)(
+    (isLocalStack ? test.skip : test)(
       'input bucket should have lifecycle policies configured',
       async () => {
         const command = new GetBucketLifecycleConfigurationCommand({
@@ -296,7 +296,7 @@ describe('TapStack Integration Tests - Secure Financial Data Processing', () => 
       }
     );
 
-    test.skipIf(isLocalStack)(
+    (isLocalStack ? test.skip : test)(
       'output bucket should have lifecycle policies configured',
       async () => {
         const command = new GetBucketLifecycleConfigurationCommand({
@@ -461,7 +461,7 @@ describe('TapStack Integration Tests - Secure Financial Data Processing', () => 
       );
     });
 
-    test.skipIf(isLocalStack)(
+    (isLocalStack ? test.skip : test)(
       'DynamoDB table should have point-in-time recovery enabled',
       async () => {
         const command = new DescribeContinuousBackupsCommand({
@@ -571,7 +571,7 @@ describe('TapStack Integration Tests - Secure Financial Data Processing', () => 
   });
 
   describe('CloudWatch Logs Validation', () => {
-    test.skipIf(isLocalStack)(
+    (isLocalStack ? test.skip : test)(
       'should have Lambda log group with 7-year retention',
       async () => {
         const command = new DescribeLogGroupsCommand({
@@ -592,7 +592,7 @@ describe('TapStack Integration Tests - Secure Financial Data Processing', () => 
       }
     );
 
-    test.skipIf(isLocalStack)(
+    (isLocalStack ? test.skip : test)(
       'should have metric filter for unauthorized access',
       async () => {
         const command = new DescribeMetricFiltersCommand({
@@ -618,7 +618,7 @@ describe('TapStack Integration Tests - Secure Financial Data Processing', () => 
   });
 
   describe('CloudWatch Alarms Validation', () => {
-    test.skipIf(isLocalStack)(
+    (isLocalStack ? test.skip : test)(
       'should have alarm for failed Lambda invocations',
       async () => {
         // Get all alarms and search for failed invocations alarm
@@ -771,7 +771,7 @@ describe('TapStack Integration Tests - Secure Financial Data Processing', () => 
   });
 
   describe('End-to-End Security Validation', () => {
-    test.skipIf(isLocalStack)(
+    (isLocalStack ? test.skip : test)(
       'all resources should be properly encrypted',
       async () => {
         // Verify S3 encryption
