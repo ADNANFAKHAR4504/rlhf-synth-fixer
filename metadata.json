@@ -6,9 +6,9 @@
   "po_id": "292025",
   "team": "5",
   "startedAt": "2025-08-20T07:26:30.305Z",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Multi-Environment Consistency and Replication"
+    "Security Configuration as Code"
   ],
   "provider": "localstack",
   "aws_services": [
