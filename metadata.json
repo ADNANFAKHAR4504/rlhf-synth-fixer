@@ -9,7 +9,6 @@
   "startedAt": "2025-08-08T14:44:53.342Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Serverless Infrastructure (Functions as Code)",
     "Cloud Environment Setup"
   ],
   "aws_services": [
