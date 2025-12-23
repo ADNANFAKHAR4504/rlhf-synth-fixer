@@ -5,8 +5,9 @@ import { TapStack } from '../lib/tap-stack';
 describe('TapStack', () => {
   const environmentSuffix = 'test';
   const fixedTimestamp = 1700000000000;
-  const accessLogsBucketName = `access-logs-bucket${environmentSuffix}-${fixedTimestamp}`;
-  const secureBucketName = `secure-bucket${environmentSuffix}`;
+  const nameSuffix = `${environmentSuffix}${fixedTimestamp}`;
+  const accessLogsBucketName = `access-logs-bucket${nameSuffix}-${fixedTimestamp}`;
+  const secureBucketName = `secure-bucket${nameSuffix}`;
   let template: Template;
 
   beforeAll(() => {
@@ -27,10 +28,10 @@ describe('TapStack', () => {
       Tags: Match.arrayWith([Match.objectLike({ Key: 'iac-rlhf-amazon', Value: 'true' })])
     });
     template.hasResourceProperties('AWS::KMS::Alias', {
-      AliasName: `alias/infrastructure-key${environmentSuffix}`
+      AliasName: `alias/infrastructure-key${nameSuffix}`
     });
     template.hasResourceProperties('AWS::SecretsManager::Secret', {
-      Name: `app-secret${environmentSuffix}`,
+      Name: `app-secret${nameSuffix}`,
       KmsKeyId: Match.anyValue(),
       GenerateSecretString: Match.objectLike({
         GenerateStringKey: 'password',
@@ -39,12 +40,12 @@ describe('TapStack', () => {
       Tags: Match.arrayWith([Match.objectLike({ Key: 'iac-rlhf-amazon', Value: 'true' })])
     });
     template.hasResourceProperties('AWS::Logs::LogGroup', {
-      LogGroupName: `/aws/infrastructure/central${environmentSuffix}`,
+      LogGroupName: `/aws/infrastructure/central${nameSuffix}`,
       RetentionInDays: 30,
       KmsKeyId: Match.anyValue()
     });
     template.hasResourceProperties('AWS::Logs::LogGroup', {
-      LogGroupName: `/aws/ec2/instances${environmentSuffix}`,
+      LogGroupName: `/aws/ec2/instances${nameSuffix}`,
       RetentionInDays: 30,
       KmsKeyId: Match.anyValue()
     });
@@ -55,12 +56,12 @@ describe('TapStack', () => {
       CidrBlock: '10.0.0.0/16',
       EnableDnsSupport: true,
       EnableDnsHostnames: true,
-      Tags: Match.arrayWith([Match.objectLike({ Key: 'Name', Value: `main-vpc${environmentSuffix}` })])
+      Tags: Match.arrayWith([Match.objectLike({ Key: 'Name', Value: `main-vpc${nameSuffix}` })])
     });
     template.resourceCountIs('AWS::EC2::Subnet', 4);
     template.resourceCountIs('AWS::EC2::NatGateway', 1);
     template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-      GroupName: `ec2-sg${environmentSuffix}`,
+      GroupName: `ec2-sg${nameSuffix}`,
       SecurityGroupIngress: Match.arrayWith([
         Match.objectLike({
           CidrIp: '0.0.0.0/0',
@@ -73,7 +74,7 @@ describe('TapStack', () => {
     template.resourceCountIs('AWS::EC2::Instance', 0);
     template.hasResourceProperties('AWS::EC2::EIP', {
       Domain: 'vpc',
-      Tags: Match.arrayWith([Match.objectLike({ Key: 'Name', Value: `elastic-ip${environmentSuffix}` })])
+      Tags: Match.arrayWith([Match.objectLike({ Key: 'Name', Value: `elastic-ip${nameSuffix}` })])
     });
   });
 
@@ -90,7 +91,7 @@ describe('TapStack', () => {
     const contextTemplate = Template.fromStack(stack);
 
     contextTemplate.hasResourceProperties('AWS::KMS::Alias', {
-      AliasName: 'alias/infrastructure-keyctx'
+      AliasName: `alias/infrastructure-keyctx${fixedTimestamp}`
     });
   });
 
@@ -153,7 +154,7 @@ describe('TapStack', () => {
 
   test('attaches least-privilege IAM policies to the compute role', () => {
     template.hasResourceProperties('AWS::IAM::Role', {
-      RoleName: `ec2-instance-role${environmentSuffix}`,
+      RoleName: `ec2-instance-role${nameSuffix}`,
       ManagedPolicyArns: Match.arrayWith([
         Match.objectLike({
           'Fn::Join': Match.arrayWith([
@@ -178,7 +179,7 @@ describe('TapStack', () => {
       ])
     });
     template.hasResourceProperties('AWS::IAM::Policy', {
-      PolicyName: `secrets-read-policy${environmentSuffix}`,
+      PolicyName: `secrets-read-policy${nameSuffix}`,
       PolicyDocument: Match.objectLike({
         Statement: Match.arrayWith([
           Match.objectLike({
@@ -193,7 +194,7 @@ describe('TapStack', () => {
       })
     });
     template.hasResourceProperties('AWS::IAM::Policy', {
-      PolicyName: `s3-read-policy${environmentSuffix}`,
+      PolicyName: `s3-read-policy${nameSuffix}`,
       PolicyDocument: Match.objectLike({
         Statement: Match.arrayWith([
           Match.objectLike({ Sid: 'ListBucket', Action: 's3:ListBucket' }),
@@ -209,7 +210,7 @@ describe('TapStack', () => {
       })
     });
     template.hasResourceProperties('AWS::IAM::Policy', {
-      PolicyName: `logs-write-policy${environmentSuffix}`,
+      PolicyName: `logs-write-policy${nameSuffix}`,
       PolicyDocument: Match.objectLike({
         Statement: Match.arrayWith([
           Match.objectLike({
@@ -227,7 +228,7 @@ describe('TapStack', () => {
 
   test('hardened launch templates drive the autoscaling group', () => {
     template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-      LaunchTemplateName: `ec2-launch-template${environmentSuffix}`,
+      LaunchTemplateName: `ec2-launch-template${nameSuffix}`,
       LaunchTemplateData: Match.objectLike({
         InstanceType: 't3.medium',
         MetadataOptions: { HttpTokens: 'required' },
@@ -238,7 +239,7 @@ describe('TapStack', () => {
       })
     });
     template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-      AutoScalingGroupName: `asg${environmentSuffix}`,
+      AutoScalingGroupName: `asg${nameSuffix}`,
       MinSize: '2',
       MaxSize: '6',
       DesiredCapacity: '2',
@@ -262,7 +263,7 @@ describe('TapStack', () => {
 
   test('alarms publish to encrypted SNS notifications', () => {
     template.hasResourceProperties('AWS::SNS::Topic', {
-      TopicName: `infrastructure-alarms${environmentSuffix}`,
+      TopicName: `infrastructure-alarms${nameSuffix}`,
       DisplayName: 'Infrastructure Alarms',
       KmsMasterKeyId: Match.anyValue()
     });
@@ -272,13 +273,13 @@ describe('TapStack', () => {
       TopicArn: { Ref: Match.stringLikeRegexp('AlarmTopic') }
     });
     template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      AlarmName: `cpu-high${environmentSuffix}`,
+      AlarmName: `cpu-high${nameSuffix}`,
       Threshold: 80,
       EvaluationPeriods: 2,
       TreatMissingData: 'breaching'
     });
     template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      AlarmName: `cpu-low${environmentSuffix}`,
+      AlarmName: `cpu-low${nameSuffix}`,
       Threshold: 20,
       ComparisonOperator: 'LessThanThreshold'
     });
@@ -286,12 +287,12 @@ describe('TapStack', () => {
 
   test('backup plan and configuration parameters capture resource metadata', () => {
     template.hasResourceProperties('AWS::Backup::BackupVault', {
-      BackupVaultName: `infrastructure-vault${environmentSuffix}`,
+      BackupVaultName: `infrastructure-vault${nameSuffix}`,
       EncryptionKeyArn: Match.anyValue()
     });
     template.hasResourceProperties('AWS::Backup::BackupPlan', {
       BackupPlan: Match.objectLike({
-        BackupPlanName: `infrastructure-backup-plan${environmentSuffix}`,
+        BackupPlanName: `infrastructure-backup-plan${nameSuffix}`,
         BackupPlanRule: Match.arrayWith([
           Match.objectLike({
             RuleName: 'DailyBackup',
@@ -303,7 +304,7 @@ describe('TapStack', () => {
     });
     template.hasResourceProperties('AWS::Backup::BackupSelection', {
       BackupSelection: Match.objectLike({
-        SelectionName: `ec2-selection${environmentSuffix}`,
+        SelectionName: `ec2-selection${nameSuffix}`,
         ListOfTags: Match.arrayWith([
           Match.objectLike({
             ConditionKey: 'aws:autoscaling:groupName',
@@ -314,7 +315,7 @@ describe('TapStack', () => {
       })
     });
     template.hasResourceProperties('AWS::SSM::Parameter', {
-      Name: `/infrastructure/config${environmentSuffix}`,
+      Name: `/infrastructure/config${nameSuffix}`,
       Value: Match.objectLike({
         'Fn::Join': [
           '',
@@ -332,19 +333,19 @@ describe('TapStack', () => {
 
   test('exports identifiers for downstream stacks', () => {
     template.hasOutput('VPCId', {
-      Export: { Name: `vpc-id${environmentSuffix}` },
+      Export: { Name: `vpc-id${nameSuffix}` },
       Value: { Ref: Match.stringLikeRegexp('MainVpc') }
     });
     template.hasOutput('S3BucketName', {
-      Export: { Name: `s3-bucket-name${environmentSuffix}` },
+      Export: { Name: `s3-bucket-name${nameSuffix}` },
       Value: { Ref: Match.stringLikeRegexp('SecureS3Bucket') }
     });
     template.hasOutput('ElasticIPAddress', {
-      Export: { Name: `elastic-ip${environmentSuffix}` },
+      Export: { Name: `elastic-ip${nameSuffix}` },
       Value: { Ref: 'ElasticIP' }
     });
     template.hasOutput('KMSKeyId', {
-      Export: { Name: `kms-key-id${environmentSuffix}` },
+      Export: { Name: `kms-key-id${nameSuffix}` },
       Value: { Ref: Match.stringLikeRegexp('MasterKmsKey') }
     });
   });
