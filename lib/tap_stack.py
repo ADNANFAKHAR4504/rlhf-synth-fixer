@@ -482,12 +482,18 @@ class TapStack(cdk.Stack):
         )
 
         # Auto Scaling Group
+        # Use LaunchTemplate with explicit version for LocalStack compatibility
+        launch_template_spec = autoscaling.LaunchTemplateSpecification(
+            version="$Latest",
+            launch_template=self.launch_template
+        )
+
         self.asg = autoscaling.AutoScalingGroup(
             self, f"{self.resource_prefix}-asg",
             auto_scaling_group_name=f"{self.resource_prefix}-asg",
             vpc=self.vpc,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            launch_template=self.launch_template,
+            launch_template=launch_template_spec,
             min_capacity=1,
             max_capacity=6 if self.env_suffix == "prod" else 3,
             desired_capacity=2 if self.env_suffix == "prod" else 1,
