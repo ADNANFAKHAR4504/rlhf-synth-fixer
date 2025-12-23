@@ -325,38 +325,6 @@ deploy_platform() {
     esac
 }
 
-# Function to cleanup failed stacks before deployment
-cleanup_failed_stacks() {
-    local stack_pattern=$1
-    print_status $YELLOW "🧹 Cleaning up failed stacks matching: $stack_pattern"
-
-    # Find all stacks in failed states
-    local failed_stacks=$(awslocal cloudformation list-stacks \
-        --stack-status-filter DELETE_FAILED ROLLBACK_FAILED CREATE_FAILED UPDATE_ROLLBACK_FAILED ROLLBACK_COMPLETE \
-        --query 'StackSummaries[].StackName' \
-        --output json 2>/dev/null | jq -r '.[]' 2>/dev/null | grep -i "$stack_pattern" || echo "")
-
-    if [[ -z "$failed_stacks" ]]; then
-        print_status $GREEN "✅ No failed stacks found"
-        return 0
-    fi
-
-    print_status $YELLOW "Found failed stacks:"
-    echo "$failed_stacks"
-
-    # Force delete each failed stack
-    while IFS= read -r stack; do
-        if [[ -n "$stack" ]]; then
-            print_status $YELLOW "   🗑️  Force deleting: $stack"
-            awslocal cloudformation delete-stack --stack-name "$stack" 2>/dev/null || true
-            sleep 1
-        fi
-    done <<< "$failed_stacks"
-
-    print_status $GREEN "✅ Cleanup completed"
-    echo ""
-}
-
 # CDK deployment
 # Languages: go, java, js, py, python, ts
 deploy_cdk() {
@@ -381,9 +349,6 @@ deploy_cdk() {
 
     local env_suffix="${ENVIRONMENT_SUFFIX:-dev}"
     print_status $BLUE "📌 Environment suffix: $env_suffix"
-
-    # Cleanup any failed stacks before deployment
-    cleanup_failed_stacks "TapStack"
 
     # Bootstrap CDK for LocalStack
     print_status $YELLOW "🔧 Bootstrapping CDK..."
@@ -428,14 +393,7 @@ deploy_cdk() {
     esac
 
     if [ $exit_code -ne 0 ]; then
-        print_status $YELLOW "⚠️  Initial deployment failed, cleaning up and retrying..."
-
-        # Cleanup failed stacks before retry
-        cleanup_failed_stacks "TapStack"
-
-        # Wait a bit for cleanup to complete
-        sleep 2
-
+        print_status $YELLOW "⚠️  Initial deployment failed, retrying..."
         cdklocal deploy --all --require-approval never \
             -c environmentSuffix="$env_suffix" \
             --force \
