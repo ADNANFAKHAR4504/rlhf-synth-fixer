@@ -49,7 +49,7 @@ Create a production-ready VPC infrastructure using **Terraform with HCL** for a 
 - Use **NAT Gateway** for private subnet outbound connectivity
 - Use **Security Groups** for instance-level security
 - Use **Network ACL** for subnet-level security
-- Resource names must include **environmentSuffix** for uniqueness
+- All resource names must include the environmentSuffix parameter for uniqueness
 - Follow naming convention: resource-type-purpose-environment-suffix format
 - Deploy to **us-east-1** region
 - All resources must be destroyable with no Retain policies
@@ -87,7 +87,7 @@ Create a production-ready VPC infrastructure using **Terraform with HCL** for a 
 - **Reliability**: Multi-AZ deployment with no single points of failure
 - **Security**: Network segmentation, least privilege security groups, flow logs enabled
 - **Compliance**: Meets PCI DSS network segmentation and audit requirements
-- **Resource Naming**: All resources include environmentSuffix parameter
+- **Naming Convention**: All resources include environmentSuffix parameter
 - **Code Quality**: Clean HCL, well-tested, properly documented
 - **Destroyability**: All resources can be cleanly destroyed with no Retain policies
 
