@@ -1,126 +1,25 @@
-AWS Multi-Region Infrastructure Setup with Pulumi Python
-========================================================
+We need a Python script using Boto3 to perform infrastructure QA validation across our AWS account. The script should analyze EC2 instances, VPC networking, and CloudWatch monitoring to verify that our infrastructure follows best practices and is properly configured.
 
-Overview
---------
+Here's what the script needs to analyze:
 
-You're an AWS Solutions Architect and you're tasked with creating a robust, multi-region AWS cloud infrastructure for a large enterprise SaaS application using Pulumi with Python
+EC2 Instance Validation: Check all EC2 instances and verify they are properly connected to VPCs with appropriate subnet placement. The script should identify instances running in public subnets that should be in private subnets, instances without proper security group configurations, and instances that are not sending logs to CloudWatch. For each instance, verify that its security groups allow outbound traffic to CloudWatch endpoints for log delivery.
 
-Requirements
-------------
+VPC Network Analysis: Analyze VPC configurations and their relationship with EC2 instances. Check that VPCs have proper route tables configured, that instances in private subnets can reach CloudWatch through VPC endpoints or NAT gateways, and that security groups are correctly attached to instances. Identify VPCs that have EC2 instances but are missing CloudWatch VPC endpoints, which could cause monitoring gaps.
 
-### Core Infrastructure Requirements
+CloudWatch Integration Verification: Verify that EC2 instances are properly integrated with CloudWatch. Check that instances have CloudWatch agents installed and configured, that CloudWatch log groups exist for the instances, and that CloudWatch metrics are being collected. The script should identify instances that are not sending metrics to CloudWatch, instances with missing log groups, and instances where CloudWatch agent configuration is incorrect.
 
-*   **Multi-Region Deployment**: Deploy resources across multiple AWS regions for redundancy and failover
-    
-*   **High Availability**: Ensure system resilience through distributed architecture
-    
-*   **Security**: Implement encryption at rest and in transit with comprehensive IAM policies
-    
-*   **Scalability**: Auto-scaling capabilities for varying load demands
-    
-*   **Monitoring**: Complete logging and monitoring setup using CloudWatch
-    
-*   **Infrastructure as Code**: Manage infrastructure using Pulumi Python with version control support
-    
+Cross-Service Connectivity: The script needs to validate the connectivity flow between services. Verify that EC2 instances can communicate with CloudWatch through their VPC configuration, that security groups allow CloudWatch traffic, and that IAM roles attached to instances are authorized to write to CloudWatch. Check that VPC flow logs are enabled and sending data to CloudWatch Logs, creating a connection between VPC networking and CloudWatch monitoring.
 
-### Specific Technical Requirements
+For the output, generate an infrastructure_qa_report.json file that includes:
+- EC2 instances with configuration issues such as public subnet placement or missing CloudWatch integration
+- VPCs with networking misconfigurations such as missing routes or security group issues
+- CloudWatch integration gaps such as missing log groups or agent configuration problems
+- Cross-service connectivity issues such as IAM authorization problems or VPC endpoint configuration
 
-1.  **Networking**: VPC with public and private subnets across multiple availability zones
-    
-2.  **Security**: IAM roles and policies following principle of least privilege
-    
-3.  **Compute**: Auto-scaling groups for application servers
-    
-4.  **Monitoring**: CloudWatch integration for operational insights and audits
-    
-5.  **Outputs**: Clear configuration outputs for DNS names, IP addresses, and other vital details
-    
+The JSON should include a summary section with:
+- Total instances analyzed
+- Count of instances properly integrated with CloudWatch
+- Count of VPCs with proper monitoring configuration
+- List of critical connectivity issues between EC2, VPC, and CloudWatch
 
-Environment
------------
-
-### Target Platform
-
-*   **Cloud Provider**: Amazon Web Services (AWS)
-    
-*   **Regions**: Multi-region deployment for high availability
-    
-*   **Environment Type**: Production-grade enterprise SaaS application
-    
-
-### Infrastructure as Code Tool
-
-*   **Primary Tool**: Pulumi
-    
-*   **Language**: Python
-    
-*   **State Management**: Pulumi state management
-    
-*   **Version Control**: Git-compatible infrastructure versioning
-    
-
-Constraints
------------
-
-### Naming Conventions
-
-*   **Pattern**: prod-\-
-    
-*   **Example**: prod-vpc-main, prod-asg-web-servers
-    
-
-### Tagging Requirements
-
-*   **Mandatory Tags**:
-    
-    *   Environment: Production
-        
-    *   Detailed resource descriptions
-        
-    *   Additional operational tags as needed
-        
-
-### Security Constraints
-
-*   **Encryption**: Must implement encryption at rest and in transit
-    
-*   **Access Control**: IAM roles and policies with least privilege principle
-    
-*   **Network Security**: Proper subnet isolation between public and private resources
-    
-*   **Compliance**: Follow AWS security best practices
-    
-
-### Operational Constraints
-
-*   **High Availability**: Resources distributed across multiple AZs
-    
-*   **Monitoring**: Comprehensive CloudWatch logging and monitoring
-    
-*   **Scalability**: Auto-scaling configuration for dynamic load handling
-    
-*   **Documentation**: Clear outputs for operational teams
-    
-
-### Technical Constraints
-
-*   **Deployment**: Zero-error deployment requirement
-    
-*   **Maintainability**: Code must support changes and updates
-    
-*   **Reusability**: Configuration outputs must be easily consumable
-    
-*   **Region Support**: Must handle multi-region complexity effectively
-    
-
-Project Details
----------------
-
-*   **Project Name**: IaC - AWS Nova Model Breaking
-    
-*   **Problem ID**: cloud-environment-setup\_Pulumi\_Python\_5n8a4sd31mn2
-    
-*   **Difficulty Level**: Expert
-    
-*   **Expected Deliverable**: Complete Pulumi Python codebase with all configuration files
+Please provide the final Python code in lib/analyse.py.
