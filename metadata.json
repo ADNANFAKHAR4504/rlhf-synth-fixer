@@ -3,7 +3,7 @@
   "language": "py",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "291226",
+  "po_id": "LS-291226",
   "team": "synth-2",
   "startedAt": "2025-08-06T11:21:17.247Z",
   "subtask": "Application Deployment",
@@ -19,5 +19,6 @@
     "S3",
     "IAM",
     "CloudWatch"
-  ]
+  ],
+  "wave": "P1"
 }
