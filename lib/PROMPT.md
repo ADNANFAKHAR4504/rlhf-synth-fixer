@@ -18,9 +18,9 @@ Amazon DynamoDB Table
 • Primary Key: Define a primary key suitable for order data such as orderId as a String partition key.
 • Billing Mode: Use On-Demand billing mode to inherently support variable workloads and simplify scaling.
 
-API Gateway (HTTP API)
+HTTP API Gateway
 • Purpose: Expose an HTTP endpoint for receiving order data.
-• Type: HTTP API (not REST API).
+• Type: HTTP API not REST API.
 • Integration: Integrate directly with the Lambda function created.
 • Method: Allow POST requests.
 • Path: Define a specific path for order submission like /orders.
@@ -29,11 +29,11 @@ API Gateway (HTTP API)
 
 Auto-Scaling
 • The design must inherently support scaling to handle up to 1000 requests per second.
-• Explain how the chosen services (Lambda, DynamoDB On-Demand, HTTP API Gateway) inherently provide this auto-scaling capability without explicit ScalingPolicy resources in the CloudFormation template for the specified services.
+• Explain how the chosen services Lambda, DynamoDB On-Demand, and HTTP API Gateway inherently provide this auto-scaling capability without explicit ScalingPolicy resources in the CloudFormation template for the specified services.
 
 High Availability
 • Deploy all resources in the us-west-2 AWS Region.
-• Ensure the architecture provides high availability by leveraging the multi-Availability Zone nature of the services (Lambda, DynamoDB, API Gateway).
+• Ensure the architecture provides high availability by leveraging the multi-Availability Zone nature of Lambda, DynamoDB, and API Gateway.
 
 3. CloudFormation Best Practices
 
