@@ -1,5 +1,5 @@
 {
-  "platform": "analysis",
+  "platform": "pulumi",
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
