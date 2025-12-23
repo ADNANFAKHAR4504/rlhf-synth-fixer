@@ -22,7 +22,7 @@ import * as path from 'path';
 
 // Test configuration
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
-const stackName = `TapStack${environmentSuffix}`;
+const stackName = 'TapStack'; // Stack name is always TapStack, environmentSuffix is passed as context
 const region = process.env.AWS_REGION || 'us-east-1';
 const isCI = process.env.CI === '1';
 
@@ -51,7 +51,7 @@ const elbClient = new ElasticLoadBalancingV2Client({
 function loadStackOutputs(): Record<string, string> {
   const outputsFile = path.join(
     process.cwd(),
-    'cfn-outputs',
+    'cdk-outputs',
     'flat-outputs.json'
   );
   if (fs.existsSync(outputsFile)) {
