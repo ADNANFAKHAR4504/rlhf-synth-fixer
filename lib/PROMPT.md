@@ -1,94 +1,47 @@
-You are tasked with creating a CloudFormation template to set up a secure web application infrastructure on AWS.
-The infrastructure should include a VPC, EC2 instances, an RDS database, and a load balancer. The security of user
-data is paramount, and the setup must adhere to the security best practices as outlined in the AWS Well-Architected
-Framework.
+I need to build a secure web application infrastructure on AWS using CloudFormation. We're handling sensitive user data so security is critical. The setup needs to follow AWS Well-Architected Framework best practices.
 
-### Problem Statement
+Here's what I need deployed in us-east-1:
 
-Create a comprehensive AWS CloudFormation **YAML** template that deploys a secure web application infrastructure in
-the **us-east-1** region for handling sensitive user data. The solution must implement defense-in-depth security
-principles and follow AWS Well-Architected Framework security pillar best practices.
+### Network Setup
 
-### Requirements
+Set up a VPC with public and private subnets across at least 2 Availability Zones. The public subnets handle internet-facing traffic while the private subnets host the application and database tiers. Include NAT Gateways for outbound access from private subnets and an Internet Gateway for public connectivity.
 
-1. **Network Architecture:**
-   - Create a VPC with public and private subnets spread across **multiple Availability Zones** (minimum 2 AZs)
-   - Implement proper network segmentation with public subnets for internet-facing resources and private subnets for
-     application and database tiers
-   - Configure NAT Gateways for outbound internet access from private subnets
-   - Set up Internet Gateway for public subnet connectivity
+### Compute Layer
 
-2. **Compute Resources:**
-   - Deploy EC2 instance(s) in the **private subnet** to host the application server
-   - Ensure instances have no direct internet access and communicate through NAT Gateway
-   - Configure appropriate instance types and AMI selection
-   - Implement systems manager access for secure administration without SSH
+Deploy EC2 instances in the private subnet for the application server. These shouldn't have direct internet access - they should route through the NAT Gateway instead. Use Systems Manager for administration rather than SSH so we don't need to expose port 22.
 
-3. **Database Security:**
-   - Deploy RDS instance in the **private subnet** for database functionality
-   - Configure **encryption at rest** using AWS KMS with customer-managed keys
-   - Enable **encryption in transit** with SSL/TLS connections
-   - Implement automated backups with encryption
-   - Configure Multi-AZ deployment for high availability
-   - Ensure database is not publicly accessible
+### Database Tier
 
-4. **Load Balancing:**
-   - Deploy Application Load Balancer (ALB) in the **public subnet** to handle incoming traffic
-   - Configure HTTPS termination with SSL/TLS certificates (ACM)
-   - Implement security headers and secure listener configurations
-   - Configure health checks and target group settings
+Put RDS in the private subnet with encryption at rest using a KMS customer-managed key. Enable SSL/TLS for connections in transit. Configure automated encrypted backups and Multi-AZ deployment for high availability. The database must not be publicly accessible.
 
-5. **Security Groups & Network ACLs:**
-   - Create restrictive Security Groups following **least privilege principle**
-   - Allow only necessary ports and protocols (HTTPS/443, HTTP/80 for ALB, database port for RDS)
-   - Restrict source IPs where possible
-   - Implement Network ACLs as additional layer of security
-   - Ensure no overly permissive rules (0.0.0.0/0 access where not required)
+### Load Balancer
 
-6. **Data Encryption & Protection:**
-   - Ensure **all data flows are encrypted** in transit and at rest
-   - Use HTTPS/TLS for web traffic
-   - Configure RDS with encryption and SSL enforcement
-   - Implement EBS volume encryption for EC2 instances
-   - Use AWS KMS for key management
+Deploy an Application Load Balancer in the public subnet to handle incoming traffic. Set up HTTPS termination with ACM certificates, configure proper health checks, and define target group settings.
 
-7. **IAM & Access Control:**
-   - Create IAM roles with **least privilege access** for EC2 instances
-   - Implement proper service roles for RDS, ALB, and other services
-   - Use instance profiles for EC2 access to AWS services
-   - Avoid hardcoded credentials or overly broad permissions
+### Security Controls
 
-8. **Monitoring & Logging:**
-   - Enable VPC Flow Logs for network monitoring
-   - Configure CloudTrail for API logging
-   - Set up CloudWatch monitoring for all resources
-   - Implement appropriate log retention policies
+Create Security Groups following least privilege - only open necessary ports like HTTPS/443 and HTTP/80 for the ALB, and the database port for RDS. Restrict source IPs where possible and add Network ACLs as an additional layer. No overly permissive 0.0.0.0/0 rules unless absolutely required.
 
-9. **Additional Security Measures:**
-   - Configure AWS Config for compliance monitoring
-   - Implement proper tagging strategy for resource management
-   - Consider backup and disaster recovery requirements
-   - Note: GuardDuty is not included as it's a regional service that may conflict with existing deployments
+### Encryption Requirements
 
-### Technical Constraints
+All data must be encrypted both in transit and at rest:
+- HTTPS/TLS for web traffic
+- RDS with encryption and SSL enforcement
+- EBS volume encryption for EC2 instances
+- KMS for key management
 
-- **Platform:** AWS CloudFormation
-- **Format:** YAML template
-- **Region:** us-east-1
-- **Security Framework:** AWS Well-Architected Framework Security Pillar
-- Must handle sensitive user data securely
+### IAM Configuration
 
-### Expected Output
+Create IAM roles with minimal permissions for EC2 instances. Set up proper service roles for RDS, ALB, and other services. Use instance profiles for EC2 to access AWS services. No hardcoded credentials.
 
-Your solution must be a **single, valid YAML-formatted CloudFormation template** that:
+### Monitoring
 
-- Successfully deploys the described infrastructure
-- Passes validation against AWS Well-Architected Framework security best practices
-- Implements defense-in-depth security architecture
-- Follows the principle of least privilege throughout
-- Encrypts all data in transit and at rest
-- Provides secure, scalable, and maintainable infrastructure
+Enable VPC Flow Logs for network visibility, CloudTrail for API logging, and CloudWatch for monitoring all components. Set appropriate log retention.
 
-The template should be production-ready, include appropriate parameters for flexibility, and contain comprehensive
-outputs for key resource identifiers and endpoints. All security configurations must be explicitly defined and
-documented within the template.
+### Additional Items
+
+Configure AWS Config for compliance monitoring and implement a tagging strategy. Note that GuardDuty isn't included since it's a regional service that may conflict with existing deployments.
+
+### Output
+
+Provide a single valid YAML CloudFormation template that deploys this infrastructure with defense-in-depth security. Include parameters for flexibility and outputs for key identifiers and endpoints.
