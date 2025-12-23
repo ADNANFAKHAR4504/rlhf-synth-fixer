@@ -101,7 +101,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       expect(
         encryptionRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
       ).toMatch(/(aws:kms|AES256)/);
-      
+
       // Only check KMS key if KMS encryption is used and KMS key is available
       if (encryptionRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === 'aws:kms' && outputs.KMSKeyId) {
         expect(
@@ -140,8 +140,8 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         new GetPublicAccessBlockCommand({ Bucket: bucketName })
       );
 
-      if (!response.PublicAccessBlockConfiguration || 
-          response.PublicAccessBlockConfiguration.BlockPublicAcls === undefined) {
+      if (!response.PublicAccessBlockConfiguration ||
+        response.PublicAccessBlockConfiguration.BlockPublicAcls === undefined) {
         console.log('Skipping S3 public access block test - configuration not available');
         return;
       }
@@ -214,7 +214,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       );
 
       const profile = listResponse.InstanceProfiles?.find(p =>
-        p.InstanceProfileName?.includes('TapStacktest') || 
+        p.InstanceProfileName?.includes('TapStacktest') ||
         p.InstanceProfileName?.includes('EC2')
       );
 
@@ -232,9 +232,9 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         outputs.WebServerSecurityGroupId,
         outputs.DatabaseSecurityGroupId
       ].filter(Boolean);
-      
+
       expect(securityGroupIds.length).toBeGreaterThan(0);
-      
+
       const securityGroupId = securityGroupIds[0];
       const response = await ec2Client.send(
         new DescribeSecurityGroupsCommand({ GroupIds: [securityGroupId] })
@@ -295,7 +295,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
           recorder.name.includes('config')
         )
       );
-      
+
       // If no specific recorders found, use any available recorder for testing
       const availableRecorders = recorders && recorders.length > 0 ? recorders : recordersResponse.ConfigurationRecorders;
       if (!availableRecorders || availableRecorders.length === 0) {
@@ -326,7 +326,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
           channel.name.includes('config')
         )
       );
-      
+
       // If no specific channels found, use any available channel for testing
       const availableChannels = channels && channels.length > 0 ? channels : response.DeliveryChannels;
       if (!availableChannels || availableChannels.length === 0) {
@@ -381,16 +381,16 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       const s3Response = await s3Client.send(
         new GetBucketEncryptionCommand({ Bucket: s3BucketName })
       );
-      
+
       const s3Encryption =
         s3Response.ServerSideEncryptionConfiguration?.Rules?.[0]
           ?.ApplyServerSideEncryptionByDefault;
-      
+
       if (!s3Encryption?.SSEAlgorithm) {
         console.log('Skipping encryption validation test - S3 encryption configuration not available');
         return;
       }
-      
+
       expect(s3Encryption?.SSEAlgorithm).toMatch(/(aws:kms|AES256)/);
 
       // Test CloudWatch log group encryption if available
