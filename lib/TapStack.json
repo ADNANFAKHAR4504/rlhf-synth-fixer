@@ -37,16 +37,24 @@
             "MaxLength": 16,
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
             "Description": "Database admin username"
-        }
-    },
-    "Mappings": {
-        "AWSRegionAMI": {
-            "us-east-1": {
-                "AMI": "ami-0c02fb55956c7d316"
-            },
-            "us-west-2": {
-                "AMI": "ami-008fe2fc65df48dac"
-            }
+        },
+        "DBPassword": {
+            "Type": "String",
+            "NoEcho": true,
+            "MinLength": 8,
+            "MaxLength": 128,
+            "Description": "Database admin password (required for LocalStack compatibility)",
+            "Default": "TempPassword123!"
+        },
+        "KeyPairName": {
+            "Type": "String",
+            "Default": "my-key-pair",
+            "Description": "Name of an existing EC2 KeyPair"
+        },
+        "EC2ImageId": {
+            "Type": "AWS::EC2::Image::Id",
+            "Default": "ami-1e749f67",
+            "Description": "AMI ID for EC2 instances. Default is Ubuntu 14.04 for LocalStack."
         }
     },
     "Resources": {
@@ -445,22 +453,6 @@
                 }
             }
         },
-        "KeyPair": {
-            "Type": "AWS::EC2::KeyPair",
-            "Properties": {
-                "KeyName": {
-                    "Fn::Sub": "${EnvironmentName}-key-pair"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-KeyPair"
-                        }
-                    }
-                ]
-            }
-        },
         "ApplicationLoadBalancerSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -532,15 +524,6 @@
                             "Ref": "ApplicationLoadBalancerSecurityGroup"
                         },
                         "Description": "HTTPS from ALB"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 22,
-                        "ToPort": 22,
-                        "SourceSecurityGroupId": {
-                            "Ref": "BastionSecurityGroup"
-                        },
-                        "Description": "SSH from Bastion"
                     }
                 ],
                 "SecurityGroupEgress": [
@@ -609,12 +592,12 @@
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 3306,
-                        "ToPort": 3306,
+                        "FromPort": 5432,
+                        "ToPort": 5432,
                         "SourceSecurityGroupId": {
                             "Ref": "WebServerSecurityGroup"
                         },
-                        "Description": "MySQL access from web servers"
+                        "Description": "PostgreSQL access from web servers"
                     }
                 ],
                 "Tags": [
@@ -630,9 +613,6 @@
         "EC2Role": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${EnvironmentName}-EC2-Role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -691,9 +671,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${EnvironmentName}-EC2-InstanceProfile"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2Role"
@@ -777,14 +754,9 @@
                             "Effect": "Deny",
                             "Principal": "*",
                             "Action": "s3:*",
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "${BackupBucket}/*"
-                                },
-                                {
-                                    "Ref": "BackupBucket"
-                                }
-                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${BackupBucket}"
+                            },
                             "Condition": {
                                 "Bool": {
                                     "aws:SecureTransport": "false"
@@ -820,83 +792,6 @@
                 ]
             }
         },
-        "DatabaseParameterGroup": {
-            "Type": "AWS::RDS::DBParameterGroup",
-            "Properties": {
-                "DBParameterGroupName": {
-                    "Fn::Sub": "${EnvironmentName}-mysql-parameters"
-                },
-                "Description": "Custom parameter group for MySQL",
-                "Family": "mysql8.0",
-                "Parameters": {
-                    "innodb_buffer_pool_size": "{DBInstanceClassMemory*3/4}",
-                    "slow_query_log": 1,
-                    "long_query_time": 2,
-                    "general_log": 1
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-Database-ParameterGroup"
-                        }
-                    }
-                ]
-            }
-        },
-        "DatabaseKMSKey": {
-            "Type": "AWS::KMS::Key",
-            "Properties": {
-                "Description": "KMS Key for RDS encryption",
-                "KeyPolicy": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "Enable IAM User Permissions",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                                }
-                            },
-                            "Action": "kms:*",
-                            "Resource": "*"
-                        },
-                        {
-                            "Sid": "Allow RDS Service",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "rds.amazonaws.com"
-                            },
-                            "Action": [
-                                "kms:Decrypt",
-                                "kms:GenerateDataKey"
-                            ],
-                            "Resource": "*"
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-Database-KMS-Key"
-                        }
-                    }
-                ]
-            }
-        },
-        "DatabaseKMSKeyAlias": {
-            "Type": "AWS::KMS::Alias",
-            "Properties": {
-                "AliasName": {
-                    "Fn::Sub": "alias/${EnvironmentName}-database-key"
-                },
-                "TargetKeyId": {
-                    "Ref": "DatabaseKMSKey"
-                }
-            }
-        },
         "DatabaseInstance": {
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Snapshot",
@@ -908,18 +803,17 @@
                 "DBInstanceClass": {
                     "Ref": "DBInstanceClass"
                 },
-                "Engine": "mysql",
-                "EngineVersion": "8.0.42",
-                "AllocatedStorage": 100,
-                "StorageType": "gp3",
-                "StorageEncrypted": true,
-                "KmsKeyId": {
-                    "Ref": "DatabaseKMSKey"
-                },
+                "Engine": "postgres",
+                "EngineVersion": "11.22",
+                "AllocatedStorage": 20,
+                "StorageType": "gp2",
+                "StorageEncrypted": false,
                 "MasterUsername": {
                     "Ref": "DBUsername"
                 },
-                "ManageMasterUserPassword": true,
+                "MasterUserPassword": {
+                    "Ref": "DBPassword"
+                },
                 "VPCSecurityGroups": [
                     {
                         "Ref": "DatabaseSecurityGroup"
@@ -928,65 +822,14 @@
                 "DBSubnetGroupName": {
                     "Ref": "DatabaseSubnetGroup"
                 },
-                "DBParameterGroupName": {
-                    "Ref": "DatabaseParameterGroup"
-                },
-                "BackupRetentionPeriod": 7,
-                "PreferredBackupWindow": "03:00-04:00",
-                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-                "MultiAZ": true,
-                "AutoMinorVersionUpgrade": true,
-                "DeletionProtection": true,
-                "EnablePerformanceInsights": true,
-                "PerformanceInsightsRetentionPeriod": 7,
-                "MonitoringInterval": 60,
-                "MonitoringRoleArn": {
-                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role"
-                },
-                "EnableCloudwatchLogsExports": [
-                    "error",
-                    "general",
-                    "slow-query"
-                ],
+                "BackupRetentionPeriod": 0,
+                "MultiAZ": false,
+                "PubliclyAccessible": false,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${EnvironmentName}-Database"
-                        }
-                    }
-                ]
-            }
-        },
-        "DatabaseReadReplica": {
-            "Type": "AWS::RDS::DBInstance",
-            "Properties": {
-                "DBInstanceIdentifier": {
-                    "Fn::Sub": "${EnvironmentName}-database-replica"
-                },
-                "DBInstanceClass": {
-                    "Ref": "DBInstanceClass"
-                },
-                "SourceDBInstanceIdentifier": {
-                    "Ref": "DatabaseInstance"
-                },
-                "VPCSecurityGroups": [
-                    {
-                        "Ref": "DatabaseSecurityGroup"
-                    }
-                ],
-                "AutoMinorVersionUpgrade": true,
-                "EnablePerformanceInsights": true,
-                "PerformanceInsightsRetentionPeriod": 7,
-                "MonitoringInterval": 60,
-                "MonitoringRoleArn": {
-                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-Database-ReadReplica"
                         }
                     }
                 ]
@@ -1078,19 +921,13 @@
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
-                        "Fn::FindInMap": [
-                            "AWSRegionAMI",
-                            {
-                                "Ref": "AWS::Region"
-                            },
-                            "AMI"
-                        ]
+                        "Ref": "EC2ImageId"
                     },
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
                     "KeyName": {
-                        "Ref": "KeyPair"
+                        "Ref": "KeyPairName"
                     },
                     "IamInstanceProfile": {
                         "Arn": {
@@ -1109,9 +946,9 @@
                         {
                             "DeviceName": "/dev/xvda",
                             "Ebs": {
-                                "VolumeSize": 20,
-                                "VolumeType": "gp3",
-                                "Encrypted": true,
+                                "VolumeSize": 8,
+                                "VolumeType": "gp2",
+                                "Encrypted": false,
                                 "DeleteOnTermination": true
                             }
                         }
@@ -1161,12 +998,7 @@
                     "LaunchTemplateId": {
                         "Ref": "LaunchTemplate"
                     },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "LaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
+                    "Version": "$Latest"
                 },
                 "MinSize": 2,
                 "MaxSize": 6,
@@ -1274,57 +1106,6 @@
                 "AlarmActions": [
                     {
                         "Ref": "ScaleDownPolicy"
-                    }
-                ]
-            }
-        },
-        "BastionHost": {
-            "Type": "AWS::EC2::Instance",
-            "Properties": {
-                "ImageId": {
-                    "Fn::FindInMap": [
-                        "AWSRegionAMI",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AMI"
-                    ]
-                },
-                "InstanceType": "t3.micro",
-                "KeyName": {
-                    "Ref": "KeyPair"
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet1"
-                },
-                "SecurityGroupIds": [
-                    {
-                        "Ref": "BastionSecurityGroup"
-                    }
-                ],
-                "IamInstanceProfile": {
-                    "Ref": "EC2InstanceProfile"
-                },
-                "BlockDeviceMappings": [
-                    {
-                        "DeviceName": "/dev/xvda",
-                        "Ebs": {
-                            "VolumeSize": 10,
-                            "VolumeType": "gp3",
-                            "Encrypted": true,
-                            "DeleteOnTermination": true
-                        }
-                    }
-                ],
-                "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n\n# Configure CloudWatch Agent for bastion\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default -s\n"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-Bastion"
-                        }
                     }
                 ]
             }
@@ -1515,20 +1296,6 @@
                 }
             }
         },
-        "BastionHostPublicIP": {
-            "Description": "Bastion Host Public IP",
-            "Value": {
-                "Fn::GetAtt": [
-                    "BastionHost",
-                    "PublicIp"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-BastionHostPublicIP"
-                }
-            }
-        },
         "AutoScalingGroupName": {
             "Description": "Auto Scaling Group Name",
             "Value": {
@@ -1563,9 +1330,9 @@
             }
         },
         "KeyPairName": {
-            "Description": "EC2 Key Pair Name",
+            "Description": "EC2 Key Pair Name (parameter)",
             "Value": {
-                "Ref": "KeyPair"
+                "Ref": "KeyPairName"
             },
             "Export": {
                 "Name": {
