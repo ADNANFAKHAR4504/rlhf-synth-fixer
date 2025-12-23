@@ -3,7 +3,7 @@
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "291795",
+  "po_id": "LS-291795",
   "team": "synth-2",
   "startedAt": "2025-08-12T13:24:08.656Z",
   "subtask": "Provisioning of Infrastructure Environments",
@@ -17,5 +17,6 @@
     "s3",
     "iam",
     "cloudwatch"
-  ]
+  ],
+  "wave": "P0"
 }
