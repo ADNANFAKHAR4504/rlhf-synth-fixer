@@ -3,7 +3,7 @@
   "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "trainr69",
+  "po_id": "LS-trainr69",
   "team": "synth-2",
   "startedAt": "2025-08-11T15:25:09-05:00",
   "subtask": "Infrastructure QA and Management",
@@ -11,5 +11,15 @@
   "subject_labels": [
     "General Infrastructure Tooling QA"
   ],
-  "aws_services": []
+  "aws_services": [
+    "S3",
+    "EC2",
+    "Lambda",
+    "IAM"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr69",
+    "pr": "Pr924"
+  }
 }
