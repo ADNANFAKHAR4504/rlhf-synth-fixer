@@ -24,5 +24,12 @@
     "Amazon SNS",
     "Amazon EventBridge"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
