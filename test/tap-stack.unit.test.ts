@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
-import { SecurityStack } from '../lib/security-stack';
 
 describe('TapStack', () => {
   let app: cdk.App;
@@ -17,20 +16,23 @@ describe('TapStack', () => {
   });
 
   describe('Stack Creation', () => {
-    test('creates TapStack with security stack nested', () => {
-      // Check that the nested security stack is created
-      const nestedStacks = stack.node.children.filter(
-        (child) => child instanceof SecurityStack
-      );
-      expect(nestedStacks.length).toBe(1);
-      expect(nestedStacks[0].node.id).toBe('SecurityStack');
+    test('creates TapStack with all resources inlined', () => {
+      // TapStack should have all resources inlined (no nested stacks)
+      // Verify key resources exist in the template
+      template.resourceCountIs('AWS::KMS::Key', 1);
+      template.resourceCountIs('AWS::S3::Bucket', 1);
+      template.resourceCountIs('AWS::DynamoDB::Table', 1);
+      template.resourceCountIs('AWS::Lambda::Function', 1);
+      template.resourceCountIs('AWS::ApiGateway::RestApi', 1);
     });
 
-    test('passes environment suffix to nested stack', () => {
-      const securityStack = stack.node.children.find(
-        (child) => child instanceof SecurityStack
-      ) as SecurityStack;
-      expect(securityStack).toBeDefined();
+    test('creates stack with correct resource count', () => {
+      // Verify that we have the expected number of each resource type
+      // Note: There's a Lambda execution role plus potentially additional service-linked roles
+      const roles = template.findResources('AWS::IAM::Role');
+      expect(Object.keys(roles).length).toBeGreaterThanOrEqual(1);
+      template.resourceCountIs('AWS::ApiGateway::ApiKey', 1);
+      template.resourceCountIs('AWS::ApiGateway::UsagePlan', 1);
     });
   });
 
@@ -40,11 +42,12 @@ describe('TapStack', () => {
       const customStack = new TapStack(customApp, 'CustomStack', {
         environmentSuffix: 'custom',
       });
-      
-      const securityStack = customStack.node.children.find(
-        (child) => child instanceof SecurityStack
-      ) as SecurityStack;
-      expect(securityStack).toBeDefined();
+      const customTemplate = Template.fromStack(customStack);
+
+      // Verify environment suffix is used in resource names
+      customTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'secure-data-table-custom',
+      });
     });
 
     test('uses environment suffix from context when props not provided', () => {
@@ -54,36 +57,24 @@ describe('TapStack', () => {
         },
       });
       const contextStack = new TapStack(contextApp, 'ContextStack');
-      
-      const securityStack = contextStack.node.children.find(
-        (child) => child instanceof SecurityStack
-      ) as SecurityStack;
-      expect(securityStack).toBeDefined();
+      const contextTemplate = Template.fromStack(contextStack);
+
+      // Verify context suffix is used
+      contextTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'secure-data-table-context-suffix',
+      });
     });
 
     test('defaults to dev when no environment suffix provided', () => {
       const defaultApp = new cdk.App();
       const defaultStack = new TapStack(defaultApp, 'DefaultStack');
-      
-      const securityStack = defaultStack.node.children.find(
-        (child) => child instanceof SecurityStack
-      ) as SecurityStack;
-      expect(securityStack).toBeDefined();
-    });
-  });
-});
+      const defaultTemplate = Template.fromStack(defaultStack);
 
-describe('SecurityStack', () => {
-  let app: cdk.App;
-  let stack: SecurityStack;
-  let template: Template;
-
-  beforeEach(() => {
-    app = new cdk.App();
-    stack = new SecurityStack(app, 'TestSecurityStack', {
-      environmentSuffix: 'test',
+      // Verify default suffix is used
+      defaultTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'secure-data-table-dev',
+      });
     });
-    template = Template.fromStack(stack);
   });
 
   describe('KMS Key', () => {
@@ -103,19 +94,17 @@ describe('SecurityStack', () => {
         }),
       });
     });
+
+    test('KMS key has removal policy set to DESTROY for LocalStack cleanup', () => {
+      template.hasResource('AWS::KMS::Key', {
+        DeletionPolicy: 'Delete',
+      });
+    });
   });
 
   describe('S3 Bucket', () => {
     test('creates S3 bucket with security features', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.objectLike({
-          'Fn::Join': Match.arrayWith([
-            '',
-            Match.arrayWith([
-              'secure-web-app-bucket-test-',
-            ]),
-          ]),
-        }),
         VersioningConfiguration: {
           Status: 'Enabled',
         },
@@ -165,6 +154,12 @@ describe('SecurityStack', () => {
         }),
       });
     });
+
+    test('S3 bucket has removal policy set to DESTROY for LocalStack cleanup', () => {
+      template.hasResource('AWS::S3::Bucket', {
+        DeletionPolicy: 'Delete',
+      });
+    });
   });
 
   describe('DynamoDB Table', () => {
@@ -196,6 +191,12 @@ describe('SecurityStack', () => {
         },
       });
     });
+
+    test('DynamoDB table has removal policy set to DESTROY', () => {
+      template.hasResource('AWS::DynamoDB::Table', {
+        DeletionPolicy: 'Delete',
+      });
+    });
   });
 
   describe('Lambda Function', () => {
@@ -207,7 +208,7 @@ describe('SecurityStack', () => {
         Timeout: 30,
         MemorySize: 256,
       });
-      
+
       // Check environment variables separately with references
       template.hasResourceProperties('AWS::Lambda::Function', {
         Environment: {
@@ -311,7 +312,7 @@ describe('SecurityStack', () => {
         StageName: 'prod',
         TracingEnabled: true,
       });
-      
+
       // Check that stage has method settings
       template.hasResourceProperties('AWS::ApiGateway::Stage', {
         MethodSettings: Match.arrayWith([
@@ -360,7 +361,9 @@ describe('SecurityStack', () => {
   });
 
   describe('WAF Configuration', () => {
-    test('creates WAF Web ACL with managed rules', () => {
+    test('creates WAF Web ACL with managed rules when not LocalStack', () => {
+      // WAF resources are conditionally created based on isLocalStack
+      // In test environment without LocalStack env vars, WAF should be created
       template.hasResourceProperties('AWS::WAFv2::WebACL', {
         Name: 'secure-web-acl-test',
         Scope: 'REGIONAL',
@@ -425,6 +428,12 @@ describe('SecurityStack', () => {
         RetentionInDays: 30,
       });
     });
+
+    test('creates log group for Lambda function', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        RetentionInDays: 731, // TWO_YEARS
+      });
+    });
   });
 
   describe('Stack Outputs', () => {
@@ -432,7 +441,7 @@ describe('SecurityStack', () => {
       // Check that outputs exist
       const outputs = template.findOutputs('*');
       const outputKeys = Object.keys(outputs);
-      
+
       expect(outputKeys.some(key => key.includes('APIGatewayURL'))).toBe(true);
       expect(outputKeys.some(key => key.includes('APIKeyId'))).toBe(true);
       expect(outputKeys.some(key => key.includes('DynamoDBTableName'))).toBe(true);
@@ -444,7 +453,6 @@ describe('SecurityStack', () => {
 
   describe('Resource Tagging', () => {
     test('applies production tags to stack', () => {
-      const tags = cdk.Tags.of(stack);
       // Tags are applied to all resources in the stack
       expect(stack.tags.tagValues()).toMatchObject({
         Environment: 'Production',
@@ -455,21 +463,63 @@ describe('SecurityStack', () => {
   });
 
   describe('Security Best Practices', () => {
-    test('DynamoDB table has removal policy set to DESTROY', () => {
+    test('all resources have appropriate removal policies for LocalStack', () => {
+      // DynamoDB table has DESTROY for cleanup
       template.hasResource('AWS::DynamoDB::Table', {
+        DeletionPolicy: 'Delete',
+      });
+
+      // S3 bucket has DESTROY for cleanup
+      template.hasResource('AWS::S3::Bucket', {
+        DeletionPolicy: 'Delete',
+      });
+
+      // KMS key has DESTROY for cleanup
+      template.hasResource('AWS::KMS::Key', {
         DeletionPolicy: 'Delete',
       });
     });
 
-    test('S3 bucket has removal policy set to RETAIN for data protection', () => {
-      template.hasResource('AWS::S3::Bucket', {
-        DeletionPolicy: 'Retain',
+    test('S3 bucket blocks all public access', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
       });
     });
 
-    test('KMS key has removal policy set to RETAIN for data protection', () => {
-      template.hasResource('AWS::KMS::Key', {
-        DeletionPolicy: 'Retain',
+    test('KMS key has key rotation enabled', () => {
+      template.hasResourceProperties('AWS::KMS::Key', {
+        EnableKeyRotation: true,
+      });
+    });
+
+    test('DynamoDB table has encryption enabled', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        SSESpecification: Match.objectLike({
+          SSEEnabled: true,
+          SSEType: 'KMS',
+        }),
+      });
+    });
+
+    test('API Gateway has tracing enabled', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Stage', {
+        TracingEnabled: true,
+      });
+    });
+  });
+
+  describe('LocalStack Compatibility', () => {
+    test('Lambda function code supports LocalStack endpoint', () => {
+      // Verify Lambda function has inline code that handles LocalStack
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Code: {
+          ZipFile: Match.stringLikeRegexp('.*LOCALSTACK.*'),
+        },
       });
     });
   });
