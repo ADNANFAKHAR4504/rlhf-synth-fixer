@@ -34,15 +34,15 @@ Create a VPC network infrastructure using **Terraform with HCL** for a productio
    - Associate route tables with corresponding subnets
 
 5. **Security Groups**
-   - Web server security group: allow HTTPS (443) from 0.0.0.0/0, HTTP (80) from 10.0.0.0/16
-   - Database security group: allow PostgreSQL (5432) only from web security group
+   - Web server security group: allow HTTPS on port 443 from 0.0.0.0/0, HTTP on port 80 from 10.0.0.0/16
+   - Database security group: allow PostgreSQL on port 5432 only from web security group
    - Use least-privilege principles with explicit ingress/egress rules
 
 ### Technical Requirements
 
 - All infrastructure defined using **Terraform with HCL**
 - Use VPC, Subnets, Internet Gateway, NAT Gateway, Elastic IP, Route Tables, and Security Groups
-- Resource names must include **environmentSuffix** for uniqueness
+- All resource names must include the environmentSuffix variable for uniqueness
 - Follow naming convention: resource-type-environment-suffix
 - Deploy to **us-east-1** region
 - Apply consistent tagging: Environment=production, Project=trading-platform, ManagedBy=terraform
@@ -53,7 +53,7 @@ Create a VPC network infrastructure using **Terraform with HCL** for a productio
 
 - VPC CIDR must be 10.0.0.0/16 for future growth capacity
 - Exactly one public and one private subnet per availability zone
-- NAT Gateways must be in high-availability configuration (one per AZ)
+- NAT Gateways must be in high-availability configuration with one per AZ
 - All private subnet traffic must route through NAT Gateways
 - Security groups must follow least-privilege with explicit rules
 - No default resources, all Internet Gateway and route tables must be explicit
@@ -65,7 +65,7 @@ Create a VPC network infrastructure using **Terraform with HCL** for a productio
 - **Performance**: High availability with NAT Gateway per AZ eliminates single points of failure
 - **Reliability**: Multi-AZ design ensures resilience to availability zone failures
 - **Security**: Databases isolated in private subnets with security group controls
-- **Resource Naming**: All resources include environmentSuffix for uniqueness
+- **Naming Convention**: All resources include environmentSuffix for uniqueness
 - **Code Quality**: Clean HCL code with proper resource dependencies and tagging
 
 ## What to deliver
