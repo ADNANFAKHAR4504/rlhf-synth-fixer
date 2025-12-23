@@ -2,16 +2,16 @@ You are an expert AWS serverless infrastructure engineer. Implement a Pulumi (Py
 
 Only modify these files:
 
-lib/tap_stack.py — Pulumi stack implementation
+lib/tap_stack.py - Pulumi stack implementation
 
-tests/unit/test_tap_stack.py — unit tests with Pulumi mocks
+tests/unit/test_tap_stack.py - unit tests with Pulumi mocks
 
-tests/integration/test_tap_stack.py — integration tests with Pulumi mocks
+tests/integration/test_tap_stack.py - integration tests with Pulumi mocks
 
 Do not touch other files. If a CI/CD or deployment snippet is needed, include it as a comment in lib/tap_stack.py.
 
 1) Objective
-Migrate an AWS serverless application — composed of API Gateway, Lambda functions, S3 buckets for static assets, and DynamoDB — from its current region to a target region (from Pulumi config), without downtime, using blue-green deployment or canary release.
+Migrate an AWS serverless application composed of API Gateway, Lambda functions, S3 buckets for static assets, and DynamoDB from its current region to a target region specified in Pulumi config, without downtime, using blue-green deployment or canary release.
 
 2) Hard requirements
 Language: Python with Pulumi SDK
@@ -53,14 +53,14 @@ Parameterize regions in Pulumi config for future deployments
 Support simultaneous deployments in ≥2 regions
 
 3) Tests
-Unit tests (tests/unit/test_tap_stack.py)
-Must run with pytest + Pulumi mocks
+Unit tests in tests/unit/test_tap_stack.py
+Must run with pytest and Pulumi mocks
 
 Assert:
 
 API Gateway exists & is connected to Lambda
 
-Lambda has correct IAM role (least privilege)
+Lambda has correct IAM role with least privilege
 
 DynamoDB table has cross-region replication enabled
 
@@ -70,12 +70,12 @@ All resource names follow <TeamName>-<Environment>-<ServiceName> pattern
 
 Logs and alarms exist for API Gateway & Lambda
 
-Integration tests (tests/integration/test_tap_stack.py)
+Integration tests in tests/integration/test_tap_stack.py
 Must run with Pulumi mocks and validate wiring:
 
 API Gateway → Lambda → DynamoDB path works in new region
 
-Traffic shift configuration (blue-green or canary) is present
+Traffic shift configuration for blue-green or canary deployment is present
 
 S3 replication destinations point to correct region bucket
 
@@ -94,7 +94,7 @@ Output must only include:
 
 No extra explanation outside inline code comments
 
-Code must pass pytest locally without AWS calls (Pulumi mocks only)
+Code must pass pytest locally without AWS calls using Pulumi mocks only
 
 5) Extra implementation rules
 All names follow <TeamName>-<Environment>-<ServiceName>
@@ -113,21 +113,21 @@ source_region
 
 target_region
 
-allowed_cidr (for API Gateway or Lambda if applicable)
+allowed_cidr for API Gateway or Lambda if applicable
 
-Default traffic shift: 10% increments over 10 minutes (configurable)
+Default traffic shift: 10% increments over 10 minutes with configurable thresholds
 
 Keep all helper functions inside lib/tap_stack.py
 
 Include commented example CI/CD snippet showing:
 
-Deploy new region (green)
+Deploy new region as green environment
 
 Gradually shift traffic via Route53 weighted routing or API Gateway stages
 
 Monitor metrics
 
-Cut-over or rollback
+Cut-over or rollback strategy
 
 Final note to assistant:
 
