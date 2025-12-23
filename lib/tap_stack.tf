@@ -434,10 +434,10 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "asg-${var.environment}-${var.environment_suffix}"
-  vpc_zone_identifier       = aws_subnet.private[*].id
+  name                = "asg-${var.environment}-${var.environment_suffix}"
+  vpc_zone_identifier = aws_subnet.private[*].id
   # target_group_arns         = [aws_lb_target_group.main.arn]  # Commented out: ALB not deployed
-  health_check_type         = "EC2"  # Changed from ELB since ALB not deployed
+  health_check_type         = "EC2" # Changed from ELB since ALB not deployed
   health_check_grace_period = 300
 
   min_size         = var.asg_min_size
