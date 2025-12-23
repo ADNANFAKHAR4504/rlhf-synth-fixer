@@ -9,7 +9,6 @@
   "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "Serverless Infrastructure (Functions as Code)",
     "Web Application Deployment"
   ],
   "aws_services": [
@@ -19,4 +18,5 @@
     "iam",
     "cloudwatch-logs"
   ]
+  "wave": "P0"
 }
