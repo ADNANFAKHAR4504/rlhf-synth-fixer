@@ -50,10 +50,11 @@ Mappings:
       AMI: ami-0e2a4b535ec045ef9 # Amazon Linux 2 AMI (HVM) - us-west-2
 
 Conditions:
-  HasCertificate: !Not
-    - !Equals
-      - !Ref pAcmCertificateArn
-      - ''
+  HasCertificate:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: pAcmCertificateArn
+        - ''
 
 Resources:
   #
