@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-ls-321",
+  "team": "synth-2",
+  "startedAt": "2025-08-07T00:22:45-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "ec2",
+    "vpc",
+    "rds",
+    "s3",
+    "iam",
+    "secretsmanager"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "ls-321",
+    "pr": "Pr660"
+  }
+}
