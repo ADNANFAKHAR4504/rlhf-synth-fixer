@@ -17,5 +17,7 @@
     "EventBridge",
     "CloudWatch LogGroup",
     "VPC"
-  ]
+  ],
+  "provider": "localstack",
+  "wave": "P1"
 }
