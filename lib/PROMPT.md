@@ -1,28 +1,18 @@
-📝 Project Description
+Infrastructure Setup
 
-This project uses the AWS Cloud Development Kit (CDK) in Python to define and deploy a serverless application. The application includes:
+We need to build a serverless backend that processes incoming data files. Here's what we need:
 
-    An AWS Lambda function that is triggered by events from an S3 bucket
+When files land in an S3 bucket, we want a Lambda function to automatically pick them up and process them. The Lambda should connect to CloudWatch to write logs for debugging and monitoring. We'll use environment variables to configure things like bucket names and processing options at runtime.
 
-    All infrastructure defined using CDK
+All the infrastructure should be defined using AWS CDK in Python. We're deploying this to us-east-1 and want proper error tracking through CloudWatch so we can see what's happening when things go wrong.
 
-    Deployment in the us-east-1 region
+The flow should be: S3 bucket receives a file, this triggers the Lambda function, Lambda processes the data and writes status to CloudWatch, everything stays logged for auditing.
 
-    Logging enabled for both request tracing and error tracking
+Key Requirements:
 
-    Environment variables for runtime configuration
-
-✅ Objectives
-
-    Use AWS Lambda to handle backend logic serverlessly
-
-    Trigger Lambda using S3 bucket events   
-
-    Define all infrastructure with CDK in Python
-
-    Deploy infrastructure in us-east-1
-
-    Enable CloudWatch logging for the Lambda function
-
-    Pass environment variables into the Lambda function
-
+- S3 bucket configured to trigger Lambda on file uploads
+- Lambda function that connects to S3 for reading objects
+- CloudWatch Logs integration for all function output
+- Environment variables for runtime configuration
+- CDK infrastructure defined in Python
+- Deployed to us-east-1

@@ -1,8 +1,8 @@
-⚠️ Failure Modeling Prompt for Serverless Application
-🎯 Objective
+Failure Modeling Prompt for Serverless Application
+Objective
 
 Model failure scenarios in a serverless application using AWS Lambda, S3, and CDK (Python). The goal is to proactively identify and design for failure conditions to improve resilience, observability, and error handling in production.
-💡 Scenario Overview
+Scenario Overview
 
 We are building a serverless application using:
 
