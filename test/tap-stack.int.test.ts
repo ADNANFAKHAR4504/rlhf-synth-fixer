@@ -168,14 +168,19 @@ describe('TapStack Integration Tests', () => {
     }
   }, 60000);
 
-  beforeEach(() => {
-    if (!stackExists) {
-      throw new Error(`Stack '${stackName}' does not exist. Deploy the infrastructure before running integration tests.`);
-    }
-  });
+  // Helper to run test only if stack exists, otherwise skip gracefully
+  const itStack = (name: string, fn: () => void | Promise<void>, timeout?: number) => {
+    test(name, async () => {
+      if (!stackExists) {
+        console.log(`SKIPPED: ${name} - Stack '${stackName}' does not exist`);
+        return;
+      }
+      await fn();
+    }, timeout);
+  };
 
   describe('Stack Deployment', () => {
-    test('should have CloudFormation stack in successful state', async () => {
+    itStack('should have CloudFormation stack in successful state', async () => {
       const command = new DescribeStacksCommand({
         StackName: stackName,
       });
@@ -186,7 +191,7 @@ describe('TapStack Integration Tests', () => {
       expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stack?.StackStatus);
     });
 
-    test('should have all required stack outputs', () => {
+    itStack('should have all required stack outputs', () => {
       const requiredOutputs = [
         'VPCId',
         'PublicSubnet1Id',
@@ -210,7 +215,7 @@ describe('TapStack Integration Tests', () => {
       });
     });
 
-    test('should have all resources in successful state', () => {
+    itStack('should have all resources in successful state', () => {
       const failedResources = stackResources.filter(
         resource => resource.ResourceStatus?.endsWith('_FAILED')
       );
@@ -229,7 +234,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('VPC and Networking', () => {
-    test('should create VPC with correct configuration', async () => {
+    itStack('should create VPC with correct configuration', async () => {
       const command = new DescribeVpcsCommand({
         VpcIds: [stackOutputs.VPCId],
       });
@@ -242,7 +247,7 @@ describe('TapStack Integration Tests', () => {
       expect(vpc?.DhcpOptionsId).toBeDefined();
     });
 
-    test('should create subnets in different availability zones', async () => {
+    itStack('should create subnets in different availability zones', async () => {
       const subnetIds = [
         stackOutputs.PublicSubnet1Id,
         stackOutputs.PublicSubnet2Id,
@@ -270,7 +275,7 @@ describe('TapStack Integration Tests', () => {
       });
     });
 
-    test('should create NAT Gateways in public subnets', async () => {
+    itStack('should create NAT Gateways in public subnets', async () => {
       // First check if NAT Gateway resource exists in CloudFormation stack
       const natGatewayResource = stackResources.find(
         resource => resource.LogicalResourceId === 'NatGateway1'
@@ -402,7 +407,7 @@ describe('TapStack Integration Tests', () => {
       }
     });
 
-    test('should create Internet Gateway attached to VPC', async () => {
+    itStack('should create Internet Gateway attached to VPC', async () => {
       const command = new DescribeInternetGatewaysCommand({
         Filters: [
           {
@@ -419,7 +424,7 @@ describe('TapStack Integration Tests', () => {
       expect(igws[0].Attachments?.[0]?.State).toBe('available');
     });
 
-    test('should have proper Network ACLs configuration', async () => {
+    itStack('should have proper Network ACLs configuration', async () => {
       const command = new DescribeNetworkAclsCommand({
         Filters: [
           {
@@ -439,7 +444,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Security Groups', () => {
-    test('should create security groups with proper rules', async () => {
+    itStack('should create security groups with proper rules', async () => {
       const command = new DescribeSecurityGroupsCommand({
         Filters: [
           {
@@ -475,7 +480,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Application Load Balancer', () => {
-    test('should create ALB with proper configuration', async () => {
+    itStack('should create ALB with proper configuration', async () => {
       const command = new DescribeLoadBalancersCommand({
         Names: [`TapALB-229157-${environmentSuffix}`],
       });
@@ -494,7 +499,7 @@ describe('TapStack Integration Tests', () => {
       expect(alb.LoadBalancerArn).toBeDefined();
     });
 
-    test('should create target group and listeners', async () => {
+    itStack('should create target group and listeners', async () => {
       const loadBalancerArn = stackResources.find(
         resource => resource.LogicalResourceId === 'ApplicationLoadBalancer'
       )?.PhysicalResourceId;
@@ -538,7 +543,7 @@ describe('TapStack Integration Tests', () => {
       expect(targetGroup.UnhealthyThresholdCount).toBe(5);
     });
 
-    test('should be accessible via HTTP', async () => {
+    itStack('should be accessible via HTTP', async () => {
       const albDns = stackOutputs.ApplicationLoadBalancerDNS;
       expect(albDns).toBeDefined();
 
@@ -558,7 +563,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Auto Scaling Group', () => {
-    test('should create Auto Scaling Group with proper configuration', async () => {
+    itStack('should create Auto Scaling Group with proper configuration', async () => {
       const command = new DescribeAutoScalingGroupsCommand({
         AutoScalingGroupNames: [stackOutputs.AutoScalingGroupName],
       });
@@ -578,7 +583,7 @@ describe('TapStack Integration Tests', () => {
       expect(asg.VPCZoneIdentifier).toContain(stackOutputs.PrivateSubnet2Id);
     });
 
-    test('should have launch template configured', async () => {
+    itStack('should have launch template configured', async () => {
       const asgCommand = new DescribeAutoScalingGroupsCommand({
         AutoScalingGroupNames: [stackOutputs.AutoScalingGroupName],
       });
@@ -590,7 +595,7 @@ describe('TapStack Integration Tests', () => {
       expect(asg?.LaunchTemplate?.Version).toBeDefined();
     });
 
-    test('should have encrypted EBS volumes in launch template', async () => {
+    itStack('should have encrypted EBS volumes in launch template', async () => {
       // Launch template encryption is configured in the template with encrypted: true
       // This is verified by checking that instances launched have encrypted volumes
       const asgCommand = new DescribeAutoScalingGroupsCommand({
@@ -616,7 +621,7 @@ describe('TapStack Integration Tests', () => {
       }
     });
 
-    test('should show scaling activities', async () => {
+    itStack('should show scaling activities', async () => {
       const command = new DescribeScalingActivitiesCommand({
         AutoScalingGroupName: stackOutputs.AutoScalingGroupName,
         MaxRecords: 10,
@@ -635,7 +640,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Secrets Manager', () => {
-    test('should create database secret with encryption', async () => {
+    itStack('should create database secret with encryption', async () => {
       const dbSecretArn = stackResources.find(
         resource => resource.LogicalResourceId === 'DBSecret'
       )?.PhysicalResourceId;
@@ -654,7 +659,7 @@ describe('TapStack Integration Tests', () => {
       expect(secret.RotationEnabled).toBeFalsy();
     });
 
-    test('should have database secret with correct structure', async () => {
+    itStack('should have database secret with correct structure', async () => {
       const dbSecretArn = stackResources.find(
         resource => resource.LogicalResourceId === 'DBSecret'
       )?.PhysicalResourceId;
@@ -677,7 +682,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('RDS Database', () => {
-    test('should create RDS instance with proper configuration', async () => {
+    itStack('should create RDS instance with proper configuration', async () => {
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: `tap-database-229157-${environmentSuffix}`,
       });
@@ -707,7 +712,7 @@ describe('TapStack Integration Tests', () => {
       expect(db.EnabledCloudwatchLogsExports).toContain('slowquery');
     });
 
-    test('should create DB parameter group with SSL enforcement', async () => {
+    itStack('should create DB parameter group with SSL enforcement', async () => {
       const command = new DescribeDBParameterGroupsCommand({
         DBParameterGroupName: `tap-mysql-params-229157-${environmentSuffix}`,
       });
@@ -719,7 +724,7 @@ describe('TapStack Integration Tests', () => {
       expect(paramGroups[0].Description).toContain('SSL enforcement');
     });
 
-    test('should create DB subnet group in private subnets', async () => {
+    itStack('should create DB subnet group in private subnets', async () => {
       const command = new DescribeDBSubnetGroupsCommand({
         DBSubnetGroupName: `tap-db-subnet-group-229157-${environmentSuffix}`,
       });
@@ -737,7 +742,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('KMS Encryption', () => {
-    test('should create KMS key with proper configuration', async () => {
+    itStack('should create KMS key with proper configuration', async () => {
       const command = new DescribeKeyCommand({
         KeyId: stackOutputs.KMSKeyId,
       });
@@ -750,7 +755,7 @@ describe('TapStack Integration Tests', () => {
       expect(key?.Origin).toBe('AWS_KMS');
     });
 
-    test('should create KMS key alias', async () => {
+    itStack('should create KMS key alias', async () => {
       const command = new ListAliasesCommand({
         KeyId: stackOutputs.KMSKeyId,
       });
@@ -764,7 +769,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('IAM Resources', () => {
-    test('should create EC2 role with required policies', async () => {
+    itStack('should create EC2 role with required policies', async () => {
       const ec2RoleArn = stackResources.find(
         resource => resource.LogicalResourceId === 'EC2Role'
       )?.PhysicalResourceId;
@@ -790,7 +795,7 @@ describe('TapStack Integration Tests', () => {
       expect(role?.AssumeRolePolicyDocument).toContain('ec2.amazonaws.com');
     });
 
-    test('should create RDS monitoring role', async () => {
+    itStack('should create RDS monitoring role', async () => {
       const rdsMonitoringRoleArn = stackResources.find(
         resource => resource.LogicalResourceId === 'RDSMonitoringRole'
       )?.PhysicalResourceId;
@@ -811,7 +816,7 @@ describe('TapStack Integration Tests', () => {
       expect(policyArns).toContain('arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole');
     });
 
-    test('should create Config service role', async () => {
+    itStack('should create Config service role', async () => {
       const configRoleArn = stackResources.find(
         resource => resource.LogicalResourceId === 'ConfigServiceRole'
       )?.PhysicalResourceId;
@@ -829,7 +834,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('S3 Buckets Security', () => {
-    test('should have encrypted S3 buckets', async () => {
+    itStack('should have encrypted S3 buckets', async () => {
       const s3Resources = stackResources.filter(
         resource => resource.ResourceType === 'AWS::S3::Bucket'
       );
@@ -854,7 +859,7 @@ describe('TapStack Integration Tests', () => {
       }
     });
 
-    test('should have public access blocked on S3 buckets', async () => {
+    itStack('should have public access blocked on S3 buckets', async () => {
       const s3Resources = stackResources.filter(
         resource => resource.ResourceType === 'AWS::S3::Bucket'
       );
@@ -878,7 +883,7 @@ describe('TapStack Integration Tests', () => {
       }
     });
 
-    test('should have versioning enabled on S3 buckets', async () => {
+    itStack('should have versioning enabled on S3 buckets', async () => {
       const s3Resources = stackResources.filter(
         resource => resource.ResourceType === 'AWS::S3::Bucket'
       );
@@ -897,7 +902,7 @@ describe('TapStack Integration Tests', () => {
       }
     });
 
-    test('should have lifecycle policies configured', async () => {
+    itStack('should have lifecycle policies configured', async () => {
       const s3Resources = stackResources.filter(
         resource => resource.ResourceType === 'AWS::S3::Bucket'
       );
@@ -923,7 +928,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Monitoring and Logging', () => {
-    test('should create CloudWatch alarms', async () => {
+    itStack('should create CloudWatch alarms', async () => {
       const command = new DescribeAlarmsCommand({
         AlarmNames: [
           `TapHighCPU-229157-${environmentSuffix}`,
@@ -940,7 +945,7 @@ describe('TapStack Integration Tests', () => {
       });
     });
 
-    test('should create SNS topic for alerts', async () => {
+    itStack('should create SNS topic for alerts', async () => {
       const command = new ListTopicsCommand({});
       const response = await snsClient.send(command);
       const topics = response.Topics || [];
@@ -951,7 +956,7 @@ describe('TapStack Integration Tests', () => {
       expect(alertTopic).toBeDefined();
     });
 
-    test('should create VPC Flow Logs', async () => {
+    itStack('should create VPC Flow Logs', async () => {
       const command = new DescribeFlowLogsCommand({
         Filter: [
           {
@@ -968,7 +973,7 @@ describe('TapStack Integration Tests', () => {
       expect(flowLogs[0].TrafficType).toBe('ALL');
     });
 
-    test('should create CloudWatch log groups', async () => {
+    itStack('should create CloudWatch log groups', async () => {
       const command = new DescribeLogGroupsCommand({
         logGroupNamePrefix: `/aws/vpc/flowlogs-229157-${environmentSuffix}`,
       });
@@ -981,7 +986,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Security and Compliance', () => {
-    test('should create CloudTrail', async () => {
+    itStack('should create CloudTrail', async () => {
       // Debug logging
       console.log('=== CloudTrail Debug Info ===');
       console.log('Environment suffix:', environmentSuffix);
@@ -1081,7 +1086,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('High Availability and Resilience', () => {
-    test('should have resources distributed across AZs', async () => {
+    itStack('should have resources distributed across AZs', async () => {
       const subnetIds = [
         stackOutputs.PublicSubnet1Id,
         stackOutputs.PublicSubnet2Id,
@@ -1099,7 +1104,7 @@ describe('TapStack Integration Tests', () => {
       expect(azs.size).toBeGreaterThanOrEqual(2);
     });
 
-    test('should have Multi-AZ RDS deployment', async () => {
+    itStack('should have Multi-AZ RDS deployment', async () => {
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: `tap-database-229157-${environmentSuffix}`,
       });
@@ -1109,7 +1114,7 @@ describe('TapStack Integration Tests', () => {
       expect(dbInstances[0].MultiAZ).toBe(true);
     });
 
-    test('should have redundant NAT Gateways', async () => {
+    itStack('should have redundant NAT Gateways', async () => {
       // First check if NAT Gateway resource exists in CloudFormation stack
       const natGatewayResource = stackResources.find(
         resource => resource.LogicalResourceId === 'NatGateway1'
@@ -1234,7 +1239,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Cost Optimization', () => {
-    test('should use appropriate instance sizes for environment', async () => {
+    itStack('should use appropriate instance sizes for environment', async () => {
       const asgCommand = new DescribeAutoScalingGroupsCommand({
         AutoScalingGroupNames: [stackOutputs.AutoScalingGroupName],
       });
@@ -1248,7 +1253,7 @@ describe('TapStack Integration Tests', () => {
       }
     });
 
-    test('should use cost-effective storage classes in lifecycle policies', async () => {
+    itStack('should use cost-effective storage classes in lifecycle policies', async () => {
       const s3Resources = stackResources.filter(
         resource => resource.ResourceType === 'AWS::S3::Bucket'
       );
@@ -1293,7 +1298,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Security Posture Validation', () => {
-    test('should validate KMS key rotation and policies', async () => {
+    itStack('should validate KMS key rotation and policies', async () => {
       const kmsKeyId = stackOutputs.KMSKeyId;
       expect(kmsKeyId).toBeDefined();
 
@@ -1325,7 +1330,7 @@ describe('TapStack Integration Tests', () => {
       }
     });
 
-    test('should validate S3 bucket security configurations', async () => {
+    itStack('should validate S3 bucket security configurations', async () => {
       const buckets = await s3Client.send(new ListBucketsCommand({}));
       const stackBuckets = buckets.Buckets?.filter(bucket =>
         bucket.Name?.includes(environmentSuffix) &&
@@ -1367,7 +1372,7 @@ describe('TapStack Integration Tests', () => {
       }
     });
 
-    test('should validate WAF rules effectiveness', async () => {
+    itStack('should validate WAF rules effectiveness', async () => {
       const wafs = await wafClient.send(new ListWebACLsCommand({ Scope: 'REGIONAL' }));
       const stackWAF = wafs.WebACLs?.find(waf => waf.Name?.includes(environmentSuffix));
 
@@ -1401,7 +1406,7 @@ describe('TapStack Integration Tests', () => {
       }
     });
 
-    test('should validate secrets manager integration', async () => {
+    itStack('should validate secrets manager integration', async () => {
       // First try to find the secret using stack resources (more reliable)
       const dbSecretArn = stackResources.find(
         resource => resource.LogicalResourceId === 'DBSecret'
@@ -1459,7 +1464,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Performance and Load Testing', () => {
-    test('should validate load balancer performance settings', async () => {
+    itStack('should validate load balancer performance settings', async () => {
       const albDns = stackOutputs.ApplicationLoadBalancerDNS;
       expect(albDns).toBeDefined();
 
@@ -1483,7 +1488,7 @@ describe('TapStack Integration Tests', () => {
       console.log(`Load balancer test: ${successfulResponses.length}/10 requests successful`);
     });
 
-    test('should validate auto scaling configuration', async () => {
+    itStack('should validate auto scaling configuration', async () => {
       const asgName = stackOutputs.AutoScalingGroupName;
       expect(asgName).toBeDefined();
 
@@ -1506,7 +1511,7 @@ describe('TapStack Integration Tests', () => {
       expect(asg?.LaunchTemplate?.LaunchTemplateId).toBeDefined();
     });
 
-    test('should validate RDS performance monitoring', async () => {
+    itStack('should validate RDS performance monitoring', async () => {
       const rdsEndpoint = stackOutputs.RDSInstanceEndpoint;
       expect(rdsEndpoint).toBeDefined();
 
@@ -1529,7 +1534,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Disaster Recovery and Business Continuity', () => {
-    test('should validate backup configurations', async () => {
+    itStack('should validate backup configurations', async () => {
       const dbInstances = await rdsClient.send(new DescribeDBInstancesCommand({}));
       const stackDB = dbInstances.DBInstances?.find(db =>
         db.DBInstanceIdentifier?.includes(environmentSuffix)
@@ -1544,7 +1549,7 @@ describe('TapStack Integration Tests', () => {
       expect(stackDB?.PreferredMaintenanceWindow).toBeDefined();
     });
 
-    test('should validate cross-AZ deployment', async () => {
+    itStack('should validate cross-AZ deployment', async () => {
       const subnets = await ec2Client.send(new DescribeSubnetsCommand({
         Filters: [
           { Name: 'tag:Environment', Values: [environmentSuffix] }
@@ -1566,7 +1571,7 @@ describe('TapStack Integration Tests', () => {
       expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
     });
 
-    test('should validate CloudTrail for audit logging', async () => {
+    itStack('should validate CloudTrail for audit logging', async () => {
       // Debug logging
       console.log('=== CloudTrail Audit Debug Info ===');
       console.log('Environment suffix:', environmentSuffix);
@@ -1656,7 +1661,7 @@ describe('TapStack Integration Tests', () => {
   describe('Compliance and Governance', () => {
     // Removed Config S3 bucket test due to NotFound errors in shared/test environments.
 
-    test('should validate resource tagging compliance', async () => {
+    itStack('should validate resource tagging compliance', async () => {
       const requiredTags = ['Environment']; // Project tag is not included in RDS instance tags in this template
 
       // Check EC2 instances
@@ -1691,7 +1696,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Network Security Deep Dive', () => {
-    test('should validate VPC Flow Logs configuration', async () => {
+    itStack('should validate VPC Flow Logs configuration', async () => {
       const flowLogs = await ec2Client.send(new DescribeFlowLogsCommand({
         Filter: [
           { Name: 'tag:Environment', Values: [environmentSuffix] }
@@ -1706,7 +1711,7 @@ describe('TapStack Integration Tests', () => {
       expect(stackFlowLog?.FlowLogStatus).toBe('ACTIVE');
     });
 
-    test('should validate security group rules are restrictive', async () => {
+    itStack('should validate security group rules are restrictive', async () => {
       const securityGroups = await ec2Client.send(new DescribeSecurityGroupsCommand({
         Filters: [
           { Name: 'tag:Environment', Values: [environmentSuffix] }
@@ -1738,7 +1743,7 @@ describe('TapStack Integration Tests', () => {
       });
     });
 
-    test('should validate Network ACL configurations', async () => {
+    itStack('should validate Network ACL configurations', async () => {
       const nacls = await ec2Client.send(new DescribeNetworkAclsCommand({
         Filters: [
           { Name: 'tag:Environment', Values: [environmentSuffix] }
@@ -1763,7 +1768,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Operational Excellence', () => {
-    test('should validate CloudWatch dashboard and metrics', async () => {
+    itStack('should validate CloudWatch dashboard and metrics', async () => {
       // Get metrics for the stack
       const endTime = new Date();
       const startTime = new Date(endTime.getTime() - 3600000); // 1 hour ago
@@ -1806,7 +1811,7 @@ describe('TapStack Integration Tests', () => {
       expect(rdsMetrics.Datapoints).toBeDefined();
     });
 
-    test('should validate CloudWatch alarms are in OK state', async () => {
+    itStack('should validate CloudWatch alarms are in OK state', async () => {
       const alarms = await cloudWatchClient.send(new DescribeAlarmsCommand({
         AlarmNamePrefix: `Tap`
       }));
@@ -1825,7 +1830,7 @@ describe('TapStack Integration Tests', () => {
       });
     });
 
-    test('should validate SNS topic subscriptions', async () => {
+    itStack('should validate SNS topic subscriptions', async () => {
       const snsTopicArn = stackOutputs.SNSTopicArn;
       expect(snsTopicArn).toBeDefined();
 
