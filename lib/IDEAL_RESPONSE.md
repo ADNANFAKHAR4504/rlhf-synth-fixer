@@ -4,6 +4,7 @@
 
 This CloudFormation template provisions a secure serverless application architecture using AWS Lambda, compliant with all specified security and logging requirements. It deploys in the `us-east-1` region, utilizes a pre-existing VPC and S3 bucket, and enforces strong security principles through:
 
+- KMS encryption for all data at rest (CloudWatch Logs and S3)
 - Granular IAM roles adhering to the least privilege model
 - Comprehensive logging to CloudWatch and scheduled log export to S3
 - Restricted network egress using VPC-attached Lambda functions
@@ -17,12 +18,19 @@ This CloudFormation template provisions a secure serverless application architec
 
 - **S3 Export**: A custom-built log export Lambda function runs on a daily EventBridge schedule, using the `CreateExportTask` API to copy logs to a specified S3 bucket under structured prefixes.
 
+### Encryption
+
+- **KMS Key**: A customer-managed KMS key is created with key rotation enabled
+- **CloudWatch Logs Encryption**: All log groups use KMS encryption for data at rest
+- **S3 Bucket Encryption**: The S3 bucket uses KMS encryption with bucket key enabled for cost optimization
+- **IAM Permissions**: Lambda roles include necessary KMS permissions (Decrypt, GenerateDataKey) for encrypted resources
+
 ### IAM and Security
 
-- `LambdaExecutionRole` provides only scoped CloudWatch and S3 permissions required for execution and logging.
+- `LambdaExecutionRole` provides only scoped CloudWatch, S3, and KMS permissions required for execution and logging.
 
 - Separate roles for:
-  - Log export Lambda
+  - Log export Lambda (with KMS permissions)
   - CloudWatch Logs S3 delivery
   - VPC Flow Logs delivery
 
@@ -89,12 +97,58 @@ Conditions:
   BucketExists: !Not [!Equals [!Ref S3BucketName, '']]
 
 Resources:
+  # KMS Key for encryption
+  EncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS key for Lambda logs and S3 bucket encryption'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'Enable IAM User Permissions'
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: 'Allow CloudWatch Logs'
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+          - Sid: 'Allow S3 Service'
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+
+  EncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${LambdaFunctionName}-encryption-key'
+      TargetKeyId: !Ref EncryptionKey
+
   # CloudWatch Log Group for Lambda with 14-day retention
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${LambdaFunctionName}'
       RetentionInDays: 14
+      KmsKeyId: !GetAtt EncryptionKey.Arn
 
   # CloudWatch Log Group for VPC Flow Logs
   VPCFlowLogGroup:
@@ -102,6 +156,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs/${VpcId}'
       RetentionInDays: 14
+      KmsKeyId: !GetAtt EncryptionKey.Arn
 
   # IAM Role for Lambda execution with least privilege
   LambdaExecutionRole:
@@ -137,6 +192,11 @@ Resources:
               - Effect: Allow
                 Action: s3:GetBucketLocation
                 Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt EncryptionKey.Arn
 
   # Security Group for Lambda with restricted egress
   LambdaSecurityGroup:
@@ -365,6 +425,12 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:s3:::${S3BucketName}'
                   - !Sub 'arn:aws:s3:::${S3BucketName}/lambda-logs/*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource: !GetAtt EncryptionKey.Arn
 
   # EventBridge Schedule Rule for daily log export
   LogExportScheduleRule:
@@ -451,6 +517,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/lambda/${LambdaFunctionName}-log-exporter'
       RetentionInDays: 7
+      KmsKeyId: !GetAtt EncryptionKey.Arn
 
   # S3 Bucket for Lambda logs (conditional creation)
   LogsBucket:
@@ -458,6 +525,12 @@ Resources:
     Condition: BucketExists
     Properties:
       BucketName: !Ref S3BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !GetAtt EncryptionKey.Arn
+            BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -537,6 +610,18 @@ Outputs:
     Value: !GetAtt LambdaExecutionRole.Arn
     Export:
       Name: !Sub '${AWS::StackName}-execution-role-arn'
+
+  EncryptionKeyArn:
+    Description: 'ARN of the KMS encryption key'
+    Value: !GetAtt EncryptionKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-encryption-key-arn'
+
+  EncryptionKeyId:
+    Description: 'ID of the KMS encryption key'
+    Value: !Ref EncryptionKey
+    Export:
+      Name: !Sub '${AWS::StackName}-encryption-key-id'
 ```
 
 ## Deployment Verification
@@ -603,14 +688,38 @@ aws ec2 describe-security-groups \
   --query 'SecurityGroups[0].IpPermissionsEgress'
 ```
 
+### 5. Verify KMS Encryption
+
+```bash
+# Get KMS key from stack outputs
+KMS_KEY_ARN=$(aws cloudformation describe-stacks \
+  --stack-name <stack-name> \
+  --query 'Stacks[0].Outputs[?OutputKey==`EncryptionKeyArn`].OutputValue' \
+  --output text)
+
+# Verify KMS key exists and rotation is enabled
+aws kms describe-key --key-id "$KMS_KEY_ARN" \
+  --query 'KeyMetadata.{KeyId:KeyId,Enabled:Enabled,KeyRotationEnabled:KeyRotationEnabled}'
+
+# Verify CloudWatch Logs are encrypted
+aws logs describe-log-groups \
+  --log-group-name-prefix /aws/lambda/SecureLambdaFunction \
+  --query 'logGroups[*].{Name:logGroupName,KmsKeyId:kmsKeyId}'
+
+# Verify S3 bucket encryption
+aws s3api get-bucket-encryption \
+  --bucket lambda-logs-bucket
+```
+
 ## Security Best Practices
 
-1. **Least Privilege IAM**: All roles grant only the minimum required permissions
-2. **Network Isolation**: Lambda in VPC with restricted egress (HTTPS and DNS only)
-3. **Secrets Management**: No hardcoded credentials - use AWS Secrets Manager or Parameter Store
-4. **Logging**: Comprehensive audit trail with CloudWatch and S3 archival
-5. **Monitoring**: CloudWatch Alarms for error detection
-6. **Regional Restrictions**: Trust policies enforce us-east-1 deployment
+1. **Data Encryption at Rest**: Customer-managed KMS key with automatic rotation for CloudWatch Logs and S3
+2. **Least Privilege IAM**: All roles grant only the minimum required permissions (including KMS)
+3. **Network Isolation**: Lambda in VPC with restricted egress (HTTPS and DNS only)
+4. **Secrets Management**: No hardcoded credentials - use AWS Secrets Manager or Parameter Store
+5. **Logging**: Comprehensive audit trail with CloudWatch and S3 archival
+6. **Monitoring**: CloudWatch Alarms for error detection
+7. **Regional Restrictions**: Trust policies enforce us-east-1 deployment
 
 ## Notes
 

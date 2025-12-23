@@ -39,17 +39,64 @@ Conditions:
   BucketExists: !Not [!Equals [!Ref S3BucketName, '']]
 
 Resources:
+  # KMS Key for encryption
+  EncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS key for Lambda logs and S3 bucket encryption'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'Enable IAM User Permissions'
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: 'Allow CloudWatch Logs'
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+          - Sid: 'Allow S3 Service'
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+
+  EncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${LambdaFunctionName}-encryption-key'
+      TargetKeyId: !Ref EncryptionKey
+
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${LambdaFunctionName}'
       RetentionInDays: 14
-      
+      KmsKeyId: !GetAtt EncryptionKey.Arn
+
   VPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs/${VpcId}'
       RetentionInDays: 14
+      KmsKeyId: !GetAtt EncryptionKey.Arn
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -84,6 +131,11 @@ Resources:
               - Effect: Allow
                 Action: s3:GetBucketLocation
                 Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt EncryptionKey.Arn
 
   VPCFlowLogRole:
     Type: AWS::IAM::Role
@@ -347,7 +399,7 @@ Resources:
                   - logs:DescribeExportTasks
                   - logs:DescribeLogGroups
                   - logs:DescribeLogStreams
-                Resource: 
+                Resource:
                   - !Sub '${LambdaLogGroup.Arn}'
                   - !Sub '${LambdaLogGroup.Arn}:*'
               - Effect: Allow
@@ -356,9 +408,15 @@ Resources:
                   - s3:GetBucketAcl
                   - s3:GetBucketLocation
                   - s3:ListBucket
-                Resource: 
+                Resource:
                   - !Sub 'arn:aws:s3:::${S3BucketName}'
                   - !Sub 'arn:aws:s3:::${S3BucketName}/lambda-logs/*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource: !GetAtt EncryptionKey.Arn
 
   LogExportScheduleRule:
     Type: AWS::Events::Rule
@@ -416,6 +474,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/lambda/${LambdaFunctionName}-log-exporter'
       RetentionInDays: 7
+      KmsKeyId: !GetAtt EncryptionKey.Arn
 
   # S3 Bucket for Lambda logs (create if not exists)
   LogsBucket:
@@ -423,6 +482,12 @@ Resources:
     Condition: BucketExists
     Properties:
       BucketName: !Ref S3BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !GetAtt EncryptionKey.Arn
+            BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -501,3 +566,15 @@ Outputs:
     Value: !GetAtt LambdaExecutionRole.Arn
     Export:
       Name: !Sub '${AWS::StackName}-execution-role-arn'
+
+  EncryptionKeyArn:
+    Description: 'ARN of the KMS encryption key'
+    Value: !GetAtt EncryptionKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-encryption-key-arn'
+
+  EncryptionKeyId:
+    Description: 'ID of the KMS encryption key'
+    Value: !Ref EncryptionKey
+    Export:
+      Name: !Sub '${AWS::StackName}-encryption-key-id'

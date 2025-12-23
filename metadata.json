@@ -12,13 +12,15 @@
     "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
-    "Lambda",
     "CloudWatch",
     "CloudWatch Logs",
-    "IAM",
-    "S3",
+    "EC2",
     "EventBridge",
-    "EC2"
+    "IAM",
+    "KMS",
+    "Lambda",
+    "S3"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 9
 }
