@@ -8,68 +8,68 @@ The business requirements are clear: track every configuration change on EC2, RD
 
 ## What we need to build
 
-Create an infrastructure drift detection and analysis system using **Terraform with HCL** that monitors Terraform-managed resources across multiple AWS accounts and workspaces.
+Create an infrastructure drift detection and analysis system using Terraform with HCL that monitors Terraform-managed resources across multiple AWS accounts and workspaces.
 
 ### Core Requirements
 
-1. **State Management Infrastructure**
+1. State Management Infrastructure
    - S3 bucket with versioning enabled to store drift analysis reports from multiple workspaces
    - Lifecycle policies on the S3 bucket to manage report retention
    - DynamoDB tables for Terraform state locking with point-in-time recovery enabled
    - Support for remote state access across multiple regions
 
-2. **Configuration Tracking**
+2. Configuration Tracking
    - AWS Config rules to track configuration changes for EC2, RDS, and S3 resources
    - AWS Config recorder to capture resource configuration changes
    - AWS Config delivery channel to store configuration snapshots in S3
 
-3. **Drift Detection System**
+3. Drift Detection System
    - Lambda functions that execute terraform plan operations and parse output for drift analysis
    - Lambda code to analyze terraform plan exit codes and generate structured drift reports
    - JSON report generation with resource drift details, timestamps, and severity levels
 
-4. **Automation and Scheduling**
+4. Automation and Scheduling
    - EventBridge rules to trigger drift detection Lambda functions every 6 hours
    - EventBridge targets connecting rules to Lambda functions
 
-5. **Notification System**
+5. Notification System
    - SNS topics for critical drift notifications
    - Email subscriptions for alerting on detected drift
 
-6. **Access Control**
-   - IAM roles for Lambda execution with permissions for S3, DynamoDB, and CloudWatch
-   - IAM policies allowing cross-account state file access for centralized analysis
-   - Least privilege IAM policies for all resources
+6. Access Control
+   - IAM roles for Lambda execution with permissions limited to specific S3 buckets, DynamoDB tables, and CloudWatch log groups
+   - IAM policies allowing cross-account state file access for centralized analysis with specific resource ARNs
+   - Least privilege IAM policies for all resources with exact action lists and resource specifications
 
-7. **Monitoring and Visibility**
+7. Monitoring and Visibility
    - CloudWatch dashboards displaying drift metrics and trends across environments
    - CloudWatch log groups for Lambda function execution logs
    - CloudWatch metrics for tracking drift detection frequency and results
 
 ### Technical Requirements
 
-- All infrastructure defined using **Terraform with HCL**
-- Use **S3** for drift report storage with versioning enabled
-- Use **DynamoDB** for state locking tables
-- Use **AWS Config** for tracking EC2, RDS, and S3 configuration changes
-- Use **Lambda** (Python 3.11 runtime) for drift detection logic
-- Use **EventBridge** for scheduling drift detection runs
-- Use **SNS** for notification delivery
-- Use **IAM** for access control and cross-account permissions
-- Use **CloudWatch** for monitoring, logging, and dashboards
-- Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `drift-detection-{resource-type}-${var.environment_suffix}`
-- Deploy to **us-east-1** region
-- All resources must be destroyable (no Retain policies or deletion protection)
+- All infrastructure defined using Terraform with HCL
+- Use S3 for drift report storage with versioning enabled
+- Use DynamoDB for state locking tables
+- Use AWS Config for tracking EC2, RDS, and S3 configuration changes
+- Use Lambda with Python 3.11 runtime for drift detection logic
+- Use EventBridge for scheduling drift detection runs
+- Use SNS for notification delivery
+- Use IAM for access control and cross-account permissions with specific resource ARNs
+- Use CloudWatch for monitoring, logging, and dashboards
+- Resource names must include environmentSuffix for uniqueness
+- Follow naming convention: drift-detection-resource-type with var.environment_suffix variable
+- Deploy to us-east-1 region
+- All resources must be destroyable with no Retain policies or deletion protection
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements - CRITICAL
 
 - All resources must include environmentSuffix in names for parallel deployments
-- Resource naming pattern: `drift-detection-{component}-${var.environment_suffix}`
+- Resource naming pattern: drift-detection-component with var.environment_suffix variable
 - No RemovalPolicy RETAIN or DeletionProtection flags
 - All resources must be fully destroyable after testing
-- Lambda functions must not use Node.js 18+ (use Python 3.11 instead to avoid AWS SDK v3 issues)
-- AWS Config IAM role must use managed policy `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+- Lambda functions must not use Node.js 18+ but use Python 3.11 instead to avoid AWS SDK v3 issues
+- AWS Config IAM role must use managed policy arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
 - Do not create AWS Config resources if AWS Config is already enabled in the account
 
 ### Constraints
@@ -86,13 +86,13 @@ Create an infrastructure drift detection and analysis system using **Terraform w
 
 ## Success Criteria
 
-- **Functionality**: Drift detection runs automatically every 6 hours and generates reports
-- **Performance**: Lambda functions complete drift analysis within 5 minutes
-- **Reliability**: System handles failures gracefully with retry logic and error notifications
-- **Security**: Least privilege IAM policies, encrypted S3 buckets, secure cross-account access
-- **Resource Naming**: All resources include environmentSuffix for unique identification
-- **Monitoring**: CloudWatch dashboards show drift metrics, Lambda logs capture execution details
-- **Code Quality**: Clean HCL code, well-organized modules, comprehensive comments
+- Functionality: Drift detection runs automatically every 6 hours and generates reports
+- Performance: Lambda functions complete drift analysis within 5 minutes
+- Reliability: System handles failures gracefully with retry logic and error notifications
+- Security: Least privilege IAM policies with specific resource ARNs, encrypted S3 buckets, secure cross-account access
+- Resource Naming: All resources include environmentSuffix for unique identification
+- Monitoring: CloudWatch dashboards show drift metrics, Lambda logs capture execution details
+- Code Quality: Clean HCL code, well-organized modules, comprehensive comments
 
 ## What to deliver
 
@@ -100,10 +100,10 @@ Create an infrastructure drift detection and analysis system using **Terraform w
 - S3 bucket for drift report storage with versioning and lifecycle policies
 - DynamoDB table for state locking with point-in-time recovery
 - AWS Config setup with rules for EC2, RDS, and S3 tracking
-- Lambda function code (Python) for drift detection and analysis
+- Lambda function code in Python for drift detection and analysis
 - EventBridge rule for 6-hour scheduling
 - SNS topic with email subscription for notifications
-- IAM roles and policies with least privilege access
+- IAM roles and policies with least privilege access using specific resource ARNs
 - CloudWatch dashboard for drift monitoring
 - CloudWatch log groups for Lambda execution logs
 - All infrastructure code organized in main.tf, variables.tf, outputs.tf
