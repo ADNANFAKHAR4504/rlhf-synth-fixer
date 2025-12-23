@@ -390,8 +390,10 @@ Resources:
             TargetGroupArn: !Ref ALBTargetGroup
 
   # Replace the existing Route53Record resource with this one
+  # Skip in LocalStack due to ambiguous HostedZoneName issue
   Route53Record:
     Type: AWS::Route53::RecordSet
+    Condition: IsNotLocalStack
     Properties:
       HostedZoneName: !Ref pApexDomainName
       Name: !Ref pHostedZoneName
