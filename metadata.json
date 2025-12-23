@@ -3,11 +3,14 @@
   "language": "yaml",
   "complexity": "medium",
   "turn_type": "single",
-  "po_id": "229228",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "rahulpatil118",
-  "dockerS3Location": "s3://iac-rlhf-production/docker_images/Pr201/docker-image-229228.tar"
+  "po_id": "LS-229228",
+  "team": "synth-2",
+  "startedAt": "2025-12-23T18:51:44Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [],
+  "wave": "P1"
 }
