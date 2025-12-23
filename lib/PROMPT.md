@@ -1,6 +1,6 @@
 our mission is to design and implement a robust, secure, and scalable cloud infrastructure using AWS CDK in Python to host a dynamic web application. The solution must strictly follow best practices for security, high availability, and efficient resource allocation.
 
-📁 Folder Structure
+ Folder Structure
 graphql
 Copy
 Edit
@@ -13,8 +13,8 @@ root/
     │   └── tests_tap_stack.py  # Unit tests for individual constructs
     └── integration/
         └── test_tap_stack.py  # Integration tests for stack output and deployment
-📌 Requirements
-🛠️ Infrastructure Setup
+ Requirements
+️ Infrastructure Setup
 Region: us-east-2 (OHIO), must span three availability zones for high availability.
 
 VPC:
@@ -68,7 +68,7 @@ Copy
 Edit
 <project>-<env>-<resource-type>  
 Example: myapp-prod-vpc, myapp-dev-web-asg
-⚙️ Configuration
+️ Configuration
 Use Pulumi’s equivalent: CDK’s cdk.json, environment variables, or config YAML to manage:
 
 Resource sizes (EC2 type, RDS class)
@@ -77,7 +77,7 @@ Environment (dev/prod)
 
 Project name and tags
 
-✅ Output Expectations
+ Output Expectations
 Your CDK implementation should include:
 
 tap_stack.py: All infrastructure defined modularly and tagged properly.

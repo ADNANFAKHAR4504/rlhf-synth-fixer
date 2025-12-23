@@ -1,6 +1,6 @@
 I'll help you design and implement a robust, secure, and scalable cloud infrastructure using AWS CDK in Python. Let me create a comprehensive solution that follows all the requirements and best practices.
 
-## 📁 Project Structure Implementation
+##  Project Structure Implementation
 
 ### 1. CDK App Entry Point (`tap.py`)
 
