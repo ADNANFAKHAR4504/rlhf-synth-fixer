@@ -4,11 +4,11 @@ We need to build an automated transaction reconciliation pipeline for our financ
 
 The business wants this implemented as a serverless workflow that can handle up to 100,000 transactions per day. Files get uploaded to S3, and from there we need to orchestrate the entire reconciliation process including parsing, validation, and report generation.
 
-I've been asked to create this infrastructure using **Terraform with HCL** for the us-east-1 region. The system needs to be production-ready with proper monitoring and error handling.
+I've been asked to create this infrastructure using Terraform with HCL for the us-east-1 region. The system needs to be production-ready with proper monitoring and error handling.
 
 ## What we need to build
 
-Create a serverless transaction reconciliation pipeline using **Terraform with HCL** that processes CSV files uploaded to S3 and orchestrates validation workflows.
+Create a serverless transaction reconciliation pipeline using Terraform with HCL that processes CSV files uploaded to S3 and orchestrates validation workflows.
 
 ### Core Requirements
 
@@ -25,9 +25,9 @@ Create a serverless transaction reconciliation pipeline using **Terraform with H
    - State machine should coordinate the three Lambda functions in sequence
 
 3. **Lambda Processing Functions**
-   - Create file parser Lambda function (Python 3.9 runtime, 1024MB memory)
-   - Create transaction validator Lambda function (Python 3.9 runtime, 1024MB memory)
-   - Create report generator Lambda function (Python 3.9 runtime, 1024MB memory)
+   - Create file parser Lambda function using Python 3.9 runtime with 1024MB memory
+   - Create transaction validator Lambda function using Python 3.9 runtime with 1024MB memory
+   - Create report generator Lambda function using Python 3.9 runtime with 1024MB memory
    - All Lambda functions must have proper IAM roles following least privilege principle
    - Set CloudWatch Logs retention to 30 days for all Lambda functions
 
@@ -47,39 +47,39 @@ Create a serverless transaction reconciliation pipeline using **Terraform with H
    - Include Lambda function duration and error metrics
    - Include DynamoDB read/write capacity metrics
 
-7. **Resource Tagging**
-   - All resources must be tagged with Environment=production and Project=reconciliation
-   - Apply tags consistently across all resource types
+7. **Tagging Strategy**
+   - All components must be tagged with Environment=production and Project=reconciliation
+   - Apply tags consistently across all component types
 
-8. **Optional Enhancements** (if time permits)
+8. **Optional Enhancements** if time permits
    - Add SQS queue for batching multiple file uploads
    - Implement EventBridge rules for scheduling daily reports
    - Add X-Ray tracing to all Lambda functions
 
 ### Technical Requirements
 
-- All infrastructure defined using **Terraform with HCL**
+- All infrastructure defined using Terraform with HCL
 - Use S3 for file storage with event notifications
 - Use Step Functions for workflow orchestration
-- Use Lambda for serverless compute (Python 3.9)
-- Use DynamoDB for transaction state storage
+- Use Lambda for serverless compute with Python 3.9
+- Use DynamoDB for data state storage
 - Use SNS for notifications
 - Use CloudWatch for monitoring and dashboards
-- Resource names must include environmentSuffix for uniqueness
-- Follow naming convention: resource-type-environment-suffix
+- Component names must include environmentSuffix for uniqueness
+- Follow naming convention: component-type-environment-suffix
 - Deploy to us-east-1 region
-- All IAM roles must follow least privilege principle with no wildcard resource permissions
-- All resources must be destroyable (no Retain policies or deletion protection)
+- All IAM roles must follow least privilege principle with specific ARNs only
+- All components must be destroyable with no Retain policies or deletion protection
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements - CRITICAL
 
-- Resource names must include environmentSuffix variable: bucket-name-${var.environment_suffix}
-- All resources must be destroyable after testing - no deletion_protection or lifecycle prevent_destroy
+- Names must include environmentSuffix variable like bucket-name-${var.environment_suffix}
+- All components must be destroyable after testing with no deletion_protection or lifecycle prevent_destroy
 - DynamoDB tables must use on-demand billing mode with point-in-time recovery enabled
 - Step Functions must implement exponential backoff retry with max 3 attempts
 - Lambda CloudWatch Logs retention must be set to 30 days
 - S3 lifecycle policy must transition to Glacier after 90 days
-- All IAM policies must be resource-specific, no wildcard permissions
+- All IAM policies must specify explicit ARNs only
 
 ### Constraints
 
@@ -87,19 +87,19 @@ Create a serverless transaction reconciliation pipeline using **Terraform with H
 - Step Functions state machine must implement exponential backoff retry logic with maximum 3 attempts
 - DynamoDB tables must use on-demand billing mode with point-in-time recovery enabled
 - S3 buckets must have versioning enabled and lifecycle policies to transition objects to Glacier after 90 days
-- All IAM roles must follow least privilege principle with no wildcard resource permissions
+- All IAM roles must follow least privilege principle with explicit ARNs only
 - CloudWatch Logs retention must be set to 30 days for all Lambda function logs
 - Processing time target: Complete reconciliation within 5 minutes of file upload
-- System must handle up to 100,000 transactions per daily CSV file
+- System must handle up to 100,000 items per daily CSV file
 
 ## Success Criteria
 
 - Functionality: S3 event triggers Step Functions workflow which executes all three Lambda functions in sequence
-- Performance: Complete processing within 5 minutes for files up to 100,000 transactions
+- Performance: Complete processing within 5 minutes for files up to 100,000 items
 - Reliability: Proper error handling with retry logic and notification on failures
-- Security: IAM least privilege, encryption at rest for S3 and DynamoDB
-- Resource Naming: All resources include environmentSuffix for deployment uniqueness
-- Destroyability: All resources can be cleanly destroyed without manual intervention
+- Security: IAM least privilege with explicit ARNs and encryption at rest for S3 and DynamoDB
+- Naming Convention: All components include environmentSuffix for deployment uniqueness
+- Destroyability: All components can be cleanly destroyed without manual intervention
 - Monitoring: CloudWatch dashboard displays key metrics for processing time and errors
 - Code Quality: Clean HCL code, well-structured, properly documented
 
@@ -108,11 +108,11 @@ Create a serverless transaction reconciliation pipeline using **Terraform with H
 - Complete Terraform HCL implementation
 - S3 bucket with event notification configuration
 - Step Functions state machine with retry logic and error handling
-- Three Lambda functions: file parser, transaction validator, report generator
+- Three Lambda functions: file parser, validator, report generator
 - Lambda function code in lib/lambda/ directory
-- Two DynamoDB tables: transaction records and reconciliation results
+- Two DynamoDB tables: records and reconciliation results
 - SNS topic for notifications
 - CloudWatch dashboard with processing metrics
 - IAM roles and policies for all services
-- All resources tagged with Environment and Project tags
+- All components tagged with Environment and Project tags
 - Documentation and deployment instructions
