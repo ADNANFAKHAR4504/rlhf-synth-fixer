@@ -413,14 +413,14 @@ deploy_cdk() {
 
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
-    local stack_name="TapStack-${env_suffix}"
+    local stack_name="TapStack"
     local output_json="{}"
 
-    # Get all stacks (parent and nested)
+    # Get all stacks (parent and nested) - match any stack starting with TapStack
     local all_stacks=$(awslocal cloudformation list-stacks \
         --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
         --query 'StackSummaries[].StackName' \
-        --output json 2>/dev/null | jq -r '.[]' 2>/dev/null | grep -i "TapStack${env_suffix}" || echo "$stack_name")
+        --output json 2>/dev/null | jq -r '.[]' 2>/dev/null | grep -i "^TapStack" || echo "$stack_name")
 
     # Collect outputs from all matching stacks
     output_json=$(python3 -c "
@@ -434,7 +434,7 @@ for stack in stacks:
         continue
     try:
         result = subprocess.run(
-            ['awslocal', 'cloudformation', 'describe-stacks', '--stack-name', stack],
+            ['awslocal', 'cloudformation', 'describe-stacks', '--stack-name', stack, '--output', 'json'],
             capture_output=True, text=True, check=False
         )
         if result.returncode == 0:
