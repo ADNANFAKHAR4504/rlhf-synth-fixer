@@ -541,8 +541,14 @@ EOF`,
       }
     );
 
-    // Add CloudFormation CreationPolicy
-    // const cfnAsg = autoScalingGroup.node.defaultChild as autoscaling.CfnAutoScalingGroup;
+    // Fix for LocalStack/CloudFormation LaunchTemplate version issue
+    // Explicitly set the LaunchTemplate version to $Default to avoid LatestVersionNumber problems
+    const cfnAsg = autoScalingGroup.node
+      .defaultChild as autoscaling.CfnAutoScalingGroup;
+    cfnAsg.launchTemplate = {
+      launchTemplateId: launchTemplate.launchTemplateId!,
+      version: '$Default',
+    };
     // cfnAsg.cfnOptions.creationPolicy = {
     //   resourceSignal: {
     //     count: config.autoScaling.minSize,
