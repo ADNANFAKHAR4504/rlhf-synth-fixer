@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291336",
+  "team": "synth-2",
+  "startedAt": "2025-08-03T12:17:00.881Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "ELB",
+    "AutoScaling",
+    "KMS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291336",
+    "pr": "Pr408"
+  }
+}
