@@ -1192,11 +1192,12 @@ jobs:
 
           # -------------------------------------------------------------------
           # CHECK 3: AI-generated content in PROMPT files
+          # Note: Pattern must not match positive messages like "no emojis" or "✅ No hardcoded secrets, no emojis"
           # -------------------------------------------------------------------
-          elif grep -qiE "❌.*emojis? found|❌.*ai-generated|CRITICAL.*emoji|CRITICAL.*ai-generated" latest_claude_comment.txt; then
+          elif grep -qiE "❌.*emojis? found|❌.*ai-generated|CRITICAL:.*emoji|emojis? detected|emojis? in PROMPT" latest_claude_comment.txt && ! grep -qiE "no emojis|✅.*no.*emojis" latest_claude_comment.txt; then
             CRITICAL_FOUND=true
             ISSUE_TYPE="ai_generated_content"
-            ISSUE_QUOTE=$(grep -oiE ".*❌.*emojis? found.*|.*❌.*ai-generated.*|.*CRITICAL.*emoji.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            ISSUE_QUOTE=$(grep -oiE ".*❌.*emojis? found.*|.*❌.*ai-generated.*|.*emojis? detected.*|.*emojis? in PROMPT.*" latest_claude_comment.txt | head -1 | cut -c1-150)
             
             build_error_output \
               "AI-Generated Content Detected" \
