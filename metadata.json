@@ -8,7 +8,7 @@
   "startedAt": "2025-08-20T07:26:30.305Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Cloud Environment Setup"
+    "Multi-Environment Consistency and Replication"
   ],
   "provider": "localstack",
   "aws_services": [
