@@ -1,80 +1,76 @@
-import fs from 'fs';
-import {
-  CloudFormationClient,
-  DescribeStacksCommand,
-} from '@aws-sdk/client-cloudformation';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
-  DescribeRouteTablesCommand,
-  DescribeLaunchTemplatesCommand,
-  DescribeVpcAttributeCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  S3Client,
-  HeadBucketCommand,
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetBucketLifecycleConfigurationCommand,
-} from '@aws-sdk/client-s3';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-  DescribeTargetHealthCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
   DescribePoliciesCommand,
 } from '@aws-sdk/client-auto-scaling';
 import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-  GetMetricStatisticsCommand,
-} from '@aws-sdk/client-cloudwatch';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-  ListAliasesCommand,
-  EncryptCommand,
-  DecryptCommand,
-} from '@aws-sdk/client-kms';
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-  DescribeSecretCommand,
-} from '@aws-sdk/client-secrets-manager';
+  CloudFormationClient,
+  DescribeStacksCommand,
+} from '@aws-sdk/client-cloudformation';
 import {
   CloudFrontClient,
-  GetDistributionCommand,
-  GetCloudFrontOriginAccessIdentityCommand,
+  GetDistributionCommand
 } from '@aws-sdk/client-cloudfront';
 import {
-  IAMClient,
-  GetRoleCommand,
+  CloudWatchClient,
+  DescribeAlarmsCommand
+} from '@aws-sdk/client-cloudwatch';
+import {
+  DescribeInternetGatewaysCommand,
+  DescribeLaunchTemplatesCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeListenersCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
   GetInstanceProfileCommand,
-  SimulatePrincipalPolicyCommand,
+  GetRoleCommand,
+  IAMClient
 } from '@aws-sdk/client-iam';
+import {
+  DecryptCommand,
+  DescribeKeyCommand,
+  EncryptCommand,
+  KMSClient,
+  ListAliasesCommand,
+} from '@aws-sdk/client-kms';
+import {
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  DeleteObjectCommand,
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  DescribeSecretCommand,
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 import axios from 'axios';
-import { createConnection, Connection } from 'mysql2/promise';
+import { Connection } from 'mysql2/promise';
 
 // Get environment suffix and stack name from environment variables
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = process.env.STACK_NAME || `TapStack${environmentSuffix}`;
+// Stack name matches the deploy script: localstack-stack-${environment_suffix}
+const stackName = process.env.STACK_NAME || `localstack-stack-${environmentSuffix}`;
 const region = process.env.AWS_REGION || 'us-east-1';
 
 console.log(`\n=== Integration Test Configuration ===`);
