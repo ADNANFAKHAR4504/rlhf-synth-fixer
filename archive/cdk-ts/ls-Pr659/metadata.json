@@ -1,0 +1,23 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "323",
+  "team": "synth-2",
+  "startedAt": "2025-08-07T00:23:09-05:00",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "hernanmog-turing",
+  "dockerS3Location": "",
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "EC2",
+    "VPC"
+  ],
+  "original_pr_id": "Pr659"
+}
