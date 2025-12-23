@@ -14,7 +14,7 @@ I need to build a multi-region cloud development environment using AWS CDK with 
 
 **Security**: Enable encryption at rest for both RDS databases and S3 bucket using AWS managed keys.
 
-**Resource Tagging**: Apply consistent tags to all resources including Environment, Region, and Purpose tags.
+**Tagging Strategy**: Apply consistent tags to all infrastructure including Environment, Region, and Purpose tags.
 
 **Modularity**: Structure the solution using separate CDK constructs for networking, compute, database, and storage for reusability and maintainability.
 
