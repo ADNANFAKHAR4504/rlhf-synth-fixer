@@ -127,7 +127,7 @@ echo -e "${YELLOW}📦 Creating CloudFormation stack...${NC}"
 CREATE_RESULT=$(awslocal cloudformation create-stack \
     --stack-name $STACK_NAME \
     --template-body file://$TEMPLATE_FILE \
-    --parameters ParameterKey=Environment,ParameterValue=$ENVIRONMENT_SUFFIX \
+    --parameters ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX \
     --capabilities CAPABILITY_IAM \
     --output json)
 
