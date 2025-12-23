@@ -13,6 +13,7 @@
   ],
   "aws_services": [
     "Lambda",
+    "CloudWatch",
     "CloudWatch Logs",
     "IAM",
     "S3",
