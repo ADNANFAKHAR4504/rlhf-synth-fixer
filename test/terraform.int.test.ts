@@ -3,7 +3,8 @@
  * Platform: Terraform
  * Language: HCL
  *
- * These tests validate the complete workflow using real AWS resources
+ * These tests validate the complete workflow using AWS-compatible resources
+ * (LocalStack when AWS_ENDPOINT_URL is set, real AWS otherwise)
  */
 
 const AWS = require('aws-sdk');
