@@ -9,7 +9,7 @@ Set up isolated VPCs for each environment - no default VPCs. Deploy EC2 instance
 Create DynamoDB tables with Point-in-Time Recovery enabled for each environment. Lambda functions should read from and write to these DynamoDB tables for region-specific processing - make sure the Lambda has proper IAM permissions to access the tables. Set up S3 buckets with server-side encryption enabled where Lambda functions can store processed data or logs.
 
 **Monitoring and Alerts**
-Configure CloudWatch to collect metrics from all resources. Set up alarms that trigger when EC2 CPU usage is high, when Lambda functions error out, or when DynamoDB throttling occurs. These alarms should send notifications so we can respond to issues.
+Configure CloudWatch to collect metrics from the EC2 instances, Lambda functions, DynamoDB tables, and ALB. Set up alarms that trigger when EC2 CPU usage is high, when Lambda functions error out, or when DynamoDB throttling occurs. These alarms should send notifications so we can respond to issues.
 
 **Security and Access Control**
 Create IAM roles for Lambda functions that allow them to read/write to DynamoDB tables and S3 buckets. EC2 instances need roles to send logs to CloudWatch and access Systems Manager Parameter Store for configuration values. Keep permissions tight - Lambda should only access its specific DynamoDB table and S3 bucket, not everything.
