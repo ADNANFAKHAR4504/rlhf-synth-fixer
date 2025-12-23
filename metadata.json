@@ -10,7 +10,7 @@
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "Cloud Environment Setup",
-    "Multi-Environment Consistency"
+    "Multi-Environment Consistency and Replication"
   ],
   "wave": "P0",
   "aws_services": [
