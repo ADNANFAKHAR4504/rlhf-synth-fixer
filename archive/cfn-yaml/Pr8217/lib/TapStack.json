@@ -1,0 +1,1498 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure AWS infrastructure for web application with enterprise security controls, MFA enforcement, IP restrictions, and comprehensive monitoring",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix",
+                        "VpcCidr",
+                        "AllowedIPRange"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Security Configuration"
+                    },
+                    "Parameters": [
+                        "EnableMFA",
+                        "CredentialRotationDays",
+                        "LogRetentionDays"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "EnvironmentSuffix": {
+                    "default": "Environment Suffix"
+                },
+                "VpcCidr": {
+                    "default": "VPC CIDR Block"
+                },
+                "AllowedIPRange": {
+                    "default": "Allowed IP Range for Access"
+                }
+            }
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (passed from deployment script)"
+        },
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for the VPC",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
+        },
+        "AllowedIPRange": {
+            "Type": "String",
+            "Default": "203.0.113.0/24",
+            "Description": "IP range allowed to access resources (CIDR notation)",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
+        },
+        "EnableMFA": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable MFA enforcement for IAM policies"
+        },
+        "CredentialRotationDays": {
+            "Type": "Number",
+            "Default": 30,
+            "MinValue": 1,
+            "MaxValue": 90,
+            "Description": "Number of days between credential rotations"
+        },
+        "LogRetentionDays": {
+            "Type": "Number",
+            "Default": 90,
+            "AllowedValues": [
+                1,
+                3,
+                5,
+                7,
+                14,
+                30,
+                60,
+                90,
+                120,
+                150,
+                180,
+                365,
+                400,
+                545,
+                731,
+                1827,
+                3653
+            ],
+            "Description": "CloudWatch log retention period in days"
+        }
+    },
+    "Conditions": {
+        "IsProdEnvironment": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnvironmentSuffix"
+                },
+                "prod"
+            ]
+        },
+        "EnableMFACondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableMFA"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "SecureVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-secure-vpc"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCidr"
+                                },
+                                4,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-public-subnet"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCidr"
+                                },
+                                4,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-private-subnet"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-igw"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "ProductionRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "IsProdEnvironment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-prod-route-table"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApplicationKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for encrypting ${EnvironmentSuffix} application data"
+                },
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudTrail encryption",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:ReEncrypt*",
+                                "kms:Decrypt"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudWatch Logs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": {
+                                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                                }
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-application-key"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApplicationKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${EnvironmentSuffix}-application-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "ApplicationKMSKey"
+                }
+            }
+        },
+        "SecureLogBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-secure-logs-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "ApplicationKMSKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "LogRetentionRule",
+                            "Status": "Enabled",
+                            "ExpirationInDays": {
+                                "Ref": "LogRetentionDays"
+                            },
+                            "NoncurrentVersionExpirationInDays": 7
+                        },
+                        {
+                            "Id": "IntelligentTieringRule",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "StorageClass": "INTELLIGENT_TIERING",
+                                    "TransitionInDays": 30
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-secure-log-bucket"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApplicationDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-app-data-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "ApplicationKMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-application-data"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureLogBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "SecureLogBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SecureLogBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentSuffix}-security-trail"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${SecureLogBucket.Arn}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentSuffix}-security-trail"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailBucketExistenceCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SecureLogBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentSuffix}-security-trail"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "DenyInsecureConnections",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "SecureLogBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${SecureLogBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                },
+                                "StringNotEquals": {
+                                    "aws:PrincipalServiceName": "cloudtrail.amazonaws.com"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "RestrictIPAccess",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "SecureLogBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${SecureLogBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "NotIpAddress": {
+                                    "aws:SourceIp": {
+                                        "Ref": "AllowedIPRange"
+                                    }
+                                },
+                                "StringNotEquals": {
+                                    "aws:PrincipalServiceName": "cloudtrail.amazonaws.com"
+                                },
+                                "Bool": {
+                                    "aws:ViaAWSService": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "EC2InstanceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3AccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ApplicationDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${ApplicationDataBucket.Arn}/*"
+                                        }
+                                    ],
+                                    "Condition": {
+                                        "IpAddress": {
+                                            "aws:SourceIp": {
+                                                "Ref": "AllowedIPRange"
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ApplicationKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CloudWatchLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-ec2-role"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "RestrictedApplicationUser": {
+            "Type": "AWS::IAM::User",
+            "Properties": {
+                "Policies": [
+                    {
+                        "PolicyName": "RestrictedS3ListPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket",
+                                        "s3:GetBucketLocation"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ApplicationDataBucket",
+                                            "Arn"
+                                        ]
+                                    },
+                                    "Condition": {
+                                        "IpAddress": {
+                                            "aws:SourceIp": {
+                                                "Ref": "AllowedIPRange"
+                                            }
+                                        },
+                                        "Bool": {
+                                            "aws:MultiFactorAuthPresent": {
+                                                "Fn::If": [
+                                                    "EnableMFACondition",
+                                                    "true",
+                                                    "false"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "Effect": "Deny",
+                                    "Action": "*",
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "Bool": {
+                                            "aws:MultiFactorAuthPresent": "false"
+                                        },
+                                        "IpAddressIfExists": {
+                                            "aws:SourceIp": {
+                                                "Ref": "AllowedIPRange"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-restricted-user"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudWatchLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/cloudtrail/${EnvironmentSuffix}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "ApplicationKMSKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "S3AccessLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/s3/${EnvironmentSuffix}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                }
+            }
+        },
+        "CloudTrailRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudTrailLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:PutLogEvents",
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "CloudWatchLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "SecurityCloudTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": "SecureLogBucketPolicy",
+            "Properties": {
+                "TrailName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-security-trail"
+                },
+                "S3BucketName": {
+                    "Ref": "SecureLogBucket"
+                },
+                "S3KeyPrefix": "cloudtrail-logs",
+                "CloudWatchLogsLogGroupArn": {
+                    "Fn::GetAtt": [
+                        "CloudWatchLogGroup",
+                        "Arn"
+                    ]
+                },
+                "CloudWatchLogsRoleArn": {
+                    "Fn::GetAtt": [
+                        "CloudTrailRole",
+                        "Arn"
+                    ]
+                },
+                "KMSKeyId": {
+                    "Ref": "ApplicationKMSKey"
+                },
+                "IsLogging": true,
+                "IsMultiRegionTrail": true,
+                "IncludeGlobalServiceEvents": true,
+                "EnableLogFileValidation": true,
+                "InsightSelectors": [
+                    {
+                        "InsightType": "ApiCallRateInsight"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-cloudtrail"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebApplicationSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-webapp-sg"
+                },
+                "GroupDescription": "Security group for web application with restricted access",
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": {
+                            "Ref": "AllowedIPRange"
+                        },
+                        "Description": "HTTPS access from allowed IP range"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": {
+                            "Ref": "AllowedIPRange"
+                        },
+                        "Description": "HTTP access from allowed IP range (redirect to HTTPS)"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS outbound for API calls"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTP outbound for package downloads"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 53,
+                        "ToPort": 53,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "DNS TCP"
+                    },
+                    {
+                        "IpProtocol": "udp",
+                        "FromPort": 53,
+                        "ToPort": 53,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "DNS UDP"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-webapp-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-database-sg"
+                },
+                "GroupDescription": "Security group for database with restricted access",
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebApplicationSecurityGroup"
+                        },
+                        "Description": "MySQL access from web application"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-database-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "CredentialRotationLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "CredentialRotationPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "iam:UpdateAccessKey",
+                                        "iam:DeleteAccessKey",
+                                        "iam:CreateAccessKey",
+                                        "iam:ListAccessKeys",
+                                        "iam:GetUser"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "RestrictedApplicationUser",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue",
+                                        "secretsmanager:PutSecretValue",
+                                        "secretsmanager:UpdateSecret"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "UserCredentialsSecret"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "SecurityAlertsTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CredentialRotationLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-credential-rotation"
+                },
+                "Runtime": "nodejs20.x",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "CredentialRotationLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "Environment": {
+                    "Variables": {
+                        "USER_NAME": {
+                            "Ref": "RestrictedApplicationUser"
+                        },
+                        "SECRET_ARN": {
+                            "Ref": "UserCredentialsSecret"
+                        },
+                        "SNS_TOPIC": {
+                            "Ref": "SecurityAlertsTopic"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "const AWS = require('aws-sdk');\nconst iam = new AWS.IAM();\nconst secretsManager = new AWS.SecretsManager();\nconst sns = new AWS.SNS();\n\nexports.handler = async (event) => {\n    console.log('Starting credential rotation for user:', process.env.USER_NAME);\n    \n    try {\n        // List current access keys\n        const keys = await iam.listAccessKeys({\n            UserName: process.env.USER_NAME\n        }).promise();\n        \n        // Create new access key\n        const newKey = await iam.createAccessKey({\n            UserName: process.env.USER_NAME\n        }).promise();\n        \n        // Update secret with new credentials\n        await secretsManager.putSecretValue({\n            SecretId: process.env.SECRET_ARN,\n            SecretString: JSON.stringify({\n                AccessKeyId: newKey.AccessKey.AccessKeyId,\n                SecretAccessKey: newKey.AccessKey.SecretAccessKey\n            })\n        }).promise();\n        \n        // Delete old access keys (keep only the newest)\n        for (const key of keys.AccessKeyMetadata) {\n            if (key.AccessKeyId !== newKey.AccessKey.AccessKeyId) {\n                await iam.deleteAccessKey({\n                    UserName: process.env.USER_NAME,\n                    AccessKeyId: key.AccessKeyId\n                }).promise();\n            }\n        }\n        \n        // Send success notification\n        await sns.publish({\n            TopicArn: process.env.SNS_TOPIC,\n            Message: `Credential rotation completed successfully for user: ${process.env.USER_NAME}`,\n            Subject: 'Credential Rotation Success'\n        }).promise();\n        \n        console.log('Credential rotation completed successfully');\n        return { statusCode: 200, body: 'Success' };\n        \n    } catch (error) {\n        console.error('Credential rotation failed:', error);\n        \n        // Send failure notification\n        await sns.publish({\n            TopicArn: process.env.SNS_TOPIC,\n            Message: `Credential rotation failed for user: ${process.env.USER_NAME}. Error: ${error.message}`,\n            Subject: 'Credential Rotation Failure'\n        }).promise();\n        \n        throw error;\n    }\n};\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-credential-rotation"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "CredentialRotationSchedule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-credential-rotation-schedule"
+                },
+                "Description": {
+                    "Fn::Sub": "Rotate IAM user credentials every ${CredentialRotationDays} days"
+                },
+                "ScheduleExpression": {
+                    "Fn::Sub": "rate(${CredentialRotationDays} days)"
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "CredentialRotationLambda",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "CredentialRotationTarget"
+                    }
+                ]
+            }
+        },
+        "CredentialRotationLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Ref": "CredentialRotationLambda"
+                },
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "CredentialRotationSchedule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "UserCredentialsSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}/app/user-credentials"
+                },
+                "Description": "Secure storage for application user credentials",
+                "KmsKeyId": {
+                    "Ref": "ApplicationKMSKey"
+                },
+                "SecretString": "{\n  \"AccessKeyId\": \"PLACEHOLDER\",\n  \"SecretAccessKey\": \"PLACEHOLDER\"\n}\n",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-user-credentials"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecurityAlertsTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-security-alerts"
+                },
+                "DisplayName": "Security Alerts",
+                "KmsMasterKeyId": {
+                    "Ref": "ApplicationKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-security-alerts"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecurityAlertsTopicPolicy": {
+            "Type": "AWS::SNS::TopicPolicy",
+            "Properties": {
+                "Topics": [
+                    {
+                        "Ref": "SecurityAlertsTopic"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowCloudTrailPublish",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "sns:Publish",
+                            "Resource": {
+                                "Ref": "SecurityAlertsTopic"
+                            }
+                        },
+                        {
+                            "Sid": "AllowLambdaPublish",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sns:Publish",
+                            "Resource": {
+                                "Ref": "SecurityAlertsTopic"
+                            }
+                        },
+                        {
+                            "Sid": "AllowCloudWatchAlarmsPublish",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudwatch.amazonaws.com"
+                            },
+                            "Action": "sns:Publish",
+                            "Resource": {
+                                "Ref": "SecurityAlertsTopic"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "UnauthorizedAPICallsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-unauthorized-api-calls"
+                },
+                "AlarmDescription": "Alarm for unauthorized API calls",
+                "MetricName": "UnauthorizedAPICalls",
+                "Namespace": "CloudTrailMetrics",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "SecurityAlertsTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ConsoleSignInWithoutMFAAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-console-signin-without-mfa"
+                },
+                "AlarmDescription": "Alarm for console sign-ins without MFA",
+                "MetricName": "ConsoleSignInWithoutMFA",
+                "Namespace": "CloudTrailMetrics",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "SecurityAlertsTopic"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "ID of the secure VPC",
+            "Value": {
+                "Ref": "SecureVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                }
+            }
+        },
+        "PublicSubnetId": {
+            "Description": "ID of the public subnet",
+            "Value": {
+                "Ref": "PublicSubnet"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet-ID"
+                }
+            }
+        },
+        "PrivateSubnetId": {
+            "Description": "ID of the private subnet",
+            "Value": {
+                "Ref": "PrivateSubnet"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet-ID"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "ID of the KMS key for encryption",
+            "Value": {
+                "Ref": "ApplicationKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMS-Key-ID"
+                }
+            }
+        },
+        "KMSKeyAlias": {
+            "Description": "Alias of the KMS key",
+            "Value": {
+                "Ref": "ApplicationKMSKeyAlias"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMS-Key-Alias"
+                }
+            }
+        },
+        "LogBucketName": {
+            "Description": "Name of the secure log storage bucket",
+            "Value": {
+                "Ref": "SecureLogBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogBucket-Name"
+                }
+            }
+        },
+        "ApplicationBucketName": {
+            "Description": "Name of the application data bucket",
+            "Value": {
+                "Ref": "ApplicationDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppBucket-Name"
+                }
+            }
+        },
+        "EC2InstanceRoleArn": {
+            "Description": "ARN of the EC2 instance role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2InstanceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2Role-ARN"
+                }
+            }
+        },
+        "EC2InstanceProfileArn": {
+            "Description": "ARN of the EC2 instance profile",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2InstanceProfile",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2Profile-ARN"
+                }
+            }
+        },
+        "WebAppSecurityGroupId": {
+            "Description": "ID of the web application security group",
+            "Value": {
+                "Ref": "WebApplicationSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebAppSG-ID"
+                }
+            }
+        },
+        "DatabaseSecurityGroupId": {
+            "Description": "ID of the database security group",
+            "Value": {
+                "Ref": "DatabaseSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DatabaseSG-ID"
+                }
+            }
+        },
+        "CloudTrailArn": {
+            "Description": "ARN of the CloudTrail",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecurityCloudTrail",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrail-ARN"
+                }
+            }
+        },
+        "SecurityAlertsTopicArn": {
+            "Description": "ARN of the security alerts SNS topic",
+            "Value": {
+                "Ref": "SecurityAlertsTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecurityAlerts-ARN"
+                }
+            }
+        },
+        "RestrictedUserArn": {
+            "Description": "ARN of the restricted IAM user",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RestrictedApplicationUser",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RestrictedUser-ARN"
+                }
+            }
+        },
+        "CredentialRotationLambdaArn": {
+            "Description": "ARN of the credential rotation Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CredentialRotationLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CredentialRotation-ARN"
+                }
+            }
+        },
+        "UserCredentialsSecretArn": {
+            "Description": "ARN of the user credentials secret",
+            "Value": {
+                "Ref": "UserCredentialsSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-UserSecret-ARN"
+                }
+            }
+        }
+    }
+}
