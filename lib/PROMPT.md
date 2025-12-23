@@ -10,7 +10,7 @@ Here's what it needs to do:
   - Give your Lambda functions an **IAM role**. This role should have just the right permissions, specifically allowing them to run and to access DynamoDB.
 - **Configure API Gateway routes:**
   - For **POST requests** that go to the `/user` path, set up API Gateway to send those straight to your `CreateUserFunction` Lambda.
-  - For **GET requests** to `/user/{id}` where {id} is the user ID, configure API Gateway to direct those to your `GetUserFunction` Lambda.
+  - For **GET requests** to `/user/ID` where ID is the user ID, configure API Gateway to direct those to your `GetUserFunction` Lambda.
 
 This app is for AWS, and it needs functions with specific settings for each environment, handling web requests through API Gateway.
 
