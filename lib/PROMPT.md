@@ -17,14 +17,14 @@ Create a complete infrastructure solution using **Terraform with HCL** that depl
 1. **Container Orchestration**
    - Deploy an ECS Fargate cluster for running containerized applications
    - Configure auto-scaling based on CPU and memory metrics
-   - Use only Fargate launch type (no EC2 instances)
+   - Use only Fargate launch type without EC2 instances
    - Implement container health checks with automatic task replacement on failure
    - Enable CloudWatch Container Insights for application monitoring
 
 2. **Database Layer**
    - Create an RDS Aurora PostgreSQL cluster with encryption at rest
    - Configure automated backups with 3-day retention minimum
-   - Use db.r6g.large instances minimum for production workloads
+   - Use db.r6g.large instances for production workloads
    - Deploy across multiple availability zones for high availability
 
 3. **Load Balancing and Traffic Management**
@@ -42,7 +42,7 @@ Create a complete infrastructure solution using **Terraform with HCL** that depl
 
 5. **Security and Compliance**
    - Store database credentials in Systems Manager Parameter Store with automatic rotation
-   - Container environment variables must reference Parameter Store (not hardcoded values)
+   - Container environment variables must reference Parameter Store with no hardcoded values
    - Enable encryption at rest for all data stores
    - Implement proper IAM roles and policies following least privilege
 
@@ -50,11 +50,11 @@ Create a complete infrastructure solution using **Terraform with HCL** that depl
    - Use ECR for container image storage
    - Enable vulnerability scanning on container images
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements - Critical
 
 - All resource names must include environmentSuffix parameter for uniqueness
 - Follow naming convention: resource-type-environment-suffix
-- All resources must be destroyable (use appropriate deletion policies, no Retain)
+- All resources must be destroyable with appropriate deletion policies, no Retain
 - Use force_destroy on S3 buckets and other stateful resources to enable clean teardown
 - FORBIDDEN: Retain policies or stateful resources that block destruction
 
@@ -69,14 +69,14 @@ Create a complete infrastructure solution using **Terraform with HCL** that depl
 
 ### AWS Services to Implement
 
-- Amazon ECS (Fargate launch type)
-- Amazon RDS (Aurora PostgreSQL 14.6)
+- Amazon ECS with Fargate launch type
+- Amazon RDS Aurora PostgreSQL 14.6
 - Application Load Balancer
-- Amazon VPC (subnets, NAT gateways, internet gateway, route tables)
-- Amazon S3 (for logs, backups, and Terraform state)
+- Amazon VPC with subnets, NAT gateways, internet gateway, and route tables
+- Amazon S3 for logs, backups, and Terraform state
 - AWS Systems Manager Parameter Store
-- Amazon CloudWatch (Container Insights, logs, and metrics)
-- Amazon ECR (Elastic Container Registry)
+- Amazon CloudWatch for Container Insights, logs, and metrics
+- Amazon ECR for container registry
 - VPC Endpoints for AWS services
 
 ### Constraints
@@ -107,7 +107,7 @@ Create a complete infrastructure solution using **Terraform with HCL** that depl
 - Complete Terraform HCL implementation with modular structure
 - Provider configuration with S3 backend and DynamoDB state locking
 - VPC with public, private, and database subnets across 3 AZs
-- NAT gateways (one per AZ) and internet gateway
+- NAT gateways with one per AZ and internet gateway
 - VPC flow logs configuration
 - ECS Fargate cluster with task definitions
 - Auto-scaling policies for ECS based on CPU and memory
