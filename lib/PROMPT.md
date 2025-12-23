@@ -55,11 +55,11 @@ Create a multi-region disaster recovery infrastructure using **Terraform with HC
    - Grant only required cross-region permissions for replication
    - Proper encryption for data at rest and in transit
 
-8. **Resource Organization**
-   - Add resource tags: Environment=DR, Region=primary/secondary, CostCenter=payments
-   - Resource names must include environmentSuffix for uniqueness
+8. **Tagging and Naming**
+   - Add tags to all resources: Environment=DR, Region=primary/secondary, CostCenter=payments
+   - All names must include environmentSuffix for uniqueness
    - Follow naming convention: resource-type-environment-suffix
-   - Consistent tagging across all resources
+   - Consistent tagging across infrastructure
 
 ### Technical Requirements
 
@@ -74,7 +74,7 @@ Create a multi-region disaster recovery infrastructure using **Terraform with HC
 - Use **CloudWatch** and **SNS** for monitoring and alerts
 - Use **VPC** infrastructure with proper subnet design
 - Use **IAM** for security and access control
-- Resource names must include **environmentSuffix** for uniqueness
+- All names must include **environmentSuffix** for uniqueness
 - Deploy to **us-east-1** as primary and **us-west-2** as secondary regions
 
 ### Optional Enhancements
@@ -102,7 +102,7 @@ If time permits, consider adding:
 - **Reliability**: Aurora Global Database with proper replication, Lambda deployed in both regions
 - **Security**: IAM least-privilege policies, encrypted data, proper network isolation
 - **Monitoring**: CloudWatch alarms monitoring cluster health, SNS notifications configured
-- **Resource Naming**: All resources include environmentSuffix in naming
+- **Naming Convention**: All infrastructure includes environmentSuffix in naming
 - **Cost Optimization**: Secondary region at minimal capacity until failover needed
 - **Code Quality**: Modular Terraform HCL, well-tested, comprehensive documentation
 
