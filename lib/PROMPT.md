@@ -15,13 +15,13 @@ Create infrastructure using **Terraform with HCL** for a production-ready financ
 ### Core Requirements
 
 1. **Container Orchestration**
-   - Deploy ECS Fargate service with minimum 3 tasks across multiple availability zones
+   - Deploy ECS Fargate service connected to Application Load Balancer with minimum 3 tasks across multiple availability zones
    - Use Fargate Spot instances for cost optimization with on-demand fallback
    - Configure auto-scaling based on ALB request count and CPU metrics
    - Support zero-downtime deployments
 
 2. **Database Layer**
-   - Create Aurora PostgreSQL Serverless v2 cluster with read replicas
+   - Create Aurora PostgreSQL Serverless v2 cluster accessible from ECS tasks via security groups with read replicas
    - Enable automated backups with point-in-time recovery
    - Encrypt data at rest using customer-managed KMS keys
    - Configure across multiple AZs for high availability
@@ -33,9 +33,9 @@ Create infrastructure using **Terraform with HCL** for a production-ready financ
    - Distribute traffic across multiple availability zones
 
 4. **Content Delivery and Edge Security**
-   - Implement CloudFront distribution with custom origin headers
+   - Implement CloudFront distribution that connects to the Application Load Balancer as origin with custom origin headers
    - Configure geo-blocking for sanctioned countries
-   - Set up WAF rules for SQL injection and XSS protection
+   - Set up WAF attached to CloudFront for SQL injection and XSS protection
    - Enable CloudFront access logging
 
 5. **DNS and Failover**
@@ -67,15 +67,15 @@ Create infrastructure using **Terraform with HCL** for a production-ready financ
 - Use **Route53** for DNS and health checks
 - Use **KMS** for encryption key management
 - Deploy to **ap-southeast-1** region
-- Resource names must include **environmentSuffix** for uniqueness
+- All names must include **environmentSuffix** for uniqueness
 - Follow naming convention: resource-type-environment-suffix
-- All resources must be destroyable (no Retain deletion policies)
+- Everything must be fully destroyable without any Retain deletion policies
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements - CRITICAL
 
 - **environmentSuffix Parameter**: All resources MUST include an environmentSuffix variable for resource naming to ensure uniqueness across deployments
 - **Destroyability**: All resources must be fully destroyable. Do NOT use any retention policies that prevent deletion
-- **Resource Tagging**: All resources must be tagged with CostCenter, Environment, and Compliance tags
+- **Tagging Requirements**: All resources must be tagged with CostCenter, Environment, and Compliance tags
 
 ### Special Constraints
 
@@ -97,7 +97,7 @@ Create infrastructure using **Terraform with HCL** for a production-ready financ
 - **Scalability**: Auto-scaling configured for ECS based on load metrics
 - **Monitoring**: CloudWatch dashboard showing all key metrics, logs flowing properly
 - **Compliance**: All audit logging enabled, proper tagging in place
-- **Resource Naming**: All resources include environmentSuffix for unique identification
+- **Naming Convention**: All resources include environmentSuffix for unique identification
 - **Cost Optimization**: Fargate Spot instances configured where appropriate
 - **Code Quality**: HCL code, well-structured, with proper variable definitions
 
