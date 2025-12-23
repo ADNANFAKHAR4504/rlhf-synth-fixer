@@ -24,11 +24,5 @@
   "migrated_from": {
     "po_id": "268",
     "pr": "Pr268"
-  },
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "veera-turing",
-  "dockerS3Location": ""
+  }
 }
