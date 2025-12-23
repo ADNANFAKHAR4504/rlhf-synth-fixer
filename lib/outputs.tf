@@ -75,10 +75,10 @@ output "flow_logs_bucket" {
   value       = aws_s3_bucket.flow_logs.id
 }
 
-output "flow_log_id" {
-  description = "ID of VPC flow log"
-  value       = aws_flow_log.main.id
-}
+# output "flow_log_id" {
+#   description = "ID of VPC flow log"
+#   value       = aws_flow_log.main.id
+# }
 
 # Availability Zones
 output "availability_zones" {
