@@ -181,7 +181,8 @@ class TestTapStack(unittest.TestCase):
         )
         template = Template.from_stack(nested)
 
-        # Verify that GetObject resource includes the normalized prefix with trailing slash
+        # Verify that GetObject statement has Resource with normalized prefix (trailing slash)
+        # The GetObject statement has a single string Resource, not an array
         template.has_resource_properties(
             "AWS::IAM::ManagedPolicy",
             {
@@ -190,9 +191,8 @@ class TestTapStack(unittest.TestCase):
                         [
                             Match.object_like(
                                 {
-                                    "Resource": Match.array_with(
-                                        [Match.string_like_regexp(r".*apps/tap/\*")]
-                                    )
+                                    "Sid": "GetObjectUnderPrefixOnly",
+                                    "Resource": "arn:aws:s3:::test-bucket/apps/tap/*"
                                 }
                             )
                         ]
