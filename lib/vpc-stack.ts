@@ -37,13 +37,12 @@ export class VpcStack extends cdk.Stack {
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
       ],
-      // Flow logs disabled for LocalStack - CloudWatch Logs integration can be problematic
-      // flowLogs: {
-      //   FlowLogCloudWatch: {
-      //     destination: ec2.FlowLogDestination.toCloudWatchLogs(),
-      //     trafficType: ec2.FlowLogTrafficType.ALL,
-      //   },
-      // },
+      flowLogs: {
+        FlowLogCloudWatch: {
+          destination: ec2.FlowLogDestination.toCloudWatchLogs(),
+          trafficType: ec2.FlowLogTrafficType.ALL,
+        },
+      },
     });
 
     this.publicSubnets = this.vpc.publicSubnets;

@@ -80,13 +80,13 @@ export class RdsStack extends cdk.Stack {
       deleteAutomatedBackups: false,
       deletionProtection: false, // Set to true for production
 
-      // Multi-AZ for high availability - disabled for LocalStack
-      multiAz: false,
+      // Multi-AZ for high availability
+      multiAz: true,
 
-      // Monitoring and logging - simplified for LocalStack
-      monitoringInterval: cdk.Duration.seconds(0), // Disable enhanced monitoring
+      // Monitoring and logging
+      monitoringInterval: cdk.Duration.seconds(0), // Disable enhanced monitoring for cost
       enablePerformanceInsights: false,
-      // cloudwatchLogsExports: ['error', 'general', 'slowquery'], // Disabled for LocalStack
+      cloudwatchLogsExports: ['error', 'general', 'slowquery'],
 
       // Parameter group
       parameterGroup: parameterGroup,
@@ -97,18 +97,17 @@ export class RdsStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Create a read replica for read scaling (optional)
-    // Disabled for LocalStack - read replicas not well supported
-    // new rds.DatabaseInstanceReadReplica(this, 'ReadReplica', {
-    //   sourceDatabaseInstance: this.database,
-    //   instanceType: ec2.InstanceType.of(
-    //     ec2.InstanceClass.T3,
-    //     ec2.InstanceSize.MICRO
-    //   ),
-    //   vpc: props.vpc,
-    //   securityGroups: [props.databaseSg],
-    //   deleteAutomatedBackups: false,
-    //   removalPolicy: cdk.RemovalPolicy.DESTROY,
-    // });
+    // Create a read replica for read scaling
+    new rds.DatabaseInstanceReadReplica(this, 'ReadReplica', {
+      sourceDatabaseInstance: this.database,
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
+      vpc: props.vpc,
+      securityGroups: [props.databaseSg],
+      deleteAutomatedBackups: false,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
   }
 }

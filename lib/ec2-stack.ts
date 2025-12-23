@@ -72,7 +72,7 @@ export class Ec2Stack extends cdk.Stack {
         userData: userData,
         role: ec2Role,
         requireImdsv2: true, // Security best practice
-        detailedMonitoring: false, // Disabled for LocalStack
+        detailedMonitoring: true, // Enable detailed monitoring for production
       }
     );
 
