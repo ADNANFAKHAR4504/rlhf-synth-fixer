@@ -2,9 +2,9 @@ Hey team,
 
 We need to build a serverless webhook processing system to handle real-time payment notifications from multiple payment providers. Our financial technology startup is growing fast and needs a reliable way to process these webhook events, transform them based on provider-specific formats, and maintain a proper audit trail for compliance. The business wants this infrastructure set up using **Terraform with HCL** to provision everything we need on AWS.
 
-Right now, we're receiving webhooks from various payment providers like Stripe, PayPal, and Square. Each one has a different data format and we need to normalize everything before storing it. The compliance team also requires full audit trails and monitoring. We need this to be production-ready from day one.
+Right now, we're receiving webhooks from various payment providers like Stripe, PayPal, and Square. Each one has a different data format and we need to normalize everything before storing it. The webhooks hit our API Gateway endpoint, which forwards requests to Lambda for validation and transformation, then Lambda writes the normalized data to DynamoDB for persistent storage. The compliance team also requires full audit trails through CloudWatch Logs and monitoring dashboards that track the entire flow from API Gateway through Lambda to DynamoDB. We need this to be production-ready from day one.
 
-The architecture should handle webhook validation, data transformation based on the provider, and orchestrate the whole process reliably. If something fails, we need to capture it in a dead letter queue so we can investigate and replay those events later.
+The architecture should handle webhook validation, data transformation based on the provider, and orchestrate the whole process reliably. API Gateway receives incoming webhooks and routes them to Lambda for processing. Lambda validates signatures, transforms data, and stores results in DynamoDB. If Lambda processing fails, failed events are sent to SQS dead letter queue for investigation and replay. Step Functions coordinates the entire workflow from validation through storage.
 
 ## What we need to build
 
