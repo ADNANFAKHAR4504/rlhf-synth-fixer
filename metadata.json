@@ -17,9 +17,5 @@
     "Lambda",
     "IAM"
   ],
-  "wave": "P0",
-  "migrated_from": {
-    "po_id": "trainr69",
-    "pr": "Pr924"
-  }
+  "wave": "P0"
 }
