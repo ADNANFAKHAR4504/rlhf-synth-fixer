@@ -1,8 +1,11 @@
 # AWS DMS for Database Migration
 # Continuous replication from on-premises PostgreSQL to Aurora PostgreSQL
+# NOTE: DMS is disabled by default for LocalStack (requires Pro license)
 
 # DMS Subnet Group
 resource "aws_dms_replication_subnet_group" "main" {
+  count = var.enable_dms ? 1 : 0
+
   replication_subnet_group_id          = "dms-subnet-group-${var.environment_suffix}"
   replication_subnet_group_description = "DMS subnet group for database migration"
   subnet_ids                           = aws_subnet.private[*].id
@@ -17,6 +20,8 @@ resource "aws_dms_replication_subnet_group" "main" {
 
 # IAM Role for DMS
 resource "aws_iam_role" "dms" {
+  count = var.enable_dms ? 1 : 0
+
   name = "dms-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
@@ -41,8 +46,10 @@ resource "aws_iam_role" "dms" {
 }
 
 resource "aws_iam_role_policy" "dms_cloudwatch" {
+  count = var.enable_dms ? 1 : 0
+
   name = "dms-cloudwatch-policy-${var.environment_suffix}"
-  role = aws_iam_role.dms.id
+  role = aws_iam_role.dms[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -55,7 +62,7 @@ resource "aws_iam_role_policy" "dms_cloudwatch" {
           "logs:PutLogEvents",
           "logs:DescribeLogStreams"
         ]
-        Resource = "${aws_cloudwatch_log_group.dms.arn}:*"
+        Resource = "${aws_cloudwatch_log_group.dms[0].arn}:*"
       }
     ]
   })
@@ -63,6 +70,8 @@ resource "aws_iam_role_policy" "dms_cloudwatch" {
 
 # CloudWatch Log Group for DMS
 resource "aws_cloudwatch_log_group" "dms" {
+  count = var.enable_dms ? 1 : 0
+
   name              = "/aws/dms/${var.environment_suffix}"
   retention_in_days = 30
 
@@ -76,6 +85,8 @@ resource "aws_cloudwatch_log_group" "dms" {
 
 # DMS Replication Instance
 resource "aws_dms_replication_instance" "main" {
+  count = var.enable_dms ? 1 : 0
+
   replication_instance_id     = "dms-replication-${var.environment_suffix}"
   replication_instance_class  = "dms.t3.medium"
   allocated_storage           = 100
@@ -83,8 +94,8 @@ resource "aws_dms_replication_instance" "main" {
   auto_minor_version_upgrade  = true
   multi_az                    = true
   publicly_accessible         = false
-  replication_subnet_group_id = aws_dms_replication_subnet_group.main.id
-  vpc_security_group_ids      = [aws_security_group.dms.id]
+  replication_subnet_group_id = aws_dms_replication_subnet_group.main[0].id
+  vpc_security_group_ids      = [aws_security_group.dms[0].id]
 
   tags = {
     Name           = "dms-replication-${var.environment_suffix}"
@@ -98,6 +109,8 @@ resource "aws_dms_replication_instance" "main" {
 
 # DMS Source Endpoint - On-premises PostgreSQL
 resource "aws_dms_endpoint" "source" {
+  count = var.enable_dms ? 1 : 0
+
   endpoint_id   = "source-onprem-${var.environment_suffix}"
   endpoint_type = "source"
   engine_name   = "postgres"
@@ -118,6 +131,8 @@ resource "aws_dms_endpoint" "source" {
 
 # DMS Target Endpoint - Aurora PostgreSQL
 resource "aws_dms_endpoint" "target" {
+  count = var.enable_dms ? 1 : 0
+
   endpoint_id   = "target-aurora-${var.environment_suffix}"
   endpoint_type = "target"
   engine_name   = "aurora-postgresql"
@@ -138,11 +153,13 @@ resource "aws_dms_endpoint" "target" {
 
 # DMS Replication Task - Continuous replication
 resource "aws_dms_replication_task" "main" {
+  count = var.enable_dms ? 1 : 0
+
   replication_task_id      = "dms-task-${var.environment_suffix}"
   migration_type           = "full-load-and-cdc"
-  replication_instance_arn = aws_dms_replication_instance.main.replication_instance_arn
-  source_endpoint_arn      = aws_dms_endpoint.source.endpoint_arn
-  target_endpoint_arn      = aws_dms_endpoint.target.endpoint_arn
+  replication_instance_arn = aws_dms_replication_instance.main[0].replication_instance_arn
+  source_endpoint_arn      = aws_dms_endpoint.source[0].endpoint_arn
+  target_endpoint_arn      = aws_dms_endpoint.target[0].endpoint_arn
   table_mappings = jsonencode({
     rules = [
       {
@@ -240,6 +257,8 @@ resource "aws_dms_replication_task" "main" {
 
 # CloudWatch Alarm for DMS Replication Lag
 resource "aws_cloudwatch_metric_alarm" "dms_replication_lag" {
+  count = var.enable_dms ? 1 : 0
+
   alarm_name          = "dms-replication-lag-${var.environment_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
@@ -253,8 +272,8 @@ resource "aws_cloudwatch_metric_alarm" "dms_replication_lag" {
   ok_actions          = [aws_sns_topic.migration_alerts.arn]
 
   dimensions = {
-    ReplicationInstanceIdentifier = aws_dms_replication_instance.main.replication_instance_id
-    ReplicationTaskIdentifier     = aws_dms_replication_task.main.replication_task_id
+    ReplicationInstanceIdentifier = aws_dms_replication_instance.main[0].replication_instance_id
+    ReplicationTaskIdentifier     = aws_dms_replication_task.main[0].replication_task_id
   }
 
   tags = {

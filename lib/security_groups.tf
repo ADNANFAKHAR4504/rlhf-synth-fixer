@@ -60,8 +60,10 @@ resource "aws_security_group" "ecs" {
   }
 }
 
-# DMS Security Group
+# DMS Security Group (only when DMS is enabled)
 resource "aws_security_group" "dms" {
+  count = var.enable_dms ? 1 : 0
+
   name        = "dms-sg-${var.environment_suffix}"
   description = "Security group for DMS replication instance"
   vpc_id      = aws_vpc.main.id
@@ -104,12 +106,16 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.ecs.id]
   }
 
-  ingress {
-    description     = "PostgreSQL from DMS"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.dms.id]
+  # DMS ingress rule - only added when DMS is enabled
+  dynamic "ingress" {
+    for_each = var.enable_dms ? [1] : []
+    content {
+      description     = "PostgreSQL from DMS"
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      security_groups = [aws_security_group.dms[0].id]
+    }
   }
 
   egress {

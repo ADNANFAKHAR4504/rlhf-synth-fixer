@@ -106,6 +106,13 @@ variable "container_image" {
   default     = "nginx:latest"
 }
 
+# DMS Feature Toggle - Disabled for LocalStack (DMS requires Pro)
+variable "enable_dms" {
+  description = "Enable DMS resources (disabled for LocalStack as DMS requires Pro)"
+  type        = bool
+  default     = false
+}
+
 # DMS Variables for Database Migration
 variable "dms_source_server" {
   description = "On-premises PostgreSQL server hostname for DMS source"

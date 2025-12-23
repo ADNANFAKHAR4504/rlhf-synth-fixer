@@ -1,8 +1,8 @@
 environment_suffix = "synth101000886"
 aws_region         = "us-east-1"
 
-# DMS Configuration - using placeholder for testing
-dms_source_endpoint = "placeholder-onprem-db.example.com"
+# DMS disabled for LocalStack (requires Pro license)
+enable_dms = false
 
 # Route53 Configuration
 route53_zone_name = "synth101000886.example.com"
