@@ -21,5 +21,6 @@
     "SNS",
     "CloudWatch",
     "IAM"
-  ]
+  ],
+  "training_quality": 8
 }

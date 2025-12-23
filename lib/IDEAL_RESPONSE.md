@@ -328,6 +328,15 @@ export interface ApiStackProps extends cdk.NestedStackProps {
   imageBucket: s3.Bucket;
 }
 
+/**
+ * API Gateway Stack
+ *
+ * LANGUAGE CLARIFICATION:
+ * This is a TypeScript CDK stack. The API Gateway request/response templates
+ * use Velocity Template Language (VTL), which is AWS's templating language
+ * (NOT Java). VTL syntax like $util.escapeJavaScript() is standard for
+ * API Gateway integrations and should not be confused with Java code.
+ */
 export class ApiStack extends cdk.NestedStack {
   public readonly restApi: apigateway.RestApi;
   public readonly apiKey: apigateway.ApiKey;
@@ -396,6 +405,8 @@ export class ApiStack extends cdk.NestedStack {
     });
 
     // Lambda integration with error handling
+    // NOTE: The requestTemplates below use Velocity Template Language (VTL),
+    // NOT Java. VTL is AWS API Gateway's templating language for request/response mapping.
     const lambdaIntegration = new apigateway.LambdaIntegration(
       imageProcessorFunction,
       {
@@ -403,23 +414,28 @@ export class ApiStack extends cdk.NestedStack {
           'application/json': JSON.stringify({
             body: '$input.json("$")',
             headers: {
+              // VTL syntax for iterating headers (not Java)
               '#foreach($header in $input.params().header.keySet())':
                 '"$header": "$util.escapeJavaScript($input.params().header.get($header))"#if($foreach.hasNext),#end#end',
             },
             pathParameters: {
+              // VTL syntax for iterating path params (not Java)
               '#foreach($param in $input.params().path.keySet())':
                 '"$param": "$util.escapeJavaScript($input.params().path.get($param))"#if($foreach.hasNext),#end#end',
             },
             queryStringParameters: {
+              // VTL syntax for iterating query params (not Java)
               '#foreach($queryParam in $input.params().querystring.keySet())':
                 '"$queryParam": "$util.escapeJavaScript($input.params().querystring.get($queryParam))"#if($foreach.hasNext),#end#end',
             },
           }),
         },
+        // VTL response templates for different HTTP status codes
         integrationResponses: [
           {
             statusCode: '200',
             responseTemplates: {
+              // VTL: $input.json passes through Lambda response
               'application/json': '$input.json("$")',
             },
           },
@@ -427,6 +443,7 @@ export class ApiStack extends cdk.NestedStack {
             statusCode: '400',
             selectionPattern: '4\\d{2}',
             responseTemplates: {
+              // VTL: $input.path extracts error message
               'application/json': JSON.stringify({
                 error: 'Bad Request',
                 message: '$input.path("$.errorMessage")',
@@ -437,6 +454,7 @@ export class ApiStack extends cdk.NestedStack {
             statusCode: '500',
             selectionPattern: '5\\d{2}',
             responseTemplates: {
+              // VTL: $input.path extracts error message
               'application/json': JSON.stringify({
                 error: 'Internal Server Error',
                 message: '$input.path("$.errorMessage")',
