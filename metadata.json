@@ -11,5 +11,6 @@
     "Security Configuration as Code"
   ],
   "provider": "localstack",
-  "aws_services": []
+  "aws_services": [],
+  "wave": "P1"
 }
