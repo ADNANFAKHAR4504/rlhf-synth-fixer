@@ -295,6 +295,16 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // Fix for LocalStack: Explicitly set launch template version
+    if (isLocalStack) {
+      const cfnAsg = this.autoScalingGroup.node
+        .defaultChild as autoscaling.CfnAutoScalingGroup;
+      cfnAsg.launchTemplate = {
+        launchTemplateId: launchTemplate.launchTemplateId,
+        version: '$Latest',
+      };
+    }
+
     // Application Load Balancer
     this.loadBalancer = new elbv2.ApplicationLoadBalancer(
       this,
