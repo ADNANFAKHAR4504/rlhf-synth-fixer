@@ -48,7 +48,7 @@ function simpleEqual(actual: any, expected: any, message: string) {
 
 const region = process.env.AWS_REGION || 'us-west-2';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
+const stackName = `localstack-stack-${environmentSuffix}`;
 
 const cfnClient = new CloudFormationClient({ region });
 const ec2Client = new EC2Client({ region });
