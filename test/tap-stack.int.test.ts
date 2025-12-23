@@ -27,10 +27,24 @@ if (fs.existsSync(outputsPath)) {
   outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 }
 
+// LocalStack detection and configuration
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+                     process.env.LOCALSTACK === 'true';
+
+const localStackConfig = isLocalStack ? {
+  endpoint: process.env.AWS_ENDPOINT_URL || 'http://localhost:4566',
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: 'test',
+    secretAccessKey: 'test',
+  },
+} : {};
+
 // Configure AWS clients
-const s3Client = new S3Client({ region: 'us-east-1' });
-const codeBuildClient = new CodeBuildClient({ region: 'us-east-1' });
-const codePipelineClient = new CodePipelineClient({ region: 'us-east-1' });
+const s3Client = new S3Client({ region: 'us-east-1', ...localStackConfig });
+const codeBuildClient = new CodeBuildClient({ region: 'us-east-1', ...localStackConfig });
+const codePipelineClient = new CodePipelineClient({ region: 'us-east-1', ...localStackConfig });
 
 describe('CI/CD Pipeline Integration Tests', () => {
   const sourceBucketName = outputs.SourceBucketName;
