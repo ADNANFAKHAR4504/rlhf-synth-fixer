@@ -1,0 +1,25 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "w6m3c2w2",
+  "team": "synth",
+  "startedAt": "2025-12-04T22:06:00-08:00",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "KMS",
+    "S3",
+    "CodeBuild",
+    "Lambda",
+    "IAM",
+    "SNS",
+    "EventBridge",
+    "CloudWatch"
+  ],
+  "wave": "P0"
+}
