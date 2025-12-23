@@ -25,6 +25,6 @@
     "SecretsManager",
     "SNS",
     "IAM"
-  ]
+  ],
   "wave": "P0"
 }
