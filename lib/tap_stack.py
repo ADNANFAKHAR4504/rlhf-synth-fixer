@@ -1,3 +1,4 @@
+# tap_stack.py
 from typing import Optional
 import pulumi
 import pulumi_aws as aws
@@ -33,7 +34,7 @@ class TapStack(pulumi.ComponentResource):
         self.regional_data_protection = {}
         self.providers = {}
 
-        print("🔐 Creating Identity and Access Infrastructure...")
+        print("Creating Identity and Access Infrastructure...")
         self.identity_access = IdentityAccessInfrastructure(
             name=f"secure-projectx-identity-{self.environment_suffix}",
             tags=self.tags,
@@ -44,7 +45,7 @@ class TapStack(pulumi.ComponentResource):
         for region in self.regions:
             region_suffix = region.replace('-', '')
 
-            print(f"🌍 Setting up AWS provider for region: {region}")
+            print(f"Setting up AWS provider for region: {region}")
             self.providers[region] = aws.Provider(
                 f"aws-provider-{region}-{self.environment_suffix}",
                 region=region
@@ -57,7 +58,7 @@ class TapStack(pulumi.ComponentResource):
                     depends_on=deps or []
                 )
 
-            print(f"🌐 Creating Networking Infrastructure for {region}...")
+            print(f"Creating Networking Infrastructure for {region}...")
             self.regional_networks[region] = NetworkSecurityInfrastructure(
                 name=f"secure-projectx-network-{region_suffix}-{self.environment_suffix}",
                 region=region,
@@ -67,7 +68,7 @@ class TapStack(pulumi.ComponentResource):
                 opts=provider_opts([self.identity_access])
             )
 
-            print(f"📱 Creating Monitoring Infrastructure for {region}...")
+            print(f"Creating Monitoring Infrastructure for {region}...")
             self.regional_monitoring[region] = SecurityMonitoringInfrastructure(
                 name=f"secure-projectx-monitoring-{region_suffix}-{self.environment_suffix}",
                 region=region,
@@ -78,7 +79,7 @@ class TapStack(pulumi.ComponentResource):
                 ])
             )
 
-            print(f"🛡️ Creating Data Protection Infrastructure for {region}...")
+            print(f"Creating Data Protection Infrastructure for {region}...")
             self.regional_data_protection[region] = DataProtectionInfrastructure(
                 name=f"secure-projectx-data-{region_suffix}-{self.environment_suffix}",
                 region=region,
@@ -95,16 +96,7 @@ class TapStack(pulumi.ComponentResource):
                 ])
             )
 
-        # print("📊 Setting up VPC Flow Logs...")
-        # self.regional_monitoring[region].setup_vpc_flow_logs(
-        #   vpc_id=self.regional_networks[region].vpc_id,
-        #   opts=provider_opts([
-        #     self.regional_monitoring[region],
-        #     self.regional_networks[region]
-        #   ])
-        # )
-
-        print("📤 Exporting Outputs...")
+        print("Exporting Outputs...")
         # Export primary region (first in list) for backward compatibility
         primary_region = self.regions[0]
         pulumi.export("primary_vpc_id", self.regional_networks[primary_region].vpc_id)

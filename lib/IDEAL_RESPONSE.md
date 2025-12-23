@@ -99,15 +99,6 @@ class TapStack(pulumi.ComponentResource):
                 ])
             )
 
-        # print("📊 Setting up VPC Flow Logs...")
-        # self.regional_monitoring[region].setup_vpc_flow_logs(
-        #   vpc_id=self.regional_networks[region].vpc_id,
-        #   opts=provider_opts([
-        #     self.regional_monitoring[region],
-        #     self.regional_networks[region]
-        #   ])
-        # )
-
         print("Exporting Outputs...")
         # Export primary region (first in list) for backward compatibility
         primary_region = self.regions[0]
