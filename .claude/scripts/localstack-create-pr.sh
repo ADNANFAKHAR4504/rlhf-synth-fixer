@@ -160,7 +160,7 @@ if [ -f "$WORK_DIR/metadata.json" ]; then
   done
   
   # Check for disallowed fields (schema has additionalProperties: false)
-  DISALLOWED_FIELDS=("coverage" "author" "dockerS3Location" "training_quality" "task_id" "pr_id" "localstack_migration" "original_po_id" "original_pr_id")
+  DISALLOWED_FIELDS=("coverage" "author" "dockerS3Location" "training_quality" "task_id" "pr_id" "localstack_migration" "original_po_id" "original_pr_id" "testDependencies" "background" "training_quality_justification")
   for field in "${DISALLOWED_FIELDS[@]}"; do
     if jq -e ".$field" "$WORK_DIR/metadata.json" &>/dev/null; then
       log_error "Disallowed field still present after sanitization: $field"

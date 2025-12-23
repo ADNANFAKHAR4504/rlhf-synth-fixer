@@ -300,12 +300,15 @@ metadata:
   fields_to_remove:
     - task_id # Use po_id instead
     - training_quality
+    - training_quality_justification
     - coverage
     - author
     - dockerS3Location
     - pr_id
     - original_pr_id
     - localstack_migration
+    - testDependencies
+    - background
 
   # Valid subtask values (from schema enum)
   valid_subtasks:
@@ -583,7 +586,7 @@ intelligent_fixes:
   prioritize_by_frequency: true # Most common fixes first
   skip_inapplicable_fixes: true # Don't run S3 fixes if no S3 used
   learn_from_history: true # Track which fixes worked for similar tasks
-  
+
   # Error pattern to fix mapping (for intelligent ordering)
   error_fix_mapping:
     endpoint_errors:
@@ -595,7 +598,7 @@ intelligent_fixes:
         - 'connection refused'
       fix: 'endpoint_config'
       priority: 1
-      
+
     s3_errors:
       patterns:
         - 'S3'
@@ -605,7 +608,7 @@ intelligent_fixes:
         - 'virtual.hosted'
       fix: 's3_path_style'
       priority: 2
-      
+
     iam_errors:
       patterns:
         - 'AccessDenied'
@@ -615,7 +618,7 @@ intelligent_fixes:
         - 'malformed'
       fix: 'iam_simplify'
       priority: 3
-      
+
     type_errors:
       patterns:
         - 'TypeError'
@@ -624,7 +627,7 @@ intelligent_fixes:
         - 'cannot find'
       fix: 'typescript_fix'
       priority: 1
-      
+
     lint_errors:
       patterns:
         - 'eslint'
@@ -633,7 +636,7 @@ intelligent_fixes:
         - 'formatting'
       fix: 'lint_fix'
       priority: 2
-      
+
     test_errors:
       patterns:
         - 'jest'
@@ -642,7 +645,7 @@ intelligent_fixes:
         - 'expect'
       fix: 'test_config'
       priority: 4
-      
+
     metadata_errors:
       patterns:
         - 'metadata'
@@ -651,7 +654,7 @@ intelligent_fixes:
         - 'additionalProperties'
       fix: 'metadata_fix'
       priority: 0 # Highest priority
-      
+
   # Service detection patterns (for skip_inapplicable_fixes)
   service_detection:
     s3:
@@ -698,7 +701,7 @@ intelligent_fixes:
 compatibility_check:
   enabled: true
   script_path: '.claude/scripts/localstack-compatibility-check.sh'
-  
+
   # Scoring weights
   scoring:
     base_score: 100
@@ -706,7 +709,7 @@ compatibility_check:
     medium_compat_service: -10
     low_compat_service: -25
     pro_only_service: -50
-    
+
     # Platform adjustments
     platform_scores:
       cfn-yaml: 10
@@ -719,27 +722,27 @@ compatibility_check:
       pulumi-ts: -5
       pulumi-py: -5
       pulumi-go: -10
-      
+
     # Complexity adjustments
     complexity_scores:
       medium: 0
       hard: -10
       expert: -20
-      
+
   # Success probability thresholds
   thresholds:
     high_probability: 80 # >= 80% = high success chance
     medium_probability: 60 # >= 60% = medium success chance
     low_probability: 40 # >= 40% = low success chance
     # < 40% = likely to fail
-    
+
   # Time estimation (minutes)
   time_estimates:
     base_time: 5
     per_fix_time: 2
     per_low_compat_service: 3
     per_medium_compat_service: 1
-    
+
   # Output format
   output_template: |
     ═══════════════════════════════════════════════════════════════
@@ -747,15 +750,15 @@ compatibility_check:
     ═══════════════════════════════════════════════════════════════
     Task: {task_id} ({platform})
     Compatibility Score: {score}/100
-    
+
     {services_section}
-    
+
     📋 Predicted Fixes Needed:
     {predicted_fixes}
-    
+
     ⏱️ Estimated Time: {estimated_time}
     🎯 Success Probability: {probability}%
-    
+
     Recommendation: {recommendation}
 
 # ═══════════════════════════════════════════════════════════════
@@ -766,17 +769,17 @@ fix_templates:
   enabled: true
   template_directory: '.claude/templates/localstack-fixes/'
   cache_directory: '.claude/cache/fix-patterns/'
-  
+
   # Save successful fix patterns
   save_successful_fixes: true
   max_cached_patterns: 100
-  
+
   # Template matching
   match_by:
     - platform
     - language
     - services_used
-    
+
   # Platform-specific templates
   templates:
     cdk-ts-basic:
@@ -793,7 +796,7 @@ fix_templates:
           // LocalStack configuration
           const isLocalStack = process.env.LOCALSTACK_HOSTNAME || process.env.AWS_ENDPOINT_URL;
           const localstackEndpoint = isLocalStack ? 'http://localhost:4566' : undefined;
-          
+
     cdk-ts-s3-lambda:
       description: 'CDK TypeScript with S3 + Lambda'
       applies_to:
@@ -817,7 +820,7 @@ fix_templates:
               bucketName: 'my-bucket-' + this.account,
             }),
           });
-          
+
     cfn-yaml-basic:
       description: 'CloudFormation YAML basic setup'
       applies_to:
@@ -830,7 +833,7 @@ fix_templates:
         deletion_policy: |
           # Add DeletionPolicy for LocalStack
           DeletionPolicy: Delete
-          
+
     tf-hcl-basic:
       description: 'Terraform HCL basic setup'
       applies_to:
@@ -861,7 +864,7 @@ fix_templates:
             
             s3_use_path_style = true
           }
-          
+
     pulumi-ts-basic:
       description: 'Pulumi TypeScript basic setup'
       applies_to:
@@ -898,19 +901,19 @@ dashboard:
   enabled: true
   script_path: '.claude/scripts/localstack-dashboard.sh'
   refresh_interval: 5 # seconds
-  
+
   # Status file locations
   status_directory: '.claude/reports/dashboard/'
   active_migrations_file: '.claude/reports/dashboard/active.json'
   history_file: '.claude/reports/dashboard/history.json'
-  
+
   # Display settings
   display:
     show_progress_bar: true
     show_elapsed_time: true
     show_estimated_remaining: true
     max_visible_migrations: 10
-    
+
   # Status indicators
   status_icons:
     pending: '⏳'
@@ -922,7 +925,7 @@ dashboard:
     completed: '✅'
     failed: '❌'
     blocked: '🚫'
-    
+
   # Metrics tracking
   metrics:
     track_daily_stats: true
@@ -938,20 +941,20 @@ dashboard:
 rollback:
   enabled: true
   script_path: '.claude/scripts/localstack-rollback.sh'
-  
+
   # Snapshot settings
   snapshots:
     enabled: true
     directory: '.claude/snapshots/'
     max_snapshots_per_pr: 3
     auto_snapshot_before_fix: true
-    
+
   # Rollback triggers
   auto_rollback:
     enabled: false # Manual rollback only by default
     on_consecutive_failures: 3 # Auto-rollback after N failures
     on_test_regression: true # Auto-rollback if tests that passed now fail
-    
+
   # Rollback scope options
   scope:
     full: 'Rollback all changes to original state'
@@ -965,7 +968,7 @@ rollback:
 # ═══════════════════════════════════════════════════════════════
 service_substitutions:
   enabled: true
-  
+
   # Pro-only services → Community alternatives
   substitutions:
     appsync:
@@ -980,7 +983,7 @@ service_substitutions:
       code_example: |
         // Instead of AppSync GraphQL API:
         // const api = new appsync.GraphqlApi(...)
-        
+
         // Use API Gateway + Lambda:
         const api = new apigateway.RestApi(this, 'Api');
         const handler = new lambda.Function(this, 'Handler', {
@@ -989,7 +992,7 @@ service_substitutions:
           code: lambda.Code.fromAsset('lambda'),
         });
         api.root.addMethod('POST', new apigateway.LambdaIntegration(handler));
-        
+
     eks:
       alternative: 'ecs'
       description: 'Replace EKS with ECS (limited LocalStack support)'
@@ -999,7 +1002,7 @@ service_substitutions:
         - 'Replace kubectl commands with ECS CLI'
         - 'Update service discovery configuration'
       note: 'ECS has limited LocalStack support - consider mocking'
-      
+
     cognito-idp:
       alternative: 'iam + lambda-authorizer'
       description: 'Replace Cognito with IAM + Lambda authorizer'
@@ -1015,11 +1018,11 @@ service_substitutions:
           handler: 'authorizer.handler',
           code: lambda.Code.fromAsset('lambda'),
         });
-        
+
         const auth = new apigateway.TokenAuthorizer(this, 'TokenAuth', {
           handler: authorizer,
         });
-        
+
     amplify:
       alternative: 's3 + cloudfront (static hosting)'
       description: 'Replace Amplify with S3 static hosting'
@@ -1036,7 +1039,7 @@ service_substitutions:
           publicReadAccess: true,
           removalPolicy: cdk.RemovalPolicy.DESTROY,
         });
-        
+
     sagemaker:
       alternative: 'lambda (for inference)'
       description: 'Replace SageMaker with Lambda for simple inference'
@@ -1046,7 +1049,7 @@ service_substitutions:
         - 'Create Lambda function for inference'
         - 'Update client code to call Lambda'
       note: 'Only suitable for small models - consider mocking for tests'
-      
+
     rds:
       alternative: 'dynamodb or mock'
       description: 'Replace RDS with DynamoDB or mock database'
@@ -1055,7 +1058,7 @@ service_substitutions:
         - 'Evaluate if DynamoDB can replace RDS'
         - 'If not, use mock database for testing'
         - 'Update connection strings for LocalStack'
-        
+
     elasticache:
       alternative: 'dynamodb (for caching)'
       description: 'Replace ElastiCache with DynamoDB TTL'
@@ -1072,19 +1075,19 @@ service_substitutions:
 test_enhancement:
   enabled: true
   script_path: '.claude/scripts/localstack-enhance-tests.sh'
-  
+
   # Auto-add LocalStack endpoint configuration to tests
   add_endpoint_config: true
-  
+
   # Add cleanup after tests
   add_cleanup_hooks: true
-  
+
   # Timeout settings for LocalStack (slower than AWS)
   timeouts:
     default: 30000 # 30 seconds
     deployment: 60000 # 60 seconds
     api_call: 10000 # 10 seconds
-    
+
   # Retry logic for flaky LocalStack operations
   retry_config:
     enabled: true
@@ -1096,7 +1099,7 @@ test_enhancement:
       - 'socket hang up'
       - 'ResourceNotFoundException'
       - 'ServiceUnavailable'
-      
+
   # Test file patterns
   test_patterns:
     integration_tests:
@@ -1109,7 +1112,7 @@ test_enhancement:
       - '**/*.unit.test.js'
       - '**/*.test.ts'
       - '**/*.test.js'
-      
+
   # Code snippets for test enhancement
   snippets:
     jest_setup: |
@@ -1127,7 +1130,7 @@ test_enhancement:
           }
         }
       });
-      
+
     jest_cleanup: |
       // LocalStack test cleanup
       afterAll(async () => {
@@ -1138,7 +1141,7 @@ test_enhancement:
           console.warn('Cleanup warning:', e.message);
         }
       });
-      
+
     aws_client_config: |
       // LocalStack AWS client configuration
       const getLocalStackConfig = () => ({
@@ -1150,7 +1153,7 @@ test_enhancement:
         },
         forcePathStyle: true, // Required for S3
       });
-      
+
     retry_helper: |
       // Retry helper for flaky operations
       async function withRetry<T>(

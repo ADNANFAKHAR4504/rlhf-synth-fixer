@@ -54,11 +54,11 @@ grep -iE "error|failed" deploy.log test.log
 
 ### Why This Matters:
 
-| Action | CI Credits Used | Recommended |
-|--------|----------------|-------------|
-| Local pre-validation | 0 | ✅ Always do first |
-| Local LocalStack deploy | 0 | ✅ Test before push |
-| PR push to CI | **Credits consumed** | ⚠️ Max 2 times |
+| Action                  | CI Credits Used      | Recommended         |
+| ----------------------- | -------------------- | ------------------- |
+| Local pre-validation    | 0                    | ✅ Always do first  |
+| Local LocalStack deploy | 0                    | ✅ Test before push |
+| PR push to CI           | **Credits consumed** | ⚠️ Max 2 times      |
 
 ## Configuration
 
@@ -745,6 +745,7 @@ batch_fix:
 ```
 
 **⚠️ CI Credit Conservation Settings:**
+
 - `max_cicd_iterations: 2` - Hard limit on CI pushes
 - `enforce_local_validation: true` - Must pass local checks before push
 - Run `localstack-prevalidate.sh` before ANY push to CI
@@ -1584,11 +1585,17 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
           jq '
             # Ensure subtask is a string
             .subtask = (if .subtask | type == "array" then .subtask[0] // "Infrastructure QA and Management" else .subtask // "Infrastructure QA and Management" end) |
+            # Ensure subject_labels is an array
+            .subject_labels = (if .subject_labels | type == "array" then .subject_labels elif .subject_labels | type == "string" then [.subject_labels] else ["General Infrastructure Tooling QA"] end) |
+            # Ensure aws_services is an array
+            .aws_services = (if .aws_services | type == "array" then .aws_services elif .aws_services | type == "string" then (.aws_services | split(",") | map(gsub("^\\s+|\\s+$"; ""))) else [] end) |
             # Set required fields
             .provider = "localstack" |
             .team = "synth-2" |
+            .wave = (.wave // "P1") |
+            .startedAt = (.startedAt // (now | todate)) |
             # Remove disallowed fields
-            del(.task_id, .training_quality, .coverage, .author, .dockerS3Location, .pr_id, .original_pr_id, .localstack_migration)
+            del(.task_id, .training_quality, .training_quality_justification, .coverage, .author, .dockerS3Location, .pr_id, .original_pr_id, .localstack_migration, .testDependencies, .background)
           ' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
 
           echo " metadata.json sanitized (inline)"

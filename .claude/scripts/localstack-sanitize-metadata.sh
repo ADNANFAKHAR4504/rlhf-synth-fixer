@@ -210,12 +210,30 @@ jq --argjson valid_subtasks "$VALID_SUBTASKS" \
     subtask: (.subtask | enforce_subtask_string),
     provider: "localstack",
     subject_labels: (
-      [.subject_labels[]? | map_label]
+      # Handle both array and string types for subject_labels
+      (if (.subject_labels | type) == "array" then
+        .subject_labels
+      elif (.subject_labels | type) == "string" then
+        [.subject_labels]
+      else
+        []
+      end)
+      | map(map_label)
       | unique
       | map(select(. as $l | $valid_labels | index($l)))
       | if length == 0 then ["General Infrastructure Tooling QA"] else . end
     ),
-    aws_services: (.aws_services // []),
+    aws_services: (
+      # Handle both array and string types for aws_services
+      if (.aws_services | type) == "array" then
+        .aws_services
+      elif (.aws_services | type) == "string" then
+        # Split comma-separated string into array
+        (.aws_services | split(",") | map(gsub("^\\s+|\\s+$"; "")))
+      else
+        []
+      end
+    ),
     wave: (.wave // "P1")
   }
   # Add migrated_from object only if we have the original PR reference
@@ -267,7 +285,7 @@ if [ ${#MISSING_FIELDS[@]} -gt 0 ]; then
 fi
 
 # Validate that no disallowed fields are present (schema has additionalProperties: false)
-DISALLOWED_FIELDS=("coverage" "author" "dockerS3Location" "training_quality" "task_id" "pr_id" "localstack_migration" "original_po_id" "original_pr_id")
+DISALLOWED_FIELDS=("coverage" "author" "dockerS3Location" "training_quality" "task_id" "pr_id" "localstack_migration" "original_po_id" "original_pr_id" "testDependencies" "background" "training_quality_justification")
 FOUND_DISALLOWED=()
 
 for field in "${DISALLOWED_FIELDS[@]}"; do

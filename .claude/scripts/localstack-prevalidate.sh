@@ -261,7 +261,7 @@ if [[ -f "metadata.json" ]]; then
     
     # Remove disallowed fields
     # NOTE: original_po_id and original_pr_id are NOW ALLOWED for LocalStack migration tracking
-    DISALLOWED_FIELDS=("task_id" "training_quality" "coverage" "author" "dockerS3Location" "pr_id" "localstack_migration")
+    DISALLOWED_FIELDS=("task_id" "training_quality" "coverage" "author" "dockerS3Location" "pr_id" "localstack_migration" "testDependencies" "background" "training_quality_justification")
     for field in "${DISALLOWED_FIELDS[@]}"; do
       if jq -e ".$field" metadata.json &>/dev/null; then
         log_warning "Found disallowed field: $field"
