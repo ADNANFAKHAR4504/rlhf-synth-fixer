@@ -3,7 +3,7 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "229155",
+  "po_id": "LS-229155",
   "team": "synth-2",
   "startedAt": "2025-07-29T15:12:43.000Z",
   "subtask": "Provisioning of Infrastructure Environments",
@@ -27,5 +27,6 @@
     "Secrets Manager",
     "CloudWatch",
     "IAM"
-  ]
+  ],
+  "wave": "P0"
 }
