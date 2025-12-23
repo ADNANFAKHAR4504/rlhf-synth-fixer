@@ -1,9 +1,11 @@
+
+
 {
   "compilerOptions": {
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["es2022", "dom"],
+    "lib": ["es2022"],
     "declaration": true,
     "strict": true,
     "noImplicitAny": true,
@@ -19,9 +21,23 @@
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
     "typeRoots": ["./node_modules/@types"],
+    "types": ["node", "jest"],
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "outDir": "dist"
   },
-  "exclude": ["node_modules", "cdk.out", "templates", "archive"]
+  "exclude": [
+    "node_modules",
+    "cdk.out",
+    "templates",
+    "archive",
+    "archive-localstack",
+    "subcategory-references",
+    "worktree",
+    "test",
+    "tests",
+    "cli",
+    "**/*.d.ts"
+  ]
 }
