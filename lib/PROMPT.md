@@ -1,66 +1,52 @@
 
 ## Objective
-Migrate an existing cloud infrastructure to AWS CloudFormation, using a **single YAML template** that defines a secure, scalable, and cost-efficient architecture. The template must maintain service continuity, modular logical separation (within the file), and follow AWS best practices.
+Migrate existing cloud infrastructure to AWS CloudFormation using a single YAML template. The infrastructure should be secure, scalable, and cost-efficient in us-east-1.
+
 ---
 
-## Requirements
+## Infrastructure Architecture
 
-### 1. **Single Template Structure**
-- Create infrastructure using a **single CloudFormation template**.
-- The template must be in **YAML format**.
-- Maintain logical separation within the template using comments and organized sections (e.g., networking, compute, database, IAM).
+### Core Components
+- VPC with public and private subnets across multiple AZs
+- Application Load Balancer in public subnets that routes traffic to EC2 instances
+- Auto Scaling group of EC2 instances in private subnets running the application
+- RDS database in private subnets that applications connect to
+- S3 bucket for logs that CloudTrail writes to
+- Lambda functions triggered by S3 events for log processing
+- DynamoDB table that Lambda writes processed metrics to
+- CloudFront distribution that serves static content from S3
+- SNS topic for alerts that Auto Scaling and CloudWatch send notifications to
 
-### 2. **Resource Dependencies**
-- Define clear **dependencies between resources** using:
-  - `DependsOn`
-  - `Ref` and `GetAtt` for resource references
-  - Proper ordering of resource creation
+### Service Connectivity Requirements
+- ALB must forward HTTP/HTTPS traffic to EC2 instances on specific ports
+- EC2 instances need IAM role with permissions to read from S3 and write to CloudWatch
+- RDS must be accessible only from EC2 security group
+- Lambda needs IAM role with S3 read access and DynamoDB write access
+- CloudTrail writes all stack operations to the S3 logging bucket
+- KMS keys encrypt EBS volumes attached to EC2 and RDS storage
+- CloudWatch Logs collects logs from EC2 instances and Lambda functions
+- SNS topic subscribers receive Auto Scaling lifecycle events and CloudWatch alarms
 
-### 3. **Region Configuration**
-- All resources must be created in the **`us-east-1`** AWS region.
+### Template Structure
+- Single CloudFormation YAML template with clear resource organization
+- Use Ref and GetAtt to link resources together
+- Set explicit DependsOn where creation order matters
+- Parameterize instance types, counts, key names, and environment suffix
 
-### 4. **Use of Intrinsic Functions**
-- Use intrinsic functions appropriately:
-  - `Ref`
-  - `GetAtt`
-  - `Sub`
-  - `Join`
-  - `Select`
+### Security Configuration
+- IAM roles with specific permissions scoped to exact resources
+- EC2 instances use role that allows reading specific S3 paths and writing to specific log groups
+- Lambda execution role allows reading from specific S3 bucket and writing to specific DynamoDB table
+- Security groups restrict traffic to minimum required ports and CIDR ranges
+- All data encrypted at rest using KMS customer-managed keys
+- S3 buckets have public access blocked and SSL-only policies
 
-### 5. **Parameterization**
-- Define **parameters** for:
-  - Instance types (e.g., `t3.micro`, `m5.large`)
-  - Instance counts
-  - Key names
-  - Environment suffixes (`dev`, `prod`, etc.)
-
-### 6. **Non-Disruptive Updates**
-- Design the stacks for **update safety**:
-  - Use `UpdatePolicy`, `CreationPolicy`, and `AutoScalingRollingUpdate` where needed.
-  - Avoid changes that trigger resource replacement unless necessary.
-
-### 7. **Operation Logging**
-- Enable **stack operation logging**:
-  - Set up an **S3 bucket** for logging.
-  - Enable CloudFormation **Stack Policy Logging**, **Change Set auditing**, and **CloudTrail logging** for stack operations.
-
-### 8. **Security and Access Management**
-- Use **IAM roles** and policies for:
-  - EC2 instances
-  - Lambda functions
-  - Service-to-service access control
-- Ensure least-privilege principle across services.
-
-### 9. **Data Encryption**
-- Use **AWS KMS**:
-  - Encrypt EBS volumes
-  - Encrypt S3 buckets
-  - Use customer-managed KMS keys where required
-
-### 10. **Cost Optimization**
-- Utilize **on-demand instances** or **spot instances** where appropriate.
-- Avoid over-provisioning.
-- Apply autoscaling with defined min/max/desired counts.
+### Operational Requirements
+- Enable CloudTrail to log all CloudFormation stack operations
+- Configure S3 bucket lifecycle policies to archive old logs
+- Set up CloudWatch alarms that trigger when Auto Scaling changes capacity
+- Use UpdatePolicy for zero-downtime deployments during stack updates
+- Auto Scaling should maintain 2-4 instances based on CPU utilization
 
 
 
