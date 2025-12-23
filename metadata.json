@@ -5,7 +5,7 @@
   "turn_type": "single",
   "po_id": "101000871",
   "team": "synth",
-  "startedAt": "2025-11-10T04:09:47",
+  "startedAt": "2025-11-10T04:09:47Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "Cloud Environment Setup"
