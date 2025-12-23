@@ -2,6 +2,7 @@
 VPC, EC2, LB Component - Creates isolated networking infrastructure
 """
 
+import os
 import ipaddress
 import pulumi
 import pulumi_aws as aws
@@ -249,17 +250,24 @@ class ComputeComponent(pulumi.ComponentResource):
         # Create instsances
         self.ec2_instances = []
 
+        # Check if running in LocalStack
+        is_localstack = os.getenv('PROVIDER', '').lower() == 'localstack'
+
         # LocalStack-compatible: Use static AMI ID instead of dynamic lookup
         # In production AWS, this would use aws.ec2.get_ami() to find the latest Ubuntu AMI
-        # For LocalStack testing, we use a static AMI ID that LocalStack
-        # accepts
-        ubuntu_ami_id = "ami-0c55b159cbfafe1f0"
+        # For LocalStack testing, we use a LocalStack-specific AMI ID
+        if is_localstack:
+            # LocalStack accepts this generic AMI ID
+            ubuntu_ami_id = "ami-ff0fea8310f3"
+        else:
+            # AWS AMI ID for Ubuntu (us-east-1)
+            ubuntu_ami_id = "ami-0c55b159cbfafe1f0"
 
         # Loop through 2 public subnets (max) and create EC2 instances
         for i, subnet in enumerate(self.public_subnets):
             instance = aws.ec2.Instance(
                 f"{name}-ec2-{i + 1}",
-                # Using static AMI ID for LocalStack compatibility
+                # Using static AMI ID for LocalStack/AWS compatibility
                 ami=ubuntu_ami_id,
                 instance_type="t2.micro",  # Use t2.micro for LocalStack compatibility
                 subnet_id=subnet.id,
