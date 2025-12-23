@@ -3,14 +3,14 @@
   "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "291705",
+  "po_id": "LS-291705",
   "team": "synth-2",
   "startedAt": "2025-08-04T18:04:25.753Z",
   "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "Web Application Deployment",
-    "Serverless Infrastructure (Functions as Code)"
+    "Serverless Infrastructure (Functions as Code)",
+    "Web Application Deployment"
   ],
   "aws_services": [
     "S3",
@@ -22,5 +22,6 @@
     "CloudWatch",
     "IAM"
   ],
+  "wave": "P1",
   "training_quality": 8
 }
