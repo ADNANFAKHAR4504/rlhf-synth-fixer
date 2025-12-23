@@ -4,6 +4,45 @@
 
 This is a complete **Terraform** implementation using **HCL** (HashiCorp Configuration Language). All infrastructure is defined in `.tf` files using Terraform resource blocks.
 
+**Example Terraform Configuration:**
+
+```hcl
+terraform {
+  required_version = ">= 1.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.region
+
+  default_tags {
+    tags = var.tags
+  }
+}
+
+resource "aws_eks_cluster" "main" {
+  name     = "eks-fargate-${var.environmentSuffix}"
+  role_arn = aws_iam_role.eks_cluster.arn
+  version  = var.cluster_version
+
+  vpc_config {
+    subnet_ids = concat(
+      aws_subnet.private[*].id,
+      aws_subnet.public[*].id
+    )
+    security_group_ids      = [aws_security_group.eks_cluster.id]
+    endpoint_private_access = true
+    endpoint_public_access  = true
+  }
+}
+```
+
 ## Summary
 
 Production-ready EKS cluster using ONLY Fargate compute profiles. Successfully deployed and tested with 28 AWS resources across 2 availability zones using Terraform.
