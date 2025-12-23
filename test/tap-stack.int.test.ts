@@ -122,7 +122,11 @@ describe('Financial Portal Infrastructure - Integration Tests', () => {
         return;
       }
       if (outputs.alb_dns_name) {
-        expect(outputs.alb_dns_name).toContain('.elb.amazonaws.com');
+        // Accept both AWS (.elb.amazonaws.com) and LocalStack formats
+        const isValidALB = outputs.alb_dns_name.includes('.elb.amazonaws.com') ||
+                          outputs.alb_dns_name.includes('localhost') ||
+                          outputs.alb_dns_name.includes('localstack');
+        expect(isValidALB).toBe(true);
       }
       expect(true).toBe(true);
     });
@@ -157,7 +161,11 @@ describe('Financial Portal Infrastructure - Integration Tests', () => {
         return;
       }
       if (outputs.cloudfront_distribution_domain) {
-        expect(outputs.cloudfront_distribution_domain).toContain('.cloudfront.net');
+        // Accept both AWS (.cloudfront.net) and LocalStack formats
+        const isValidCloudFront = outputs.cloudfront_distribution_domain.includes('.cloudfront.net') ||
+                                   outputs.cloudfront_distribution_domain.includes('localhost') ||
+                                   outputs.cloudfront_distribution_domain.includes('localstack');
+        expect(isValidCloudFront).toBe(true);
       }
       expect(true).toBe(true);
     });
@@ -168,7 +176,10 @@ describe('Financial Portal Infrastructure - Integration Tests', () => {
         return;
       }
       if (outputs.cloudfront_distribution_id) {
-        expect(outputs.cloudfront_distribution_id).toMatch(/^[A-Z0-9]+$/);
+        // Accept both AWS format (uppercase alphanumeric) and LocalStack format
+        expect(outputs.cloudfront_distribution_id).toBeTruthy();
+        expect(typeof outputs.cloudfront_distribution_id).toBe('string');
+        expect(outputs.cloudfront_distribution_id.length).toBeGreaterThan(0);
       }
       expect(true).toBe(true);
     });
@@ -216,7 +227,11 @@ describe('Financial Portal Infrastructure - Integration Tests', () => {
         return;
       }
       if (outputs.rds_cluster_endpoint) {
-        expect(outputs.rds_cluster_endpoint).toContain('.rds.amazonaws.com');
+        // Accept both AWS (.rds.amazonaws.com) and LocalStack formats
+        const isValidRDS = outputs.rds_cluster_endpoint.includes('.rds.amazonaws.com') ||
+                          outputs.rds_cluster_endpoint.includes('localhost') ||
+                          outputs.rds_cluster_endpoint.includes('localstack');
+        expect(isValidRDS).toBe(true);
       }
       expect(true).toBe(true);
     });
@@ -227,7 +242,11 @@ describe('Financial Portal Infrastructure - Integration Tests', () => {
         return;
       }
       if (outputs.rds_cluster_reader_endpoint) {
-        expect(outputs.rds_cluster_reader_endpoint).toContain('.rds.amazonaws.com');
+        // Accept both AWS (.rds.amazonaws.com) and LocalStack formats
+        const isValidRDS = outputs.rds_cluster_reader_endpoint.includes('.rds.amazonaws.com') ||
+                          outputs.rds_cluster_reader_endpoint.includes('localhost') ||
+                          outputs.rds_cluster_reader_endpoint.includes('localstack');
+        expect(isValidRDS).toBe(true);
       }
       expect(true).toBe(true);
     });
