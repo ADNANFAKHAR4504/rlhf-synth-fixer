@@ -348,17 +348,25 @@ The PR is created with standard project structure at the root level:
 └── cdk.json / Pulumi.yaml     # Platform config (if applicable)
 ```
 
-The `metadata.json` is updated with:
+The `metadata.json` is updated with migration tracking fields:
 
 ```json
 {
-  "pr_id": "ls-Pr7179",
-  "original_pr_id": "Pr7179",
-  "localstack_migration": true,
+  "po_id": "LS-trainr97",
   "provider": "localstack",
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "trainr97",
+    "pr": "Pr7179"
+  },
   ...
 }
 ```
+
+**Migration Tracking Fields:**
+- `po_id`: New ID with `LS-` prefix (e.g., `LS-trainr97`)
+- `migrated_from.po_id`: Original task's PO ID before migration
+- `migrated_from.pr`: Original PR number (e.g., `Pr7179`)
 
 The PR pipeline handles:
 
@@ -391,7 +399,25 @@ The schema has `additionalProperties: false`. These fields must be REMOVED:
 | `author` | Remove |
 | `dockerS3Location` | Remove |
 | `pr_id` | Remove |
-| `original_pr_id` | Remove |
+| `localstack_migration` | Remove (use `original_po_id` and `original_pr_id` for tracking) |
+
+### Migration Tracking Object (Optional)
+
+The `migrated_from` object tracks the original task lineage:
+
+```json
+{
+  "migrated_from": {
+    "po_id": "trainr97",
+    "pr": "Pr7179"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `migrated_from.po_id` | string | Original task PO ID before migration |
+| `migrated_from.pr` | string | Original PR number (e.g., `Pr7179`) |
 | `localstack_migration` | Remove |
 
 ### Subtask Mapping
