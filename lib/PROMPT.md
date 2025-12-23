@@ -1,186 +1,208 @@
-Functional scope (build everything new):
-Design and produce a complete `TapStack.yml` CloudFormation template that provisions a **brand-new**, production-ready AWS environment in `us-east-1` based on the following Python+Boto3 requirements, but implemented entirely as infrastructure-as-code in YAML (no JSON, no Python code in this file). The template must define **all resources from scratch** (no references to existing VPCs, subnets, security groups, roles, KMS keys, buckets, or databases), and must include all necessary parameters, conditions, mappings (if needed), resources, and outputs.
+# PROMPT 
 
-Reinterpret the original problem as a single CloudFormation stack that creates and wires the full environment below:
+I need help designing a **single CloudFormation YAML template** named `TapStack.yml` that builds a **brand-new, production-ready AWS environment** in **us-east-1**.
 
-1. **Global conventions and parameters**
+This is a fresh deployment. Nothing should reference existing AWS resources. Every VPC, subnet, role, key, bucket, table, database, and security group must be created inside this one stack.
 
-   * Define a parameter `EnvironmentSuffix` of type `String` that is used to distinguish multiple deployments of this stack.
+The goal is to translate what would normally be built using Python and Boto3 into **clean, readable CloudFormation YAML**, with security, cost control, and operational visibility in mind.
 
-     * Do **not** use `AllowedValues` for `EnvironmentSuffix`.
-     * Enforce a **safe naming regex** using `AllowedPattern` and `ConstraintDescription` instead (e.g., lowercase letters, digits, and hyphens only, reasonable length).
-   * Every **named resource** created by this template must include `${EnvironmentSuffix}` in its `BucketName`, `DBInstanceIdentifier`, `TableName`, `LogGroupName`, `TopicName`, `FunctionName`, `SecurityGroupName`, `ClusterIdentifier`, etc., to avoid conflicts between multiple deployments.
-   * Include additional parameters as needed for:
+---
 
-     * Project/stack name (e.g., `ProjectName`)
-     * VPC CIDR
-     * Public and private subnet CIDR blocks
-     * Bastion host allowed SSH CIDR
-     * EC2 instance type(s)
-     * RDS instance class, engine version, allocated storage
-     * DynamoDB read/write capacity baselines
-     * KMS key alias names
-   * Use **YAML syntax only** (no embedded JSON payloads, no `{"Key": "Value"}` inline maps).
+## General expectations
 
-2. **VPC, networking, and bastion host**
+* YAML only
+* One stack
+* No JSON blocks
+* No Python code
+* No references to existing infrastructure
+* Reasonable defaults that keep costs low but realistic
 
-   * Create a new **VPC** in `us-east-1` with:
+This should feel like something a senior cloud engineer would actually deploy.
 
-     * At least two public subnets (in different AZs).
-     * At least two private subnets (in different AZs).
-     * An Internet Gateway and route tables for public subnets.
-     * NAT Gateway(s) or equivalent routing setup for private subnets to reach the internet where needed.
-   * All subnet, VPC, and route table resource names/IDs must incorporate `${EnvironmentSuffix}` where a Name tag or identifier is used.
-   * Create a **bastion host EC2 instance** in a public subnet:
+---
 
-     * Minimal instance type (e.g., t3.micro) to keep costs low.
-     * Security group that allows SSH only from a parameterized CIDR (e.g., `BastionAllowedCidr`).
-     * Use IAM roles with least privilege access where required.
-   * Optionally enable **VPC Flow Logs** to CloudWatch Logs or S3, using KMS encryption to support auditing and debugging.
+## Environment naming and parameters
 
-3. **S3, lifecycle policies, and eventing**
+Add an `EnvironmentSuffix` parameter that lets me deploy the same stack multiple times without conflicts.
+Examples include dev, staging, or prod.
 
-   * Create a **new S3 bucket** dedicated to this stack with:
+Do not restrict values using a fixed list.
+Instead, validate it using a safe naming pattern that allows lowercase letters, numbers, and hyphens.
 
-     * Versioning enabled.
-     * Server-side encryption enabled using a **KMS CMK** (defined in this template).
-     * Lifecycle policies to transition older object versions to cheaper storage classes and eventually expire them, while balancing cost optimization and retention.
-     * All S3 logging (such as access logs) should be enabled where practical, with logs stored in an encrypted logging bucket (can be a separate bucket in this template, also suffixed with `${EnvironmentSuffix}`).
-   * Configure an **S3 event notification** that triggers a Lambda function whenever a relevant event occurs (e.g., `s3:ObjectCreated:*` on a specific prefix).
+Every named resource must include this suffix so deployments stay isolated.
 
-4. **Lambda function and API Gateway integration**
+Add other practical parameters where they make sense, such as:
 
-   * Define a **Lambda function** resource:
+* Project name
+* VPC CIDR
+* Subnet CIDRs
+* Instance sizes
+* Database sizing
+* SSH allowed CIDR
+* Capacity baselines for DynamoDB
 
-     * Name includes `${EnvironmentSuffix}`.
-     * Execution role created in this template with the **least privileges** required:
+---
 
-       * Read from the S3 bucket that triggers it.
-       * Write logs to CloudWatch Logs.
-       * Publish to SNS, access DynamoDB, or KMS decrypt/encrypt as needed by design.
-     * Use environment variables (where needed) with encryption using KMS.
-     * Configure a log group for the Lambda function with retention and KMS encryption.
-   * Create an **API Gateway (HTTP or REST) API** integrated with the Lambda function:
+## Networking and access
 
-     * Set up at least one method and resource path (e.g., `GET /status` or similar).
-     * Use appropriate IAM roles/lambda permissions to allow invocation.
-     * Enable access logging and execution logging through CloudWatch Logs, encrypted with KMS.
+Create a new VPC with:
 
-5. **DynamoDB with auto-scaling and KMS encryption**
+* Two public subnets in different availability zones
+* Two private subnets in different availability zones
+* Internet gateway and routing for public traffic
+* Outbound access for private subnets where required
 
-   * Create one or more **DynamoDB tables**:
+Include a small bastion EC2 instance in a public subnet:
 
-     * Table name(s) must include `${EnvironmentSuffix}`.
-     * Enable **server-side encryption** using a KMS CMK defined in this template (or AWS-managed KMS where appropriate, but prefer CMK for control).
-     * Configure **auto-scaling** for read and write capacity using Application Auto Scaling:
+* Cost-friendly instance type
+* SSH access limited to a configurable CIDR
+* Minimal IAM permissions
 
-       * Target tracking scaling policies with sensible min/max capacity bounds for cost control.
-   * IAM roles for Lambda, EC2 or other services must grant least-privilege access to these tables.
+If flow logs are enabled, send them to encrypted logs storage for auditing.
 
-6. **RDS with Multi-AZ and encryption**
+---
 
-   * Provision an **RDS instance** (for example, MySQL or PostgreSQL) with:
+## Storage and events
 
-     * Multi-AZ deployment enabled.
-     * Allocated storage and instance class parameters chosen with cost in mind.
-     * Storage encrypted with a **KMS CMK** defined in this template.
-     * Placed in private subnets only (no public access).
-     * Security group(s) that only allow inbound traffic from the application tier (e.g., EC2 instances or Lambda functions via VPC endpoints, depending on design).
-   * Store the database credentials in **AWS Secrets Manager** or **SSM Parameter Store (SecureString)** created in this template, encrypted with KMS, and reference them from application roles (Lambda/EC2) with least privilege.
+Create an S3 bucket dedicated to this stack:
 
-7. **EC2 application instance, IAM role, and security groups**
+* Versioning enabled
+* Encrypted using a customer-managed KMS key
+* Lifecycle rules that reduce storage cost over time
+* Access logging enabled to an encrypted logging bucket
 
-   * Launch an **EC2 instance** (separate from the bastion if needed) as an application host:
+Configure the bucket so object uploads trigger a Lambda function.
 
-     * Instance type parameterized and cost-conscious (e.g., t3.micro/t3.small).
-     * IAM instance role with a minimal permissions policy:
+---
 
-       * Access to specific S3 buckets, DynamoDB tables, SNS topics, or SSM parameters required by the app.
-       * CloudWatch Logs/metrics permissions for publishing logs/metrics.
-     * Attach a **security group** that:
+## Lambda and API access
 
-       * Allows inbound HTTP (port 80) from appropriate CIDR ranges (e.g., 0.0.0.0/0 for demo or a parameter).
-       * Allows inbound SSH (port 22) only from a restricted CIDR (e.g., same `BastionAllowedCidr` or a separate parameter).
-       * Denies all other inbound ports.
-   * Apply tags on the EC2 instance and related resources for cost allocation (Environment, Project, Owner, CostCenter, etc.).
+Create a Lambda function that:
 
-8. **SNS topic for notifications**
+* Uses a dedicated execution role
+* Can read from the S3 bucket
+* Can write logs
+* Can interact only with the services it truly needs
 
-   * Create an **SNS topic** with `${EnvironmentSuffix}` in its name.
-   * Enable KMS encryption for the SNS topic using a CMK from this template.
-   * Configure appropriate IAM policies to allow Lambda or other services to publish notifications.
-   * Optionally allow email subscription endpoints via a parameter.
+Encrypt environment variables using KMS.
 
-9. **KMS keys and encryption strategy**
+Expose a simple API endpoint through API Gateway that invokes this function.
+Enable access logging and execution logging with encryption and retention.
 
-   * Define one or more **KMS CMKs** in this template for:
+---
 
-     * S3 bucket encryption.
-     * DynamoDB table encryption (if not using AWS-managed).
-     * RDS storage.
-     * SNS topic and CloudWatch Logs where applicable.
-   * Configure key policies following best practices:
+## DynamoDB
 
-     * Allow the account root and a small set of IAM roles (defined in this template) to use and administer the keys.
-     * Keep policies least-privilege and avoid wildcards wherever possible.
+Create one or more DynamoDB tables that:
 
-10. **Monitoring, logging, and auditing**
+* Use customer-managed encryption
+* Include the environment suffix in the name
+* Support automatic scaling for read and write capacity
+* Use reasonable minimum and maximum limits to avoid over-provisioning
 
-    * Enable **CloudWatch metrics and alarms** for key resources, such as:
+Ensure only the required services can access the tables.
 
-      * EC2 instance CPU or status check failures.
-      * RDS CPU/storage/connection health.
-      * DynamoDB throttling rates.
-      * Lambda errors and throttles.
-    * Create **CloudWatch Log Groups** for:
+---
 
-      * Lambda functions.
-      * API Gateway access/execution logs.
-      * VPC Flow Logs (if enabled).
-      * Any application logs from EC2 (assume CloudWatch agent or similar).
-      * Ensure all log groups use KMS encryption and have sensible retention.
-    * Deploy **AWS CloudTrail**:
+## Relational database
 
-      * Multi-AZ or multi-region best practice configuration where reasonable but at least covering `us-east-1`.
-      * Store CloudTrail logs in an encrypted S3 bucket (can be dedicated logging bucket in this template).
-      * Optionally configure CloudWatch Logs integration for CloudTrail.
-    * Where possible, set up alarms on **unauthorized API calls** or security-relevant events using CloudWatch.
+Provision a managed database instance that:
 
-11. **Cost optimization and tagging**
+* Runs in private subnets only
+* Uses Multi-AZ for availability
+* Encrypts storage with KMS
+* Uses instance sizing that balances reliability and cost
 
-    * Choose cost-effective default instance sizes and capacity settings while still realistic for a small production-like environment.
-    * Apply **consistent tags** to all taggable resources:
+Store credentials securely using a managed secrets service.
+Grant access only to the workloads that need it.
 
-      * `Environment`, `Project`, `Owner`, `CostCenter`, `Application`, and any others useful for cost allocation and governance.
-    * Prefer auto-scaling and managed services defaults that avoid over-provisioning.
+---
 
-12. **IAM and security posture**
+## Application compute
 
-    * All IAM roles, instance profiles, and policies must be defined within this template:
+Launch an EC2 instance for application workloads:
 
-      * Lambda execution roles.
-      * EC2 instance roles (bastion and application).
-      * Any roles used by CloudWatch, CloudTrail, or other services created here.
-    * Follow **least-privilege** rigorously:
+* Parameterized instance type
+* Minimal IAM role permissions
+* Access limited by security groups
+* HTTP access controlled by CIDR
+* SSH access restricted to the bastion or a trusted range
 
-      * Scope permissions to specific resources created in this stack where possible.
-      * Avoid overly broad actions (`*`) unless genuinely required for a managed service integration.
-    * Where using AWS managed policies is suitable and realistic, you may attach them, but avoid overbroad combinations.
+Apply consistent tags for cost tracking and ownership.
 
-13. **Region and resiliency**
+---
 
-    * Assume the stack is deployed in `us-east-1`.
+## Notifications
 
-      * You may use a `Condition` to assert that `AWS::Region` must be `us-east-1` and fail or adjust resources if not.
-    * Use AZ-aware constructs for subnets, RDS Multi-AZ, and (if applicable) Lambda and Auto Scaling groups to enhance availability.
+Create an SNS topic for alerts and notifications:
 
-Deliverable:
-A single, self-contained **CloudFormation template file named `TapStack.yml`**, written **only in valid YAML**, that:
+* Encrypted using KMS
+* Publish access limited to approved services
+* Optional email subscription support through parameters
 
-* Implements all the infrastructure and wiring described above without referencing any pre-existing infrastructure components.
-* Defines all required **Parameters**, **Conditions**, **Mappings** (if used), **Resources**, and **Outputs**, including:
+---
 
-  * Outputs for key resource identifiers (VPC ID, subnet IDs, security group IDs, S3 bucket names, DynamoDB table names, RDS endpoint, API Gateway endpoint URL, SNS topic ARN, KMS key ARNs, etc.).
-* Uses `EnvironmentSuffix` everywhere necessary to keep deployments isolated and avoid naming collisions.
-* Reflects AWS and security best practices regarding encryption, least privilege, network isolation, monitoring, tagging, and cost optimization.
-* Is syntactically correct YAML (no JSON blocks) and suitable for deployment as a new stack in `us-east-1` via CloudFormation or a Boto3-based deployment pipeline.
+## Encryption strategy
+
+Define customer-managed KMS keys for:
+
+* S3
+* DynamoDB
+* Database storage
+* Logs
+* Notifications
+
+Key policies should:
+
+* Allow account administration
+* Grant usage only to the roles created in this stack
+* Avoid broad permissions
+
+---
+
+## Monitoring and auditability
+
+Enable monitoring for:
+
+* Compute health
+* Database health
+* Lambda errors
+* DynamoDB throttling
+
+Create encrypted log groups with sensible retention.
+Enable CloudTrail and store logs in encrypted storage.
+Where reasonable, surface security-related events through alarms.
+
+---
+
+## Cost awareness
+
+Defaults should reflect:
+
+* Small but production-realistic instance sizes
+* Auto-scaling instead of fixed capacity
+* Lifecycle rules to control storage growth
+
+Everything should be tagged consistently for cost allocation.
+
+---
+
+## Region control and resilience
+
+Assume deployment in us-east-1.
+Design subnets, databases, and networking with availability zones in mind.
+Use conditions if needed to enforce or adapt behavior based on region.
+
+---
+
+## Final output
+
+Deliver a single file named `TapStack.yml` that:
+
+* Is valid CloudFormation YAML
+* Can be deployed as a new stack
+* Creates all required infrastructure from scratch
+* Follows security and cost best practices
+* Exposes useful outputs like IDs, ARNs, and endpoints
+
+This should be something I can confidently deploy and evolve, not just a theoretical example.
