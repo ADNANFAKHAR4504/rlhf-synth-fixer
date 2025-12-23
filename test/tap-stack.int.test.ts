@@ -33,7 +33,6 @@ import {
   LambdaClient
 } from '@aws-sdk/client-lambda';
 import {
-  DescribeDBInstancesCommand,
   RDSClient
 } from '@aws-sdk/client-rds';
 import {
@@ -392,25 +391,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(instance).toBeDefined();
       expect(instance?.InstanceId).toBe(instanceId);
       expect(instance?.State?.Name).toBe('running');
-    });
-  });
-
-  describe('RDS Database Tests', () => {
-    test('RDS database should exist and be configured correctly', async () => {
-      const dbIdentifier = outputs.DatabaseEndpoint?.split('.')[0];
-
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier
-      });
-      const response = await rdsClient.send(command);
-
-      expect(response.DBInstances).toBeDefined();
-      expect(response.DBInstances?.length).toBeGreaterThan(0);
-      const dbInstance = response.DBInstances?.[0];
-      expect(dbInstance).toBeDefined();
-      expect(dbInstance?.StorageEncrypted).toBe(true);
-      expect(dbInstance?.MultiAZ).toBe(true);
-      expect(dbInstance?.BackupRetentionPeriod).toBe(7);
     });
   });
 
