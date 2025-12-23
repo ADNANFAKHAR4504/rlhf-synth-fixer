@@ -22,5 +22,6 @@
     "Amazon CloudWatch Logs",
     "Amazon CloudWatch Alarms",
     "AWS X-Ray"
-  ]
+  ],
+  "wave": "P1"
 }
