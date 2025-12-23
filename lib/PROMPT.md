@@ -1,7 +1,38 @@
-Deploy a secure multi-tier web application infrastructure with comprehensive security controls and governance. Application Load Balancer in public subnets distributes traffic to Auto Scaling Group instances running in private subnets across multiple availability zones. Instances connect through NAT Gateway for outbound internet access while remaining isolated from direct inbound traffic. Security groups enforce least-privilege access with ALB security group allowing HTTP and HTTPS from internet, and instance security group only accepting traffic from ALB security group on port 80.
+Prompt:
+You are acting as a Cloud Engineer responsible for designing a secure production environment on AWS. This must be implemented using CloudFormation in YAML, adhering to AWS best practices for security, scalability, and compliance.
 
-Application data stored in encrypted DynamoDB table with server-side encryption enabled and point-in-time recovery configured for disaster recovery. Static assets stored in S3 bucket with encryption at rest, versioning enabled for audit trail, and public access blocked through bucket policies. Separate logging bucket receives access logs from application bucket and ALB for security monitoring and compliance.
+The deployment region is us-west-2.
 
-IAM role attached to EC2 instances grants least-privilege permissions for DynamoDB table access, S3 bucket operations, CloudWatch Logs publishing, and Systems Manager Parameter Store reads. Instance profile associates IAM role with Auto Scaling Group instances. CloudWatch alarms monitor CPU utilization triggering Auto Scaling policies to scale instances up when CPU exceeds 70 percent and scale down when CPU drops below 30 percent. SNS topic receives alarm notifications and scaling events for operations team visibility.
+Requirements
+Your CloudFormation template must meet the following specifications:
 
-CloudWatch Logs captures application logs and system metrics for security analysis. Systems Manager Parameter Store securely stores application configuration with encryption. All resources tagged with project and team identifiers for cost allocation and governance. VPC flow logs enabled for network traffic analysis and security auditing.
+S3 Security
+All S3 buckets must be private by default.
+Enable server-side encryption with AWS KMS (SSE-KMS) for all data at rest.
+IAM Roles
+Define IAM roles following the principle of least privilege for all AWS services.
+EC2 & Auto Scaling
+All EC2 instances must be launched as part of an Auto Scaling Group (ASG).
+Minimum ASG capacity: 2 instances.
+Elastic Load Balancer (ELB)
+Integrate an ELB to distribute incoming traffic across the ASG.
+CloudTrail
+Enable CloudTrail to log all API calls.
+Deliver logs to a secure, encrypted S3 bucket.
+VPC
+Deploy all resources within a single, isolated VPC.
+AWS Config
+Enable AWS Config to track resource changes and generate compliance reports.
+Resource Tagging
+Apply the following tags to all resources:
+Environment: Production
+Project: IaC - AWS Nova Model Breaking
+Naming Conventions
+Follow AWS naming best practices.
+Append a prod suffix to all resource names.
+Expected Output
+A single YAML CloudFormation template named: secure_infrastructure.yaml
+The template must be:
+Complete
+Validated (passes cfn-lint / AWS validation)
+Deployable in us-west-2
