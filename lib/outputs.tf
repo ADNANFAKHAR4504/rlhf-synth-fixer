@@ -112,25 +112,26 @@ output "secondary_kms_alias_name" {
 # SERVICE CONTROL POLICY OUTPUTS
 #
 
-output "enforce_s3_encryption_policy_id" {
-  description = "The ID of the S3 encryption enforcement SCP"
-  value       = aws_organizations_policy.enforce_s3_encryption.id
-}
-
-output "enforce_ebs_encryption_policy_id" {
-  description = "The ID of the EBS encryption enforcement SCP"
-  value       = aws_organizations_policy.enforce_ebs_encryption.id
-}
-
-output "enforce_rds_encryption_policy_id" {
-  description = "The ID of the RDS encryption enforcement SCP"
-  value       = aws_organizations_policy.enforce_rds_encryption.id
-}
-
-output "protect_cloudwatch_logs_policy_id" {
-  description = "The ID of the CloudWatch Logs protection SCP"
-  value       = aws_organizations_policy.protect_cloudwatch_logs.id
-}
+# Note: SCP outputs commented out due to LocalStack limitations
+# output "enforce_s3_encryption_policy_id" {
+#   description = "The ID of the S3 encryption enforcement SCP"
+#   value       = aws_organizations_policy.enforce_s3_encryption.id
+# }
+#
+# output "enforce_ebs_encryption_policy_id" {
+#   description = "The ID of the EBS encryption enforcement SCP"
+#   value       = aws_organizations_policy.enforce_ebs_encryption.id
+# }
+#
+# output "enforce_rds_encryption_policy_id" {
+#   description = "The ID of the RDS encryption enforcement SCP"
+#   value       = aws_organizations_policy.enforce_rds_encryption.id
+# }
+#
+# output "protect_cloudwatch_logs_policy_id" {
+#   description = "The ID of the CloudWatch Logs protection SCP"
+#   value       = aws_organizations_policy.protect_cloudwatch_logs.id
+# }
 
 #
 # IAM POLICY OUTPUTS
