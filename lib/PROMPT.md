@@ -6,14 +6,14 @@ A fintech startup needs to migrate their microservices architecture from on-prem
 
 ## Task
 
-Create a Terraform configuration to deploy a production-ready EKS cluster with advanced networking and security configurations using **Terraform with HCL**.
+Create a Terraform configuration to deploy a production-ready EKS cluster with advanced networking and security configurations using Terraform with HCL.
 
 ## Platform and Language Requirements
 
-**MANDATORY**: This task MUST use:
-- **Platform**: Terraform
-- **Language**: HCL
-- **Complexity**: expert
+MANDATORY: This task MUST use:
+- Platform: Terraform
+- Language: HCL
+- Complexity: expert
 
 These are NON-NEGOTIABLE constraints. Do not use any other IaC platform or language.
 
@@ -21,24 +21,24 @@ These are NON-NEGOTIABLE constraints. Do not use any other IaC platform or langu
 
 You MUST implement ALL of the following requirements:
 
-1. Deploy an EKS cluster version 1.28 with private API endpoint access only (CORE: EKS)
-2. Configure three managed node groups: system (t3.medium), application (m5.large), and spot instances (m5.large) with distinct taints and labels (CORE: EC2)
-3. Implement pod security standards with baseline enforcement for all namespaces
-4. Enable IRSA (IAM Roles for Service Accounts) with OIDC provider configuration
-5. Configure cluster autoscaler with proper IAM permissions and node group tags
-6. Set up aws-ebs-csi-driver addon with encrypted GP3 storage class as default
-7. Implement network segmentation with dedicated subnets for each node group
-8. Enable control plane logging for api, audit, authenticator, controllerManager, and scheduler
-9. Configure KMS encryption for EKS secrets with customer-managed key rotation
-10. Set up aws-load-balancer-controller with IAM role for ALB/NLB provisioning
+1. Deploy an EKS cluster version 1.28 with private API endpoint that connects through VPC PrivateLink for secure cluster access
+2. Configure three managed node groups that connect to the EKS control plane: system nodes on t3.medium, application nodes on m5.large, and spot instances on m5.large with distinct taints and labels
+3. Implement pod security standards with baseline enforcement that integrates with EKS admission controllers for all namespaces
+4. Enable IRSA that connects IAM roles to Kubernetes service accounts through OIDC provider configuration
+5. Configure cluster autoscaler that integrates with EC2 Auto Scaling Groups through proper IAM permissions and node group tags
+6. Set up aws-ebs-csi-driver addon that connects to KMS for encrypted GP3 storage class as default
+7. Implement network segmentation with dedicated subnets that isolate each node group for security
+8. Enable control plane logging that streams to CloudWatch Logs for api, audit, authenticator, controllerManager, and scheduler
+9. Configure KMS encryption that protects EKS secrets with customer-managed key rotation
+10. Set up aws-load-balancer-controller that integrates with ALB and NLB for ingress traffic through IAM role
 
 ## Optional Enhancements
 
 If time permits, consider implementing:
 
-- Add AWS Systems Manager Session Manager for node access (OPTIONAL: Systems Manager) - eliminates SSH key management
-- Implement Karpenter for advanced autoscaling (OPTIONAL: EC2 Karpenter) - improves cost optimization and scaling speed
-- Add Amazon GuardDuty EKS Protection (OPTIONAL: GuardDuty) - provides runtime threat detection
+- Add AWS Systems Manager Session Manager that connects to EKS nodes for secure access without SSH key management
+- Implement Karpenter that integrates with EC2 for advanced autoscaling with improved cost optimization and scaling speed
+- Add Amazon GuardDuty that monitors EKS runtime for threat detection
 
 ## Constraints
 
@@ -54,17 +54,17 @@ You MUST adhere to the following constraints:
 
 ## Destroyability Requirements
 
-**CRITICAL**: All resources MUST be destroyable without manual intervention:
-- No Terraform `prevent_destroy` lifecycle rules
-- Use `skip_final_snapshot = true` for any database resources
+CRITICAL: All resources MUST be destroyable without manual intervention:
+- No Terraform prevent_destroy lifecycle rules
+- Use skip_final_snapshot = true for any database resources
 - No DeletionProtection settings enabled
 - All S3 buckets must allow force_destroy
 
 ## Environment Suffix Requirement
 
-**CRITICAL**: ALL resource names MUST include the `environment_suffix` variable:
-- Pattern: `{resource-name}-${var.environment_suffix}`
-- Example: `eks-cluster-${var.environment_suffix}`
+CRITICAL: ALL resource names MUST include the environment_suffix variable:
+- Pattern: resource-name-with-suffix
+- Example: eks-cluster-with-environment-suffix
 - This prevents resource conflicts in parallel deployments
 
 ## Expected Output
@@ -73,31 +73,28 @@ Complete Terraform configuration files that provision a secure, production-ready
 
 ## AWS Services Used
 
-- Amazon EKS (Elastic Kubernetes Service)
-- Amazon EC2 (Elastic Compute Cloud)
-- Amazon VPC (Virtual Private Cloud)
-- AWS IAM (Identity and Access Management)
-- AWS KMS (Key Management Service)
-- Amazon EBS (Elastic Block Store)
+- Amazon EKS connects to VPC for network isolation
+- Amazon EC2 hosts worker nodes that connect to EKS control plane
+- Amazon VPC provides network infrastructure that isolates cluster resources
+- AWS IAM authenticates service accounts that connect to AWS services
+- AWS KMS encrypts secrets and volumes that protect sensitive data
+- Amazon EBS provides persistent storage that connects to EC2 instances through CSI driver
 
 ## File Structure
 
-Your implementation should include:
+Your implementation should include these files in lib directory:
 
-```
-lib/
-├── main.tf                 # Main Terraform configuration
-├── variables.tf            # Variable definitions
-├── outputs.tf              # Output definitions
-├── versions.tf             # Terraform and provider versions
-├── eks.tf                  # EKS cluster configuration
-├── node-groups.tf          # Managed node group configurations
-├── iam.tf                  # IAM roles and policies
-├── networking.tf           # VPC and subnet configurations
-├── addons.tf               # EKS addons (CSI driver, load balancer controller)
-├── security.tf             # Security groups and KMS keys
-└── backend.tf              # S3 backend configuration
-```
+- main.tf contains the primary Terraform configuration
+- variables.tf defines all input variables
+- outputs.tf defines all output values
+- versions.tf specifies Terraform and provider versions
+- eks.tf configures the EKS cluster
+- node-groups.tf configures managed node groups
+- iam.tf defines IAM roles and policies
+- networking.tf configures VPC and subnets
+- addons.tf configures EKS addons like CSI driver and load balancer controller
+- security.tf configures security groups and KMS keys
+- backend.tf configures S3 backend for state storage
 
 ## Success Criteria
 
