@@ -1,13 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, multi-region AWS infrastructure template with comprehensive logging, security, and data protection'
 
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: ami-0c02fb55b34c1e1a8  # Amazon Linux 2 AMI (HVM) - us-east-1
-    us-west-2:
-      AMI: ami-0a36eb8fadc976275  # Amazon Linux 2 AMI (HVM) - us-west-2
-
 Resources:
   # ========================================
   # NETWORKING & LOGGING INFRASTRUCTURE
