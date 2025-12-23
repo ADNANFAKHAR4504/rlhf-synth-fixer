@@ -35,11 +35,6 @@ Parameters:
     Default: 'infrastructure-team'
     Description: 'Resource owner for mandatory tagging'
 
-  AMIId:
-    Type: String
-    Default: 'ami-12345678'
-    Description: 'AMI ID for EC2 instance (use a simple string like "ami-12345678" for LocalStack, or real AMI ID for AWS)'
-
 Resources:
   # ===== KMS KEY FOR ENCRYPTION =====
   SecurityKMSKey:
