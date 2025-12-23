@@ -1,5 +1,7 @@
 [MAIN]
 # Configuration for pylint
+# Ignore patterns for files or directories
+ignore=tests,test,node_modules,dist,build,.git
 
 [MESSAGES CONTROL]
 # Disable specific warning messages
