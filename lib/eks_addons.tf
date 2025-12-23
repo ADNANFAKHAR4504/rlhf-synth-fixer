@@ -53,8 +53,6 @@ resource "aws_eks_addon" "kube_proxy" {
 
   depends_on = [
     aws_eks_node_group.frontend,
-    aws_eks_node_group.backend,
-    aws_eks_node_group.data_processing,
   ]
 }
 
@@ -76,8 +74,6 @@ resource "aws_eks_addon" "coredns" {
 
   depends_on = [
     aws_eks_node_group.frontend,
-    aws_eks_node_group.backend,
-    aws_eks_node_group.data_processing,
     aws_eks_fargate_profile.coredns,
   ]
 }

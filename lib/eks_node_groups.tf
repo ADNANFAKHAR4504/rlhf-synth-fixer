@@ -129,7 +129,7 @@ resource "aws_launch_template" "eks_node_group" {
 }
 
 # Frontend Node Group (t3.large)
-# NOTE: depends on backend to avoid LocalStack parallel creation issues
+# NOTE: Only one node group enabled for LocalStack compatibility
 resource "aws_eks_node_group" "frontend" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "frontend-${var.environment_suffix}"
@@ -167,7 +167,6 @@ resource "aws_eks_node_group" "frontend" {
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
     aws_iam_role_policy_attachment.eks_container_registry_policy,
-    aws_eks_node_group.backend,  # LocalStack: create sequentially to avoid issues
   ]
 
   lifecycle {
@@ -175,92 +174,94 @@ resource "aws_eks_node_group" "frontend" {
   }
 }
 
+# NOTE: Backend and data_processing node groups disabled for LocalStack compatibility
+# LocalStack has limitations with multiple EKS node groups
 # Backend Node Group (m5.xlarge)
-resource "aws_eks_node_group" "backend" {
-  cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "backend-${var.environment_suffix}"
-  node_role_arn   = aws_iam_role.eks_node_group.arn
-  subnet_ids      = aws_subnet.private[*].id
-  instance_types  = [var.backend_instance_type]
-
-  scaling_config {
-    desired_size = var.node_group_desired_size
-    max_size     = var.node_group_max_size
-    min_size     = var.node_group_min_size
-  }
-
-  update_config {
-    max_unavailable = 1
-  }
-
-  launch_template {
-    id      = aws_launch_template.eks_node_group.id
-    version = "$Latest"
-  }
-
-  labels = {
-    role        = "backend"
-    environment = var.environment_suffix
-  }
-
-  tags = {
-    Name                                                                      = "eks-backend-nodegroup-${var.environment_suffix}"
-    "k8s.io/cluster-autoscaler/${var.cluster_name}-${var.environment_suffix}" = "owned"
-    "k8s.io/cluster-autoscaler/enabled"                                       = "true"
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_worker_node_policy,
-    aws_iam_role_policy_attachment.eks_cni_policy,
-    aws_iam_role_policy_attachment.eks_container_registry_policy,
-  ]
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
+# resource "aws_eks_node_group" "backend" {
+#   cluster_name    = aws_eks_cluster.main.name
+#   node_group_name = "backend-${var.environment_suffix}"
+#   node_role_arn   = aws_iam_role.eks_node_group.arn
+#   subnet_ids      = aws_subnet.private[*].id
+#   instance_types  = [var.backend_instance_type]
+#
+#   scaling_config {
+#     desired_size = var.node_group_desired_size
+#     max_size     = var.node_group_max_size
+#     min_size     = var.node_group_min_size
+#   }
+#
+#   update_config {
+#     max_unavailable = 1
+#   }
+#
+#   launch_template {
+#     id      = aws_launch_template.eks_node_group.id
+#     version = "$Latest"
+#   }
+#
+#   labels = {
+#     role        = "backend"
+#     environment = var.environment_suffix
+#   }
+#
+#   tags = {
+#     Name                                                                      = "eks-backend-nodegroup-${var.environment_suffix}"
+#     "k8s.io/cluster-autoscaler/${var.cluster_name}-${var.environment_suffix}" = "owned"
+#     "k8s.io/cluster-autoscaler/enabled"                                       = "true"
+#   }
+#
+#   depends_on = [
+#     aws_iam_role_policy_attachment.eks_worker_node_policy,
+#     aws_iam_role_policy_attachment.eks_cni_policy,
+#     aws_iam_role_policy_attachment.eks_container_registry_policy,
+#   ]
+#
+#   lifecycle {
+#     create_before_destroy = true
+#   }
+# }
 
 # Data Processing Node Group (c5.2xlarge)
-resource "aws_eks_node_group" "data_processing" {
-  cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "data-processing-${var.environment_suffix}"
-  node_role_arn   = aws_iam_role.eks_node_group.arn
-  subnet_ids      = aws_subnet.private[*].id
-  instance_types  = [var.data_processing_instance_type]
-
-  scaling_config {
-    desired_size = var.node_group_desired_size
-    max_size     = var.node_group_max_size
-    min_size     = var.node_group_min_size
-  }
-
-  update_config {
-    max_unavailable = 1
-  }
-
-  launch_template {
-    id      = aws_launch_template.eks_node_group.id
-    version = "$Latest"
-  }
-
-  labels = {
-    role        = "data-processing"
-    environment = var.environment_suffix
-  }
-
-  tags = {
-    Name                                                                      = "eks-data-processing-nodegroup-${var.environment_suffix}"
-    "k8s.io/cluster-autoscaler/${var.cluster_name}-${var.environment_suffix}" = "owned"
-    "k8s.io/cluster-autoscaler/enabled"                                       = "true"
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_worker_node_policy,
-    aws_iam_role_policy_attachment.eks_cni_policy,
-    aws_iam_role_policy_attachment.eks_container_registry_policy,
-  ]
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
+# resource "aws_eks_node_group" "data_processing" {
+#   cluster_name    = aws_eks_cluster.main.name
+#   node_group_name = "data-processing-${var.environment_suffix}"
+#   node_role_arn   = aws_iam_role.eks_node_group.arn
+#   subnet_ids      = aws_subnet.private[*].id
+#   instance_types  = [var.data_processing_instance_type]
+#
+#   scaling_config {
+#     desired_size = var.node_group_desired_size
+#     max_size     = var.node_group_max_size
+#     min_size     = var.node_group_min_size
+#   }
+#
+#   update_config {
+#     max_unavailable = 1
+#   }
+#
+#   launch_template {
+#     id      = aws_launch_template.eks_node_group.id
+#     version = "$Latest"
+#   }
+#
+#   labels = {
+#     role        = "data-processing"
+#     environment = var.environment_suffix
+#   }
+#
+#   tags = {
+#     Name                                                                      = "eks-data-processing-nodegroup-${var.environment_suffix}"
+#     "k8s.io/cluster-autoscaler/${var.cluster_name}-${var.environment_suffix}" = "owned"
+#     "k8s.io/cluster-autoscaler/enabled"                                       = "true"
+#   }
+#
+#   depends_on = [
+#     aws_iam_role_policy_attachment.eks_worker_node_policy,
+#     aws_iam_role_policy_attachment.eks_cni_policy,
+#     aws_iam_role_policy_attachment.eks_container_registry_policy,
+#   ]
+#
+#   lifecycle {
+#     create_before_destroy = true
+#   }
+# }

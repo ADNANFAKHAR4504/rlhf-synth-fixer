@@ -59,30 +59,31 @@ output "node_group_frontend_id" {
   value       = aws_eks_node_group.frontend.id
 }
 
-output "node_group_backend_id" {
-  description = "Backend node group ID"
-  value       = aws_eks_node_group.backend.id
-}
-
-output "node_group_data_processing_id" {
-  description = "Data processing node group ID"
-  value       = aws_eks_node_group.data_processing.id
-}
+# NOTE: Backend and data_processing outputs disabled for LocalStack compatibility
+# output "node_group_backend_id" {
+#   description = "Backend node group ID"
+#   value       = aws_eks_node_group.backend.id
+# }
+#
+# output "node_group_data_processing_id" {
+#   description = "Data processing node group ID"
+#   value       = aws_eks_node_group.data_processing.id
+# }
 
 output "node_group_frontend_arn" {
   description = "Amazon Resource Name (ARN) of the Frontend Node Group"
   value       = aws_eks_node_group.frontend.arn
 }
 
-output "node_group_backend_arn" {
-  description = "Amazon Resource Name (ARN) of the Backend Node Group"
-  value       = aws_eks_node_group.backend.arn
-}
-
-output "node_group_data_processing_arn" {
-  description = "Amazon Resource Name (ARN) of the Data Processing Node Group"
-  value       = aws_eks_node_group.data_processing.arn
-}
+# output "node_group_backend_arn" {
+#   description = "Amazon Resource Name (ARN) of the Backend Node Group"
+#   value       = aws_eks_node_group.backend.arn
+# }
+#
+# output "node_group_data_processing_arn" {
+#   description = "Amazon Resource Name (ARN) of the Data Processing Node Group"
+#   value       = aws_eks_node_group.data_processing.arn
+# }
 
 output "fargate_profile_coredns_id" {
   description = "Fargate Profile ID for CoreDNS"
@@ -143,18 +144,18 @@ output "cluster_info" {
         min_size      = var.node_group_min_size
         max_size      = var.node_group_max_size
       }
-      backend = {
-        name          = aws_eks_node_group.backend.node_group_name
-        instance_type = var.backend_instance_type
-        min_size      = var.node_group_min_size
-        max_size      = var.node_group_max_size
-      }
-      data_processing = {
-        name          = aws_eks_node_group.data_processing.node_group_name
-        instance_type = var.data_processing_instance_type
-        min_size      = var.node_group_min_size
-        max_size      = var.node_group_max_size
-      }
+      # backend = {
+      #   name          = aws_eks_node_group.backend.node_group_name
+      #   instance_type = var.backend_instance_type
+      #   min_size      = var.node_group_min_size
+      #   max_size      = var.node_group_max_size
+      # }
+      # data_processing = {
+      #   name          = aws_eks_node_group.data_processing.node_group_name
+      #   instance_type = var.data_processing_instance_type
+      #   min_size      = var.node_group_min_size
+      #   max_size      = var.node_group_max_size
+      # }
     }
     fargate_profiles = {
       coredns        = aws_eks_fargate_profile.coredns.fargate_profile_name
