@@ -862,13 +862,269 @@ echo ""
 echo "📋 Migration log: $MIGRATION_LOG"
 echo ""
 
-# Exit with appropriate code
+# Don't exit yet - PR creation is only PARTIAL completion
+# Task is complete only when archive-folders job passes
+```
+
+### Step 12: Monitor CI/CD Pipeline Until Archive Stage (TASK COMPLETION)
+
+> **CRITICAL**: A task is NOT complete when the PR is created. It is only complete when the **archive-folders** job passes in CI/CD. This step monitors the pipeline and triggers auto-fixes until that checkpoint is reached.
+
+```bash
+# ═══════════════════════════════════════════════════════════════
+# STEP 12: POST-PR MONITORING AND AUTO-FIX LOOP
+# ═══════════════════════════════════════════════════════════════
+# Task completion criteria:
+#   ✅ archive-folders job passes = TASK COMPLETE
+#   ❌ Any job fails = Trigger localstack-fixer, retry
+# ═══════════════════════════════════════════════════════════════
+
 if [ "$MIGRATION_STATUS" = "success" ]; then
-  exit 0
+  log_header "🔄 STEP 12: MONITORING CI/CD UNTIL TASK COMPLETION"
+  
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  ⚠️  PR CREATED - BUT TASK IS NOT YET COMPLETE!"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "  Task completion requires: archive-folders job to PASS"
+  echo ""
+  echo "  The orchestrator will now:"
+  echo "    1. Monitor the CI/CD pipeline"
+  echo "    2. If any job fails → trigger localstack-fixer"
+  echo "    3. Push fixes and wait for new pipeline run"
+  echo "    4. Repeat until archive-folders passes"
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  
+  # Configuration for monitoring
+  MAX_FIX_ITERATIONS=5
+  PIPELINE_TIMEOUT=2700  # 45 minutes
+  POLL_INTERVAL=45
+  WAIT_AFTER_PUSH=60
+  
+  # Job order for progress tracking
+  JOB_ORDER=(
+    "detect-metadata"
+    "claude-review-prompt-quality"
+    "validate-commit-message"
+    "validate-jest-config"
+    "build"
+    "synth"
+    "deploy"
+    "lint"
+    "unit-tests"
+    "integration-tests-live"
+    "claude-code-action"
+    "cleanup"
+    "claude-review-ideal-response"
+    "archive-folders"  # FINAL CHECKPOINT
+  )
+  
+  FINAL_CHECKPOINT="archive-folders"
+  FIX_ITERATION=0
+  START_TIME=$(date +%s)
+  TASK_COMPLETE=false
+  
+  # Wait for CI to start
+  log_info "Waiting ${WAIT_AFTER_PUSH}s for CI/CD pipeline to start..."
+  sleep $WAIT_AFTER_PUSH
+  
+  # Main monitoring loop
+  while [ "$TASK_COMPLETE" = "false" ]; do
+    ELAPSED=$(($(date +%s) - START_TIME))
+    
+    # Check timeout
+    if [ "$ELAPSED" -ge "$PIPELINE_TIMEOUT" ]; then
+      log_error "Pipeline timeout reached after ${ELAPSED}s"
+      log_error "Task is NOT complete - manual intervention required"
+      break
+    fi
+    
+    # Check max iterations
+    if [ "$FIX_ITERATION" -ge "$MAX_FIX_ITERATIONS" ]; then
+      log_error "Maximum fix iterations ($MAX_FIX_ITERATIONS) reached"
+      log_error "Task is NOT complete - manual intervention required"
+      break
+    fi
+    
+    log_info "Checking pipeline status... (elapsed: ${ELAPSED}s, iteration: $FIX_ITERATION)"
+    
+    # Get PR branch
+    PR_BRANCH=$(gh pr view "$NEW_PR_NUMBER" --repo "$GITHUB_REPO" --json headRefName -q '.headRefName' 2>/dev/null || echo "")
+    
+    if [ -z "$PR_BRANCH" ]; then
+      log_warning "Could not get PR branch, retrying..."
+      sleep $POLL_INTERVAL
+      continue
+    fi
+    
+    # Get latest workflow run
+    WORKFLOW_RUN=$(gh run list --repo "$GITHUB_REPO" --branch "$PR_BRANCH" --limit 1 --json databaseId,status,conclusion 2>/dev/null || echo "[]")
+    
+    if [ "$WORKFLOW_RUN" = "[]" ] || [ -z "$WORKFLOW_RUN" ]; then
+      log_warning "No workflow runs found, waiting..."
+      sleep $POLL_INTERVAL
+      continue
+    fi
+    
+    RUN_ID=$(echo "$WORKFLOW_RUN" | jq -r '.[0].databaseId')
+    RUN_STATUS=$(echo "$WORKFLOW_RUN" | jq -r '.[0].status')
+    RUN_CONCLUSION=$(echo "$WORKFLOW_RUN" | jq -r '.[0].conclusion // "in_progress"')
+    
+    # Get job statuses
+    JOBS=$(gh run view "$RUN_ID" --repo "$GITHUB_REPO" --json jobs 2>/dev/null | jq '.jobs // []' || echo "[]")
+    
+    # Check archive-folders status
+    ARCHIVE_STATUS=$(echo "$JOBS" | jq -r '.[] | select(.name == "archive-folders") | .conclusion // "pending"')
+    
+    # Check for any failures
+    FAILED_JOBS=$(echo "$JOBS" | jq -r '[.[] | select(.conclusion == "failure")] | length')
+    RUNNING_JOBS=$(echo "$JOBS" | jq -r '[.[] | select(.status == "in_progress" or .status == "queued")] | length')
+    FIRST_FAILED=$(echo "$JOBS" | jq -r '[.[] | select(.conclusion == "failure")][0].name // ""')
+    
+    # Display progress
+    echo ""
+    echo "┌─────────────────────────────────────────────────────────────┐"
+    echo "│  📊 PIPELINE PROGRESS - PR #$NEW_PR_NUMBER"
+    echo "├─────────────────────────────────────────────────────────────┤"
+    
+    for job in "${JOB_ORDER[@]}"; do
+      JOB_STATUS=$(echo "$JOBS" | jq -r --arg name "$job" '.[] | select(.name == $name) | .conclusion // .status // "pending"')
+      case "$JOB_STATUS" in
+        success) ICON="✅" ;;
+        failure) ICON="❌" ;;
+        in_progress|queued) ICON="🔄" ;;
+        skipped) ICON="⏭️ " ;;
+        *) ICON="⏳" ;;
+      esac
+      if [ "$job" = "$FINAL_CHECKPOINT" ]; then
+        echo "│  $ICON $job [FINAL]"
+      else
+        echo "│  $ICON $job"
+      fi
+    done
+    
+    echo "└─────────────────────────────────────────────────────────────┘"
+    echo ""
+    
+    # Check if task is complete
+    if [ "$ARCHIVE_STATUS" = "success" ]; then
+      TASK_COMPLETE=true
+      
+      log_header "🎉 TASK COMPLETE - ARCHIVE STAGE REACHED!"
+      echo ""
+      echo "   PR #$NEW_PR_NUMBER is now PRODUCTION READY!"
+      echo "   Total fix iterations: $FIX_ITERATION"
+      echo "   Total time: ${ELAPSED}s"
+      echo ""
+      echo "   The task has passed all CI/CD checkpoints and is ready for manual review."
+      echo ""
+      
+      # Update migration log with completion status
+      "$PROJECT_ROOT/.claude/scripts/localstack-update-log.sh" \
+        --task-path "$TASK_PATH" \
+        --status "completed" \
+        --pr-url "${NEW_PR_URL:-}" \
+        --pr-number "${NEW_PR_NUMBER:-}" \
+        --iterations "$FIX_ITERATION" 2>/dev/null || true
+      
+      break
+      
+    elif [ "$FAILED_JOBS" -gt 0 ]; then
+      # Pipeline failed - trigger auto-fix
+      FIX_ITERATION=$((FIX_ITERATION + 1))
+      
+      log_warning "Pipeline failed at: $FIRST_FAILED"
+      log_fix "Triggering auto-fix iteration $FIX_ITERATION..."
+      echo ""
+      echo "═══════════════════════════════════════════════════════════════"
+      echo "  🤖 INVOKING LOCALSTACK-FIXER AGENT"
+      echo "═══════════════════════════════════════════════════════════════"
+      echo ""
+      echo "  Target PR: #$NEW_PR_NUMBER"
+      echo "  Failed Job: $FIRST_FAILED"
+      echo "  Iteration: $FIX_ITERATION of $MAX_FIX_ITERATIONS"
+      echo ""
+      echo "  The fixer agent will:"
+      echo "    1. Fetch error logs from failed job"
+      echo "    2. Analyze errors and identify fixes"
+      echo "    3. Apply batch fixes"
+      echo "    4. Run local pre-validation"
+      echo "    5. Push fixes to trigger new CI run"
+      echo ""
+      echo "═══════════════════════════════════════════════════════════════"
+      echo ""
+      
+      # >>> INVOKE LOCALSTACK-FIXER AGENT HERE <<<
+      # The agent system will pick up this invocation
+      # Agent context: Fix PR #$NEW_PR_NUMBER, failed at $FIRST_FAILED
+      
+      # Wait for fix to be applied and new CI run to start
+      log_info "Waiting ${WAIT_AFTER_PUSH}s for new CI run after fix..."
+      sleep $WAIT_AFTER_PUSH
+      
+    elif [ "$RUNNING_JOBS" -gt 0 ]; then
+      # Pipeline still running
+      log_info "Pipeline running... waiting ${POLL_INTERVAL}s"
+      sleep $POLL_INTERVAL
+      
+    else
+      # Pipeline completed but archive not reached - check again
+      log_info "Pipeline completed, checking archive status..."
+      sleep $POLL_INTERVAL
+    fi
+  done
+  
+  # Final status
+  if [ "$TASK_COMPLETE" = "true" ]; then
+    exit 0
+  else
+    log_error "Task did NOT complete - archive stage not reached"
+    log_info "Manual intervention required for PR #$NEW_PR_NUMBER"
+    exit 1
+  fi
+  
 else
+  log_header "❌ MIGRATION FAILED - PR NOT CREATED"
+  
+  echo "   Task:   $TASK_PATH"
+  echo "   Reason: $MIGRATION_REASON"
+  echo ""
+  echo "💡 Next steps:"
+  echo "   - Review errors in migration log"
+  echo "   - Try manual migration"
+  echo "   - Check if services are supported in LocalStack Community"
+  
   exit 1
 fi
 ```
+
+## Task Completion Criteria
+
+**IMPORTANT**: A localstack-migrate task is NOT complete until:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TASK COMPLETION STAGES                                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ❌ PR Created                    → PARTIAL (not complete)                  │
+│  ❌ Deployment passed             → PARTIAL (not complete)                  │
+│  ❌ Tests passed                  → PARTIAL (not complete)                  │
+│  ❌ Claude review passed          → PARTIAL (not complete)                  │
+│  ✅ archive-folders job passed    → COMPLETE (production ready)             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+The orchestrator will automatically:
+1. Monitor the CI/CD pipeline after PR creation
+2. Detect any failures at any checkpoint
+3. Invoke the localstack-fixer agent to fix issues
+4. Push fixes and wait for new pipeline run
+5. Repeat until archive-folders passes (max 5 iterations)
 
 ## CI/CD Pipeline Compliance
 

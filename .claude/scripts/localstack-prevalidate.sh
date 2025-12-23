@@ -784,11 +784,43 @@ if [[ "$SKIP_TESTS" != "true" ]]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# STEP 10: Jest Configuration Check
+# STEP 10: Generate/Validate IDEAL_RESPONSE.md (Required for claude-review-ideal-response)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "⚙️  STEP 10: Jest Configuration Check"
+echo "📄 STEP 10: IDEAL_RESPONSE.md Validation"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+IDEAL_RESPONSE_FILE="lib/IDEAL_RESPONSE.md"
+GENERATE_SCRIPT="$PROJECT_ROOT/.claude/scripts/localstack-generate-ideal-response.sh"
+
+if [[ -f "$IDEAL_RESPONSE_FILE" ]]; then
+  # Check if it has actual code content
+  CODE_BLOCK_COUNT=$(grep -c '```' "$IDEAL_RESPONSE_FILE" 2>/dev/null || echo "0")
+  if [[ "$CODE_BLOCK_COUNT" -lt 2 ]]; then
+    log_warning "IDEAL_RESPONSE.md exists but has no code blocks"
+    if [[ "$FIX_ERRORS" == "true" ]] && [[ -x "$GENERATE_SCRIPT" ]]; then
+      log_fix "Regenerating IDEAL_RESPONSE.md with infrastructure code"
+      "$GENERATE_SCRIPT" "$WORK_DIR" 2>/dev/null || log_warning "Could not regenerate IDEAL_RESPONSE.md"
+    fi
+  else
+    log_success "IDEAL_RESPONSE.md exists with $((CODE_BLOCK_COUNT / 2)) code blocks"
+  fi
+else
+  log_warning "lib/IDEAL_RESPONSE.md not found (required for claude-review-ideal-response)"
+  if [[ "$FIX_ERRORS" == "true" ]] && [[ -x "$GENERATE_SCRIPT" ]]; then
+    log_fix "Generating IDEAL_RESPONSE.md"
+    "$GENERATE_SCRIPT" "$WORK_DIR" 2>/dev/null || log_warning "Could not generate IDEAL_RESPONSE.md"
+  fi
+fi
+echo ""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 11: Jest Configuration Check
+# ═══════════════════════════════════════════════════════════════════════════════
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "⚙️  STEP 11: Jest Configuration Check"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [[ -f "jest.config.js" ]]; then
