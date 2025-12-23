@@ -509,13 +509,13 @@ try {
   expect(response.MetricAlarms).toBeDefined();
   // CloudWatch alarms may not be fully supported in LocalStack
   if (IS_LOCALSTACK && response.MetricAlarms.length === 0) {
-    console.warn('⚠️ CloudWatch alarms not available in LocalStack - this is expected');
+    console.warn('[WARN] CloudWatch alarms not available in LocalStack - this is expected');
   } else {
     expect(response.MetricAlarms.length).toBeGreaterThanOrEqual(0);
   }
 } catch (error) {
   if (IS_LOCALSTACK) {
-    console.warn('⚠️ CloudWatch alarms API not fully supported in LocalStack - skipping');
+    console.warn('[WARN] CloudWatch alarms API not fully supported in LocalStack - skipping');
   } else {
     throw error;
   }
@@ -556,7 +556,7 @@ try {
   // ... validation
 } catch (error) {
   if (IS_LOCALSTACK) {
-    console.warn('⚠️ Aurora Global Cluster API may have limitations in LocalStack');
+    console.warn('[WARN] Aurora Global Cluster API may have limitations in LocalStack');
     // In LocalStack, try to verify via cluster description instead
     const clusterName = globalClusterId.replace('-global-cluster', '');
     const primaryCluster = awsCommand(

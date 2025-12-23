@@ -876,8 +876,8 @@ function loadInfrastructureOutputs(): InfrastructureOutputs {
   }
 
   if (!outputsPath) {
-    console.warn(`⚠️ Infrastructure outputs not found. Checked paths: ${possiblePaths.join(', ')}`);
-    console.warn(`⚠️ Integration tests will discover resources dynamically from AWS`);
+    console.warn(`[WARN] Infrastructure outputs not found. Checked paths: ${possiblePaths.join(', ')}`);
+    console.warn(`[WARN] Integration tests will discover resources dynamically from AWS`);
     return {};
   }
 
@@ -901,13 +901,13 @@ function loadInfrastructureOutputs(): InfrastructureOutputs {
       outputs = JSON.parse(outputsContent) as InfrastructureOutputs;
     }
 
-    console.log(`✅ Loaded infrastructure outputs from: ${outputsPath}`);
-    console.log(`📋 Available outputs: [${Object.keys(outputs).join(', ')}]`);
+    console.log(`[PASS] Loaded infrastructure outputs from: ${outputsPath}`);
+    console.log(`Available outputs: [${Object.keys(outputs).join(', ')}]`);
 
     return outputs;
   } catch (error) {
-    console.warn(`⚠️ Failed to parse outputs file ${outputsPath}: ${error}`);
-    console.warn(`⚠️ Integration tests will discover resources dynamically from AWS`);
+    console.warn(`[WARN] Failed to parse outputs file ${outputsPath}: ${error}`);
+    console.warn(`[WARN] Integration tests will discover resources dynamically from AWS`);
     return {};
   }
 }
@@ -1025,9 +1025,9 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
   let discovered: any;
 
   beforeAll(() => {
-    console.log(`🌎 Primary Region: ${PRIMARY_REGION}`);
-    console.log(`🌎 Secondary Region: ${SECONDARY_REGION}`);
-    console.log(`🏷️  Environment Suffix: ${ENVIRONMENT_SUFFIX}`);
+    console.log(`Primary Region: ${PRIMARY_REGION}`);
+    console.log(`Secondary Region: ${SECONDARY_REGION}`);
+    console.log(`Environment Suffix: ${ENVIRONMENT_SUFFIX}`);
 
     // Load outputs from Terraform
     outputs = loadInfrastructureOutputs();
@@ -1074,7 +1074,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('Primary VPC should exist and be available', () => {
       const vpcId = outputs.primary_vpc_id || discovered.primaryVpcId;
       if (!vpcId) {
-        console.warn('⚠️ Primary VPC ID not found, skipping test');
+        console.warn('[WARN] Primary VPC ID not found, skipping test');
         return;
       }
 
@@ -1089,7 +1089,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('Secondary VPC should exist and be available', () => {
       const vpcId = outputs.secondary_vpc_id || discovered.secondaryVpcId;
       if (!vpcId) {
-        console.warn('⚠️ Secondary VPC ID not found, skipping test');
+        console.warn('[WARN] Secondary VPC ID not found, skipping test');
         return;
       }
 
@@ -1104,7 +1104,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('Primary VPC should have private subnets', () => {
       const vpcId = outputs.primary_vpc_id || discovered.primaryVpcId;
       if (!vpcId) {
-        console.warn('⚠️ Primary VPC ID not found, skipping test');
+        console.warn('[WARN] Primary VPC ID not found, skipping test');
         return;
       }
 
@@ -1120,7 +1120,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('Secondary VPC should have private subnets', () => {
       const vpcId = outputs.secondary_vpc_id || discovered.secondaryVpcId;
       if (!vpcId) {
-        console.warn('⚠️ Secondary VPC ID not found, skipping test');
+        console.warn('[WARN] Secondary VPC ID not found, skipping test');
         return;
       }
 
@@ -1136,7 +1136,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('VPC Peering Connection should exist and be active', () => {
       const peeringId = outputs.vpc_peering_connection_id;
       if (!peeringId) {
-        console.warn('⚠️ VPC Peering Connection ID not found, skipping test');
+        console.warn('[WARN] VPC Peering Connection ID not found, skipping test');
         return;
       }
 
@@ -1156,7 +1156,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       const globalClusterId =
         outputs.aurora_global_cluster_id || discovered.globalClusterId;
       if (!globalClusterId) {
-        console.warn('⚠️ Aurora Global Cluster ID not found, skipping test');
+        console.warn('[WARN] Aurora Global Cluster ID not found, skipping test');
         return;
       }
 
@@ -1173,7 +1173,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
         expect(response.GlobalClusters[0].EngineVersion).toBe('15.12');
       } catch (error) {
         if (IS_LOCALSTACK) {
-          console.warn('⚠️ Aurora Global Cluster API may have limitations in LocalStack');
+          console.warn('[WARN] Aurora Global Cluster API may have limitations in LocalStack');
           // In LocalStack, try to verify via cluster description instead
           const clusterName = globalClusterId.replace('-global-cluster', '');
           const primaryCluster = awsCommand(
@@ -1192,7 +1192,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       const globalClusterId =
         outputs.aurora_global_cluster_id || discovered.globalClusterId;
       if (!globalClusterId) {
-        console.warn('⚠️ Aurora Global Cluster ID not found, skipping test');
+        console.warn('[WARN] Aurora Global Cluster ID not found, skipping test');
         return;
       }
 
@@ -1222,7 +1222,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       }
 
       if (!primaryClusterId) {
-        console.warn('⚠️ Primary cluster ID not found, skipping test');
+        console.warn('[WARN] Primary cluster ID not found, skipping test');
         return;
       }
 
@@ -1242,7 +1242,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       const globalClusterId =
         outputs.aurora_global_cluster_id || discovered.globalClusterId;
       if (!globalClusterId) {
-        console.warn('⚠️ Aurora Global Cluster ID not found, skipping test');
+        console.warn('[WARN] Aurora Global Cluster ID not found, skipping test');
         return;
       }
 
@@ -1275,7 +1275,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       }
 
       if (!secondaryClusterId) {
-        console.warn('⚠️ Secondary cluster ID not found, skipping test');
+        console.warn('[WARN] Secondary cluster ID not found, skipping test');
         return;
       }
 
@@ -1295,7 +1295,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       const globalClusterId =
         outputs.aurora_global_cluster_id || discovered.globalClusterId;
       if (!globalClusterId) {
-        console.warn('⚠️ Aurora Global Cluster ID not found, skipping test');
+        console.warn('[WARN] Aurora Global Cluster ID not found, skipping test');
         return;
       }
 
@@ -1325,7 +1325,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       }
 
       if (!primaryClusterId) {
-        console.warn('⚠️ Primary cluster ID not found, skipping test');
+        console.warn('[WARN] Primary cluster ID not found, skipping test');
         return;
       }
 
@@ -1343,7 +1343,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('DynamoDB table should exist', () => {
       const tableName = outputs.dynamodb_table_name || discovered.dynamodbTableName;
       if (!tableName) {
-        console.warn('⚠️ DynamoDB table name not found, skipping test');
+        console.warn('[WARN] DynamoDB table name not found, skipping test');
         return;
       }
 
@@ -1358,7 +1358,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('DynamoDB table should have global replicas', () => {
       const tableName = outputs.dynamodb_table_name || discovered.dynamodbTableName;
       if (!tableName) {
-        console.warn('⚠️ DynamoDB table name not found, skipping test');
+        console.warn('[WARN] DynamoDB table name not found, skipping test');
         return;
       }
 
@@ -1376,7 +1376,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       const functionName =
         outputs.primary_lambda_function_name || discovered.primaryLambdaName;
       if (!functionName) {
-        console.warn('⚠️ Primary Lambda function name not found, skipping test');
+        console.warn('[WARN] Primary Lambda function name not found, skipping test');
         return;
       }
 
@@ -1392,7 +1392,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       const functionName =
         outputs.primary_lambda_function_name || discovered.primaryLambdaName;
       if (!functionName) {
-        console.warn('⚠️ Primary Lambda function name not found, skipping test');
+        console.warn('[WARN] Primary Lambda function name not found, skipping test');
         return;
       }
 
@@ -1410,7 +1410,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       const functionName =
         outputs.secondary_lambda_function_name || discovered.secondaryLambdaName;
       if (!functionName) {
-        console.warn('⚠️ Secondary Lambda function name not found, skipping test');
+        console.warn('[WARN] Secondary Lambda function name not found, skipping test');
         return;
       }
 
@@ -1426,7 +1426,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       const functionName =
         outputs.secondary_lambda_function_name || discovered.secondaryLambdaName;
       if (!functionName) {
-        console.warn('⚠️ Secondary Lambda function name not found, skipping test');
+        console.warn('[WARN] Secondary Lambda function name not found, skipping test');
         return;
       }
 
@@ -1444,7 +1444,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       const functionName =
         outputs.primary_lambda_function_name || discovered.primaryLambdaName;
       if (!functionName) {
-        console.warn('⚠️ Primary Lambda function name not found, skipping test');
+        console.warn('[WARN] Primary Lambda function name not found, skipping test');
         return;
       }
 
@@ -1462,7 +1462,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('Route53 Hosted Zone should exist', () => {
       const zoneId = outputs.route53_zone_id || discovered.route53ZoneId;
       if (!zoneId) {
-        console.warn('⚠️ Route53 Zone ID not found, skipping test');
+        console.warn('[WARN] Route53 Zone ID not found, skipping test');
         return;
       }
 
@@ -1480,7 +1480,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('Route53 should have DNS records for Lambda endpoints', () => {
       const zoneId = outputs.route53_zone_id || discovered.route53ZoneId;
       if (!zoneId) {
-        console.warn('⚠️ Route53 Zone ID not found, skipping test');
+        console.warn('[WARN] Route53 Zone ID not found, skipping test');
         return;
       }
 
@@ -1499,7 +1499,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       // Health checks are created but we need to discover them
       // For now, we'll just verify the zone exists (health check is created as part of the module)
       if (!outputs.route53_zone_id) {
-        console.warn('⚠️ Route53 Zone ID not found, skipping health check test');
+        console.warn('[WARN] Route53 Zone ID not found, skipping health check test');
         return;
       }
 
@@ -1511,7 +1511,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('Primary region should have CloudWatch alarms', () => {
       const clusterId = outputs.aurora_global_cluster_id || discovered.globalClusterId;
       if (!clusterId) {
-        console.warn('⚠️ Aurora cluster ID not found, skipping test');
+        console.warn('[WARN] Aurora cluster ID not found, skipping test');
         return;
       }
 
@@ -1524,13 +1524,13 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
         expect(response.MetricAlarms).toBeDefined();
         // CloudWatch alarms may not be fully supported in LocalStack
         if (IS_LOCALSTACK && response.MetricAlarms.length === 0) {
-          console.warn('⚠️ CloudWatch alarms not available in LocalStack - this is expected');
+          console.warn('[WARN] CloudWatch alarms not available in LocalStack - this is expected');
         } else {
           expect(response.MetricAlarms.length).toBeGreaterThanOrEqual(0);
         }
       } catch (error) {
         if (IS_LOCALSTACK) {
-          console.warn('⚠️ CloudWatch alarms API not fully supported in LocalStack - skipping');
+          console.warn('[WARN] CloudWatch alarms API not fully supported in LocalStack - skipping');
         } else {
           throw error;
         }
@@ -1540,7 +1540,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('Secondary region should have CloudWatch alarms', () => {
       const clusterId = outputs.aurora_global_cluster_id || discovered.globalClusterId;
       if (!clusterId) {
-        console.warn('⚠️ Aurora cluster ID not found, skipping test');
+        console.warn('[WARN] Aurora cluster ID not found, skipping test');
         return;
       }
 
@@ -1553,13 +1553,13 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
         expect(response.MetricAlarms).toBeDefined();
         // CloudWatch alarms may not be fully supported in LocalStack
         if (IS_LOCALSTACK && response.MetricAlarms.length === 0) {
-          console.warn('⚠️ CloudWatch alarms not available in LocalStack - this is expected');
+          console.warn('[WARN] CloudWatch alarms not available in LocalStack - this is expected');
         } else {
           expect(response.MetricAlarms.length).toBeGreaterThanOrEqual(0);
         }
       } catch (error) {
         if (IS_LOCALSTACK) {
-          console.warn('⚠️ CloudWatch alarms API not fully supported in LocalStack - skipping');
+          console.warn('[WARN] CloudWatch alarms API not fully supported in LocalStack - skipping');
         } else {
           throw error;
         }
@@ -1571,7 +1571,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('Primary SNS topic should exist', () => {
       const topicArn = outputs.primary_sns_topic_arn;
       if (!topicArn) {
-        console.warn('⚠️ Primary SNS topic ARN not found, skipping test');
+        console.warn('[WARN] Primary SNS topic ARN not found, skipping test');
         return;
       }
 
@@ -1584,7 +1584,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('Secondary SNS topic should exist', () => {
       const topicArn = outputs.secondary_sns_topic_arn;
       if (!topicArn) {
-        console.warn('⚠️ Secondary SNS topic ARN not found, skipping test');
+        console.warn('[WARN] Secondary SNS topic ARN not found, skipping test');
         return;
       }
 
@@ -1599,7 +1599,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
     test('Lambda IAM role should exist with correct policies', () => {
       const roleArn = outputs.lambda_iam_role_arn;
       if (!roleArn) {
-        console.warn('⚠️ Lambda IAM role ARN not found, skipping test');
+        console.warn('[WARN] Lambda IAM role ARN not found, skipping test');
         return;
       }
 
@@ -1633,7 +1633,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
       const tableName = outputs.dynamodb_table_name || discovered.dynamodbTableName;
 
       if (!functionName || !tableName) {
-        console.warn('⚠️ Lambda function or DynamoDB table not found, skipping test');
+        console.warn('[WARN] Lambda function or DynamoDB table not found, skipping test');
         return;
       }
 
@@ -1657,7 +1657,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
 
       // Skip test if critical resources are not found
       if (!primaryVpcId || !secondaryVpcId || !primaryLambda || !secondaryLambda) {
-        console.warn('⚠️ Critical resources not found, skipping disaster recovery failover test');
+        console.warn('[WARN] Critical resources not found, skipping disaster recovery failover test');
         console.warn(`  Primary VPC: ${primaryVpcId || 'Not found'}`);
         console.warn(`  Secondary VPC: ${secondaryVpcId || 'Not found'}`);
         console.warn(`  Primary Lambda: ${primaryLambda || 'Not found'}`);
@@ -1684,7 +1684,7 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
           expect(globalCluster.GlobalClusters[0].GlobalClusterMembers.length).toBeGreaterThanOrEqual(2);
         } catch (error) {
           if (IS_LOCALSTACK) {
-            console.warn('⚠️ Aurora Global Cluster verification skipped due to LocalStack API limitation');
+            console.warn('[WARN] Aurora Global Cluster verification skipped due to LocalStack API limitation');
             // Verify clusters exist individually instead
             const primaryCluster = awsCommand(
               `rds describe-db-clusters --db-cluster-identifier ${globalClusterId.replace('-global-cluster', '')}-primary`,
