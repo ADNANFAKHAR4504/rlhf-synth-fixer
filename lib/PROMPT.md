@@ -1,103 +1,40 @@
-Create an expert-level Terraform code tap_stack.tf to achieve multi-environment consistency and replication across 'dev', 'staging', and 'production'. The stack must meet the following requirements: 1. Use environment-specific parameters to adjust configurations for each target environment. 2. Define IAM roles and policies with the least privileges required. 3. Facilitate easy deployment across different AWS regions (us-east-1, us-west-2, eu-central-1). 4. All resources must be consistently tagged with ‘Environment’, ‘Owner’, and ‘CostCenter’. 5. Implement AWS Config rules to maintain compliance with organizational standards. 6. Employ intrinsic functions for template optimization. 7. Ensure resources can be tracked and billed appropriately.
+I need to build a Terraform infrastructure stack that supports dev, staging, and production environments across multiple AWS regions. The infrastructure should connect services properly - EC2 instances need to access RDS databases through security groups, Application Load Balancers should route traffic to EC2 instances in private subnets, CloudWatch Logs should collect logs from all services, and S3 buckets should store application data and logs with proper encryption.
 
-provider.tf
+Create provider.tf and lib/tap_stack.tf files.
 
-lib/tap_stack.tf
+provider.tf should contain:
+- Terraform version requirement, at least 1.6.0
+- AWS provider from hashicorp/aws, version 5.0 or higher
+- Default provider using var.aws_region variable
+- Three aliased providers for us-east-1, us-west-2, and eu-central-1
+- S3 backend configuration with bucket, key path, region, DynamoDB table for locking, and encryption enabled
 
-No external modules, no additional files.
+lib/tap_stack.tf should contain everything else:
+- All variables including aws_region
+- Locals for environment-specific configs
+- Data sources for AMI lookup, availability zones, etc
+- All resources with proper connections:
+  * VPC with public and private subnets
+  * NAT Gateways in public subnets for private subnet internet access
+  * Security groups that allow EC2 to connect to RDS on port 3306
+  * Application Load Balancer routing to EC2 instances
+  * EC2 instances in private subnets accessing RDS in database subnets
+  * RDS database accessible only from EC2 security group
+  * S3 buckets for application data and logs
+  * CloudWatch Log Groups receiving logs from EC2 and RDS
+  * KMS keys for encrypting S3, RDS, and CloudWatch Logs
+  * IAM roles allowing EC2 to write to CloudWatch and read from S3
+  * AWS Config rules monitoring compliance
+- Outputs for VPC IDs, subnet IDs, load balancer DNS, RDS endpoint, S3 bucket names, KMS key ARNs
 
-A) provider.tf — Providers, versions, and backend (no variables here)
-
-Author a complete provider.tf that:
-
-Pins Terraform and AWS provider versions:
-
-terraform block with:
-
-required_version (e.g., >= 1.6.0)
-
-required_providers:
-
-aws from hashicorp/aws with version >= 5.0
-
-Declares four AWS providers:
-
-Default provider uses var.aws_region (which is declared in lib/tap_stack.tf)
-
-Aliased providers for all target regions:
-
-provider "aws" { alias = "use1" region = "us-east-1" }
-
-provider "aws" { alias = "usw2" region = "us-west-2" }
-
-provider "aws" { alias = "euc1" region = "eu-central-1" }
-
-Configure a remote state backend in S3 (secured) to manage Terraform state (versioning and locking):
-
-Inside the terraform block add backend "s3" with placeholders:
-
-bucket (state bucket name)
-
-key (e.g., nova-model-breaking/tfstate/${terraform.workspace}.tfstate)
-
-region (e.g., us-east-1)
-
-dynamodb_table (for state locking)
-
-encrypt = true
-
-Note: backend arguments are typically provided via -backend-config on terraform init; do not reference variables in the backend config.
-
-Do not declare any variables in provider.tf. The variable aws_region is defined in lib/tap_stack.tf and consumed by the default provider here.
-
-B) lib/tap_stack.tf — Single logic file (everything else goes here)
-
-Author a single Terraform configuration at ./lib/tap_stack.tf that contains:
-
-All variable declarations (including aws_region for the default provider in provider.tf)
-
-Locals
-
-Data sources
-
-Resources
-
-Outputs
-
-Do not put any provider blocks here. Build all resources directly (no external modules). This is a brand‑new stack.
-
-Non‑negotiables
-
-Exactly one logic file: lib/tap_stack.tf
-
-No external modules
-
-Implement multi‑environment consistency & replication for environments: dev, staging, production using environment‑specific parameters
-
-Implement multi‑region capability across us-east-1, us-west-2, eu-central-1 by attaching resources to provider aliases:
-
-provider = aws.use1
-
-provider = aws.usw2
-
-provider = aws.euc1
-
-All Terraform logic (variables, locals, resources, outputs) must be in lib/tap_stack.tf
-
-No provider blocks in tap_stack.tf (providers live only in provider.tf)
-
-No external modules; build resources directly
-
-The variable aws_region must be declared in tap_stack.tf and is consumed by provider.tf
-
-Follow best practices:
-
-Least‑privilege IAM
-
-Avoid 0.0.0.0/0 on sensitive ports (restrict SSH/RDP)
-
-Encrypt where possible (S3, EBS, RDS, Logs, KMS)
-
-Consistent tagging across all resources
-
-No secrets in outputs
+Requirements:
+- Single file lib/tap_stack.tf with all logic
+- No external modules
+- Multi-environment support for dev, staging, production with different instance sizes, backup retention, etc
+- Multi-region capability using provider aliases aws.use1, aws.usw2, aws.euc1
+- IAM roles with least privilege - EC2 role can only read specific S3 buckets and write CloudWatch logs
+- Security groups restrict access - RDS only accepts connections from EC2 security group, not from internet
+- Encryption enabled for S3 buckets using KMS, RDS storage encryption, EBS volumes encrypted
+- Consistent tagging with Environment, Owner, CostCenter on all resources
+- No secrets in outputs
+- SSH access restricted to specific CIDR blocks, not 0.0.0.0/0
