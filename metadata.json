@@ -3,20 +3,19 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "291491",
+  "po_id": "291491_ls",
   "team": "2",
   "startedAt": "2025-08-17T14:05:21.793Z",
-  "subtask": "Serverless Architecture Implementation",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Security Configuration",
-    "Database Management",
-    "Monitoring Setup",
-    "Access Control",
-    "Performance Optimization",
-    "Resource Scaling"
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)",
+    "Cloud Environment Setup",
+    "Security Configuration as Code",
+    "Infrastructure Analysis/Monitoring",
+    "General Infrastructure Tooling QA"
   ],
-  "training_quality": 9,
+  "provider": "localstack",
   "aws_services": [
     "S3",
     "Lambda",
@@ -27,11 +26,5 @@
     "EventBridge",
     "KMS",
     "SQS"
-  ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "paulsony13",
-  "dockerS3Location": ""
+  ]
 }

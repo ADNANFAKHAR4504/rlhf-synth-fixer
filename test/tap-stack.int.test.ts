@@ -65,6 +65,7 @@ let environmentSuffix: string = '';
 // AWS SDK clients
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
+  forcePathStyle: true,
 });
 const dynamoClient = new DynamoDBClient({
   region: process.env.AWS_REGION || 'us-east-1',
