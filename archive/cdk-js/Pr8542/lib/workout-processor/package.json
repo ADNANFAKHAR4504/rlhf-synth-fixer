@@ -1,0 +1,11 @@
+{
+  "name": "workout-processor",
+  "version": "1.0.0",
+  "description": "Lambda function for processing workout logs",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.883.0",
+    "@aws-sdk/lib-dynamodb": "^3.901.0",
+    "@aws-sdk/client-ssm": "^3.879.0"
+  }
+}

@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "platform": "cfn",
   "language": "yaml",
   "complexity": "expert",
@@ -29,5 +30,32 @@
   "migrated_from": {
     "po_id": "barun-turing",
     "pr": "Pr2037"
+=======
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-Pr303",
+  "team": "synth-2",
+  "startedAt": "2025-12-23T13:00:00Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)",
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "SNS",
+    "SQS",
+    "IAM",
+    "CloudWatch"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "284667",
+    "pr": "Pr303"
+>>>>>>> 80954e8cc67d3729c85d873e60ef900a1e7cf447
   }
 }
