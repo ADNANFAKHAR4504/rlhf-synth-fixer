@@ -1,20 +1,25 @@
 {
-  "platform": "analysis",
+  "platform": "cdk",
   "language": "py",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "291159",
   "team": "synth-2",
   "startedAt": "2025-08-06T07:40:04.324Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "wave": "P0",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "s3",
     "lambda",
-    "cloudwatch"
+    "cloudwatch",
+    "ec2",
+    "vpc",
+    "iam",
+    "rds",
+    "sns"
   ]
 }

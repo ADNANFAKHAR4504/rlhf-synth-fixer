@@ -1,11 +1,11 @@
 from typing import Optional
 
 import aws_cdk as cdk
-from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_logs as logs
+from aws_cdk import aws_s3 as s3
 from aws_cdk.aws_lambda_event_sources import S3EventSource
-from aws_cdk import aws_cloudwatch as cloudwatch
 from constructs import Construct
 
 
