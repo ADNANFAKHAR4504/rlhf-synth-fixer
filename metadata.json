@@ -1,0 +1,27 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291333",
+  "team": "synth-2",
+  "startedAt": "2025-08-03T09:44:59.740Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "s3",
+    "kms",
+    "iam",
+    "ec2",
+    "cloudwatch",
+    "sns"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291333",
+    "pr": "Pr405"
+  }
+}
