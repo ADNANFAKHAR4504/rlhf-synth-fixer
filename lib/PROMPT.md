@@ -12,10 +12,10 @@ Three DynamoDB Tables:
 • A table for items with a primary key.
 • A table for users with a primary key.
 • A table for orders with a primary key.
-• All tables must be configured with on-demand capacity (PAY_PER_REQUEST).
+• All tables must be configured with on-demand capacity PAY_PER_REQUEST.
 
 One API Gateway:
-• A single REST API with three distinct endpoints (/items, /users, /orders),
+• A single REST API with three distinct endpoints: /items, /users, /orders,
 one for each Lambda function.
 • Each endpoint must be configured to trigger its corresponding Lambda function.
 • The API should support ANY method for each endpoint.
@@ -25,9 +25,9 @@ one for each Lambda function.
 IAM Roles:
 • Create a single, reusable IAM role for all three Lambda functions.
 • The role’s policy must grant permissions for logging to CloudWatch Logs
-(logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents).
+logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents.
 • The role’s policy must also grant granular DynamoDB permissions
-(dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem)
+dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem
 for each specific table, following the principle of least privilege.
 
 Environment Variables:
@@ -37,9 +37,9 @@ Use !Ref to dynamically reference the table names.
 
 Region and Naming:
 • Ensure the template is deployable to us-east-1
-(this is the default, so no explicit mention is needed unless a resource requires it).
+since this is the default.
 • All resources should follow a clear and logical naming convention
-(e.g., ItemsTable, ItemsFunction, etc.).
+like ItemsTable and ItemsFunction.
 
 3. Documentation & Outputs:
 
@@ -65,6 +65,6 @@ which is a key part of error handling.
 Template Directives:
 • The template must start with AWSTemplateFormatVersion: ‘2010-09-09’.
 • It must include the Transform: AWS::Serverless-2016-10-31 line.
-• Use the Globals section to define common properties (like Runtime) to reduce redundancy.
+• Use the Globals section to define common properties like Runtime to reduce redundancy.
 • The final YAML code must be complete, valid, and free of syntax errors.
 • Generate the full YAML template code within a single immersive code block.
