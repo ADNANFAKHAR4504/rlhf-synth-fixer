@@ -46,13 +46,13 @@ export class CiCdPipelineStack extends cdk.Stack {
       autoDeleteObjects: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      lifecycleRules: [
-        {
-          id: 'DeleteOldVersions',
-          enabled: true,
-          noncurrentVersionExpiration: cdk.Duration.days(30),
-        },
-      ],
+    });
+
+    // Add lifecycle rule to manage old artifact versions
+    this.artifactsBucket.addLifecycleRule({
+      id: 'DeleteOldVersions',
+      enabled: true,
+      noncurrentVersionExpiration: cdk.Duration.days(30),
     });
 
     // IAM Role for CodeBuild service
