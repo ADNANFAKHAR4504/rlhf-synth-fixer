@@ -11,5 +11,12 @@
   "turn_type": "single",
   "startedAt": "2025-12-03T14:03:00Z",
   "aws_services": [],
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
