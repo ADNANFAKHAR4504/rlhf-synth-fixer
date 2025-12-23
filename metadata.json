@@ -28,5 +28,6 @@
     "Security Groups",
     "S3"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": "P1"
 }
