@@ -13,13 +13,20 @@ const { v4: uuidv4 } = require('uuid');
 
 // Configure AWS SDK
 const region = process.env.AWS_REGION || 'us-east-1';
-AWS.config.update({ region });
+const endpointUrl = process.env.AWS_ENDPOINT_URL;
 
-const eventBridge = new AWS.EventBridge();
-const dynamodb = new AWS.DynamoDB.DocumentClient();
-const lambda = new AWS.Lambda();
-const cloudwatchLogs = new AWS.CloudWatchLogs();
-const sqs = new AWS.SQS();
+const awsConfig = { region };
+if (endpointUrl) {
+  awsConfig.endpoint = endpointUrl;
+  awsConfig.s3ForcePathStyle = true;
+}
+AWS.config.update(awsConfig);
+
+const eventBridge = new AWS.EventBridge(endpointUrl ? { endpoint: endpointUrl } : {});
+const dynamodb = new AWS.DynamoDB.DocumentClient(endpointUrl ? { endpoint: endpointUrl } : {});
+const lambda = new AWS.Lambda(endpointUrl ? { endpoint: endpointUrl } : {});
+const cloudwatchLogs = new AWS.CloudWatchLogs(endpointUrl ? { endpoint: endpointUrl } : {});
+const sqs = new AWS.SQS(endpointUrl ? { endpoint: endpointUrl } : {});
 
 describe('Market Data Stack Integration Tests', () => {
   let outputs;
@@ -78,7 +85,7 @@ describe('Market Data Stack Integration Tests', () => {
         TableName: marketDataTableName
       };
 
-      const dynamodbClient = new AWS.DynamoDB();
+      const dynamodbClient = new AWS.DynamoDB(endpointUrl ? { endpoint: endpointUrl } : {});
       const response = await dynamodbClient.describeTable(params).promise();
 
       expect(response.Table.TableName).toBe(marketDataTableName);
@@ -87,7 +94,7 @@ describe('Market Data Stack Integration Tests', () => {
     });
 
     test('market data table has correct indexes', async () => {
-      const dynamodbClient = new AWS.DynamoDB();
+      const dynamodbClient = new AWS.DynamoDB(endpointUrl ? { endpoint: endpointUrl } : {});
       const params = {
         TableName: marketDataTableName
       };
@@ -101,7 +108,7 @@ describe('Market Data Stack Integration Tests', () => {
 
 
     test('audit trail table is accessible and records are created', async () => {
-      const dynamodbClient = new AWS.DynamoDB();
+      const dynamodbClient = new AWS.DynamoDB(endpointUrl ? { endpoint: endpointUrl } : {});
       const params = {
         TableName: auditTrailTableName
       };
