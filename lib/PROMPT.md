@@ -51,7 +51,7 @@ Create a serverless webhook processing infrastructure using **Terraform with HCL
 - Use **SQS** for Lambda dead letter queue
 - Use **CloudWatch** for monitoring and alarms
 - Use **KMS** customer-managed keys for encryption
-- All resource names must include **environmentSuffix** for uniqueness
+- All resource names must include environmentSuffix for uniqueness
 - Follow naming convention: resource-type-environment-suffix
 - Deploy to **us-east-1** region
 
@@ -83,8 +83,8 @@ Create a serverless webhook processing infrastructure using **Terraform with HCL
 - **Reliability**: Step Functions orchestrates workflow, failed events go to DLQ
 - **Security**: KMS encryption for environment variables and logs, proper IAM roles
 - **Monitoring**: CloudWatch dashboard and alarms provide visibility
-- **Naming Convention**: All resources include environmentSuffix for uniqueness
-- **Destroyability**: All resources can be destroyed without errors
+- Naming Convention: All deployed items include environmentSuffix for uniqueness
+- Destroyability: All infrastructure can be destroyed without errors
 - **Code Quality**: HCL, well-structured, documented
 
 ## What to deliver
