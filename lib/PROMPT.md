@@ -1,89 +1,52 @@
-our mission is to design and implement a robust, secure, and scalable cloud infrastructure using AWS CDK in Python to host a dynamic web application. The solution must strictly follow best practices for security, high availability, and efficient resource allocation.
+Need a production-ready AWS infrastructure for hosting our web application. Building with CDK Python. The setup needs to be secure, scalable, and follow AWS best practices.
 
- Folder Structure
-graphql
-Copy
-Edit
-root/
-├── tap.py                     # CDK App entry point
-├── lib/
-│   └── tap_stack.py           # Main CDK stack logic
-└── tests/
-    ├── unit/
-    │   └── tests_tap_stack.py  # Unit tests for individual constructs
-    └── integration/
-        └── test_tap_stack.py  # Integration tests for stack output and deployment
- Requirements
-️ Infrastructure Setup
-Region: us-east-2 (OHIO), must span three availability zones for high availability.
+## Infrastructure Components
 
-VPC:
+**Networking**
+- VPC in us-east-2 spanning three AZs with public and private subnets
+- NAT Gateway connecting private subnets to internet
+- Security groups controlling traffic between all components
 
-Include both public and private subnets across three AZs.
+**Load Balancing and Compute**
+- ALB in public subnets routing HTTP/HTTPS traffic to EC2 instances
+- EC2 instances running in private subnets behind the ALB
+- Auto Scaling Group monitoring CloudWatch CPU metrics to scale instances up or down
 
-Enable NAT Gateway for internet access from private subnets.
+**Database**
+- RDS MySQL instance in isolated private subnet accessed only by EC2 instances
+- KMS encryption enabled for data at rest
+- Database credentials stored in Secrets Manager
 
-Compute:
+**Static Content**
+- S3 bucket serving static files publicly
+- Bucket encrypted with KMS for security
+- IAM policies allowing EC2 instances to read/write objects
 
-Use EC2 instances in private subnets to host a web application.
+**Monitoring**
+- CloudWatch alarms watching EC2 CPU, RDS connections, and ALB response times
+- CloudWatch Logs collecting application logs from EC2 instances
 
-Attach instances to an Auto Scaling Group based on CPU utilization.
+**Backup**
+- AWS Backup taking daily snapshots of RDS database
 
-Use an Application Load Balancer (ALB) in public subnets to distribute traffic to EC2 instances.
+## Service Integration
 
-Database:
+The traffic flow works like this: Users hit the ALB in public subnets, which routes requests to EC2 instances in private subnets. EC2 instances connect to RDS database for data storage and to S3 bucket for static files. CloudWatch monitors all services and triggers Auto Scaling when CPU exceeds 70%. Security groups ensure EC2 only accepts traffic from ALB, and RDS only accepts connections from EC2.
 
-Deploy an Amazon RDS instance in private subnet (non-publicly accessible).
+## Configuration
 
-Enable KMS encryption for data at rest.
+Use cdk.json or environment variables to configure:
+- Instance types and RDS class
+- Environment: dev or prod
+- Project name for resource naming
 
-Static File Hosting:
+## Resource Naming
 
-Create an S3 bucket for static files.
+Follow this pattern: myapp-dev-vpc, myapp-prod-web-asg, myapp-dev-database
 
-Make it publicly accessible only for static content.
+## Expected Outputs
 
-Enable bucket encryption using AWS KMS.
-
-Security:
-
-Use Security Groups to control traffic (e.g., ALB allows 80/443, EC2 only from ALB, RDS internal only).
-
-Implement IAM roles and policies following least privilege principles.
-
-Monitoring and Logging:
-
-Enable CloudWatch Logs and Alarms for EC2, RDS, ALB, and Auto Scaling.
-
-Backup and Recovery:
-
-Use AWS Backup to back up RDS and critical data in S3 or EC2 EBS volumes.
-
-Naming Convention:
-
-All resources must follow the format:
-
-php-template
-Copy
-Edit
-<project>-<env>-<resource-type>  
-Example: myapp-prod-vpc, myapp-dev-web-asg
-️ Configuration
-Use Pulumi’s equivalent: CDK’s cdk.json, environment variables, or config YAML to manage:
-
-Resource sizes (EC2 type, RDS class)
-
-Environment (dev/prod)
-
-Project name and tags
-
- Output Expectations
-Your CDK implementation should include:
-
-tap_stack.py: All infrastructure defined modularly and tagged properly.
-
-tap.py: The CDK entry point that synthesizes the app.
-
-tests/unit/tests_tap_stack.py: Unit tests to check individual resource properties.
-
-tests/integration/test_tap_stack.py: Integration tests to validate outputs and full resource relationships.
+- tap_stack.py with modular infrastructure code
+- tap.py as CDK app entry point
+- Unit tests validating individual resources
+- Integration tests checking full deployment
