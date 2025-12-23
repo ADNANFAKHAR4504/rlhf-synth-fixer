@@ -196,7 +196,7 @@ Resources:
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0c02fb55b34c1e1a8  # Amazon Linux 2 AMI (works with both AWS and LocalStack)
+      ImageId: ami-ff0fea8310f3  # LocalStack mock AMI ID
       InstanceType: t2.micro
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
