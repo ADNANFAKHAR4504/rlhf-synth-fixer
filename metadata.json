@@ -5,12 +5,11 @@
   "turn_type": "single",
   "po_id": "284212",
   "startedAt": "2025-08-01T07:21:12.497Z",
-  "team": "4",
+  "team": "synth-2",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [
-    "Cloud Environment Setup"
-  ],
+  "subject_labels": ["Cloud Environment Setup", "Web Application Deployment"],
   "provider": "localstack",
+  "wave": "P1",
   "aws_services": [
     "IAM",
     "S3",
