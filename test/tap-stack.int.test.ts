@@ -32,12 +32,32 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr176';
 const region = process.env.AWS_REGION || 'us-east-1';
 const stackName = `TapStack${environmentSuffix}`;
 
+// LocalStack endpoint configuration
+const localstackEndpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
+const isLocalStack = process.env.AWS_ENDPOINT_URL !== undefined || process.env.LOCALSTACK === 'true';
+
+// AWS SDK client configuration for LocalStack
+const clientConfig = isLocalStack ? {
+  region,
+  endpoint: localstackEndpoint,
+  credentials: {
+    accessKeyId: 'test',
+    secretAccessKey: 'test'
+  }
+} : { region };
+
+// S3 requires path-style URLs in LocalStack to avoid DNS resolution issues
+const s3Config = isLocalStack ? {
+  ...clientConfig,
+  forcePathStyle: true
+} : { region };
+
 // Initialize AWS SDK clients
-const s3 = new S3Client({ region });
-const lambda = new LambdaClient({ region });
-const apigateway = new APIGatewayClient({ region });
-const cloudformation = new CloudFormationClient({ region });
-const iam = new IAMClient({ region });
+const s3 = new S3Client(s3Config);
+const lambda = new LambdaClient(clientConfig);
+const apigateway = new APIGatewayClient(clientConfig);
+const cloudformation = new CloudFormationClient(clientConfig);
+const iam = new IAMClient(clientConfig);
 
 // Function to get outputs from CloudFormation stack
 async function getStackOutputs(): Promise<Record<string, string>> {
