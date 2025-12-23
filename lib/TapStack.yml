@@ -27,13 +27,6 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     Description: 'Database admin username'
 
-Mappings:
-  AWSRegionAMI:
-    us-east-1:
-      AMI: ami-0c02fb55956c7d316  # Amazon Linux 2023
-    us-west-2:
-      AMI: ami-008fe2fc65df48dac  # Amazon Linux 2023
-
 Resources:
   # ============================================================================
   # NETWORKING LAYER
@@ -621,7 +614,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentName}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: !FindInMap [AWSRegionAMI, !Ref 'AWS::Region', AMI]
+        ImageId: ami-04681a1dbd79675a5
         InstanceType: !Ref InstanceType
         KeyName: !Ref KeyPair
         IamInstanceProfile:
@@ -706,7 +699,7 @@ Resources:
         - !Ref PrivateSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
@@ -782,7 +775,7 @@ Resources:
   BastionHost:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [AWSRegionAMI, !Ref 'AWS::Region', AMI]
+      ImageId: ami-04681a1dbd79675a5
       InstanceType: t3.micro
       KeyName: !Ref KeyPair
       SubnetId: !Ref PublicSubnet1
