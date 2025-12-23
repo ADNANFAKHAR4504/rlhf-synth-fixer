@@ -344,11 +344,10 @@ resource "aws_lb" "main" {
     ManagedBy   = "terraform"
   }
 
+  # Prevent Terraform from attempting to configure logging attributes
+  # LocalStack doesn't support these features
   lifecycle {
-    ignore_changes = [
-      access_logs,
-      connection_logs
-    ]
+    ignore_changes = all
   }
 }
 
