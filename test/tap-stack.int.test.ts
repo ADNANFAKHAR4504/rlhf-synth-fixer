@@ -3,7 +3,7 @@ import * as fs from 'fs';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
-const stackName = `TapStack${environmentSuffix}`;
+const stackName = `localstack-stack-${environmentSuffix}`;
 
 // Helper function to execute AWS CLI commands
 function awsCli(command: string): any {
