@@ -22,5 +22,11 @@
     "S3"
   ],
   "wave": "P0",
-  "training_quality": 9
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "michael-adeteye",
+  "dockerS3Location": ""
 }
