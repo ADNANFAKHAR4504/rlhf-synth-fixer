@@ -133,63 +133,66 @@ resource "aws_route_table_association" "database" {
   route_table_id = aws_route_table.private[count.index].id
 }
 
-# VPC Flow Logs
-resource "aws_flow_log" "main" {
-  iam_role_arn             = aws_iam_role.vpc_flow_log.arn
-  log_destination          = aws_cloudwatch_log_group.vpc_flow_log.arn
-  traffic_type             = "ALL"
-  vpc_id                   = aws_vpc.main.id
-  max_aggregation_interval = 60
+# VPC Flow Logs - Disabled for LocalStack compatibility
+# LocalStack does not fully support VPC Flow Logs with max_aggregation_interval parameter
+# Uncomment for AWS deployments if flow logs are required
 
-  tags = merge(local.common_tags, {
-    Name = "vpc-flow-log-${var.environment_suffix}"
-  })
-}
-
-resource "aws_cloudwatch_log_group" "vpc_flow_log" {
-  name              = "/aws/vpc/flowlogs-${var.environment_suffix}"
-  retention_in_days = 30
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role" "vpc_flow_log" {
-  name = "vpc-flow-log-role-${var.environment_suffix}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "vpc-flow-logs.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy" "vpc_flow_log" {
-  name = "vpc-flow-log-policy-${var.environment_suffix}"
-  role = aws_iam_role.vpc_flow_log.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams"
-        ]
-        Effect   = "Allow"
-        Resource = "*"
-      }
-    ]
-  })
-}
+# resource "aws_flow_log" "main" {
+#   iam_role_arn             = aws_iam_role.vpc_flow_log.arn
+#   log_destination          = aws_cloudwatch_log_group.vpc_flow_log.arn
+#   traffic_type             = "ALL"
+#   vpc_id                   = aws_vpc.main.id
+#   max_aggregation_interval = 60
+#
+#   tags = merge(local.common_tags, {
+#     Name = "vpc-flow-log-${var.environment_suffix}"
+#   })
+# }
+#
+# resource "aws_cloudwatch_log_group" "vpc_flow_log" {
+#   name              = "/aws/vpc/flowlogs-${var.environment_suffix}"
+#   retention_in_days = 30
+#
+#   tags = local.common_tags
+# }
+#
+# resource "aws_iam_role" "vpc_flow_log" {
+#   name = "vpc-flow-log-role-${var.environment_suffix}"
+#
+#   assume_role_policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Action = "sts:AssumeRole"
+#         Effect = "Allow"
+#         Principal = {
+#           Service = "vpc-flow-logs.amazonaws.com"
+#         }
+#       }
+#     ]
+#   })
+#
+#   tags = local.common_tags
+# }
+#
+# resource "aws_iam_role_policy" "vpc_flow_log" {
+#   name = "vpc-flow-log-policy-${var.environment_suffix}"
+#   role = aws_iam_role.vpc_flow_log.id
+#
+#   policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Action = [
+#           "logs:CreateLogGroup",
+#           "logs:CreateLogStream",
+#           "logs:PutLogEvents",
+#           "logs:DescribeLogGroups",
+#           "logs:DescribeLogStreams"
+#         ]
+#         Effect   = "Allow"
+#         Resource = "*"
+#       }
+#     ]
+#   })
+# }
