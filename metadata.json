@@ -4,6 +4,7 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "101912228",
+  "wave": "P0",
   "team": "3",
   "startedAt": "2025-12-22T14:46:52.133Z",
   "subtask": "Failure Recovery and High Availability",
