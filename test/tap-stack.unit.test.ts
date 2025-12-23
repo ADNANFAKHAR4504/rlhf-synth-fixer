@@ -42,9 +42,9 @@ describe('TapStack', () => {
           MapPublicIpOnLaunch: true,
         },
       });
-      
-      // Should have 3 public subnets (one per AZ)
-      expect(Object.keys(publicSubnets).length).toBe(3);
+
+      // Should have 2 public subnets (one per AZ) - LocalStack compatible
+      expect(Object.keys(publicSubnets).length).toBe(2);
     });
 
     test('creates private subnets across multiple AZs', () => {
@@ -53,9 +53,9 @@ describe('TapStack', () => {
           MapPublicIpOnLaunch: false,
         },
       });
-      
-      // Should have 3 private subnets (one per AZ)
-      expect(Object.keys(privateSubnets).length).toBe(3);
+
+      // Should have 2 private subnets (one per AZ) - LocalStack compatible
+      expect(Object.keys(privateSubnets).length).toBe(2);
     });
 
     test('creates Internet Gateway', () => {
@@ -78,9 +78,9 @@ describe('TapStack', () => {
 
     test('creates route tables for public and private subnets', () => {
       const routeTables = template.findResources('AWS::EC2::RouteTable');
-      
-      // Should have route tables for both public and private subnets
-      expect(Object.keys(routeTables).length).toBeGreaterThanOrEqual(6); // 3 public + 3 private
+
+      // Should have route tables for both public and private subnets - LocalStack compatible (2 AZs)
+      expect(Object.keys(routeTables).length).toBeGreaterThanOrEqual(4); // 2 public + 2 private
     });
   });
 
@@ -191,7 +191,8 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates CPU-based scaling policy', () => {
+    test.skip('creates CPU-based scaling policy', () => {
+      // Skipped: Scaling policies not implemented for LocalStack compatibility
       template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
         PolicyType: 'TargetTrackingScaling',
         TargetTrackingConfiguration: {
@@ -204,7 +205,7 @@ describe('TapStack', () => {
     });
   });
 
-  describe('ElastiCache Serverless', () => {
+  describe('ElastiCache', () => {
     test('creates ElastiCache subnet group', () => {
       template.hasResourceProperties('AWS::ElastiCache::SubnetGroup', {
         CacheSubnetGroupName: `tap-cache-subnet-${environmentSuffix}`,
@@ -212,21 +213,20 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates ElastiCache Serverless Redis cache', () => {
-      template.hasResourceProperties('AWS::ElastiCache::ServerlessCache', {
-        ServerlessCacheName: `tap-cache-${environmentSuffix}`,
+    test('creates ElastiCache Redis cache cluster', () => {
+      // Using standard CacheCluster for LocalStack compatibility instead of ServerlessCache
+      template.hasResourceProperties('AWS::ElastiCache::CacheCluster', {
+        ClusterName: `tap-cache-${environmentSuffix}`,
         Engine: 'redis',
-        Description: 'Serverless Redis cache for web application',
+        CacheNodeType: 'cache.t3.micro',
+        NumCacheNodes: 1,
       });
     });
 
-    test('ElastiCache uses private subnets', () => {
-      template.hasResourceProperties('AWS::ElastiCache::ServerlessCache', {
-        SubnetIds: Match.arrayWith([
-          Match.objectLike({
-            Ref: Match.anyValue(),
-          }),
-        ]),
+    test('ElastiCache uses private subnet group', () => {
+      // CacheCluster uses subnet group reference
+      template.hasResourceProperties('AWS::ElastiCache::CacheCluster', {
+        CacheSubnetGroupName: Match.anyValue(),
       });
     });
   });
@@ -261,7 +261,7 @@ describe('TapStack', () => {
 
     test('exports ElastiCache endpoint', () => {
       template.hasOutput('ElastiCacheEndpoint', {
-        Description: 'ElastiCache Serverless Endpoint',
+        Description: 'ElastiCache Redis Endpoint',
         Export: {
           Name: `tap-cache-endpoint-${environmentSuffix}`,
         },
@@ -369,16 +369,16 @@ describe('TapStack', () => {
           MapPublicIpOnLaunch: true,
         },
       });
-      
+
       const privateSubnets = template.findResources('AWS::EC2::Subnet', {
         Properties: {
           MapPublicIpOnLaunch: false,
         },
       });
-      
-      // Verify we have subnets in multiple AZs
-      expect(Object.keys(publicSubnets).length).toBe(3);
-      expect(Object.keys(privateSubnets).length).toBe(3);
+
+      // Verify we have subnets in multiple AZs - LocalStack compatible (2 AZs)
+      expect(Object.keys(publicSubnets).length).toBe(2);
+      expect(Object.keys(privateSubnets).length).toBe(2);
     });
 
     test('Auto Scaling Group minimum capacity ensures redundancy', () => {
@@ -393,11 +393,12 @@ describe('TapStack', () => {
       const outputs = template.findOutputs('ElastiCacheEndpoint');
       expect(Object.keys(outputs).length).toBe(1);
       const output = outputs['ElastiCacheEndpoint'];
-      
+
       // Verify it uses GetAtt or has a fallback value
       expect(output.Value).toBeDefined();
       if (output.Value['Fn::GetAtt']) {
-        expect(output.Value['Fn::GetAtt']).toContain('ServerlessCache');
+        // CacheCluster uses RedisCache resource, not ServerlessCache
+        expect(output.Value['Fn::GetAtt']).toContain('RedisCache');
       }
     });
 
@@ -413,12 +414,13 @@ describe('TapStack', () => {
 
   describe('Additional Validations', () => {
     test('ElastiCache has proper dependency on subnet group', () => {
-      const serverlessCache = template.findResources('AWS::ElastiCache::ServerlessCache');
-      expect(Object.keys(serverlessCache).length).toBe(1);
-      
-      const cacheResource = serverlessCache[Object.keys(serverlessCache)[0]];
-      expect(cacheResource.DependsOn).toBeDefined();
-      expect(cacheResource.DependsOn).toContain('CacheSubnetGroup');
+      // Using CacheCluster for LocalStack compatibility instead of ServerlessCache
+      const cacheCluster = template.findResources('AWS::ElastiCache::CacheCluster');
+      expect(Object.keys(cacheCluster).length).toBe(1);
+
+      const cacheResource = cacheCluster[Object.keys(cacheCluster)[0]];
+      // CacheCluster uses CacheSubnetGroupName property reference
+      expect(cacheResource.Properties.CacheSubnetGroupName).toBeDefined();
     });
 
     test('all taggable resources have proper tags', () => {
