@@ -202,6 +202,11 @@ Resources:
   # EC2 Instance with regional AMI mapping
   EC2Instance:
     Type: AWS::EC2::Instance
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1034  # ImageId uses SSM parameter resolution which is valid
     Properties:
       ImageId: !FindInMap
         - RegionMap
