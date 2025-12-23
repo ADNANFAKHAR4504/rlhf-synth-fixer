@@ -81,27 +81,26 @@ export class TapStack extends cdk.Stack {
       userData: ec2.UserData.forLinux(),
     });
 
-    // Auto Scaling Group
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+    // Auto Scaling Group - using CfnAutoScalingGroup for LocalStack compatibility
+    // LocalStack doesn't properly return LatestVersionNumber attribute
+    const asgName = `tap-asg-${props.environmentSuffix}`;
+    new autoscaling.CfnAutoScalingGroup(
       this,
       'WebAutoScalingGroup',
       {
-        autoScalingGroupName: `tap-asg-${props.environmentSuffix}`,
-        vpc,
-        launchTemplate,
-        minCapacity: 2,
-        maxCapacity: 10,
-        desiredCapacity: 2,
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        autoScalingGroupName: asgName,
+        minSize: '2',
+        maxSize: '10',
+        desiredCapacity: '2',
+        launchTemplate: {
+          launchTemplateId: launchTemplate.launchTemplateId,
+          version: '$Latest',
         },
+        vpcZoneIdentifier: vpc.privateSubnets.map(
+          (subnet: ec2.ISubnet) => subnet.subnetId
+        ),
       }
     );
-
-    // Auto Scaling policies for dynamic scaling
-    autoScalingGroup.scaleOnCpuUtilization('CpuScaling', {
-      targetUtilizationPercent: 70,
-    });
 
     // ElastiCache configuration - using standard cluster for LocalStack compatibility
     const cacheSubnetGroup = new elasticache.CfnSubnetGroup(
@@ -110,7 +109,7 @@ export class TapStack extends cdk.Stack {
       {
         cacheSubnetGroupName: `tap-cache-subnet-${props.environmentSuffix}`,
         description: 'Subnet group for ElastiCache',
-        subnetIds: vpc.privateSubnets.map(subnet => subnet.subnetId),
+        subnetIds: vpc.privateSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId),
       }
     );
 
@@ -155,7 +154,7 @@ export class TapStack extends cdk.Stack {
 
     const asgNameParam = new ssm.StringParameter(this, 'AsgNameParam', {
       parameterName: `/tap/${props.environmentSuffix}/asg-name`,
-      stringValue: autoScalingGroup.autoScalingGroupName,
+      stringValue: asgName,
       description: 'Auto Scaling Group name for integration testing',
     });
     asgNameParam.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
@@ -174,19 +173,19 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'AutoScalingGroupName', {
-      value: autoScalingGroup.autoScalingGroupName,
+      value: asgName,
       description: 'Auto Scaling Group Name',
       exportName: `tap-asg-name-${props.environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'PublicSubnetIds', {
-      value: vpc.publicSubnets.map(subnet => subnet.subnetId).join(','),
+      value: vpc.publicSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId).join(','),
       description: 'Public Subnet IDs',
       exportName: `tap-public-subnets-${props.environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'PrivateSubnetIds', {
-      value: vpc.privateSubnets.map(subnet => subnet.subnetId).join(','),
+      value: vpc.privateSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId).join(','),
       description: 'Private Subnet IDs',
       exportName: `tap-private-subnets-${props.environmentSuffix}`,
     });
