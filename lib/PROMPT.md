@@ -8,7 +8,7 @@ This is a payment processing system, so we're dealing with financial transaction
 
 ## What we need to build
 
-Create a multi-environment infrastructure deployment using **Terraform with HCL** that provisions identical architecture across dev, staging, and production environments with environment-specific resource sizing.
+Create a multi-environment infrastructure deployment using Terraform with HCL that provisions identical architecture across dev, staging, and production environments with environment-specific sizing.
 
 ### Core Requirements
 
@@ -69,7 +69,7 @@ Create a multi-environment infrastructure deployment using **Terraform with HCL*
 - Use **CloudTrail** for audit logging
 - Use **CloudWatch** for monitoring and logging
 - Use **IAM** for access management
-- Resource names must include **environmentSuffix** for uniqueness across environments
+- All resource names must include the environmentSuffix for uniqueness across environments
 - Follow naming convention: resource-type-environment-suffix pattern
 - Deploy to **us-east-1** region
 - All infrastructure must use AWS-managed encryption where available
@@ -126,8 +126,8 @@ Create a multi-environment infrastructure deployment using **Terraform with HCL*
 - **Security**: Encryption enabled, network segmentation implemented, audit logging active
 - **Reliability**: Multi-AZ deployment in staging and prod, auto-scaling configured
 - **Compliance**: CloudTrail enabled, encryption at rest, proper IAM roles
-- **Resource Naming**: All resources include environment suffix for uniqueness
-- **Cost Optimization**: Dev environment uses minimal resources, prod uses appropriate scaling
+- **Naming**: Environment suffix included for uniqueness
+- **Cost Optimization**: Dev uses minimal sizing, prod uses appropriate scaling
 - **Code Quality**: Clean HCL code, well-structured modules, comprehensive variables
 
 ## What to deliver
