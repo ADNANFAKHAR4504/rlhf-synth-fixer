@@ -328,6 +328,7 @@ resource "aws_iam_instance_profile" "ec2" {
 }
 
 # Application Load Balancer
+# Note: Some attributes are omitted to avoid LocalStack compatibility issues
 resource "aws_lb" "main" {
   name               = "alb-${var.environment}-${var.environment_suffix}"
   internal           = false
@@ -336,11 +337,6 @@ resource "aws_lb" "main" {
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = false
-
-  # Explicitly disable access logs for LocalStack compatibility
-  access_logs {
-    enabled = false
-  }
 
   tags = {
     Name        = "alb-${var.environment}-${var.environment_suffix}"
