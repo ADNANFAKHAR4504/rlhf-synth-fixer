@@ -4,16 +4,18 @@
 
 # ═══════════════════════════════════════════════════════════════
 # ITERATION SETTINGS
-# Optimized for faster fixing with local pre-validation
+# CRITICAL: CI credits are LIMITED - prioritize local validation!
 # ═══════════════════════════════════════════════════════════════
 iteration:
-  max_fix_iterations: 10 # Maximum fix iterations (increased to ensure production ready)
-  max_cicd_iterations: 10 # Maximum CI/CD monitoring iterations after PR push
+  max_fix_iterations: 3 # Reduced from 10 - prioritize local validation over CI iterations
+  max_cicd_iterations: 2 # REDUCED from 10 - CI credits are LIMITED! Max 2 pushes allowed
   max_deployment_attempts: 3 # Maximum deployment attempts per iteration
   use_batch_fix: true # Enable batch fix approach (apply ALL fixes before re-deploy)
   continue_until_production_ready: true # MUST iterate until all CI/CD jobs pass
-  run_local_prevalidation: true # NEW: Run local validation before pushing to CI/CD
+  run_local_prevalidation: true # MANDATORY: Run local validation before pushing to CI/CD
   prevalidation_script: '.claude/scripts/localstack-prevalidate.sh' # Path to pre-validation script
+  enforce_local_validation: true # NEW: Block CI push if local validation fails
+  ci_credit_warning: true # NEW: Show warnings about CI credit consumption
 
 # ═══════════════════════════════════════════════════════════════
 # TIMEOUT SETTINGS (in seconds)
