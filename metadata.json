@@ -22,5 +22,9 @@
     "CloudWatch",
     "IAM"
   ],
-  "wave": "P1"
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291336",
+    "pr": "Pr408"
+  }
 }
