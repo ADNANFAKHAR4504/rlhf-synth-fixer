@@ -1,58 +1,61 @@
-# AWS Infrastructure Expert - Complete Code Generator
+# Build complete AWS infrastructure with Pulumi Python
 
-You are an expert AWS infrastructure architect. Build complete, production-ready infrastructure using Pulumi Python SDK.
+Need a full production-ready infrastructure setup using Pulumi Python SDK.
 
-## MANDATORY REQUIREMENTS:
+## What I need:
 
-### Code Delivery Rules:
-- **ALWAYS provide COMPLETE, executable code files**
-- **NEVER give partial code, snippets, or placeholders like "..." or "TODO"**
-- **Include ALL files needed for immediate deployment**
-- **Embed Lambda function code as inline strings within the main infrastructure file**
-- **Work ONLY within the existing file structure shown by the user**
+Give me COMPLETE working code - no placeholders or TODOs. All files ready to deploy immediately.
 
-### File Structure Constraints:
-Based on user's project structure, work within these files ONLY:
-- `tap_stack.py` - Main infrastructure code with embedded Lambda
-- `test_tap_stack.py` (unit tests) - Complete unit test suite  
-- `test_tap_stack.py` (integration tests) - Complete integration test suite
-- `README.md` - Complete setup and deployment guide
-- Other config files as shown in user's project
+Embed Lambda functions as inline strings in the infrastructure file - don't create separate files unless absolutely necessary.
 
-### Infrastructure Requirements:
-- **AWS Region**: us-east-1 only
-- **VPC**: 10.0.0.0/16 with 2 public + 2 private subnets across different AZs
-- **Networking**: IGW, NAT Gateway, proper route tables
-- **S3**: Encrypted bucket with versioning, public access blocked
-- **Lambda**: Python 3.9 function triggered by S3 events
-- **IAM**: Least privilege roles and policies
-- **CloudWatch**: Logging with 14-day retention
-- **Security**: Encryption at rest, secure defaults
+### Files to create:
+- tap_stack.py - main infrastructure
+- test_tap_stack.py for unit tests
+- test_tap_stack.py for integration tests
+- README.md with setup instructions
 
-### Code Quality Standards:
-- **Idempotent deployments** - support multi-branch CI/CD
-- **Environment variables** for configuration (STAGE, BUCKET, etc.)
-- **Proper resource tagging** (Project, Stage, Managed)
-- **Error handling** and validation
-- **Production-ready** security configurations
-- **Resource connectivity** - all services properly integrated
-- **Pylint compliant** (score ≥ 7.0)
+### Infrastructure components:
 
-### Test Requirements:
-- **Unit tests** with Pulumi mocks for all components
-- **Integration tests** against live AWS resources
-- **End-to-end testing** of S3 → Lambda trigger workflow
-- **Security validation** tests
-- **Multi-AZ resilience** tests
+VPC setup in us-east-1:
+- 10.0.0.0/16 network
+- 2 public and 2 private subnets in different AZs
+- Internet gateway and NAT gateway
+- Route tables configured correctly
 
-### Documentation Requirements:
-- **Complete README.md** with installation, deployment, usage instructions
-- **Architecture explanation** and component relationships
-- **Environment setup** and configuration details
-- **Troubleshooting guide** and common issues
+S3 bucket:
+- Encrypted with versioning enabled
+- Public access blocked
+- Set up to trigger Lambda on object creation
 
-## Response Format:
+Lambda function:
+- Python 3.9 runtime
+- Triggered by S3 events
+- Proper IAM role with minimal permissions
+- CloudWatch logging with 14-day retention
 
-Provide files in this exact order:
+Security requirements:
+- Use least privilege IAM policies
+- Encryption enabled where supported
+- No hardcoded credentials
 
-### 1. Infrastructure Code (`tap_stack.py`)
+Make it work across multiple environments - use env variables for STAGE and BUCKET names.
+Tag everything with Project, Stage, and Managed tags.
+
+### Tests needed:
+
+Unit tests using Pulumi mocks for all resources.
+Integration tests against real AWS.
+Test the S3 to Lambda trigger end-to-end.
+Verify multi-AZ setup works.
+
+Code should pass pylint with score above 7.
+
+### Docs:
+
+README with how to install, deploy, and use this.
+Explain the architecture briefly.
+Include troubleshooting tips.
+
+## Format:
+
+Start with the infrastructure code in tap_stack.py
