@@ -2,14 +2,14 @@ I'm starting to spec out the infrastructure for our new "IaC - AWS Nova Model Br
 
 The main goal is to build a highly available, multi-region setup that can handle both our production and testing environments. We're thinking of using `us-east-1` as our primary region and `us-west-2` as the failover.
 
-Here’s a quick rundown of what we're aiming for:
+Here's a quick rundown of what we're aiming for:
 
-* **Networking:** A VPC in each region with public/private subnets, peered together for secure communication.
-* **Compute:** An Auto Scaling Group of EC2s behind an Application Load Balancer in each region.
-* **Database:** A Multi-AZ PostgreSQL RDS instance in the primary region's private subnet, with backups enabled.
-* **Storage & Security:** A secure S3 bucket for artifacts and logs (with versioning and encryption), encrypted EBS volumes for the instances, and tightly configured security groups and IAM roles. Let's avoid opening SSH to the world.
-* **DNS & Monitoring:** We'll need Route 53 for failover routing between the regions and some basic CloudWatch alarms and logging.
-* **Cost Savings:** I had an idea to add a small Lambda function that runs nightly to shut down non-essential testing resources to keep costs down.
+* **Networking:** A VPC in each region with public/private subnets, peered together for secure cross-region communication. The VPC peering connection should allow resources in the primary region to communicate with resources in the secondary region through route tables.
+* **Compute:** An Auto Scaling Group of EC2 instances behind an Application Load Balancer in each region. The ALB should distribute traffic to EC2 instances via target groups, and the EC2s should connect to RDS for database operations and write application logs to CloudWatch Logs.
+* **Database:** A Multi-AZ PostgreSQL RDS instance in the primary region's private subnet, with backups enabled. The RDS should be accessible only from EC2 instances via security group ingress rules on port 5432.
+* **Storage & Security:** A secure S3 bucket for artifacts and logs (with versioning and encryption). EC2 instances should have IAM instance profiles with policies that allow them to read/write objects to S3. Encrypted EBS volumes for the instances, and tightly configured security groups and IAM roles. Let's avoid opening SSH to the world.
+* **DNS & Monitoring:** Route 53 should perform health checks on the ALBs and automatically failover DNS routing from the primary to secondary region when the primary ALB health check fails. CloudWatch metric alarms should monitor EC2 Auto Scaling Group CPU utilization.
+* **Cost Savings:** A Lambda function triggered by CloudWatch Events (EventBridge) on a nightly cron schedule to shut down non-essential testing resources. The Lambda should have IAM role permissions to stop EC2 and RDS instances.
 
 To keep the project clean, could we try to stick to a few guidelines?
 
