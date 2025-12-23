@@ -41,7 +41,7 @@ Create a complete migration toolkit using Terraform with HCL for moving an AWS a
    - State verification and validation steps
    - Commands for state file backup and recovery
 
-5. **Resource ID Mapping**
+5. **ID Mapping**
    - Produce id-mapping.csv with sample data showing old-to-new ID translation
    - Headers: resource, address, old_id, new_id, notes
    - Examples for common AWS resources like VPC, subnets, security groups, and instances
@@ -86,7 +86,7 @@ Create a complete migration toolkit using Terraform with HCL for moving an AWS a
 - **State Migration**: Zero-loss migration plan with exact CLI commands
 - **Documentation**: Clear runbook that operations team can follow step-by-step
 - **ID Mapping**: Comprehensive mapping showing old vs new resource identifiers
-- **Resource Naming**: All resources include environmentSuffix parameter
+- **Naming Convention**: All resources include environmentSuffix parameter
 - **Rollback Capability**: Documented procedures to revert if migration fails
 - **Validation**: Automated checks to verify migration success
 - **Code Quality**: Clean HCL code following Terraform best practices
