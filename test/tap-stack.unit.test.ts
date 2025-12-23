@@ -176,12 +176,8 @@ describe('TAP Stack - EKS Cluster Infrastructure Unit Tests', () => {
       expect(eksContent).toContain('audit');
     });
 
-    test('should create OIDC provider', () => {
-      expect(eksContent).toMatch(/resource\s+"aws_iam_openid_connect_provider"\s+"eks"/);
-    });
-
-    test('should configure TLS certificate data source', () => {
-      expect(eksContent).toMatch(/data\s+"tls_certificate"\s+"eks"/);
+    test('should have OIDC provider removed with explanation comment', () => {
+      expect(eksContent).toMatch(/OIDC Provider removed due to LocalStack limitation/);
     });
   });
 

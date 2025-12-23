@@ -166,8 +166,8 @@ describe('Terraform EKS Cluster Infrastructure Unit Tests', () => {
       expect(eksContent).toMatch(/enabled_cluster_log_types\s*=/);
     });
 
-    test('should have OIDC provider for IRSA', () => {
-      expect(eksContent).toMatch(/resource\s+"aws_iam_openid_connect_provider"\s+"eks"/);
+    test('should have OIDC provider removed with explanation comment', () => {
+      expect(eksContent).toMatch(/OIDC Provider removed due to LocalStack limitation/);
     });
   });
 

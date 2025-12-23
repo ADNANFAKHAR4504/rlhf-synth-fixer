@@ -248,6 +248,8 @@ resource "aws_iam_policy" "ebs_csi_driver" {
   })
 }
 
+# Simplified IAM role without OIDC due to LocalStack limitation
+# In production, this should use OIDC federated identity for IRSA
 resource "aws_iam_role" "ebs_csi_driver" {
   name = "eks-ebs-csi-driver-${var.environment_suffix}"
 
@@ -257,15 +259,9 @@ resource "aws_iam_role" "ebs_csi_driver" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = aws_iam_openid_connect_provider.eks.arn
+          Service = "ec2.amazonaws.com"
         }
-        Action = "sts:AssumeRoleWithWebIdentity"
-        Condition = {
-          StringEquals = {
-            "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
-            "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
-          }
-        }
+        Action = "sts:AssumeRole"
       }
     ]
   })
@@ -528,6 +524,8 @@ resource "aws_iam_policy" "load_balancer_controller" {
   })
 }
 
+# Simplified IAM role without OIDC due to LocalStack limitation
+# In production, this should use OIDC federated identity for IRSA
 resource "aws_iam_role" "load_balancer_controller" {
   name = "eks-load-balancer-controller-${var.environment_suffix}"
 
@@ -537,15 +535,9 @@ resource "aws_iam_role" "load_balancer_controller" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = aws_iam_openid_connect_provider.eks.arn
+          Service = "ec2.amazonaws.com"
         }
-        Action = "sts:AssumeRoleWithWebIdentity"
-        Condition = {
-          StringEquals = {
-            "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"
-            "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
-          }
-        }
+        Action = "sts:AssumeRole"
       }
     ]
   })

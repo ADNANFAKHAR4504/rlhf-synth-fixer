@@ -35,10 +35,11 @@ output "cluster_oidc_issuer_url" {
   value       = aws_eks_cluster.main.identity[0].oidc[0].issuer
 }
 
-output "oidc_provider_arn" {
-  description = "ARN of the OIDC Provider for EKS"
-  value       = aws_iam_openid_connect_provider.eks.arn
-}
+# OIDC provider output removed due to LocalStack limitation
+# output "oidc_provider_arn" {
+#   description = "ARN of the OIDC Provider for EKS"
+#   value       = aws_iam_openid_connect_provider.eks.arn
+# }
 
 output "node_security_group_system_id" {
   description = "Security group ID for system node group"
