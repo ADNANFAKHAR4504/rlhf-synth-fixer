@@ -65,7 +65,7 @@ Create a production-ready VPC infrastructure using **Terraform with HCL** for a 
 
 ### Deployment Requirements - CRITICAL
 
-- All resource names must include **environmentSuffix** parameter for multi-environment support
+- Every infrastructure component name must include the environmentSuffix parameter for multi-environment support
 - All resources must use DeletionPolicy Delete or RemovalPolicy DESTROY with no Retain policies
 - Infrastructure must be completely destroyable for testing environments
 - VPC Flow Logs should write to CloudWatch Logs with appropriate IAM role
