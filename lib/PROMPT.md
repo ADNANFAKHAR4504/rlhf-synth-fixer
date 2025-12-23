@@ -14,11 +14,11 @@ CloudTrail logging enabled in all regions, writing logs to an encrypted and vers
 
 A Security Group that allows SSH access only from a CIDR range passed as a parameter.
 
-A Lambda function triggered daily by a CloudWatch Events rule to back up a dataset (simulate with logs or S3 copy).
+A Lambda function triggered daily by a CloudWatch Events rule to back up a dataset - simulate with logs or S3 copy.
 
 All EBS volumes created must be encrypted.
 
-An SNS topic with email subscriptions that notifies on security events (CloudTrail/GuardDuty).
+An SNS topic with email subscriptions that notifies on security events from CloudTrail or GuardDuty.
 
 S3 Bucket Policy that restricts access to specific IAM users.
 
@@ -38,7 +38,7 @@ No external scripts, no TODOs, no placeholders. Use Parameters, Mappings, Output
 
 Each requirement must be fully implemented. No summaries or simplified resource definitions.
 
-Do not use macros or custom resources — only standard AWS resources.
+Do not use macros or custom resources - only standard AWS resources.
 
 
 
