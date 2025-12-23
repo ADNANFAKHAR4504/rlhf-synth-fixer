@@ -1692,12 +1692,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: refs/pull/${{ github.event.pull_request.number }}/head
 
-      - name: Install jq for metadata parsing
-        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Check if ideal response review file exists
+        id: check-ideal-response-file
+        run: |
+          if [ -f .claude/prompts/claude-ideal-response-review.md ]; then
+            echo "file_exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Ideal response review file found"
+          else
+            echo "file_exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Ideal response review file not found - skipping this check"
+            echo "This is expected for PRs created before this feature was merged to main"
+          fi
 
       - name: Prepare Claude prompt for IDEAL_RESPONSE validation
+        if: steps.check-ideal-response-file.outputs.file_exists == 'true'
         id: prepare-ideal-response-prompt
         run: |
           PROMPT=$(cat .claude/prompts/claude-ideal-response-review.md)
@@ -1708,6 +1717,7 @@ jobs:
           } >> $GITHUB_ENV
 
       - name: Run Claude IDEAL_RESPONSE Code Validation
+        if: steps.check-ideal-response-file.outputs.file_exists == 'true'
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -1715,6 +1725,19 @@ jobs:
           allowed_tools: 'Bash,Read,Grep,Glob'
           trigger_phrase: ''
           custom_instructions: '${{ env.CLAUDE_IDEAL_RESPONSE_PROMPT }}'
+
+      - name: Verify Ideal Response Validation Result
+        run: |
+          echo "Verifying ideal response validation result..."
+          # Run the validation script directly to check if it passes
+          if bash .claude/scripts/validate-ideal-response.sh; then
+            echo "✅ Ideal response validation PASSED"
+            exit 0
+          else
+            echo "❌ Ideal response validation FAILED"
+            echo "::error::Ideal response validation failed. Check the Claude review comment for details."
+            exit 1
+          fi
 
   archive-folders:
     name: Archive Folders and Reset Repository
