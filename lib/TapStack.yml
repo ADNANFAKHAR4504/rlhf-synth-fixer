@@ -205,7 +205,7 @@ Resources:
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      ImageId: ami-ff0fea91
       InstanceType: t2.micro
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
