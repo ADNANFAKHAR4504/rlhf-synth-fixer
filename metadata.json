@@ -20,5 +20,6 @@
     "VPC Flow Logs",
     "Network ACL"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": "P1"
 }
