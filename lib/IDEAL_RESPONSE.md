@@ -604,7 +604,7 @@ boto3>=1.28.0
 - **Time-Based Sessions**: Maximum 1-hour sessions with sensitive data requiring fresh MFA
 - **S3 Access Points**: Granular network and policy controls
 
-### 🔐 **Comprehensive Encryption**
+###  **Comprehensive Encryption**
 - **Customer-Managed KMS**: Full control over encryption keys with rotation
 - **Encryption Enforcement**: Bucket policies deny unencrypted uploads
 - **Key Access Controls**: Service-specific KMS permissions
@@ -615,7 +615,7 @@ boto3>=1.28.0
 - **Real-time Alerts**: SNS notifications for sensitive data access
 - **Access Logging**: Detailed S3 request logging
 
-### 🛡️ **Defense in Depth**
+###  **Defense in Depth**
 - **Bucket Policies**: Additional security layer beyond IAM
 - **Network Controls**: VPC endpoint ready configuration
 - **Data Classification**: Separate policies for sensitive vs. general data
