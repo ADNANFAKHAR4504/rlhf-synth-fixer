@@ -334,8 +334,6 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
       'PrivateSubnet2Id',
       'PublicSubnet1Id',
       'PublicSubnet2Id',
-      'RDSInstanceId',
-      'RDSEndpoint',
       'S3BucketName',
       'LambdaFunctionName',
       'DBSubnetGroupName',
@@ -345,9 +343,9 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
       'DailyBackupRuleName'
     ];
 
-    // CloudTrailLogBucketName only exists when not running on LocalStack
+    // RDS outputs and CloudTrail only exist when not running on LocalStack
     if (!isLocalStack) {
-      expected.push('CloudTrailLogBucketName');
+      expected.push('RDSInstanceId', 'RDSEndpoint', 'CloudTrailLogBucketName');
     }
 
     expected.forEach(key => expect(outputs[key]).toBeDefined());
