@@ -28,6 +28,7 @@ pulumi-aws-infrastructure/
 ## 2. Main Pulumi Files
 
 ### `Pulumi.yaml`
+
 ```yaml
 name: aws-multi-environment-infrastructure
 runtime: python
@@ -42,51 +43,56 @@ template:
       default: dev
     vpc_cidr:
       description: CIDR block for VPC
-      default: "10.0.0.0/16"
+      default: '10.0.0.0/16'
     instance_type:
       description: EC2 instance type
       default: t3.medium
 ```
 
 ### `Pulumi.dev.yaml`
+
 ```yaml
 config:
   aws:region: us-west-2
   aws-multi-environment-infrastructure:environment: dev
-  aws-multi-environment-infrastructure:vpc_cidr: "10.1.0.0/16"
+  aws-multi-environment-infrastructure:vpc_cidr: '10.1.0.0/16'
   aws-multi-environment-infrastructure:instance_type: t3.medium
 ```
 
 ### `Pulumi.staging.yaml`
+
 ```yaml
 config:
   aws:region: eu-central-1
   aws-multi-environment-infrastructure:environment: staging
-  aws-multi-environment-infrastructure:vpc_cidr: "10.2.0.0/16"
+  aws-multi-environment-infrastructure:vpc_cidr: '10.2.0.0/16'
   aws-multi-environment-infrastructure:instance_type: t3.medium
 ```
 
 ### `Pulumi.test.yaml`
+
 ```yaml
 config:
   aws:region: ap-southeast-1
   aws-multi-environment-infrastructure:environment: test
-  aws-multi-environment-infrastructure:vpc_cidr: "10.3.0.0/16"
+  aws-multi-environment-infrastructure:vpc_cidr: '10.3.0.0/16'
   aws-multi-environment-infrastructure:instance_type: t3.medium
 ```
 
 ### `Pulumi.prod.yaml`
+
 ```yaml
 config:
   aws:region: us-east-1
   aws-multi-environment-infrastructure:environment: prod
-  aws-multi-environment-infrastructure:vpc_cidr: "10.4.0.0/16"
+  aws-multi-environment-infrastructure:vpc_cidr: '10.4.0.0/16'
   aws-multi-environment-infrastructure:instance_type: t3.medium
 ```
 
 ## 3. Main Infrastructure Code
 
 ### `__main__.py`
+
 ```python
 """
 Multi-Environment AWS Infrastructure with Pulumi
@@ -122,7 +128,7 @@ common_tags = {
 
 def main():
     """Main function to orchestrate infrastructure deployment"""
-    
+
     # 1. Create compute resources (Vpc, EC2, LoadBalancer)
     iam_component = IAMComponent(
         f"iam-{environment}",
@@ -138,30 +144,30 @@ def main():
         tags=common_tags,
         instance_profile=iam_component.instance_profile.name
     )
-    
-    
+
+
     # 3. Create S3 buckets with encryption
     storage_component = StorageComponent(
         f"storage-{environment}",
         environment=environment,
         tags=common_tags
     )
-    
+
     # 4. Create DynamoDB tables with PITR
     database_component = DatabaseComponent(
         f"database-{environment}",
         environment=environment,
         tags=common_tags
     )
-    
+
     # 5. Create serverless resources (Lambda)
     serverless_component = ServerlessComponent(
         f"serverless-{environment}",
         environment=environment,
         tags=common_tags,
-        lambda_role_arn=iam_component.lambda_role.arn 
-    )  
-    
+        lambda_role_arn=iam_component.lambda_role.arn
+    )
+
     # 7. Create monitoring and alarms
     monitoring_component = MonitoringComponent(
         name=f"ec2-monitoring-{environment}",
@@ -170,7 +176,7 @@ def main():
         notification_email="ogunfowokan.e@turing.com"
     )
 
-    
+
     # Export important resource information
     pulumi.export("vpc_id", compute_component.vpc.id)
     pulumi.export("alb_dns_name", compute_component.alb.dns_name)
@@ -187,6 +193,7 @@ if __name__ == "__main__":
 ## 4. Component Files
 
 ### `components/compute.py`
+
 ```python
 """
 VPC, EC2, LB Component - Creates isolated networking infrastructure
@@ -200,7 +207,7 @@ import ipaddress
 class ComputeComponent(pulumi.ComponentResource):
     def __init__(self, name: str, cidr_block: str, environment: str, tags: dict, instance_profile: str, opts=None):
         super().__init__("custom:aws:Compute", name, None, opts)
-        
+
         # Create VPC
         self.vpc = aws.ec2.Vpc(
             f"{name}-vpc",
@@ -210,7 +217,7 @@ class ComputeComponent(pulumi.ComponentResource):
             tags={**tags, "Name": f"{environment}-vpc"},
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # Create Internet Gateway
         self.igw = aws.ec2.InternetGateway(
             f"{name}-igw",
@@ -218,17 +225,17 @@ class ComputeComponent(pulumi.ComponentResource):
             tags={**tags, "Name": f"{environment}-igw"},
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # Get availability zones
         azs = aws.get_availability_zones(state="available")
-        
+
         # Create public subnets (2 for high availability)
         self.public_subnets = []
         self.public_subnet_ids = []
         # Create subnet cidrs
         network = ipaddress.ip_network(cidr_block)
         subnet_cidrs = list(network.subnets(new_prefix=24))
-        
+
         for i in range(min(2, len(azs.names))):
             subnet = aws.ec2.Subnet(
                 f"{name}-public-subnet-{i+1}",
@@ -242,11 +249,11 @@ class ComputeComponent(pulumi.ComponentResource):
             )
             self.public_subnets.append(subnet)
             self.public_subnet_ids.append(subnet.id)
-        
+
         # Create private subnets (2 for high availability)
         self.private_subnets = []
         self.private_subnet_ids = []
-        
+
         for i in range(min(2, len(azs.names))):
             subnet = aws.ec2.Subnet(
                 f"{name}-private-subnet-{i+1}",
@@ -259,7 +266,7 @@ class ComputeComponent(pulumi.ComponentResource):
             )
             self.private_subnets.append(subnet)
             self.private_subnet_ids.append(subnet.id)
-        
+
         # Create NAT Gateways for private subnets
         self.nat_gateways = []
         for i, private_subnet in enumerate(self.private_subnets):
@@ -270,7 +277,7 @@ class ComputeComponent(pulumi.ComponentResource):
                 tags={**tags, "Name": f"{environment}-nat-eip-{i+1}"},
                 opts=pulumi.ResourceOptions(parent=self)
             )
-            
+
             # Create NAT Gateway
             nat_gw = aws.ec2.NatGateway(
                 f"{name}-nat-gw-{i+1}",
@@ -280,7 +287,7 @@ class ComputeComponent(pulumi.ComponentResource):
                 opts=pulumi.ResourceOptions(parent=self)
             )
             self.nat_gateways.append(nat_gw)
-        
+
         # Create route tables
         # Public route table
         self.public_route_table = aws.ec2.RouteTable(
@@ -289,7 +296,7 @@ class ComputeComponent(pulumi.ComponentResource):
             tags={**tags, "Name": f"{environment}-public-rt"},
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # Public route to Internet Gateway
         aws.ec2.Route(
             f"{name}-public-route",
@@ -298,7 +305,7 @@ class ComputeComponent(pulumi.ComponentResource):
             gateway_id=self.igw.id,
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # Associate public subnets with public route table
         for i, subnet in enumerate(self.public_subnets):
             aws.ec2.RouteTableAssociation(
@@ -307,7 +314,7 @@ class ComputeComponent(pulumi.ComponentResource):
                 route_table_id=self.public_route_table.id,
                 opts=pulumi.ResourceOptions(parent=self)
             )
-        
+
         # Private route tables (one per AZ for high availability)
         self.private_route_tables = []
         for i, (private_subnet, nat_gw) in enumerate(zip(self.private_subnets, self.nat_gateways)):
@@ -317,7 +324,7 @@ class ComputeComponent(pulumi.ComponentResource):
                 tags={**tags, "Name": f"{environment}-private-rt-{i+1}"},
                 opts=pulumi.ResourceOptions(parent=self)
             )
-            
+
             # Route to NAT Gateway
             aws.ec2.Route(
                 f"{name}-private-route-{i+1}",
@@ -326,7 +333,7 @@ class ComputeComponent(pulumi.ComponentResource):
                 nat_gateway_id=nat_gw.id,
                 opts=pulumi.ResourceOptions(parent=self)
             )
-            
+
             # Associate private subnet with route table
             aws.ec2.RouteTableAssociation(
                 f"{name}-private-rta-{i+1}",
@@ -334,9 +341,9 @@ class ComputeComponent(pulumi.ComponentResource):
                 route_table_id=rt.id,
                 opts=pulumi.ResourceOptions(parent=self)
             )
-            
+
             self.private_route_tables.append(rt)
-        
+
         # Security Groups
 
         # ALB Security Group
@@ -404,7 +411,7 @@ class ComputeComponent(pulumi.ComponentResource):
             tags={**tags, "Name": f"{environment}-ec2-sg"},
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # Create instsances
         self.ec2_instances = []
 
@@ -479,7 +486,7 @@ class ComputeComponent(pulumi.ComponentResource):
         )
 
 
-        
+
         self.register_outputs({
             "vpc_id": self.vpc.id,
             "public_subnet_ids": self.public_subnet_ids,
@@ -492,6 +499,7 @@ class ComputeComponent(pulumi.ComponentResource):
 ```
 
 ### `components/iam.py`
+
 ```python
 """
 IAM Component - Creates IAM roles and policies following least privilege principle
@@ -504,7 +512,7 @@ import json
 class IAMComponent(pulumi.ComponentResource):
     def __init__(self, name: str, environment: str, tags: dict, opts=None):
         super().__init__("custom:aws:IAM", name, None, opts)
-        
+
         # EC2 Instance Role
         self.instance_role = aws.iam.Role(
             f"{name}-ec2-role",
@@ -521,7 +529,7 @@ class IAMComponent(pulumi.ComponentResource):
             tags={**tags, "Name": f"{environment}-ec2-role"},
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # EC2 Instance Policy
         self.instance_policy = aws.iam.RolePolicy(
             f"{name}-ec2-policy",
@@ -573,14 +581,14 @@ class IAMComponent(pulumi.ComponentResource):
             }),
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # Instance Profile
         self.instance_profile = aws.iam.InstanceProfile(
             f"{name}-instance-profile",
             role=self.instance_role.name,
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # Lambda Execution Role
         self.lambda_role = aws.iam.Role(
             f"{name}-lambda-role",
@@ -597,7 +605,7 @@ class IAMComponent(pulumi.ComponentResource):
             tags={**tags, "Name": f"{environment}-lambda-role"},
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # Lambda Basic Execution Policy
         aws.iam.RolePolicyAttachment(
             f"{name}-lambda-basic-execution",
@@ -605,7 +613,7 @@ class IAMComponent(pulumi.ComponentResource):
             policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # Lambda Custom Policy
         self.lambda_policy = aws.iam.RolePolicy(
             f"{name}-lambda-policy",
@@ -638,7 +646,7 @@ class IAMComponent(pulumi.ComponentResource):
             }),
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # Backup Role for automated backups
         self.backup_role = aws.iam.Role(
             f"{name}-backup-role",
@@ -655,7 +663,7 @@ class IAMComponent(pulumi.ComponentResource):
             tags={**tags, "Name": f"{environment}-backup-role"},
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # Attach AWS Backup service role policy
         aws.iam.RolePolicyAttachment(
             f"{name}-backup-service-role",
@@ -663,7 +671,7 @@ class IAMComponent(pulumi.ComponentResource):
             policy_arn="arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         self.register_outputs({
             "instance_role_arn": self.instance_role.arn,
             "lambda_role_arn": self.lambda_role.arn,
@@ -673,6 +681,7 @@ class IAMComponent(pulumi.ComponentResource):
 ```
 
 ### `components/storage.py`
+
 ```python
 """
 Storage Component - Creates S3 buckets with encryption and security best practices
@@ -685,7 +694,7 @@ import json
 class StorageComponent(pulumi.ComponentResource):
     def __init__(self, name: str, environment: str, tags: dict, opts=None):
         super().__init__("custom:aws:Storage", name, None, opts)
-        
+
         # S3 Bucket for application data
         self.bucket = aws.s3.Bucket(
             f"{name}-app-bucket",
@@ -693,7 +702,7 @@ class StorageComponent(pulumi.ComponentResource):
             tags={**tags, "Name": f"{environment}-app-bucket"},
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # S3 Bucket Versioning
         self.bucket_versioning = aws.s3.BucketVersioning(
             f"{name}-bucket-versioning",
@@ -703,12 +712,12 @@ class StorageComponent(pulumi.ComponentResource):
             ),
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # S3 Bucket Server-Side Encryption
         self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfiguration(
             f"{name}-bucket-encryption",
             bucket=self.bucket.id,
-            rules=[  # ✅ pass rules directly, no extra nested arg class
+            rules=[  # pass rules directly, no extra nested arg class
                 aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
                     apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
                         sse_algorithm="AES256"
@@ -719,7 +728,7 @@ class StorageComponent(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self)
         )
 
-        
+
         # S3 Bucket Public Access Block
         self.bucket_public_access_block = aws.s3.BucketPublicAccessBlock(
             f"{name}-bucket-pab",
@@ -730,7 +739,7 @@ class StorageComponent(pulumi.ComponentResource):
             restrict_public_buckets=True,
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # S3 Bucket Policy for secure access
         self.bucket_policy = aws.s3.BucketPolicy(
             f"{name}-bucket-policy",
@@ -757,7 +766,7 @@ class StorageComponent(pulumi.ComponentResource):
             })),
             opts=pulumi.ResourceOptions(parent=self, depends_on=[self.bucket_public_access_block])
         )
-        
+
         # S3 Bucket Lifecycle Configuration
         self.bucket_lifecycle = aws.s3.BucketLifecycleConfiguration(
             f"{name}-bucket-lifecycle",
@@ -787,7 +796,7 @@ class StorageComponent(pulumi.ComponentResource):
             ],
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         # Create Systems Manager Parameters for configuration
         self.ssm_parameter_db_config = aws.ssm.Parameter(
             f"{name}-db-config",
@@ -802,7 +811,7 @@ class StorageComponent(pulumi.ComponentResource):
             tags={**tags, "Name": f"{environment}-db-config"},
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         self.ssm_parameter_app_config = aws.ssm.Parameter(
             f"{name}-app-config",
             name=f"/{environment}/application/config",
@@ -816,7 +825,7 @@ class StorageComponent(pulumi.ComponentResource):
             tags={**tags, "Name": f"{environment}-app-config"},
             opts=pulumi.ResourceOptions(parent=self)
         )
-        
+
         self.register_outputs({
             "bucket_name": self.bucket.bucket,
             "bucket_arn": self.bucket.arn,
@@ -826,6 +835,7 @@ class StorageComponent(pulumi.ComponentResource):
 ```
 
 ### `components/database.py`
+
 ```python
 """
 Database Component - Creates DynamoDB tables with PITR and backup configurations
@@ -837,11 +847,11 @@ import pulumi_aws as aws
 class DatabaseComponent(pulumi.ComponentResource):
     def __init__(self, name: str, environment: str, tags: dict, opts=None):
         super().__init__("custom:aws:Database", name, None, opts)
-        
+
         # Determine capacity based on environment
         read_capacity = 5 if environment in ["dev", "test"] else 20
         write_capacity = 5 if environment in ["dev", "test"] else 20
-        
+
         # DynamoDB Table
         self.table = aws.dynamodb.Table(
             f"{name}-main-table",
@@ -887,7 +897,7 @@ class DatabaseComponent(pulumi.ComponentResource):
                     projection_type="ALL"
                 )
             ],
-            # ✅ Enable PITR
+            # Enable PITR
             point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(
                 enabled=True
             ),
@@ -896,6 +906,7 @@ class DatabaseComponent(pulumi.ComponentResource):
 ```
 
 ### `components/serverless.py`
+
 ```python
 import pulumi
 import pulumi_aws as aws
@@ -918,13 +929,13 @@ def zip_directory_contents(source_dir: str, output_zip: str):
         zipf.write(file_path, arcname)
 
 class ServerlessComponent(pulumi.ComponentResource):
-    def __init__(self, 
-                 name: str, 
-                 environment: str, 
-                 tags: dict, 
+    def __init__(self,
+                 name: str,
+                 environment: str,
+                 tags: dict,
                  lambda_role_arn: str,   # IAM role ARN from your IAM component
-                 handler: str = "lambda_function.lambda_handler", 
-                 runtime: str = "python3.11", 
+                 handler: str = "lambda_function.lambda_handler",
+                 runtime: str = "python3.11",
                  opts=None):
         super().__init__("custom:aws:Serverless", name, None, opts)
 
@@ -933,7 +944,7 @@ class ServerlessComponent(pulumi.ComponentResource):
 
         # 3. Create the zip (only contents)
         zip_directory_contents(lambda_folder, zip_file)
-        
+
         # 1. Validate lambda.zip exists
         lambda_zip_path = os.path.join(os.getcwd(), "lib/components/lambda.zip")
         if not os.path.exists(lambda_zip_path):
@@ -958,6 +969,7 @@ class ServerlessComponent(pulumi.ComponentResource):
 ```
 
 ### `components/monitoring.py`
+
 ```python
 import pulumi
 import pulumi_aws as aws
