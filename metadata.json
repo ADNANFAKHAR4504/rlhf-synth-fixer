@@ -3,9 +3,9 @@
   "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "323",
+  "po_id": "LS-323",
   "team": "synth-2",
-  "startedAt": "2025-08-07T00:23:09-05:00",
+  "startedAt": "2025-12-23T15:30:00-05:00",
   "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
@@ -18,5 +18,9 @@
     "EC2",
     "S3"
   ],
-  "wave": "P0"
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "323",
+    "pr": "Pr659"
+  }
 }

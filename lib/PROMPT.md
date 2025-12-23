@@ -1,32 +1,21 @@
-# Secure Multi-Region Infrastructure for Software Company
+# Secure Infrastructure for Customer Data
 
-I need to implement secure AWS infrastructure for a medium-sized software company that handles sensitive customer data. The solution needs to be highly secure and distributed across multiple regions for high availability.
+I need to set up secure AWS infrastructure for our company that handles sensitive customer data. We're using CDK with TypeScript.
 
-## Requirements
+Here's what we need:
 
-**Security & Compliance:**
-- All data must be encrypted at rest and in transit
-- IAM policies should not exceed 5 attached policies per user
-- Use IAM roles for EC2 instances instead of IAM users
-- Enable comprehensive logging for all AWS services for auditing
-- Lock down S3 buckets from public access
-- RDS instances must use customer-managed CMKs for encryption
-- Security groups must log all inbound rules and avoid open access
+We need a VPC with both public and private subnets spread across two availability zones. The private subnets should be completely isolated - no NAT gateways to keep costs down and reduce attack surface.
 
-**High Availability:**
-- Distribute infrastructure across at least 3 AWS regions (us-east-1, us-west-2, and a third region)
-- VPC with multiple subnets across different availability zones
-- S3 versioning enabled to protect against accidental deletions
+For compute, we'll have EC2 instances that need proper IAM roles attached. These instances should be able to write logs to CloudWatch and decrypt data using KMS. Don't use IAM users - everything should go through roles. Make sure the role doesn't have more than 5 policies attached total.
 
-**Latest AWS Features:**
-- Integrate AWS Security Hub for unified security management and risk prioritization
-- Use Amazon GuardDuty Extended Threat Detection for multi-stage attack detection
+We need two S3 buckets - one for actual data storage and another for access logs. The data bucket should log all access to the logs bucket. Both buckets need KMS encryption with a customer-managed key, versioning enabled, and all public access blocked. Add lifecycle rules to the data bucket that moves objects to Standard-IA after 30 days. Both buckets should enforce SSL connections only.
 
-**Technical Requirements:**
-- Use AWS CDK with TypeScript
-- Follow project-based naming conventions (project-name-component)
-- Avoid hardcoding sensitive information
-- CDK assets should be stored with encryption and version control
-- Ensure CDK v2 compatibility
+Set up a security group that only allows HTTPS traffic from internal networks - specifically from the 10.0.0.0/8 range. For egress, disable the default allow-all rule since we want tight control over outbound connections.
 
-Please provide infrastructure code with one code block per file that creates a comprehensive secure setup meeting all these requirements.
+Everything should be encrypted with a single KMS key that has automatic rotation enabled. CloudWatch can use this key for encrypting logs, and S3 uses it for bucket encryption.
+
+For naming, use a pattern like secure-company-ENV-resource where ENV comes from either props or context, defaulting to dev if neither is provided.
+
+Make sure to export the VPC ID, both bucket names, the EC2 role ARN, and KMS key ARN so other stacks can reference them.
+
+Deploy this to us-east-1.
