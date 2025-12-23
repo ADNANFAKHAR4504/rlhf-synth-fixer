@@ -123,7 +123,6 @@ variable "db_password" {
   description = "Database master password"
   type        = string
   sensitive   = true
-  default     = "TempPassword123!"
 }
 
 variable "db_multi_az" {
