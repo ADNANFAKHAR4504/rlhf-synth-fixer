@@ -28,5 +28,6 @@
     "NAT Gateway",
     "Internet Gateway",
     "Security Groups"
-  ]
+  ],
+  "training_quality": 8
 }
