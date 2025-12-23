@@ -11,7 +11,19 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "Secrets Manager",
+    "IAM",
+    "VPC"
+  ],
   "wave": "P1",
   "migrated_from": {
     "po_id": "291355",
