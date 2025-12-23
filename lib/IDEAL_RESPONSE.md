@@ -1,8 +1,12 @@
-# EKS Fargate Cluster - Ideal Terraform Implementation
+# EKS Fargate Cluster - Terraform HCL Implementation
+
+## Platform: Terraform with HCL
+
+This is a complete **Terraform** implementation using **HCL** (HashiCorp Configuration Language). All infrastructure is defined in `.tf` files using Terraform resource blocks.
 
 ## Summary
 
-Production-ready EKS cluster using ONLY Fargate compute profiles. Successfully deployed and tested with 28 AWS resources across 2 availability zones.
+Production-ready EKS cluster using ONLY Fargate compute profiles. Successfully deployed and tested with 28 AWS resources across 2 availability zones using Terraform.
 
 ## Key Components
 
