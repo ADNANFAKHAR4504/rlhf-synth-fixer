@@ -11,6 +11,7 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
+  "wave": "P0",
   "aws_services": [
     "S3 Bucket",
     "DynamoDB",
