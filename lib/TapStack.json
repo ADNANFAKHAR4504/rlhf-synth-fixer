@@ -36,6 +36,17 @@
     "PrivateSubnet2CIDR": {
       "Type": "String",
       "Default": "10.0.4.0/24"
+    },
+    "DBMasterUsername": {
+      "Type": "String",
+      "Default": "postgres",
+      "Description": "Database master username"
+    },
+    "DBMasterPassword": {
+      "Type": "String",
+      "Default": "MySecurePassword123!",
+      "NoEcho": true,
+      "Description": "Database master password"
     }
   },
   "Resources": {
@@ -445,40 +456,24 @@
       "Properties": {
         "Name": "MyRDSSecret",
         "Description": "RDS master user credentials",
-        "GenerateSecretString": {
-          "SecretStringTemplate": "{\"username\": \"postgres\"}",
-          "GenerateStringKey": "password",
-          "PasswordLength": 20,
-          "ExcludeCharacters": "\"@/\\"
+        "SecretString": {
+          "Fn::Sub": "{\n  \"username\": \"${DBMasterUsername}\",\n  \"password\": \"${DBMasterPassword}\"\n}\n"
         }
       }
     },
     "RDSInstance": {
       "Type": "AWS::RDS::DBInstance",
+      "DependsOn": "MyRDSSecret",
       "Properties": {
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
         "EngineVersion": "8.0.43",
         "MultiAZ": true,
         "MasterUsername": {
-          "Fn::Sub": [
-            "{{resolve:secretsmanager:${SecretArn}::username}}",
-            {
-              "SecretArn": {
-                "Ref": "MyRDSSecret"
-              }
-            }
-          ]
+          "Ref": "DBMasterUsername"
         },
         "MasterUserPassword": {
-          "Fn::Sub": [
-            "{{resolve:secretsmanager:${SecretArn}::password}}",
-            {
-              "SecretArn": {
-                "Ref": "MyRDSSecret"
-              }
-            }
-          ]
+          "Ref": "DBMasterPassword"
         },
         "AllocatedStorage": 20,
         "DBInstanceIdentifier": "WebAppDB",

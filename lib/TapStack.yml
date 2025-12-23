@@ -36,6 +36,17 @@ Parameters:
     Type: String
     Default: 10.0.4.0/24
 
+  DBMasterUsername:
+    Type: String
+    Default: postgres
+    Description: Database master username
+
+  DBMasterPassword:
+    Type: String
+    Default: MySecurePassword123!
+    NoEcho: true
+    Description: Database master password
+
 Resources:
 
   VPC:
@@ -264,28 +275,22 @@ Resources:
     Properties:
       Name: MyRDSSecret
       Description: RDS master user credentials
-      GenerateSecretString:
-        SecretStringTemplate: '{"username": "postgres"}'
-        GenerateStringKey: password
-        PasswordLength: 20
-        ExcludeCharacters: '"@/\'
+      SecretString: !Sub |
+        {
+          "username": "${DBMasterUsername}",
+          "password": "${DBMasterPassword}"
+        }
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn: MyRDSSecret
     Properties:
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: 8.0.43
       MultiAZ: true
-      MasterUsername:
-        !Sub
-          - '{{resolve:secretsmanager:${SecretArn}::username}}'
-          - { SecretArn: !Ref MyRDSSecret }
-
-      MasterUserPassword:
-        !Sub
-          - '{{resolve:secretsmanager:${SecretArn}::password}}'
-          - { SecretArn: !Ref MyRDSSecret }
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Ref DBMasterPassword
       AllocatedStorage: 20
       DBInstanceIdentifier: WebAppDB
       VPCSecurityGroups:
