@@ -7,10 +7,20 @@
   "team": "synth-2",
   "startedAt": "2025-12-03T18:16:23.616Z",
   "subtask": "Provisioning of Infrastructure Environments",
+  "wave": "P0",
+  "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "EC2 Instance"
+    "EC2 Instance",
+    "VPC",
+    "S3",
+    "Cloudwatch",
+    "IAM",
+    "SSM",
+    "ALB",
+    "SNS",
+    "KMS"
   ]
 }
