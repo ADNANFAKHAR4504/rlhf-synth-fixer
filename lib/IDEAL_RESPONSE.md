@@ -247,7 +247,7 @@ botocore>=1.31.0
 
 ## Testing Implementation
 
-### Unit Tests (test/market_data_stack_unit.test.ts)
+### Unit Tests
 
 **52 comprehensive test cases** covering:
 
@@ -324,7 +324,7 @@ botocore>=1.31.0
 
 **Test Results**:  **52/52 tests passing**
 
-### Integration Tests (test/market_data_stack_integration.test.ts)
+### Integration Tests
 
 **15 comprehensive integration test cases** covering:
 
