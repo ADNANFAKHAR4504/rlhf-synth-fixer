@@ -18,5 +18,6 @@
     "CloudFront",
     "IAM",
     "CloudFormation"
-  ]
+  ],
+  "wave": "P1"
 }
