@@ -1,47 +1,17 @@
-I need help setting up a serverless API infrastructure using CloudFormation YAML for LocalStack deployment. Here's what I'm trying to build:
+I need to build a serverless API using CloudFormation YAML that works with LocalStack. The setup needs a Lambda function running python3.11 that handles HTTP requests coming through API Gateway. When requests come in, Lambda should process them and save the data to an S3 bucket.
 
-Lambda Function Setup:
-- Deploy a Lambda function that processes incoming HTTP requests routed from API Gateway
-- Should run on python3.11 runtime
-- Lambda writes processed request data to an S3 bucket
+For the API Gateway part, set it up as a REST API with proxy integration so all paths go to the same Lambda function. I want both the root path and any wildcard paths to work.
 
-API Gateway Integration:
-- API Gateway REST API integrated with Lambda using proxy integration
-- All HTTP requests flow through API Gateway to Lambda
-- Both root path and wildcard paths connect to the same Lambda function
+The Lambda needs an IAM role but keep it minimal - just enough permissions to write logs to its CloudWatch log group, do S3 operations on the data bucket like GetObject, PutObject, DeleteObject and ListBucket, and KMS permissions to decrypt and generate data keys since the bucket uses encryption.
 
-IAM Permissions:
-- Lambda execution role with specific least-privilege permissions
-- CloudWatch Logs access limited to its own log group for writing logs
-- S3 access scoped to the data bucket only: GetObject, PutObject, DeleteObject for objects and ListBucket for the bucket
-- KMS permissions restricted to decrypt and generate data keys for the bucket encryption key
+The S3 bucket should encrypt everything with a customer-managed KMS key, block public access, and have versioning turned on. Lambda will write processed request data here.
 
-S3 Data Storage:
-- S3 bucket receives processed data from Lambda
-- Customer-managed KMS key encrypts all bucket objects
-- Public access blocked on the bucket
-- Versioning enabled
+Set up a CloudWatch log group for Lambda with 14 day retention so I can see what requests come in and what responses go out.
 
-CloudWatch Logging:
-- Lambda sends all logs to a dedicated CloudWatch log group
-- Log group configured with 14 day retention
-- Captures incoming requests and outgoing responses
+Create a KMS key for the S3 bucket encryption and add an alias to make it easier to reference. Lambda needs to access this key when writing encrypted data to S3.
 
-KMS Encryption:
-- Customer-managed KMS key created for S3 bucket encryption
-- Lambda accesses this key to encrypt data written to S3
-- Key alias added for easier reference
+Since this runs on LocalStack, don't include key rotation, bucket lifecycle policies, or CloudWatch alarms - LocalStack doesn't support those well. Also use inline IAM policies instead of managed policy ARNs.
 
-LocalStack Compatibility:
-- Skip key rotation since LocalStack doesn't support it
-- No bucket lifecycle policies
-- No CloudWatch alarms
-- Use inline IAM policies instead of managed policy ARNs
+The stack should output the API Gateway URL so I can test it, plus the Lambda ARN, S3 bucket name, and KMS key details.
 
-Stack Outputs:
-- API Gateway URL for testing the endpoint
-- Lambda function ARN
-- S3 bucket name
-- KMS key ID and alias
-
-Lambda should accept incoming requests through API Gateway, extract HTTP method, path, query params, and body, save that data to S3 as JSON files organized by date, and return a success response with request ID and S3 location.
+The Lambda code itself should take incoming requests from API Gateway, pull out the HTTP method, path, query parameters, and body, then save all that as JSON files in S3 organized by date. Return a success response with the request ID and where it saved the file in S3.
