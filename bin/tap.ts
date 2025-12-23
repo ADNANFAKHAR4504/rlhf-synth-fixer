@@ -5,9 +5,19 @@ import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
 
-// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
+// Detect if running in LocalStack
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('127.0.0.1') ||
+  process.env.LOCALSTACK === 'true';
+
+// Get environment suffix from context (set by CI/CD pipeline) or use appropriate default
+let environmentSuffix = app.node.tryGetContext('environmentSuffix');
+if (!environmentSuffix) {
+  environmentSuffix = isLocalStack ? 'localstack' : 'dev';
+}
+
+const stackName = isLocalStack ? 'TapStackLocalStack' : `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 const prNumber = process.env.PR_NUMBER || 'unknown';
