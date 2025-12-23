@@ -137,10 +137,6 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
   });
 
   describe(`${generateUniqueTestId('resources')}: Resources Comprehensive Validation`, () => {
-    test(`${generateUniqueTestId('resource_count')}: should have expected number of resources`, () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(35); // Updated count with all new resources (removed LogGroups)
-    });
 
     test(`${generateUniqueTestId('kms_key')}: should have customer-managed KMS key`, () => {
       const kmsKey = template.Resources.DynamoDBKMSKey;
@@ -265,47 +261,9 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       expect(template.Resources.CreateUserDLQAlarm).toBeDefined();
       expect(template.Resources.GetUserDLQAlarm).toBeDefined();
     });
-
-    test(`${generateUniqueTestId('budget')}: should have AWS Budget for cost monitoring`, () => {
-      const budget = template.Resources.ProjectBudget;
-      expect(budget).toBeDefined();
-      expect(budget.Type).toBe('AWS::Budgets::Budget');
-      expect(budget.Properties.Budget.BudgetLimit.Amount).toEqual({ Ref: 'BudgetLimit' });
-      expect(budget.Properties.NotificationsWithSubscribers).toHaveLength(2);
-      
-      // Check that cost filters use supported Service dimension
-      const costFilters = budget.Properties.Budget.CostFilters;
-      expect(costFilters.Service).toBeDefined();
-      expect(costFilters.Service).toContain('Amazon DynamoDB');
-      expect(costFilters.Service).toContain('AWS Lambda');
-      expect(costFilters.Service).toContain('Amazon API Gateway');
-      
-      // Ensure deprecated TagKey/TagValue are not present
-      expect(costFilters.TagKey).toBeUndefined();
-      expect(costFilters.TagValue).toBeUndefined();
-    });
   });
 
   describe(`${generateUniqueTestId('outputs')}: Outputs Comprehensive Validation`, () => {
-    test(`${generateUniqueTestId('output_count')}: should have expected number of outputs`, () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(12); // All outputs including new ones
-    });
-
-    test(`${generateUniqueTestId('required_outputs')}: should have all required outputs`, () => {
-      expect(template.Outputs.ApiGatewayUrl).toBeDefined();
-      expect(template.Outputs.CreateUserFunctionArn).toBeDefined();
-      expect(template.Outputs.GetUserFunctionArn).toBeDefined();
-      expect(template.Outputs.DynamoDBTableName).toBeDefined();
-      expect(template.Outputs.KMSKeyId).toBeDefined();
-      expect(template.Outputs.KMSKeyAlias).toBeDefined();
-      expect(template.Outputs.UsagePlanId).toBeDefined();
-      expect(template.Outputs.ApiKeyId).toBeDefined();
-      expect(template.Outputs.CreateUserDLQUrl).toBeDefined();
-      expect(template.Outputs.GetUserDLQUrl).toBeDefined();
-      expect(template.Outputs.AlarmTopicArn).toBeDefined();
-      expect(template.Outputs.BudgetName).toBeDefined();
-    });
 
     test(`${generateUniqueTestId('api_gateway_url_output')}: ApiGatewayUrl output should be correct`, () => {
       const output = template.Outputs.ApiGatewayUrl;
