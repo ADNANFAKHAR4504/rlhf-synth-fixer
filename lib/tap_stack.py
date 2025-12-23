@@ -13,7 +13,7 @@ class TapStackArgs:
                  regions: Optional[list] = None,
                  tags: Optional[dict] = None):
         self.environment_suffix = environment_suffix or 'dev'
-        self.regions = ['us-west-2']
+        self.regions = regions or ['us-east-1', 'us-west-2']
         self.tags = tags or {
             'Project': 'ProjectX',
             'Security': 'High',
@@ -40,59 +40,60 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        region = 'us-west-2'
-        region_suffix = region.replace('-', '')
+        # Create resources for each region
+        for region in self.regions:
+            region_suffix = region.replace('-', '')
 
-        print(f"🌍 Setting up AWS provider for region: {region}")
-        self.providers[region] = aws.Provider(
-            f"aws-provider-{region}-{self.environment_suffix}",
-            region=region
-        )
-
-        def provider_opts(deps=None):
-            return ResourceOptions(
-                parent=self,
-                provider=self.providers[region],
-                depends_on=deps or []
+            print(f"🌍 Setting up AWS provider for region: {region}")
+            self.providers[region] = aws.Provider(
+                f"aws-provider-{region}-{self.environment_suffix}",
+                region=region
             )
 
-        print("🌐 Creating Networking Infrastructure (no NAT/NACL)...")
-        self.regional_networks[region] = NetworkSecurityInfrastructure(
-            name=f"secure-projectx-network-{region_suffix}-{self.environment_suffix}",
-            region=region,
-            environment=self.environment_suffix,
-            kms_key_arn=self.identity_access.kms_key.arn,
-            tags=self.tags,
-            opts=provider_opts([self.identity_access])
-        )
+            def provider_opts(deps=None, current_region=region):
+                return ResourceOptions(
+                    parent=self,
+                    provider=self.providers[current_region],
+                    depends_on=deps or []
+                )
 
-        print("📱 Creating Monitoring Infrastructure...")
-        self.regional_monitoring[region] = SecurityMonitoringInfrastructure(
-            name=f"secure-projectx-monitoring-{region_suffix}-{self.environment_suffix}",
-            region=region,
-            tags=self.tags,
-            opts=provider_opts([
-                self.identity_access,
-                self.regional_networks[region]
-            ])
-        )
+            print(f"🌐 Creating Networking Infrastructure for {region}...")
+            self.regional_networks[region] = NetworkSecurityInfrastructure(
+                name=f"secure-projectx-network-{region_suffix}-{self.environment_suffix}",
+                region=region,
+                environment=self.environment_suffix,
+                kms_key_arn=self.identity_access.kms_key.arn,
+                tags=self.tags,
+                opts=provider_opts([self.identity_access])
+            )
 
-        print("🛡️ Creating Data Protection Infrastructure...")
-        self.regional_data_protection[region] = DataProtectionInfrastructure(
-            name=f"secure-projectx-data-{region_suffix}-{self.environment_suffix}",
-            region=region,
-            vpc_id=self.regional_networks[region].vpc_id,
-            private_subnet_ids=self.regional_networks[region].private_subnet_ids,
-            database_security_group_id=self.regional_networks[region].database_security_group_id,
-            kms_key_arn=self.identity_access.kms_key.arn,
-            sns_topic_arn=self.regional_monitoring[region].sns_topic.arn,
-            tags=self.tags,
-            opts=provider_opts([
-                self.regional_networks[region],
-                self.regional_monitoring[region],
-                self.identity_access
-            ])
-        )
+            print(f"📱 Creating Monitoring Infrastructure for {region}...")
+            self.regional_monitoring[region] = SecurityMonitoringInfrastructure(
+                name=f"secure-projectx-monitoring-{region_suffix}-{self.environment_suffix}",
+                region=region,
+                tags=self.tags,
+                opts=provider_opts([
+                    self.identity_access,
+                    self.regional_networks[region]
+                ])
+            )
+
+            print(f"🛡️ Creating Data Protection Infrastructure for {region}...")
+            self.regional_data_protection[region] = DataProtectionInfrastructure(
+                name=f"secure-projectx-data-{region_suffix}-{self.environment_suffix}",
+                region=region,
+                vpc_id=self.regional_networks[region].vpc_id,
+                private_subnet_ids=self.regional_networks[region].private_subnet_ids,
+                database_security_group_id=self.regional_networks[region].database_security_group_id,
+                kms_key_arn=self.identity_access.kms_key.arn,
+                sns_topic_arn=self.regional_monitoring[region].sns_topic.arn,
+                tags=self.tags,
+                opts=provider_opts([
+                    self.regional_networks[region],
+                    self.regional_monitoring[region],
+                    self.identity_access
+                ])
+            )
 
         # print("📊 Setting up VPC Flow Logs...")
         # self.regional_monitoring[region].setup_vpc_flow_logs(
@@ -104,11 +105,11 @@ class TapStack(pulumi.ComponentResource):
         # )
 
         print("📤 Exporting Outputs...")
-        pulumi.export("primary_vpc_id", self.regional_networks[region].vpc_id)
+        # Export primary region (first in list) for backward compatibility
+        primary_region = self.regions[0]
+        pulumi.export("primary_vpc_id", self.regional_networks[primary_region].vpc_id)
         pulumi.export("kms_key_arn", self.identity_access.kms_key.arn)
-        # pulumi.export("guardduty_detector_id", self.regional_monitoring[region].guardduty_detector.id)
-        # pulumi.export("sns_topic_arn", self.regional_monitoring[region].sns_topic.arn)
-        pulumi.export("secure_s3_bucket", self.regional_data_protection[region].secure_s3_bucket.bucket)
-        pulumi.export("public_subnet_ids", self.regional_networks[region].public_subnet_ids)
-        pulumi.export("private_subnet_ids", self.regional_networks[region].private_subnet_ids)
-        pulumi.export("database_security_group_id", self.regional_networks[region].database_security_group_id)
+        pulumi.export("secure_s3_bucket", self.regional_data_protection[primary_region].secure_s3_bucket.bucket)
+        pulumi.export("public_subnet_ids", self.regional_networks[primary_region].public_subnet_ids)
+        pulumi.export("private_subnet_ids", self.regional_networks[primary_region].private_subnet_ids)
+        pulumi.export("database_security_group_id", self.regional_networks[primary_region].database_security_group_id)

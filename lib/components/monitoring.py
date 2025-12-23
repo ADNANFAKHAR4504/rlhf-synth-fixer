@@ -6,8 +6,9 @@ import pulumi
 import pulumi_aws as aws
 from pulumi import ResourceOptions
 from pulumi_aws import get_caller_identity
+from .base import BaseInfrastructureComponent
 
-class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
+class SecurityMonitoringInfrastructure(pulumi.ComponentResource, BaseInfrastructureComponent):
     def __init__(
         self,
         name: str,
@@ -15,15 +16,8 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
         tags: Optional[dict] = None,
         opts: Optional[ResourceOptions] = None
     ):
-        super().__init__('projectx:monitoring:SecurityMonitoring', name, None, opts)
-
-        self.region = region
-        self.tags = tags or {}
-
-        if not isinstance(self.tags, dict):
-            raise ValueError("tags must be a dictionary")
-        if not region:
-            raise ValueError("region must be provided")
+        pulumi.ComponentResource.__init__(self, 'projectx:monitoring:SecurityMonitoring', name, None, opts)
+        BaseInfrastructureComponent.__init__(self, region, tags)
 
         self._create_cloudwatch_resources()
         self._create_sns_resources()

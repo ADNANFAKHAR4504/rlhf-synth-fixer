@@ -6,9 +6,10 @@ import pulumi_aws as aws
 import pulumi_random as random
 from pulumi import ResourceOptions
 from pulumi_aws import get_caller_identity
+from .base import BaseInfrastructureComponent
 
 
-class DataProtectionInfrastructure(pulumi.ComponentResource):
+class DataProtectionInfrastructure(pulumi.ComponentResource, BaseInfrastructureComponent):
     """Data Protection Infrastructure Component
     
     This component creates and manages:
@@ -26,20 +27,14 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
                  sns_topic_arn: pulumi.Input[str],
                  tags: Optional[dict] = None,
                  opts: Optional[ResourceOptions] = None):
-        super().__init__('projectx:data:DataProtection', name, None, opts)
+        pulumi.ComponentResource.__init__(self, 'projectx:data:DataProtection', name, None, opts)
+        BaseInfrastructureComponent.__init__(self, region, tags)
 
-        self.region = region
         self.vpc_id = vpc_id
         self.private_subnet_ids = private_subnet_ids
         self.database_security_group_id = database_security_group_id
         self.kms_key_arn = kms_key_arn
         self.sns_topic_arn = sns_topic_arn
-        self.tags = tags or {}
-
-        if not isinstance(self.tags, dict):
-            raise ValueError("tags must be a dictionary")
-        if not region:
-            raise ValueError("region must be provided")
 
         self._create_s3_resources()
 
@@ -70,21 +65,21 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
         )
 
         # Enable versioning
-        self.s3_versioning = aws.s3.BucketVersioningV2(
+        self.s3_versioning = aws.s3.BucketVersioning(
             f"secure-s3-versioning-{self.region.replace('-', '')}",
             bucket=self.secure_s3_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                 status="Enabled"
             ),
             opts=ResourceOptions(parent=self, depends_on=[self.secure_s3_bucket])
         )
 
         # Server-side encryption configuration
-        self.s3_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+        self.s3_encryption = aws.s3.BucketServerSideEncryptionConfiguration(
             f"secure-s3-encryption-{self.region.replace('-', '')}",
             bucket=self.secure_s3_bucket.id,
-            rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+            rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                     sse_algorithm="aws:kms",
                     kms_master_key_id=self.kms_key_arn
                 )
@@ -104,13 +99,13 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
         )
 
         # Lifecycle configuration for cost optimization
-        self.s3_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
+        self.s3_lifecycle = aws.s3.BucketLifecycleConfiguration(
             f"secure-s3-lifecycle-{self.region.replace('-', '')}",
             bucket=self.secure_s3_bucket.id,
-            rules=[aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+            rules=[aws.s3.BucketLifecycleConfigurationRuleArgs(
                 id="secure-lifecycle-rule",
                 status="Enabled",
-                noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionExpirationArgs(
+                noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs(
                     noncurrent_days=30
                 )
             )],

@@ -71,9 +71,6 @@ for region in regions:
     pulumi.export(f"{region.replace('-', '_')}_vpc_id", stack.regional_networks[region].vpc_id)
     pulumi.export(f"{region.replace('-', '_')}_public_subnet_ids", stack.regional_networks[region].public_subnet_ids)
     pulumi.export(f"{region.replace('-', '_')}_private_subnet_ids", stack.regional_networks[region].private_subnet_ids)
-    pulumi.export(f"{region.replace('-', '_')}_database_subnet_ids", stack.regional_networks[region].database_subnet_ids)
-    pulumi.export(f"{region.replace('-', '_')}_web_security_group_id", stack.regional_networks[region].web_security_group_id)
-    pulumi.export(f"{region.replace('-', '_')}_app_security_group_id", stack.regional_networks[region].app_security_group_id)
     pulumi.export(f"{region.replace('-', '_')}_database_security_group_id", stack.regional_networks[region].database_security_group_id)
 
 # Export identity and access management resources
@@ -82,12 +79,13 @@ pulumi.export("kms_key_id", stack.identity_access.kms_key.id)
 pulumi.export("ec2_instance_role_arn", stack.identity_access.ec2_instance_role.arn)
 pulumi.export("lambda_execution_role_arn", stack.identity_access.lambda_execution_role.arn)
 
-# Export monitoring resources
-pulumi.export("sns_topic_arn", stack.monitoring.sns_topic.arn)
-pulumi.export("security_log_group_name", stack.monitoring.security_log_group.name)
+# Export monitoring resources (from primary region)
+primary_region = regions[0]
+pulumi.export("sns_topic_arn", stack.regional_monitoring[primary_region].sns_topic.arn)
+pulumi.export("security_log_group_name", stack.regional_monitoring[primary_region].security_log_group.name)
 
 # Export data protection resources for each region
 for region in regions:
-    if hasattr(stack, 'data_protection') and region in stack.data_protection:
-        pulumi.export(f"{region.replace('-', '_')}_secure_s3_bucket", stack.data_protection[region].secure_s3_bucket.bucket)
-        pulumi.export(f"{region.replace('-', '_')}_secure_s3_bucket_arn", stack.data_protection[region].secure_s3_bucket.arn)
+    if hasattr(stack, 'regional_data_protection') and region in stack.regional_data_protection:
+        pulumi.export(f"{region.replace('-', '_')}_secure_s3_bucket", stack.regional_data_protection[region].secure_s3_bucket.bucket)
+        pulumi.export(f"{region.replace('-', '_')}_secure_s3_bucket_arn", stack.regional_data_protection[region].secure_s3_bucket.arn)
