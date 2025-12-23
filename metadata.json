@@ -26,11 +26,6 @@
   ],
   "provider": "localstack",
   "wave": "P0",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "harshita-turing",
   "migrated_from": {
     "po_id": "barun-turing",
     "pr": "Pr2037"
