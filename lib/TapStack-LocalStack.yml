@@ -1,0 +1,474 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'LocalStack Community Edition compatible version - Secure web application environment (simplified)'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    Description: Environment name
+    AllowedValues: [development, staging, production]
+
+  ProjectName:
+    Type: String
+    Default: secure-web-app18
+    Description: Project name for resource tagging
+
+  AllowedCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block allowed for inbound access
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}\/([1-2][0-9]|3[0-2])$'
+
+  DBUsername:
+    Type: String
+    Default: dbadmin
+    Description: Database username
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
+
+  SSMParameterPrefix:
+    Type: String
+    Default: /secure-web-app
+    Description: SSM Parameter Store prefix for sensitive values
+
+  # For LocalStack, use a static AMI ID instead of SSM lookup
+  LatestAmi:
+    Type: String
+    Default: ami-0c55b159cbfafe1f0
+    Description: Amazon Linux 2 AMI ID
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, 'production']
+
+Resources:
+  # -------------------- KMS --------------------
+  ApplicationKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for application encryption
+      KeyPolicy:
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow use of the key for S3
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: [kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
+            Resource: '*'
+      Tags:
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  ApplicationKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ProjectName}-${Environment}-${AWS::StackName}'
+      TargetKeyId: !Ref ApplicationKMSKey
+
+  # -------------------- Networking --------------------
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-vpc' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-igw' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-public-subnet-1' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-public-subnet-2' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.11.0/24
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-private-subnet-1' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.12.0/24
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-private-subnet-2' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  # NOTE: NAT Gateway removed - not essential for LocalStack testing
+  # Private subnets will use Internet Gateway for outbound access
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-public-routes' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # Private subnets also use public route for LocalStack simplicity
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PrivateSubnet2
+
+  # -------------------- Security Groups --------------------
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80,  ToPort: 80,  CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+      SecurityGroupEgress:
+        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-alb-sg' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EC2 instances
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, SourceSecurityGroupId: !Ref ALBSecurityGroup }
+        - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref AllowedCIDR }
+      SecurityGroupEgress:
+        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-ec2-sg' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-lambda-sg' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  # -------------------- SSM Parameters --------------------
+  DBPasswordParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SSMParameterPrefix}/database/password'
+      Type: String
+      Value: ChangeMe123!
+      Description: Database password
+      Tags: { Environment: !Ref Environment, ProjectName: !Ref ProjectName }
+
+  APIKeyParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SSMParameterPrefix}/api/key'
+      Type: String
+      Value: api-key-placeholder
+      Description: API key for external services
+      Tags: { Environment: !Ref Environment, ProjectName: !Ref ProjectName }
+
+  # -------------------- S3 Buckets --------------------
+  ApplicationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-app-${Environment}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref ApplicationKMSKey
+            BucketKeyEnabled: true
+      VersioningConfiguration: { Status: Enabled }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  ApplicationBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ApplicationBucket.Arn
+              - !Sub '${ApplicationBucket.Arn}/*'
+            Condition:
+              Bool: { 'aws:SecureTransport': 'false' }
+
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-logs-${Environment}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref ApplicationKMSKey
+            BucketKeyEnabled: true
+      VersioningConfiguration: { Status: Enabled }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: LogRetention
+            Status: Enabled
+            ExpirationInDays: !If [IsProduction, 2555, 365]
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  LogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt LogsBucket.Arn
+              - !Sub '${LogsBucket.Arn}/*'
+            Condition:
+              Bool: { 'aws:SecureTransport': 'false' }
+
+  # -------------------- CloudWatch Log Groups --------------------
+  # NOTE: CloudWatch Logs service is available (logs: running)
+  # But CloudWatch Alarms service is disabled (cloudwatch: disabled)
+
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-process-file-${Environment}'
+      RetentionInDays: !If [IsProduction, 365, 30]
+
+  # -------------------- REMOVED SERVICES --------------------
+  # The following services are NOT available in LocalStack Community Edition:
+  #
+  # 1. API Gateway (apigateway: disabled)
+  #    - RestAPI
+  #    - AuthResource
+  #    - AuthMethod
+  #    - APIGatewayDeployment
+  #    - APIGatewayLogGroup
+  #
+  # 2. SNS (sns: disabled)
+  #    - SecurityAlertsTopic
+  #
+  # 3. CloudWatch Alarms (cloudwatch: disabled)
+  #    - HighCPUAlarm
+  #    - LowCPUAlarm
+  #    - DatabaseHighConnectionsAlarm
+  #
+  # 4. RDS (rds service not tested - removing to simplify)
+  #    - DBSubnetGroup
+  #    - DatabaseInstance
+  #
+  # 5. Auto Scaling (autoscaling service not tested - removing to simplify)
+  #    - AutoScalingGroup
+  #    - ScaleUpPolicy
+  #    - ScaleDownPolicy
+  #
+  # 6. ELB/ALB (elasticloadbalancing: limited support - removing to avoid fallback issues)
+  #    - ApplicationLoadBalancer
+  #    - ALBTargetGroup
+  #    - ALBListener
+  #
+  # 7. Launch Template and EC2 instances (simplified deployment)
+  #    - LaunchTemplate
+  #
+  # 8. Auth Lambda Log Group (auth lambda not needed without API Gateway)
+  #    - AuthLambdaLogGroup
+
+  # -------------------- Simple Lambda Function (Optional) --------------------
+  # This is a basic Lambda to demonstrate working resources
+  # Note: We're not creating actual Lambda function code, just the IAM role
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: LambdaS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub '${ApplicationBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt ApplicationKMSKey.Arn
+      Tags:
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-VPC-ID'
+
+  ApplicationBucketName:
+    Description: Application S3 Bucket Name
+    Value: !Ref ApplicationBucket
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-APP-BUCKET'
+
+  LogsBucketName:
+    Description: Logs S3 Bucket Name
+    Value: !Ref LogsBucket
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LOGS-BUCKET'
+
+  KMSKeyId:
+    Description: KMS Key ID
+    Value: !Ref ApplicationKMSKey
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-KMS-KEY'
+
+  KMSKeyArn:
+    Description: KMS Key ARN
+    Value: !GetAtt ApplicationKMSKey.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-KMS-KEY-ARN'
+
+  LambdaExecutionRoleArn:
+    Description: Lambda Execution Role ARN
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LAMBDA-ROLE'
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-PUBLIC-SUBNET-1'
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-PUBLIC-SUBNET-2'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-PRIVATE-SUBNET-1'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-PRIVATE-SUBNET-2'
