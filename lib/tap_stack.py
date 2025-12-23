@@ -157,7 +157,7 @@ class TapStack(cdk.Stack):
             vpc_name=f"{self.resource_prefix}-vpc",
             ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
             max_azs=2,  # Reduced from 3 to 2 for LocalStack
-            nat_gateways=1,  # Use single NAT gateway to reduce resources
+            nat_gateways=0,  # Disabled NAT gateway for LocalStack compatibility
             restrict_default_security_group=False,  # Disable custom resource for LocalStack
             subnet_configuration=[
             ec2.SubnetConfiguration(
@@ -167,7 +167,7 @@ class TapStack(cdk.Stack):
             ),
             ec2.SubnetConfiguration(
                 name=f"{self.resource_prefix}-private",
-                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
+                subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,  # Use ISOLATED instead of PRIVATE_WITH_EGRESS for LocalStack
                 cidr_mask=24
             ),
             ec2.SubnetConfiguration(
@@ -482,18 +482,13 @@ class TapStack(cdk.Stack):
         )
 
         # Auto Scaling Group
-        # Use LaunchTemplate with explicit version for LocalStack compatibility
-        launch_template_spec = autoscaling.LaunchTemplateSpecification(
-            version="$Latest",
-            launch_template=self.launch_template
-        )
-
+        # Using PUBLIC subnets for LocalStack compatibility (no NAT Gateway)
         self.asg = autoscaling.AutoScalingGroup(
             self, f"{self.resource_prefix}-asg",
             auto_scaling_group_name=f"{self.resource_prefix}-asg",
             vpc=self.vpc,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            launch_template=launch_template_spec,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
+            launch_template=self.launch_template,
             min_capacity=1,
             max_capacity=6 if self.env_suffix == "prod" else 3,
             desired_capacity=2 if self.env_suffix == "prod" else 1,
