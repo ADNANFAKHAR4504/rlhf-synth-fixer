@@ -51,8 +51,8 @@ Parameters:
 
   AMIId:
     Type: String
-    Default: 'ami-12345678'
-    Description: AMI ID for EC2 instances. Default works with LocalStack. For AWS, use RegionMap lookup by setting to empty.
+    Default: ami-1e749f67
+    Description: AMI ID for EC2 instances. Default is Ubuntu 14.04 for LocalStack. For AWS, use RegionMap lookup by setting to empty.
 
 Conditions:
   UseProvidedAMI: !Not [!Equals [!Ref AMIId, '']]
@@ -435,10 +435,7 @@ Resources:
   SecureEC2Instance1:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !If
-        - UseProvidedAMI
-        - !Ref AMIId
-        - !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      ImageId: !Ref AMIId
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet1
       SecurityGroupIds:
@@ -492,10 +489,7 @@ Resources:
   SecureEC2Instance2:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !If
-        - UseProvidedAMI
-        - !Ref AMIId
-        - !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      ImageId: !Ref AMIId
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet2
       SecurityGroupIds:
