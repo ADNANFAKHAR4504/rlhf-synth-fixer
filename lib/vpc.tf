@@ -135,10 +135,11 @@ resource "aws_route_table_association" "database" {
 
 # VPC Flow Logs
 resource "aws_flow_log" "main" {
-  iam_role_arn    = aws_iam_role.vpc_flow_log.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
+  iam_role_arn             = aws_iam_role.vpc_flow_log.arn
+  log_destination          = aws_cloudwatch_log_group.vpc_flow_log.arn
+  traffic_type             = "ALL"
+  vpc_id                   = aws_vpc.main.id
+  max_aggregation_interval = 60
 
   tags = merge(local.common_tags, {
     Name = "vpc-flow-log-${var.environment_suffix}"
