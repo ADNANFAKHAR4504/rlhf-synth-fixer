@@ -1,3 +1,5 @@
+# Payment Processing Migration to AWS
+
 Hey team,
 
 We have a critical migration project coming up. One of our financial services clients needs to move their payment processing application from their on-premises data center to AWS. This isn't just a lift-and-shift situation - we need to ensure zero downtime during the migration and maintain strict PCI-DSS compliance throughout. The application currently handles payment processing APIs, so any disruption would be catastrophic for their business.
@@ -16,117 +18,117 @@ Create a complete AWS migration infrastructure using **Terraform with HCL** for 
    - VPC spanning 3 availability zones in us-east-1 region
    - Each AZ must have both public and private subnets
    - Public subnets for Application Load Balancers and NAT Gateways
-   - Private subnets for ECS Fargate containers and RDS Aurora cluster
-   - Proper route tables to ensure private resources use NAT Gateways for outbound connectivity
+   - Private subnets connect to ECS Fargate containers and RDS Aurora cluster
+   - Route tables configured so private resources route traffic through NAT Gateways for outbound connectivity
 
 2. **ECS Fargate Service**
    - Deploy containerized payment processing application using ECS Fargate
-   - Containers must run in private subnets only
-   - Service must support blue and green environments for zero-downtime deployment
+   - Containers must run in private subnets and connect through security groups
+   - Service integrates with Application Load Balancer target groups for traffic routing
+   - Support blue and green environments connected to separate ALB target groups for zero-downtime deployment
    - Task definitions with appropriate CPU and memory allocations
-   - Integration with Application Load Balancer target groups
 
 3. **RDS Aurora PostgreSQL Cluster**
-   - Multi-AZ Aurora PostgreSQL cluster for high availability
-   - Deploy across all three availability zones
+   - Multi-AZ Aurora PostgreSQL cluster connected across all three availability zones
    - Automated backups with 7-day retention period
-   - All data encrypted at rest using AWS KMS customer-managed keys
-   - Database subnet group spanning private subnets in all AZs
+   - All data encrypted at rest using KMS customer-managed keys integrated with the cluster
+   - Database subnet group associated with private subnets in all AZs
+   - DMS connects to this cluster as the target endpoint for migration
 
 4. **Application Load Balancer**
-   - ALB deployed in public subnets across all three AZs
-   - Two target groups: one for blue environment, one for green environment
-   - SSL/TLS termination using AWS Certificate Manager certificates
-   - Health checks configured for each target group
-   - Listener rules to route traffic to active environment
+   - ALB deployed in public subnets and listening on ports 80 and 443
+   - Two target groups: one routing to blue environment, one routing to green environment
+   - SSL/TLS termination using certificates integrated from AWS Certificate Manager
+   - Health checks configured to monitor each target group
+   - Listener rules route incoming traffic to the active environment based on rules
 
 5. **AWS Database Migration Service**
-   - DMS replication instance for Oracle to Aurora migration
-   - Replication instance in private subnet with appropriate security groups
-   - Continuous replication enabled for ongoing data sync
-   - Source endpoint for on-premises Oracle database
-   - Target endpoint for Aurora PostgreSQL cluster
+   - DMS replication instance connects to both source Oracle and target Aurora endpoints
+   - Replication instance in private subnet communicates through security groups
+   - Continuous replication enabled to sync data from Oracle to Aurora PostgreSQL
+   - Source endpoint connects to on-premises Oracle database
+   - Target endpoint connects to Aurora PostgreSQL cluster
    - Migration task configured for full load and ongoing replication
 
 6. **IAM Roles and Policies**
-   - ECS task execution role with permissions to pull container images and write logs
-   - ECS task role with least privilege access to required AWS services
-   - DMS service role with permissions to access source and target databases
-   - All roles following principle of least privilege
+   - ECS task execution role allows pulling container images from ECR and writing logs to CloudWatch
+   - ECS task role provides access to required AWS services like Secrets Manager and S3
+   - DMS service role connects to both source and target databases
+   - All roles follow principle of least privilege with specific actions and resources defined
 
 7. **CloudWatch Log Groups**
-   - Separate log groups for ECS container logs, ALB access logs, and DMS task logs
-   - All log groups configured with exactly 90-day retention for compliance
+   - Separate log groups connected to ECS containers, ALB access logs, and DMS task logs
+   - All log groups configured with exactly 90-day retention for compliance tracking
    - Log streams organized by service and environment
 
-8. **Resource Tagging**
-   - All resources must include Environment tag
+8. **Tagging Strategy**
+   - All infrastructure components include Environment tag
    - CostCenter tag for cost allocation tracking
    - MigrationPhase tag to identify blue vs green resources
-   - Resource names must include **environmentSuffix** variable for uniqueness
+   - Names for all infrastructure components include the environmentSuffix variable for uniqueness
 
 ### Technical Requirements
 
 - All infrastructure defined using **Terraform with HCL**
 - Use Terraform 1.5 or later with AWS provider version 5.x
 - Deploy to **us-east-1** region
-- Use **VPC** with proper subnet segmentation across 3 availability zones
-- Use **ECS Fargate** for containerized application hosting in private subnets
-- Use **RDS Aurora PostgreSQL** with Multi-AZ for database layer
-- Use **Application Load Balancer** with target groups for blue-green deployment
-- Use **AWS DMS** for continuous database replication from Oracle to Aurora
-- Use **KMS** customer-managed keys for all encryption at rest
-- Use **AWS Certificate Manager** for SSL/TLS certificates on ALB
-- Use **NAT Gateways** for outbound internet access from private subnets
-- Use **IAM** roles with least privilege permissions
-- Use **CloudWatch** Log Groups with 90-day retention
-- Resource names must include **environmentSuffix** for uniqueness
+- **VPC** with proper subnet segmentation connects resources across 3 availability zones
+- **ECS Fargate** hosts containerized application in private subnets and integrates with ALB
+- **RDS Aurora PostgreSQL** with Multi-AZ connects through private subnet group
+- **Application Load Balancer** routes traffic to ECS target groups
+- **AWS DMS** replicates data from Oracle source to Aurora target continuously
+- **KMS** customer-managed keys encrypt all data at rest
+- **AWS Certificate Manager** provides SSL/TLS certificates attached to ALB listeners
+- **NAT Gateways** allow private subnets to access internet for outbound traffic
+- **IAM** roles grant least privilege permissions with explicit actions
+- **CloudWatch** Log Groups store logs with 90-day retention
+- Names for all resources include the environmentSuffix variable for uniqueness
 - Follow naming convention: resource-type-environmentSuffix
 
 ### Mandatory Constraints
 
-- All data must be encrypted at rest using AWS KMS customer-managed keys (RDS, EBS volumes)
-- Network traffic between application tiers must traverse private subnets only (no direct internet access)
-- Database migration must use AWS DMS with continuous replication enabled
-- Application logs must be retained for exactly 90 days for PCI-DSS compliance
-- Each environment must have identical resource tagging: Environment, CostCenter, MigrationPhase
-- RDS instances must have automated backups with 7-day retention period
-- ALB must use SSL/TLS certificates from AWS Certificate Manager
-- Security groups must follow principle of least privilege with no 0.0.0.0/0 ingress rules
-- All resources must be destroyable with no Retain policies (for testing purposes)
-- NAT Gateways required for private subnet outbound internet access
-- ECS tasks must only run in private subnets with no public IP assignment
+- All data encrypted at rest using KMS customer-managed keys integrated with RDS and EBS volumes
+- Network traffic between application tiers flows through private subnets only with no direct internet access
+- Database migration uses AWS DMS with continuous replication streaming data from Oracle to Aurora
+- Application logs retained for exactly 90 days in CloudWatch for PCI-DSS compliance
+- Each environment tagged identically: Environment, CostCenter, MigrationPhase
+- RDS instances configured with automated backups storing 7-day retention period
+- ALB listeners attach SSL/TLS certificates from AWS Certificate Manager
+- Security groups configured with least privilege rules allowing only necessary traffic between specific sources
+- All resources destroyable with no Retain policies for testing purposes
+- NAT Gateways provide outbound internet access for private subnet resources
+- ECS tasks run only in private subnets with no public IP assignment
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements - CRITICAL
 
-- All resources must include **environmentSuffix** variable in their names for uniqueness
+- All infrastructure components must include the environmentSuffix variable in their names for uniqueness
 - Example naming: vpc-dev, alb-dev, ecs-service-dev, aurora-cluster-dev
-- Resource RemovalPolicy/DeletionPolicy must allow destruction (no RETAIN policies)
-- All IAM roles must have unique names using environmentSuffix
-- KMS key aliases must include environmentSuffix to avoid conflicts
+- RemovalPolicy and DeletionPolicy must be configured to allow destruction with no RETAIN policies
+- All IAM roles use unique names with environmentSuffix appended
+- KMS key aliases include environmentSuffix to avoid naming conflicts
 
 ## Success Criteria
 
-- **Functionality**: Complete infrastructure supporting blue-green deployment with database migration
-- **High Availability**: Multi-AZ deployment across 3 availability zones for fault tolerance
-- **Security**: All data encrypted at rest, all network traffic in private subnets, no public 0.0.0.0/0 ingress
-- **Compliance**: 90-day log retention, proper tagging, automated backups with 7-day retention
-- **Zero Downtime**: Blue-green architecture allowing traffic switching without downtime
-- **Database Migration**: DMS continuous replication from Oracle to Aurora PostgreSQL
-- **Resource Naming**: All resources include environmentSuffix for uniqueness
+- **Functionality**: Complete infrastructure supporting blue-green deployment with database migration working end-to-end
+- **High Availability**: Multi-AZ deployment across 3 availability zones providing fault tolerance
+- **Security**: All data encrypted at rest with KMS, all network traffic in private subnets, security groups limiting traffic
+- **Compliance**: 90-day log retention tracking audit trail, proper tagging for cost allocation, automated backups with 7-day retention
+- **Zero Downtime**: Blue-green architecture allowing traffic switching without downtime using ALB listener rules
+- **Database Migration**: DMS continuous replication streaming from Oracle to Aurora PostgreSQL
+- **Naming Convention**: All infrastructure components include environmentSuffix for uniqueness in shared environments
 - **Code Quality**: Clean HCL code, well-organized modules, comprehensive documentation
 
 ## What to deliver
 
 - Complete Terraform HCL implementation with modular structure
-- VPC with 3 AZs, public and private subnets, NAT Gateways
-- ECS Fargate cluster and service for blue and green environments
-- RDS Aurora PostgreSQL Multi-AZ cluster with KMS encryption
-- Application Load Balancer with target groups and ACM certificate integration
-- AWS DMS replication instance, endpoints, and migration task
-- IAM roles and policies with least privilege
-- CloudWatch Log Groups with 90-day retention
-- KMS customer-managed keys for encryption
-- Security groups following least privilege principle
-- All resources tagged with Environment, CostCenter, MigrationPhase
-- README.md with deployment instructions and architecture overview
+- VPC with 3 AZs, public and private subnets connected through route tables, NAT Gateways for outbound access
+- ECS Fargate cluster and service integrated with ALB for blue and green environments
+- RDS Aurora PostgreSQL Multi-AZ cluster encrypted with KMS, accessible through security groups
+- Application Load Balancer with target groups routing traffic to ECS services and ACM certificate integration
+- AWS DMS replication instance connecting source Oracle to target Aurora endpoints with continuous data sync
+- IAM roles and policies granting least privilege access with explicit permissions
+- CloudWatch Log Groups collecting logs with 90-day retention enforced
+- KMS customer-managed keys encrypting data at rest for RDS and EBS
+- Security groups controlling traffic flow between services with least privilege rules
+- All resources tagged with Environment, CostCenter, MigrationPhase for tracking and cost allocation
+- README with deployment instructions and architecture overview explaining service connectivity
