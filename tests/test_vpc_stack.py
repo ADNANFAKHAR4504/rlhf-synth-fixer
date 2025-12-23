@@ -56,7 +56,7 @@ class TestVPCStack(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Load CloudFormation template once for all tests"""
-        template_path = os.path.join(os.path.dirname(__file__), '..', 'lib', 'tap-stack.yaml')
+        template_path = os.path.join(os.path.dirname(__file__), '..', 'lib', 'TapStack.yml')
         with open(template_path, 'r') as f:
             cls.template = yaml.safe_load(f)
 
