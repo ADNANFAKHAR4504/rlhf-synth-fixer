@@ -67,14 +67,14 @@ All regions, CIDR ranges, and team/environment naming are **configurable via Pul
 
 | Requirement                                    | Status | Implementation Reference                  |
 |-----------------------------------------------|--------|---------------------------------------------|
-| Zero downtime migration                        | ✅     | Canary deployment in `_create_api_gateway()` |
-| Multi-region readiness                         | ✅     | Parameterized regions, DynamoDB global table |
-| API Gateway → Lambda → DynamoDB                | ✅     | `_create_api_gateway()`, `_create_lambda_function()` |
-| S3 replication                                 | ✅     | `_create_s3_buckets()`                      |
-| IAM least privilege                            | ✅     | `_create_iam_roles()`                       |
-| Alarms & monitoring                            | ✅     | `_create_cloudwatch_alarms()`               |
-| Config fail-fast                               | ✅     | `_validate_config()`                         |
-| Naming standard `<Team>-<Env>-<Service>`       | ✅     | All resource names                           |
+| Zero downtime migration                        | Yes    | Canary deployment in `_create_api_gateway()` |
+| Multi-region readiness                         | Yes    | Parameterized regions, DynamoDB global table |
+| API Gateway → Lambda → DynamoDB                | Yes    | `_create_api_gateway()`, `_create_lambda_function()` |
+| S3 replication                                 | Yes    | `_create_s3_buckets()`                      |
+| IAM least privilege                            | Yes    | `_create_iam_roles()`                       |
+| Alarms & monitoring                            | Yes    | `_create_cloudwatch_alarms()`               |
+| Config fail-fast                               | Yes    | `_validate_config()`                         |
+| Naming standard `<Team>-<Env>-<Service>`       | Yes    | All resource names                           |
 
 ---
 
