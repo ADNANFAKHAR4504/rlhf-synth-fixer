@@ -1133,7 +1133,7 @@ terraform workspace select us-west-2
 # Set variables
 export TF_VAR_environment_suffix="prod-usw2"
 export TF_VAR_aws_region="us-west-2"
-export TF_VAR_db_password="SECURE_PASSWORD"
+export TF_VAR_db_password="${DB_PASSWORD}"
 
 # Plan deployment
 terraform plan -out=us-west-2.tfplan
