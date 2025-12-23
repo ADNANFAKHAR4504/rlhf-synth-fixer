@@ -190,8 +190,9 @@ describe('WebServerStack', () => {
 
     expect(Array.isArray(subnetGroupProps.SubnetIds)).toBe(true);
     expect(subnetGroupProps.SubnetIds.length).toBeGreaterThan(0);
+    // SubnetIds are CDK intrinsic references (objects), not plain strings
     subnetGroupProps.SubnetIds.forEach((id: any) => {
-      expect(typeof id).toBe('string');
+      expect(typeof id).toBe('object'); // CDK intrinsics are objects like {Ref: "..."}
     });
   });
 
@@ -200,7 +201,7 @@ describe('WebServerStack', () => {
       DBInstanceClass: 'db.t3.micro',
       Engine: 'mysql',
       MasterUsername: 'admin',
-      MultiAZ: true,
+      MultiAZ: false, // Disabled for LocalStack Community compatibility
       PubliclyAccessible: false,
       CopyTagsToSnapshot: true,
       Tags: Match.arrayWith([
