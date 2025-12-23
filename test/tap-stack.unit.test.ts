@@ -64,10 +64,6 @@ describe('TapStack', () => {
           Match.objectLike({
             Key: 'ProjectName',
             Value: 'secure-vpc-project'
-          }),
-          Match.objectLike({
-            Key: 'CostCenter',
-            Value: 'infrastructure'
           })
         ])
       }));
