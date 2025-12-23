@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "synth-101912692",
+  "team": "synth",
+  "startedAt": "2025-11-26T00:00:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ALB",
+    "Auto Scaling",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "S3",
+    "IAM",
+    "Secrets Manager",
+    "SNS"
+  ],
+  "provider": "localstack",
+  "wave": "P0"
+}
