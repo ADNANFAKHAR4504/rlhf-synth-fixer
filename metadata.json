@@ -9,5 +9,6 @@
   "provider": "localstack",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": ["Cloud Environment Setup"],
-  "aws_services": ["VPC", "EC2", "IAM", "S3", "DynamoDB", "CloudWatch Logs", "VPC Flow Logs"]
+  "aws_services": ["VPC", "EC2", "IAM", "S3", "DynamoDB", "CloudWatch Logs", "VPC Flow Logs"],
+  "wave": "P0"
 }
