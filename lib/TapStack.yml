@@ -4,9 +4,9 @@ Description: 'Secure, multi-region AWS infrastructure template with comprehensiv
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+      AMI: ami-0c02fb55b34c1e1a8  # Amazon Linux 2 AMI (HVM) - us-east-1
     us-west-2:
-      AMI: resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+      AMI: ami-0a36eb8fadc976275  # Amazon Linux 2 AMI (HVM) - us-west-2
 
 Resources:
   # ========================================
@@ -202,11 +202,6 @@ Resources:
   # EC2 Instance with regional AMI mapping
   EC2Instance:
     Type: AWS::EC2::Instance
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks:
-            - W1034  # ImageId uses SSM parameter resolution which is valid
     Properties:
       ImageId: !FindInMap
         - RegionMap
