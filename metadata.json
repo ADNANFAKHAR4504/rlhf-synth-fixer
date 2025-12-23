@@ -11,6 +11,7 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
+  "wave": "P0",
   "aws_services": [
     "VPC",
     "VPC Subnets",
