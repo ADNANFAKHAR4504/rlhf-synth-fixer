@@ -1,24 +1,24 @@
 You are an expert AWS infrastructure engineer specializing in multi-region deployments using Pulumi with Python. Implement an expert-level Pulumi program that deploys a static website meeting the following requirements:
 
-Multi-Region Deployment: Deploy the static website in us-west-2 and us-east-1 using Amazon S3 with static website hosting enabled.
+Multi-Region Deployment: Deploy the static website in us-west-2 and us-east-1 using Amazon S3 with static website hosting enabled. Configure S3 buckets that serve as origin sources for CloudFront distributions.
 
-Global Content Delivery: Use AWS CloudFront to distribute the S3-hosted content globally.
+Global Content Delivery: Use AWS CloudFront distributions that connect to the S3 buckets as origin sources to distribute content globally. CloudFront integrates with Route 53 for DNS routing and ACM for TLS certificates.
 
 Security:
 
-Enable KMS-managed encryption on all S3 buckets.
+Enable KMS-managed encryption on all S3 buckets using KMS keys that integrate with S3 for server-side encryption.
 
 Configure S3 versioning for rollback.
 
-Enable CloudWatch logging for S3 access events.
+Enable CloudWatch logging that captures S3 access events and CloudFront distribution metrics for monitoring.
 
-Add AWS WAF for protection against common web exploits.
+Add AWS WAF rules that attach to CloudFront distributions for protection against common web exploits.
 
-Use ACM TLS certificates for HTTPS access.
+Use ACM TLS certificates that CloudFront references for HTTPS access.
 
-DNS: Manage domain and routing using Amazon Route 53, directing traffic to CloudFront distributions.
+DNS: Manage domain and routing using Amazon Route 53 that directs traffic to CloudFront distributions via CNAME or Alias records.
 
-IAM: Create roles and policies following the principle of least privilege for all services.
+IAM: Create roles and policies following the principle of least privilege. IAM policies grant CloudFront read access to specific S3 origin buckets, WAF rule attachment permissions scoped to CloudFront distributions, and CloudWatch log write permissions limited to specific log groups.
 
 Testing & Quality:
 
@@ -38,11 +38,11 @@ Constraints:
 
 You may only modify these three files:
 
-lib/tap_stack.py — Pulumi stack implementation.
+lib/tap_stack.py - Pulumi stack implementation.
 
-tests/unit/test_tap_stack.py — unit tests with Pulumi mocks.
+tests/unit/test_tap_stack.py - unit tests with Pulumi mocks.
 
-tests/integration/test_tap_stack.py — integration tests with Pulumi mocks.
+tests/integration/test_tap_stack.py - integration tests with Pulumi mocks.
 
 Use only Pulumi’s Python SDK (no extra IaC frameworks).
 
