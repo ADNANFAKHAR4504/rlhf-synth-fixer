@@ -1,16 +1,15 @@
-2025-11-17 13:19:09,241 - INFO - Found credentials in environment variables.
-2025-11-17 13:19:09,351 - INFO - Found 4 RDS instances to analyze
-2025-11-17 13:19:09,351 - INFO - Analyzing db-underutilized-e2e...
-2025-11-17 13:19:09,373 - INFO - Analyzing db-no-backups-e2e...
-2025-11-17 13:19:09,391 - INFO - Analyzing db-prod-single-az...
-2025-11-17 13:19:09,410 - INFO - Analyzing db-sensitive-plain...
-2025-11-17 13:19:09,430 - INFO - JSON report saved to rds_performance_report.json
-2025-11-17 13:19:09,431 - INFO - Audit results saved to aws_audit_results.json
-2025-11-17 13:19:09,510 - WARNING - pandas not available; falling back to lightweight CSV writer
-2025-11-17 13:19:09,510 - INFO - Rightsizing CSV saved to rds_rightsizing.csv
-2025-11-17 13:19:09,510 - WARNING - matplotlib not available; generating performance chart via stub implementation
-2025-11-17 13:19:09,510 - INFO - Performance distribution chart saved to performance_distribution.png
-2025-11-17 13:19:09,510 - INFO - Analysis complete!
+2025-12-22 10:17:46,313 - INFO - Found credentials in environment variables.
+2025-12-22 10:17:46,417 - INFO - Found 4 RDS instances to analyze
+2025-12-22 10:17:46,417 - INFO - Analyzing db-underutilized-e2e...
+2025-12-22 10:17:46,438 - INFO - Analyzing db-no-backups-e2e...
+2025-12-22 10:17:46,457 - INFO - Analyzing db-prod-single-az...
+2025-12-22 10:17:46,475 - INFO - Analyzing db-sensitive-plain...
+2025-12-22 10:17:46,495 - INFO - JSON report saved to rds_performance_report.json
+2025-12-22 10:17:46,495 - INFO - Audit results saved to aws_audit_results.json
+2025-12-22 10:17:46,572 - INFO - Rightsizing CSV saved to rds_rightsizing.csv
+2025-12-22 10:17:46,572 - WARNING - matplotlib not available; generating performance chart via stub implementation
+2025-12-22 10:17:46,572 - INFO - Performance distribution chart saved to performance_distribution.png
+2025-12-22 10:17:46,572 - INFO - Analysis complete!
 
 ========================================================================================================================
 RDS PERFORMANCE ANALYSIS REPORT
@@ -32,7 +31,7 @@ INSTANCE OVERVIEW
 
 ISSUES BY SEVERITY
 
-🔴 CRITICAL (Immediate Action Required)
+[CRITICAL] CRITICAL (Immediate Action Required)
 +--------------------+----------------------+-----------------+------------------------------------------------+
 | DB Identifier      | Issue Type           | Current Value   | Recommendation                                 |
 +====================+======================+=================+================================================+
@@ -41,14 +40,14 @@ ISSUES BY SEVERITY
 | db-sensitive-plain | no_encryption        | Not encrypted   | Enable encryption at rest immediately          |
 +--------------------+----------------------+-----------------+------------------------------------------------+
 
-🟠 HIGH PRIORITY
+[HIGH] HIGH PRIORITY
 +-------------------+------------------+-----------------+---------------------------------------+
 | DB Identifier     | Issue Type       | Current Value   | Recommendation                        |
 +===================+==================+=================+=======================================+
 | db-prod-single-az | missing_multi_az | Disabled        | Enable Multi-AZ for high availability |
 +-------------------+------------------+-----------------+---------------------------------------+
 
-🟡 MEDIUM PRIORITY
+[MEDIUM] MEDIUM PRIORITY
 +----------------------+-------------------------+----------------------------+---------------------------------------------------------------+
 | DB Identifier        | Issue Type              | Current Value              | Recommendation                                                |
 +======================+=========================+============================+===============================================================+

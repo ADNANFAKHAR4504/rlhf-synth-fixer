@@ -13,5 +13,12 @@
   "aws_services": [
     "rds"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
