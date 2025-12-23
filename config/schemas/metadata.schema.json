@@ -137,6 +137,18 @@
         "P0",
         "P1"
       ]
+    },
+    "migrated_from": {
+      "type": "object",
+      "properties": {
+        "po_id": {
+          "type": "string"
+        },
+        "pr": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     }
   }
 }
