@@ -1,6 +1,6 @@
 /home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:31: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
   self.timestamp = datetime.utcnow().isoformat()
-Error checking S3 buckets: <botocore.errorfactory.S3Exceptions object at 0x7f7e32f4f380> object has no attribute ServerSideEncryptionConfigurationNotFoundError. Valid exceptions are: BucketAlreadyExists, BucketAlreadyOwnedByYou, EncryptionTypeMismatch, IdempotencyParameterMismatch, InvalidObjectState, InvalidRequest, InvalidWriteOffset, NoSuchBucket, NoSuchKey, NoSuchUpload, ObjectAlreadyInActiveTierError, ObjectNotInActiveTierError, TooManyParts
+Error checking S3 buckets: <botocore.errorfactory.S3Exceptions object at 0x7f76ffb4bf80> object has no attribute ServerSideEncryptionConfigurationNotFoundError. Valid exceptions are: BucketAlreadyExists, BucketAlreadyOwnedByYou, EncryptionTypeMismatch, IdempotencyParameterMismatch, InvalidObjectState, InvalidRequest, InvalidWriteOffset, NoSuchBucket, NoSuchKey, NoSuchUpload, ObjectAlreadyInActiveTierError, ObjectNotInActiveTierError, TooManyParts
 Error checking SSM agent status: An error occurred (500) when calling the DescribeInstanceInformation operation (reached max retries: 4): <!doctype html>
 <html lang=en>
 <title>500 Internal Server Error</title>
@@ -18,7 +18,7 @@ Error checking SSM agent status: An error occurred (500) when calling the Descri
 === AWS Infrastructure Compliance Analysis ===
 
 Region: us-east-1
-Environment Suffix: pr7802
+Environment Suffix: pr8475
 Approved AMIs: ami-0c55b159cbfafe1f0, ami-0574da719dca65348
 
 Starting compliance scan...
@@ -34,9 +34,9 @@ CloudWatch metrics exported successfully
 
 === Compliance Scan Results ===
 
-Scan Timestamp: 2025-12-06T21:29:07.548063
+Scan Timestamp: 2025-12-23T00:37:19.947462
 Region: us-east-1
-Environment: pr7802
+Environment: pr8475
 
 Summary:
   Total Resources Scanned: 4
@@ -53,29 +53,29 @@ Violations by Type:
 Detailed Violations:
 
 [HIGH] UnencryptedEBSVolume
-  Resource: EC2::Instance - i-c472c0d5ff1f70fe1
-  Details: Instance has unencrypted EBS volume: vol-f949e57a352d34c85
-  Timestamp: 2025-12-06T21:28:57.411940
+  Resource: EC2::Instance - i-97d10aa5d2252cce9
+  Details: Instance has unencrypted EBS volume: vol-e616ac33c00594e94
+  Timestamp: 2025-12-23T00:37:10.348558
 
 [HIGH] UnrestrictedInboundRule
-  Resource: EC2::SecurityGroup - sg-d1bb3e98ee5cc573c
+  Resource: EC2::SecurityGroup - sg-af0f8867d57d7cbd2
   Details: Security group test-sg-public allows unrestricted access (0.0.0.0/0) on port 22
-  Timestamp: 2025-12-06T21:28:57.441556
+  Timestamp: 2025-12-23T00:37:10.376470
 
 [MEDIUM] MissingRequiredTags
-  Resource: EC2::Instance - i-c472c0d5ff1f70fe1
+  Resource: EC2::Instance - i-97d10aa5d2252cce9
   Details: Instance missing required tags: Environment, Owner, CostCenter
-  Timestamp: 2025-12-06T21:28:57.450138
+  Timestamp: 2025-12-23T00:37:10.384451
 
 [MEDIUM] UnapprovedAMI
-  Resource: EC2::Instance - i-c472c0d5ff1f70fe1
+  Resource: EC2::Instance - i-97d10aa5d2252cce9
   Details: Instance using unapproved AMI: ami-12345678
-  Timestamp: 2025-12-06T21:28:57.458330
+  Timestamp: 2025-12-23T00:37:10.392336
 
 [MEDIUM] FlowLogsDisabled
-  Resource: EC2::VPC - vpc-108754ec162d4b126
+  Resource: EC2::VPC - vpc-da3ebd811a3a2b1da
   Details: VPC does not have flow logs enabled
-  Timestamp: 2025-12-06T21:29:07.529837
+  Timestamp: 2025-12-23T00:37:19.929603
 
 Full report saved to: ./compliance-report.json
 
