@@ -1,54 +1,26 @@
-You are an expert **Cloud DevOps Engineer** specializing in AWS infrastructure as code. Your task is to generate a **Pulumi (Python)** script and supporting files to establish a consistent, replicable AWS infrastructure across multiple environments and regions, following enterprise-grade best practices.
+I need help setting up our AWS infrastructure using Pulumi with Python for four environments: production, development, staging, and testing. Each environment needs to be in its own region with complete isolation.
 
----
+Here's what I need to deploy:
 
-### Context & Objective
-You need to build a **multi-environment, multi-region AWS setup** using Pulumi and Python. The goal is to ensure **consistent application deployments** across four AWS regions representing distinct environment types:  
-- Production  
-- Development  
-- Staging  
-- Testing  
+**Network and Compute Layer**
+Set up isolated VPCs for each environment - no default VPCs. Deploy EC2 instances behind an Application Load Balancer in each region with at least two target instances per environment. The ALB should distribute traffic to the EC2 instances and perform health checks.
 
-Each region must fully comply with enterprise guidelines for **security, cost management, resource configurations, and network settings**.
+**Data and Storage**
+Create DynamoDB tables with Point-in-Time Recovery enabled for each environment. Lambda functions should read from and write to these DynamoDB tables for region-specific processing - make sure the Lambda has proper IAM permissions to access the tables. Set up S3 buckets with server-side encryption enabled where Lambda functions can store processed data or logs.
 
----
+**Monitoring and Alerts**
+Configure CloudWatch to collect metrics from all resources. Set up alarms that trigger when EC2 CPU usage is high, when Lambda functions error out, or when DynamoDB throttling occurs. These alarms should send notifications so we can respond to issues.
 
-### Detailed Requirements
-1. **Pulumi + Python**: All infrastructure must be fully defined in Pulumi using Python as the scripting language.
-2. **VPC Isolation**: Create fully isolated VPCs for each environment; do not use any default VPCs.
-3. **Monitoring**: Integrate Amazon CloudWatch for resource monitoring with metrics and alarms for unexpected behavior.
-4. **Data Layer**: Use DynamoDB tables for environment-specific data with **Point-in-Time Recovery (PITR)** enabled.
-5. **Load Balancing**: Deploy an Application Load Balancer (ALB) in each region with at least **two target EC2 instances** per environment.
-6. **IAM**: Configure IAM roles and policies consistently across environments using the **principle of least privilege**.
-7. **Data Security**: Ensure all Amazon S3 buckets have **server-side encryption** enabled.
-8. **Compute**: Use AWS Lambda (Python runtime) for region-specific computation needs.
-9. **Configuration Management**: Manage environment-specific configurations using **AWS Systems Manager Parameter Store**.
-10. **Backup & RPO**: Automate backups of all databases, ensuring a **Recovery Point Objective (RPO)** of no more than 1 hour.
+**Security and Access Control**
+Create IAM roles for Lambda functions that allow them to read/write to DynamoDB tables and S3 buckets. EC2 instances need roles to send logs to CloudWatch and access Systems Manager Parameter Store for configuration values. Keep permissions tight - Lambda should only access its specific DynamoDB table and S3 bucket, not everything.
 
----
+**Configuration Management**
+Store environment-specific settings in Systems Manager Parameter Store so Lambda functions and EC2 instances can retrieve configuration without hardcoding values. Things like database connection strings, API endpoints, feature flags should live there.
 
-### Expected Deliverables
-- A Pulumi Python script named **`index.py`** that provisions all required resources across the four environments and regions.
-- Any supporting Pulumi configuration files needed for deployments.
-- Code must adhere to **Pulumi best practices** (e.g., reusable components, environment-aware configs).
-- Automated tests to verify resource setup, security configurations, and environment isolation.
+**Backup Strategy**
+Set up automated backups for DynamoDB tables with a Recovery Point Objective of 1 hour maximum. We need to be able to restore data quickly if something goes wrong.
 
----
+**Deliverables**
+Write this as a Pulumi Python project with an index.py file that provisions everything. Make it modular so we can reuse components across environments. Include tests to verify the setup works and resources are properly isolated. Add comments explaining the major sections.
 
-### Success Criteria
-- Each environment (Prod, Dev, Staging, Test) is isolated and consistently configured.
-- All security and backup requirements are met.
-- Code is modular, readable, and supports future scalability.
-- Include inline comments explaining major sections of the code.
-
----
-
-### Output Format
-Return the following in your response:
-1. The complete **`index.py`** Pulumi script.
-2. Any required configuration snippets (YAML/JSON) for Pulumi project and stack definitions.
-3. Clear instructions for deploying and testing the infrastructure.
-
----
-
-**Now generate the full Pulumi Python solution and tests according to the above requirements.**
+The goal is consistent, repeatable deployments across all four environments with proper security and monitoring in place.
