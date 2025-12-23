@@ -824,6 +824,19 @@ Resources:
 # NOTE: Limited to 42 outputs for LocalStack Community compatibility
 # Only including outputs that are tested in integration tests
 Outputs:
+  # Environment Configuration
+  Environment:
+    Description: 'Deployment Environment'
+    Value: !Ref Environment
+    Export:
+      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Environment'
+
+  EnvironmentSuffix:
+    Description: 'Environment Suffix for parallel deployments'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Environment-Suffix'
+
   # Primary Outputs
   LoadBalancerURL:
     Description: 'URL of the Application Load Balancer'
