@@ -1,9 +1,9 @@
 # LocalStack-specific configuration
 # Disabling features not fully supported by LocalStack
 
-enable_aws_config     = false
-enable_kms_replicas   = false
-enable_vpc_flow_logs  = false
+enable_aws_config    = false
+enable_kms_replicas  = false
+enable_vpc_flow_logs = false
 
 environment      = "production"
 primary_region   = "us-east-1"

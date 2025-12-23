@@ -2,7 +2,7 @@
 resource "aws_secretsmanager_secret" "database_credentials" {
   name                    = "${local.resource_prefix}-db-credentials-${local.suffix}"
   description             = "Database credentials with automatic rotation"
-  kms_key_id              = null # LocalStack: KMS encryption disabled due to compatibility issues
+  kms_key_id              = aws_kms_key.primary.id
   recovery_window_in_days = 7
 
   tags = merge(local.common_tags, {
