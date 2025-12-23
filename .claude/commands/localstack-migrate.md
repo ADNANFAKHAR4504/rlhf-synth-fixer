@@ -870,6 +870,96 @@ else
 fi
 ```
 
+## CI/CD Pipeline Compliance
+
+The localstack-migrate command automatically ensures that created PRs will pass the CI/CD pipeline's "Detect Project Files" job. Here's what happens:
+
+### Pre-Flight Validation
+
+Before creating a PR, the script validates:
+
+1. **File Locations**: All files must be in allowed folders (`bin/`, `lib/`, `test/`, `tests/`, `cli/`, `scripts/`, `.github/`) or be allowed root files
+2. **Metadata Schema**: `metadata.json` must have all required fields and valid enum values
+3. **Required Documentation**: For synthetic tasks (team starting with `synth`), ensures `lib/PROMPT.md` and `lib/MODEL_RESPONSE.md` exist
+
+### Automatic Fixes
+
+The PR creation script automatically:
+
+| Issue | Auto-Fix |
+| ----- | -------- |
+| Missing `PROMPT.md` | Creates placeholder with task context |
+| Missing `MODEL_RESPONSE.md` | Creates placeholder with migration summary |
+| Invalid metadata fields | Sanitizes to valid enum values via `localstack-sanitize-metadata.sh` |
+| Missing `wave` field | Defaults to "P1" |
+| Invalid `subtask` values | Maps to closest valid subtask |
+| Invalid `subject_labels` | Maps to closest valid labels |
+
+### Pipeline Job Dependencies
+
+Understanding the CI/CD job flow helps diagnose issues:
+
+```
+detect-metadata (Detect Project Files)
+    ├── Validates metadata.json against schema
+    ├── Checks file locations (check-project-files.sh)
+    ├── Validates required docs for synth tasks
+    └── Outputs: platform, language, provider, subject_labels
+         │
+         ▼
+claude-review-prompt-quality
+         │
+         ▼
+validate-commit-message → validate-jest-config (JS/TS only)
+         │
+         ▼
+      build
+         │
+         ▼
+    synth (CDK/CDKTF only)
+         │
+         ▼
+      deploy → lint → unit-tests
+         │
+         ▼
+integration-tests-live
+         │
+         ▼
+  claude-code-action
+         │
+         ▼
+      cleanup → claude-review-ideal-response
+         │
+         ▼
+  archive-folders
+```
+
+### Troubleshooting CI/CD Failures
+
+If the "Detect Project Files" job fails:
+
+1. **Check metadata.json schema**: Run the schema validator locally
+   ```bash
+   npm install -g ajv-cli
+   ajv validate -s config/schemas/metadata.schema.json -d metadata.json
+   ```
+
+2. **Verify file locations**: Run the check script
+   ```bash
+   ./scripts/check-project-files.sh
+   ```
+
+3. **Check required docs for synth tasks**:
+   ```bash
+   # For team starting with "synth"
+   ls -la lib/PROMPT.md lib/MODEL_RESPONSE.md
+   ```
+
+4. **Re-run sanitization manually**:
+   ```bash
+   .claude/scripts/localstack-sanitize-metadata.sh metadata.json
+   ```
+
 ## Supported Platforms
 
 | Platform | Language         | Deploy Method                    |

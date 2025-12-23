@@ -285,7 +285,8 @@ if [ ${#MISSING_FIELDS[@]} -gt 0 ]; then
 fi
 
 # Validate that no disallowed fields are present (schema has additionalProperties: false)
-DISALLOWED_FIELDS=("coverage" "author" "dockerS3Location" "training_quality" "task_id" "pr_id" "localstack_migration" "original_po_id" "original_pr_id" "testDependencies" "background" "training_quality_justification")
+# Note: training_quality IS allowed by schema as an optional field, so it's not in this list
+DISALLOWED_FIELDS=("coverage" "author" "dockerS3Location" "task_id" "pr_id" "localstack_migration" "original_po_id" "original_pr_id" "testDependencies" "background" "training_quality_justification")
 FOUND_DISALLOWED=()
 
 for field in "${DISALLOWED_FIELDS[@]}"; do
