@@ -1,0 +1,41 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292033",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T11:47:34.001Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "security_fixes",
+    "performance_optimization",
+    "iac_improvements",
+    "deployment_fixes",
+    "compliance_validation",
+    "best_practices",
+    "encryption_implementation",
+    "access_control",
+    "monitoring_setup"
+  ],
+  "aws_services": [
+    "KMS",
+    "S3",
+    "DynamoDB",
+    "IAM",
+    "Lambda",
+    "GuardDuty",
+    "CloudTrail",
+    "EC2",
+    "VPC",
+    "RDS",
+    "ALB",
+    "CloudWatch"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr2037"
+  }
+}
