@@ -20,5 +20,6 @@
     "DynamoDB",
     "Security Groups"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": "P1"
 }
