@@ -50,21 +50,3 @@ variable "common_tags" {
   }
 }
 
-variable "jwt_secret" {
-  description = "JWT secret key for authentication"
-  type        = string
-  sensitive   = true
-  default     = "default-jwt-secret-key-change-in-production-12345"
-}
-
-variable "alert_email" {
-  description = "Email address for security alerts"
-  type        = string
-  default     = "emmanuel@turing.com"
-}
-
-variable "allowed_file_extensions" {
-  description = "List of allowed file extensions for document uploads"
-  type        = list(string)
-  default     = ["pdf", "doc", "docx", "txt", "jpg", "png"]
-}

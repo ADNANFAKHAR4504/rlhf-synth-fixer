@@ -11,24 +11,13 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "S3",
-    "CloudFront",
-    "WAF",
-    "Lambda",
-    "DynamoDB",
-    "Secrets Manager",
-    "KMS",
-    "SNS",
-    "CloudWatch",
-    "Systems Manager",
     "VPC",
     "Subnets",
     "Internet Gateway",
     "NAT Gateway",
     "Elastic IP",
     "Route Tables",
-    "Security Groups",
-    "IAM"
+    "Security Groups"
   ],
   "provider": "localstack",
   "wave": "P1"
