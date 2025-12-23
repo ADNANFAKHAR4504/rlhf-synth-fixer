@@ -20,5 +20,12 @@
     "elb",
     "autoscaling",
     "secrets-manager"
-  ]
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
