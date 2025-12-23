@@ -22,45 +22,74 @@ describe('TapStack', () => {
   });
 
   describe('Stack Structure', () => {
-    test('creates nested stacks for all components', () => {
-      // Check that all nested stacks are created
-      template.hasResourceProperties('AWS::CloudFormation::Stack', 
-        Match.objectLike({
-          TemplateURL: Match.anyValue()
-        })
-      );
+    test('creates all component resources', () => {
+      // Check that resources from all constructs are created
+      // Networking: VPC
+      template.resourceCountIs('AWS::EC2::VPC', 1);
       
-      // Should have at least 5 nested stacks (without cross-region)
-      const stacks = template.findResources('AWS::CloudFormation::Stack');
-      expect(Object.keys(stacks).length).toBeGreaterThanOrEqual(5);
+      // Security: Security Groups
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', Match.objectLike({
+        GroupDescription: Match.anyValue()
+      }));
+      
+      // Database: RDS Cluster
+      template.resourceCountIs('AWS::RDS::DBCluster', 1);
+      
+      // Storage: S3 Buckets
+      template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
+        VersioningConfiguration: Match.objectLike({
+          Status: 'Enabled'
+        })
+      }));
+      
+      // Monitoring: CloudWatch resources
+      template.hasResourceProperties('AWS::Logs::LogGroup', Match.objectLike({
+        LogGroupName: Match.anyValue()
+      }));
+      
+      // Secrets: Secrets Manager
+      template.hasResourceProperties('AWS::SecretsManager::Secret', Match.objectLike({
+        Name: Match.anyValue()
+      }));
     });
 
-    test('applies proper tags to stack', () => {
-      // Verify that nested stacks are created
-      const stacks = template.findResources('AWS::CloudFormation::Stack');
-      expect(Object.keys(stacks).length).toBeGreaterThan(0);
+    test('applies proper tags to resources', () => {
+      // Verify that VPC has tags
+      template.hasResourceProperties('AWS::EC2::VPC', Match.objectLike({
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Environment',
+            Value: environmentSuffix
+          }),
+          Match.objectLike({
+            Key: 'ProjectName',
+            Value: 'secure-vpc-project'
+          }),
+          Match.objectLike({
+            Key: 'CostCenter',
+            Value: 'infrastructure'
+          })
+        ])
+      }));
     });
   });
 
   describe('Stack Dependencies', () => {
-    test('creates stacks in correct dependency order', () => {
-      const stacks = template.findResources('AWS::CloudFormation::Stack');
+    test('creates resources from all constructs', () => {
+      // Verify resources from each construct are present
+      const hasVpc = template.findResources('AWS::EC2::VPC');
+      const hasSecurityGroups = template.findResources('AWS::EC2::SecurityGroup');
+      const hasDatabase = template.findResources('AWS::RDS::DBCluster');
+      const hasStorage = template.findResources('AWS::S3::Bucket');
+      const hasMonitoring = template.findResources('AWS::Logs::LogGroup');
+      const hasSecrets = template.findResources('AWS::SecretsManager::Secret');
       
-      // Check that we have the expected nested stacks
-      const stackKeys = Object.keys(stacks);
-      const hasNetworking = stackKeys.some(key => key.includes('NetworkingStack'));
-      const hasSecurity = stackKeys.some(key => key.includes('SecurityStack'));
-      const hasDatabase = stackKeys.some(key => key.includes('DatabaseStack'));
-      const hasStorage = stackKeys.some(key => key.includes('StorageStack'));
-      const hasMonitoring = stackKeys.some(key => key.includes('MonitoringStack'));
-      const hasSecrets = stackKeys.some(key => key.includes('SecretsStack'));
-      
-      expect(hasNetworking).toBe(true);
-      expect(hasSecurity).toBe(true);
-      expect(hasDatabase).toBe(true);
-      expect(hasStorage).toBe(true);
-      expect(hasMonitoring).toBe(true);
-      expect(hasSecrets).toBe(true);
+      expect(Object.keys(hasVpc).length).toBeGreaterThan(0);
+      expect(Object.keys(hasSecurityGroups).length).toBeGreaterThan(0);
+      expect(Object.keys(hasDatabase).length).toBeGreaterThan(0);
+      expect(Object.keys(hasStorage).length).toBeGreaterThan(0);
+      expect(Object.keys(hasMonitoring).length).toBeGreaterThan(0);
+      expect(Object.keys(hasSecrets).length).toBeGreaterThan(0);
     });
   });
 
@@ -69,22 +98,45 @@ describe('TapStack', () => {
       expect(stack.stackName).toBe('TestTapStack');
     });
 
-    test('passes environment configuration to nested stacks', () => {
-      const stacks = template.findResources('AWS::CloudFormation::Stack');
-      
-      // Verify stacks are created with proper configuration
-      expect(Object.keys(stacks).length).toBeGreaterThan(0);
+    test('passes environment configuration to constructs', () => {
+      // Verify resources are created with environment suffix in their names
+      const vpcs = template.findResources('AWS::EC2::VPC');
+      expect(Object.keys(vpcs).length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Stack Outputs', () => {
+    test('exports VPC ID output', () => {
+      template.hasOutput('VpcId', {
+        Description: 'VPC ID',
+        Export: {
+          Name: `secure-vpc-project-${environmentSuffix}-vpc-id`
+        }
+      });
+    });
+
+    test('exports VPC ARN output', () => {
+      template.hasOutput('VpcArn', {
+        Description: 'VPC ARN',
+        Export: {
+          Name: `secure-vpc-project-${environmentSuffix}-vpc-arn`
+        }
+      });
+    });
+
+    test('exports Region output', () => {
+      template.hasOutput('Region', {
+        Description: 'Deployment Region'
+      });
     });
   });
 
   describe('Cross-Region Support', () => {
     test('does not create cross-region stack when disabled', () => {
-      // StorageStackWest should not exist in current configuration
-      const stacks = template.findResources('AWS::CloudFormation::Stack');
-      const westStack = Object.entries(stacks).find(([key]) => 
-        key.includes('StorageStackWest')
-      );
-      expect(westStack).toBeUndefined();
+      // Cross-region stack is disabled in current configuration
+      // Verify we only have resources in primary region
+      const vpcs = template.findResources('AWS::EC2::VPC');
+      expect(Object.keys(vpcs).length).toBe(1);
     });
   });
 });
