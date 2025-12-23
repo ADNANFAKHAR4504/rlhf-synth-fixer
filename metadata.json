@@ -6,17 +6,9 @@
   "po_id": "292033",
   "team": "synth-2",
   "startedAt": "2025-08-22T11:47:34.001Z",
-  "subtask": "Security and Compliance Implementation",
+  "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "security_fixes",
-    "performance_optimization",
-    "iac_improvements",
-    "deployment_fixes",
-    "compliance_validation",
-    "best_practices",
-    "encryption_implementation",
-    "access_control",
-    "monitoring_setup"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "KMS",
