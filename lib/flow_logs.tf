@@ -82,11 +82,10 @@ resource "aws_s3_bucket_policy" "flow_logs" {
 
 # VPC Flow Log
 resource "aws_flow_log" "main" {
-  log_destination          = aws_s3_bucket.flow_logs.arn
-  log_destination_type     = "s3"
-  traffic_type             = "ALL"
-  vpc_id                   = aws_vpc.main.id
-  max_aggregation_interval = 60
+  log_destination      = aws_s3_bucket.flow_logs.arn
+  log_destination_type = "s3"
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.main.id
 
   tags = {
     Name = "flow-log-${var.environment_suffix}"
