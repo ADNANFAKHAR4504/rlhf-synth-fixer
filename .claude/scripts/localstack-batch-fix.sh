@@ -33,14 +33,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONFIG_FILE="$PROJECT_ROOT/.claude/config/localstack.yaml"
 
-# Load configuration
-MAX_CONCURRENT=${MAX_CONCURRENT:-5}  # Maximum parallel processes
+# Load configuration - Updated for 20 concurrent agents
+MAX_CONCURRENT=${MAX_CONCURRENT:-20}  # Maximum parallel processes (increased to 20)
 GITHUB_REPO=${GITHUB_REPO:-"TuringGpt/iac-test-automations"}
 
 # Try to load from config file
 if command -v yq &>/dev/null && [[ -f "$CONFIG_FILE" ]]; then
-  MAX_CONCURRENT=$(yq -r '.parallel.max_concurrent_agents // 5' "$CONFIG_FILE" 2>/dev/null || echo "5")
+  MAX_CONCURRENT=$(yq -r '.parallel.max_concurrent_agents // 20' "$CONFIG_FILE" 2>/dev/null || echo "20")
   GITHUB_REPO=$(yq -r '.github.repo // "TuringGpt/iac-test-automations"' "$CONFIG_FILE" 2>/dev/null || echo "$GITHUB_REPO")
+fi
+
+# Cache and template scripts
+CACHE_MANAGER="$SCRIPT_DIR/localstack-cache-manager.sh"
+TEMPLATE_APPLICATOR="$SCRIPT_DIR/localstack-apply-templates.sh"
+WATCHDOG_SCRIPT="$SCRIPT_DIR/localstack-watchdog.sh"
+
+# Source cache manager for faster installs
+if [[ -f "$CACHE_MANAGER" ]]; then
+  source "$CACHE_MANAGER"
 fi
 
 # Directories
@@ -280,7 +290,39 @@ fix_single_pr() {
     echo ""
     
     # ─────────────────────────────────────────────────────────────────────────────
-    # STEP 3: Run pre-validation with auto-fix
+    # STEP 3a: Setup caching for fast dependency installation
+    # ─────────────────────────────────────────────────────────────────────────────
+    
+    echo "📦 Setting up dependency caching..."
+    
+    if [[ -f "$CACHE_MANAGER" ]]; then
+      setup_npm_cache_env 2>/dev/null || true
+      setup_cdk_cache_env 2>/dev/null || true
+    fi
+    
+    # Fast npm install using cache
+    if [[ -f "package.json" ]]; then
+      if type cached_npm_install &>/dev/null; then
+        cached_npm_install "$WORK_DIR" 2>&1 | head -20 || npm install --prefer-offline --no-audit 2>&1 | head -20
+      else
+        npm install --prefer-offline --no-audit 2>&1 | head -20
+      fi
+    fi
+    echo ""
+    
+    # ─────────────────────────────────────────────────────────────────────────────
+    # STEP 3b: Apply fix templates automatically
+    # ─────────────────────────────────────────────────────────────────────────────
+    
+    echo "🔧 Applying fix templates..."
+    
+    if [[ -x "$TEMPLATE_APPLICATOR" ]]; then
+      "$TEMPLATE_APPLICATOR" "$WORK_DIR" --all 2>&1 | head -30 || echo "⚠️ Template application had issues"
+    fi
+    echo ""
+    
+    # ─────────────────────────────────────────────────────────────────────────────
+    # STEP 3c: Run pre-validation with auto-fix
     # ─────────────────────────────────────────────────────────────────────────────
     
     echo "🔍 Running pre-validation with auto-fix..."
@@ -310,17 +352,20 @@ fix_single_pr() {
       
       git add -A
       
-      COMMIT_MSG="fix(localstack): batch auto-fixes for PR #${pr}
+      COMMIT_MSG="fix(localstack): comprehensive batch auto-fixes for PR #${pr}
 
 Applied automated fixes:
 - Metadata validation and sanitization
 - TypeScript compilation fixes
 - Lint auto-fixes
-- LocalStack endpoint configuration
+- LocalStack endpoint configuration (from templates)
 - S3 path-style configuration
+- RemovalPolicy.DESTROY for all resources
 - Jest configuration fixes
+- Test endpoint configuration
+- Fix templates auto-applied
 
-Automated by localstack-batch-fix"
+Automated by localstack-batch-fix (optimized for 20 concurrent agents)"
 
       git commit -m "$COMMIT_MSG" 2>/dev/null || true
       
