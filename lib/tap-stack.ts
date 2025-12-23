@@ -1,8 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -18,10 +18,6 @@ export class TapStack extends cdk.Stack {
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
-
-    // LocalStack detection
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                         process.env.AWS_ENDPOINT_URL?.includes('4566');
 
     // Create access logging bucket for S3
     const accessLogsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
