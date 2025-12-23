@@ -24,7 +24,8 @@ resource "aws_lambda_function" "validator" {
   }
 
   depends_on = [
-    aws_cloudwatch_log_group.validator
+    aws_cloudwatch_log_group.validator,
+    null_resource.build_and_push_lambda_images
   ]
 
   tags = {
@@ -58,7 +59,8 @@ resource "aws_lambda_function" "processor" {
   }
 
   depends_on = [
-    aws_cloudwatch_log_group.processor
+    aws_cloudwatch_log_group.processor,
+    null_resource.build_and_push_lambda_images
   ]
 
   tags = {
@@ -92,7 +94,8 @@ resource "aws_lambda_function" "enricher" {
   }
 
   depends_on = [
-    aws_cloudwatch_log_group.enricher
+    aws_cloudwatch_log_group.enricher,
+    null_resource.build_and_push_lambda_images
   ]
 
   tags = {
@@ -121,7 +124,8 @@ resource "aws_lambda_function" "event_trigger" {
   }
 
   depends_on = [
-    aws_cloudwatch_log_group.event_trigger
+    aws_cloudwatch_log_group.event_trigger,
+    null_resource.build_and_push_lambda_images
   ]
 
   tags = {
