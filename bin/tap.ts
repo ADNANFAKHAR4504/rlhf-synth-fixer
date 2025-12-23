@@ -7,8 +7,9 @@ const app = new cdk.App();
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const awsRegion = process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1';
-// For LocalStack deployments, always use 000000000000
-const awsAccountId = process.env.CURRENT_ACCOUNT_ID || process.env.CDK_DEFAULT_ACCOUNT || '000000000000';
+// Prioritize CDK_DEFAULT_ACCOUNT for LocalStack deployments (set to 000000000000)
+// Falls back to CURRENT_ACCOUNT_ID for real AWS deployments
+const awsAccountId = process.env.CDK_DEFAULT_ACCOUNT || process.env.CURRENT_ACCOUNT_ID || '000000000000';
 
 new TapStack(app, `TapStack-${environmentSuffix}`, {
   env: {
