@@ -39,11 +39,11 @@ export class CiCdPipelineStack extends cdk.Stack {
     });
 
     // S3 Bucket for artifacts storage with versioning
+    // Note: autoDeleteObjects is NOT used because lifecycle rules handle cleanup
     this.artifactsBucket = new s3.Bucket(this, 'PipelineArtifacts', {
       bucketName: `ci-cd-pipeline-artifacts-${props.environmentSuffix}`,
       versioned: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN, // Retain to prevent accidental deletion
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
