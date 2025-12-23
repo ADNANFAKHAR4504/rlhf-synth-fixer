@@ -26,5 +26,6 @@
     "IAM",
     "Systems Manager Parameter Store",
     "CloudWatch"
-  ]
+  ],
+  "wave": "P0"
 }
