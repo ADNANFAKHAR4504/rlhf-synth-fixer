@@ -13,7 +13,7 @@
   ],
   "aws_services": [
     "VPC",
-    "EC2", 
+    "EC2",
     "S3",
     "KMS",
     "IAM",
@@ -25,5 +25,11 @@
   "migrated_from": {
     "po_id": "291348",
     "pr": "Pr494"
-  }
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
 }
