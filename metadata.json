@@ -21,5 +21,6 @@
     "CloudWatch",
     "Auto Scaling"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": "P1"
 }
