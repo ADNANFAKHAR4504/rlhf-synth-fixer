@@ -134,8 +134,12 @@ describe('VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       const azs = response.Subnets!.map(s => s.AvailabilityZone).sort();
-      expect(azs).toContain('us-east-1a');
-      expect(azs).toContain('us-east-1b');
+      const uniqueAzs = [...new Set(azs)];
+
+      // Should have exactly 2 unique availability zones
+      expect(uniqueAzs).toHaveLength(2);
+      // Each AZ should have 2 subnets (1 public + 1 private)
+      expect(azs).toHaveLength(4);
     });
   });
 
