@@ -70,16 +70,16 @@ Create an enterprise-grade observability platform using **Terraform with HCL** f
 - Use **EventBridge** for event-driven alerting and routing
 - Use **SNS** for multi-channel notifications
 - Use **Systems Manager** for operational insights and parameter storage
-- Use **Config** for resource configuration tracking and compliance
+- Use **Config** for configuration tracking and compliance
 - Use **Security Hub** for centralized security findings
-- Resource names must include **environmentSuffix** for uniqueness
+- All names must include the environmentSuffix variable for uniqueness
 - Follow naming convention: `{resource-type}-{environment-suffix}`
 - Deploy to **us-east-1** region
-- All resources must be destroyable (no Retain policies, no deletion protection)
+- All infrastructure must be destroyable (no Retain policies, no deletion protection)
 
 ### Deployment Requirements (CRITICAL)
 
-- All named AWS resources MUST include **environmentSuffix** variable to prevent naming conflicts
+- All named AWS components MUST include the environmentSuffix variable to prevent naming conflicts
 - Pattern: `payment-logs-${var.environment_suffix}` or `trace-data-${var.environment_suffix}`
 - All resources must be fully destroyable (set `skip_final_snapshot = true` for databases, no retain policies)
 - AWS Config IAM role must use correct managed policy: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
@@ -106,7 +106,7 @@ Create an enterprise-grade observability platform using **Terraform with HCL** f
 - **Reliability**: Zero data loss for critical payment events, 99.9% uptime for monitoring services
 - **Security**: All data encrypted, audit trails enabled, security findings centralized
 - **Compliance**: PCI DSS compliant logging, Config rules for compliance checks
-- **Resource Naming**: All resources include environmentSuffix for parallel deployments
+- **Naming Convention**: All components include environmentSuffix for parallel deployments
 - **Cost Efficiency**: Optimized log retention, trace sampling, and serverless architecture
 - **Code Quality**: HCL code, well-structured modules, comprehensive variables and outputs
 
