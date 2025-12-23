@@ -18,8 +18,8 @@ provider "aws" {
   region = "us-east-1"
 
   # LocalStack configuration
-  access_key                  = "test"
-  secret_key                  = "test"
+  # Use environment variables: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+  # For LocalStack testing, set: export AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test
   skip_credentials_validation = true
   skip_metadata_api_check     = true
   skip_requesting_account_id  = true
