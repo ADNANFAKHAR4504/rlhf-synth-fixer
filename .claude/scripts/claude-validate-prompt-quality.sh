@@ -94,6 +94,7 @@ if [ $CONNECTIVITY_COUNT -gt 0 ]; then
   echo ""
 fi
 
+
 # Require at least 2 different connectivity patterns
 if [ $CONNECTIVITY_COUNT -ge 2 ]; then
   echo "✅ PASS: Prompt describes service connectivity (found $CONNECTIVITY_COUNT patterns)"
