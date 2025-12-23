@@ -102,5 +102,5 @@ variable "enable_container_insights" {
 variable "enable_vpc_flow_logs" {
   description = "Enable VPC Flow Logs"
   type        = bool
-  default     = true
+  default     = false
 }
