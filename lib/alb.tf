@@ -42,9 +42,7 @@ resource "aws_lb" "main" {
   }
 
   lifecycle {
-    ignore_changes = [
-      access_logs,
-    ]
+    ignore_changes = all
   }
 }
 

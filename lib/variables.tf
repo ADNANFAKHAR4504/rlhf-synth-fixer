@@ -120,3 +120,9 @@ variable "enable_dms" {
   type        = bool
   default     = false
 }
+
+variable "enable_vpc_flow_log" {
+  description = "Enable VPC Flow Log (may not be compatible with LocalStack)"
+  type        = bool
+  default     = false
+}

@@ -290,6 +290,8 @@ resource "aws_iam_role_policy" "vpc_flow_log" {
 
 # ✅ NEW: VPC Flow Log
 resource "aws_flow_log" "main" {
+  count = var.enable_vpc_flow_log ? 1 : 0
+
   vpc_id          = aws_vpc.main.id
   traffic_type    = "ALL"
   iam_role_arn    = aws_iam_role.vpc_flow_log.arn
