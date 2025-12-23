@@ -18,7 +18,12 @@ module.exports = {
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
+    '^.+\\.tsx?$': ['ts-jest', {
+      tsconfig: {
+        allowJs: true,
+        esModuleInterop: true,
+      },
+    }],
     // Transform JS files (so ESM syntax in some node_modules can be transpiled)
     '^.+\\.jsx?$': 'babel-jest',
     '^.+\\.mjs$': 'babel-jest',
@@ -51,13 +56,4 @@ module.exports = {
   testTimeout: 60000,
   silent: false,
   verbose: true,
-  globals: {
-    'ts-jest': {
-      isolatedModules: true,
-      tsconfig: {
-        allowJs: true,
-        esModuleInterop: true,
-      },
-    },
-  },
 };
