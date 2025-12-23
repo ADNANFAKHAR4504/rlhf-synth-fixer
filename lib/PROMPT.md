@@ -84,7 +84,7 @@ Create a security-focused infrastructure using **Terraform with HCL** for paymen
 - Follow naming convention: resource-type-environment-suffix
 - Deploy to us-east-1 region
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements 
 
 - All resources must include var.environment_suffix in their names to avoid conflicts
 - Resources must be destroyable with no deletion protection or Retain policies
@@ -103,7 +103,7 @@ Create a security-focused infrastructure using **Terraform with HCL** for paymen
 - KMS key rotation must be enabled on all customer-managed keys
 - All resources must have mandatory tags: Environment, DataClassification, Owner
 - CloudWatch alarms must trigger on unauthorized access attempts
-- All resources must be destroyable (no Retain or deletion protection policies)
+- All resources must be destroyable 
 - Include proper error handling and logging throughout
 
 ## Success Criteria
