@@ -48,11 +48,12 @@ export class CiCdPipelineStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
-    // Add lifecycle rule to manage old artifact versions
+    // Add lifecycle rule to manage old artifact versions and expire old artifacts
     this.artifactsBucket.addLifecycleRule({
       id: 'DeleteOldVersions',
       enabled: true,
-      noncurrentVersionExpiration: cdk.Duration.days(30),
+      expiration: cdk.Duration.days(90), // Expire current objects after 90 days
+      noncurrentVersionExpiration: cdk.Duration.days(30), // Expire noncurrent versions after 30 days
     });
 
     // IAM Role for CodeBuild service
