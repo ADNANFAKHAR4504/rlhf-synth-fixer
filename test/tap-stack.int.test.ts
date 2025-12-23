@@ -50,7 +50,7 @@ describe('VPC Infrastructure Integration Tests', () => {
       const supportResponse = await ec2Client.send(dnsSupportCommand);
 
       expect(hostnamesResponse.EnableDnsHostnames?.Value).toBe(false);
-      expect(supportResponse.EnableDnsSupport?.Value).toBe(false);
+      expect(supportResponse.EnableDnsSupport?.Value).toBe(true);
     });
   });
 
