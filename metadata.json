@@ -1,0 +1,10 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291435",
+  "team": "3",
+  "provider": "localstack",
+  "startedAt": "2025-08-08T14:44:53.342Z"
+}
