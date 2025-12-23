@@ -36,7 +36,7 @@ Reinterpret the original problem as a single CloudFormation stack that creates a
      * Minimal instance type (e.g., t3.micro) to keep costs low.
      * Security group that allows SSH only from a parameterized CIDR (e.g., `BastionAllowedCidr`).
      * Use IAM roles with least privilege access where required.
-   * Optionally enable **VPC Flow Logs** to CloudWatch Logs or S3, using KMS encryption, to support auditing and debugging.
+   * Optionally enable **VPC Flow Logs** to CloudWatch Logs or S3, using KMS encryption to support auditing and debugging.
 
 3. **S3, lifecycle policies, and eventing**
 
