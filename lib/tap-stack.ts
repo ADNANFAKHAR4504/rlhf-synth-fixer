@@ -406,10 +406,14 @@ export class TapStack extends cdk.Stack {
     // ====================================================================================
 
     // Create an instance profile explicitly to ensure it's attached to instances
-    const instanceProfile = new iam.CfnInstanceProfile(this, 'EC2InstanceProfile', {
-      instanceProfileName: `ec2-instance-profile${config.nameSuffix}`,
-      roles: [ec2Role.roleName],
-    });
+    const instanceProfile = new iam.CfnInstanceProfile(
+      this,
+      'EC2InstanceProfile',
+      {
+        instanceProfileName: `ec2-instance-profile${config.nameSuffix}`,
+        roles: [ec2Role.roleName],
+      }
+    );
 
     // ====================================================================================
     // Launch Template for ASG
@@ -528,8 +532,11 @@ EOF`,
     });
 
     // Ensure the launch template uses the instance profile and IMDSv2
-    const cfnLaunchTemplate = launchTemplate.node.defaultChild as ec2.CfnLaunchTemplate;
-    const existingData = cfnLaunchTemplate.launchTemplateData as any;
+    const cfnLaunchTemplate = launchTemplate.node
+      .defaultChild as ec2.CfnLaunchTemplate;
+    const existingData = cfnLaunchTemplate.launchTemplateData as
+      | ec2.CfnLaunchTemplate.LaunchTemplateDataProperty
+      | undefined;
     cfnLaunchTemplate.launchTemplateData = {
       ...existingData,
       iamInstanceProfile: {
