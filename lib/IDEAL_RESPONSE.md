@@ -646,7 +646,7 @@ import net from 'net';
 // Load CloudFormation outputs
 const outputsPath = 'cfn-outputs/flat-outputs.json';
 if (!fs.existsSync(outputsPath)) {
-  throw new Error(`❌ Missing CloudFormation output file: ${outputsPath}`);
+  throw new Error(`Missing CloudFormation output file: ${outputsPath}`);
 }
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
@@ -693,7 +693,7 @@ describe('WebAppStack Integration Tests', () => {
         expect(response.status).toBe(200);
         expect(typeof response.data).toBe('string');
       } catch (err: any) {
-        console.error(`❌ HTTP request to ${url} failed:`, err.message);
+        console.error(`HTTP request to ${url} failed:`, err.message);
         // Pass test even if request fails
         expect(true).toBe(true);
       }
@@ -704,7 +704,7 @@ describe('WebAppStack Integration Tests', () => {
 
       const isOpen = await checkTcp(lbDns, 80, 5000);
       if (!isOpen) {
-        console.warn(`⚠️ TCP port 80 on ${lbDns} appears to be closed. Passing test anyway.`);
+        console.warn(`TCP port 80 on ${lbDns} appears to be closed. Passing test anyway.`);
         expect(true).toBe(true); // Always pass
       } else {
         expect(isOpen).toBe(true); // Pass if it's open
