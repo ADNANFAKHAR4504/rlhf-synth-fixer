@@ -3,12 +3,14 @@
   "language": "yaml",
   "complexity": "medium",
   "turn_type": "single",
-  "po_id": "243911",
+  "po_id": "LS-243911",
+  "team": "synth-2",
   "startedAt": "2025-07-27T16:48:27.397Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "sreeni-ops",
-  "dockerS3Location": "s3://iac-rlhf-production/docker_images/Pr228/docker-image-243911.tar"
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [],
+  "wave": "P1"
 }
