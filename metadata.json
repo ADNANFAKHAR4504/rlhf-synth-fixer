@@ -3,12 +3,14 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "274773",
+  "po_id": "LS-274773",
+  "team": "synth-2",
   "startedAt": "2025-07-29T07:25:34.461Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "veera-turing",
-  "dockerS3Location": ""
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [],
+  "wave": "P1"
 }
