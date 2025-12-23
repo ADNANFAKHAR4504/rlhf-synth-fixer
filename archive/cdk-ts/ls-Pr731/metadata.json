@@ -1,0 +1,22 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr24",
+  "team": "synth-2",
+  "startedAt": "2025-08-07T23:24:57-05:00",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "AutoScaling",
+    "RDS",
+    "IAM"
+  ]
+}
