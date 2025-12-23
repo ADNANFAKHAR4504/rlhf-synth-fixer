@@ -105,3 +105,30 @@ variable "container_image" {
   type        = string
   default     = "nginx:latest"
 }
+
+# DMS Variables for Database Migration
+variable "dms_source_server" {
+  description = "On-premises PostgreSQL server hostname for DMS source"
+  type        = string
+  default     = "onprem-db.example.com"
+}
+
+variable "dms_source_database" {
+  description = "On-premises PostgreSQL database name"
+  type        = string
+  default     = "trading"
+}
+
+variable "dms_source_username" {
+  description = "On-premises PostgreSQL username for DMS"
+  type        = string
+  default     = "dms_user"
+  sensitive   = true
+}
+
+variable "dms_source_password" {
+  description = "On-premises PostgreSQL password for DMS"
+  type        = string
+  default     = "PLACEHOLDER_UPDATE_IN_TFVARS"
+  sensitive   = true
+}

@@ -97,3 +97,24 @@ output "api_keys_secret_arn" {
   description = "API keys secret ARN"
   value       = aws_secretsmanager_secret.api_keys.arn
 }
+
+# DMS Outputs
+output "dms_replication_instance_arn" {
+  description = "DMS replication instance ARN"
+  value       = aws_dms_replication_instance.main.replication_instance_arn
+}
+
+output "dms_replication_task_arn" {
+  description = "DMS replication task ARN"
+  value       = aws_dms_replication_task.main.replication_task_arn
+}
+
+output "dms_source_endpoint_arn" {
+  description = "DMS source endpoint ARN"
+  value       = aws_dms_endpoint.source.endpoint_arn
+}
+
+output "dms_target_endpoint_arn" {
+  description = "DMS target endpoint ARN"
+  value       = aws_dms_endpoint.target.endpoint_arn
+}
