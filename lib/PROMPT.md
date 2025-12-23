@@ -37,7 +37,7 @@ All Lambdas should have environment variables for stage config and log to CloudW
 ### API Gateway
 REST API with these endpoints:
 - POST /upload - submit an image for processing
-- GET /images/{id} - retrieve detection results for a specific image
+- GET /images/:id - retrieve detection results for a specific image
 - GET /images - list all processed images
 
 Add API key authentication with usage plans for rate limiting. Configure CORS so web apps can call it. Also set up request validation to check JSON payloads.
@@ -47,8 +47,8 @@ Create a DetectionLogs table to store image analysis results. Enable point-in-ti
 
 Schema should look like:
 ```
-ImageID: string (partition key)
-DetectedAnimal: string (cat/dog/other)
+ImageID: string - partition key
+DetectedAnimal: string - cat, dog, or other
 ConfidenceScore: number
 Timestamp: string
 S3Location: string
@@ -93,7 +93,7 @@ Don't use wildcards in IAM policies. Be specific about which actions each Lambda
 ## Configuration
 
 Make it environment-aware. Use CDK context or environment variables for:
-- Stage name (dev/staging/prod)
+- Stage name like dev, staging, or prod
 - S3 bucket names with stage suffix
 - DynamoDB table names with stage suffix
 - Rekognition confidence thresholds
