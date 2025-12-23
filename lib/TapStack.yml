@@ -2,12 +2,13 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, multi-region AWS infrastructure template with comprehensive logging, security, and data protection'
 
 # Regional mappings for AMI IDs to ensure cross-region compatibility
+# Using LocalStack-compatible placeholder AMI IDs
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-0ad253013fad0a42a # Amazon Linux 2 AMI ID for us-east-1
+      AMI: ami-ff0fea91 # LocalStack-compatible placeholder AMI for us-east-1
     us-west-2:
-      AMI: ami-0e0d5cba8c90ba8c5 # Amazon Linux 2 AMI ID for us-west-2
+      AMI: ami-ff0fea91 # LocalStack-compatible placeholder AMI for us-west-2
 
 Resources:
   # ========================================
