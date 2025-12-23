@@ -501,7 +501,7 @@ Resources:
     Properties:
       BackupPlan:
         BackupPlanName: !Sub ${AWS::StackName}-Daily-Plan
-        Rules:
+        BackupPlanRule:
           - RuleName: DailyBackups
             TargetBackupVault: !Ref BackupVault
             ScheduleExpression: cron(0 5 * * ? *) # Daily at 5 AM UTC
