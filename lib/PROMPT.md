@@ -47,7 +47,7 @@ Create a serverless event processing pipeline using **Terraform with HCL** that 
    - No wildcard resource permissions in IAM policies
    - All encryption keys properly configured
 
-8. **Resource Naming**
+8. **Naming Standards**
    - All resources must include environmentSuffix variable for uniqueness
    - Follow naming convention with environment suffix
 
@@ -89,7 +89,7 @@ Create a serverless event processing pipeline using **Terraform with HCL** that 
 - **Reliability**: SQS dead letter queues capture failures from each Lambda function for retry analysis. DynamoDB point-in-time recovery with 35-day retention enables data recovery from corruption or accidental deletes.
 - **Security**: SNS topic encrypts messages at rest using AWS managed keys. CloudWatch Log Groups encrypt Lambda execution logs using customer-managed KMS keys. IAM roles grant each Lambda function only specific permissions needed for its DynamoDB operations and log writes, following least privilege principles.
 - **Monitoring**: CloudWatch Log Groups capture Lambda execution logs with 30-day retention. Step Functions execution history tracks workflow progress. CloudWatch metrics monitor Lambda invocations, errors, and throttles.
-- **Resource Naming**: All resources include environmentSuffix variable to enable multiple deployments in the same account without naming conflicts.
+- **Naming Standards**: All resources include environmentSuffix variable to enable multiple deployments in the same account without naming conflicts.
 - **Destroyability**: All resources can be destroyed cleanly. DynamoDB tables have no retention policies, ECR images follow lifecycle rules, and no resources use deletion protection.
 - **Code Quality**: Well-structured HCL with modular resource definitions, clear variable descriptions, and deployment documentation.
 
