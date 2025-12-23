@@ -26,5 +26,6 @@
     "EventBridge",
     "KMS",
     "SQS"
-  ]
+  ],
+  "wave": "P0"
 }
