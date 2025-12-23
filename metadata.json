@@ -20,7 +20,7 @@
     "CloudWatch",
     "CloudTrail"
   ],
-  "training_quality": 9.5,
+  "training_quality": 10,
   "wave": "P1",
   "migrated_from": {
     "po_id": "291348",
