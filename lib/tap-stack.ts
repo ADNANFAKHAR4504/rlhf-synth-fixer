@@ -217,12 +217,9 @@ exports.handler = async (event) => {
     });
 
     // Create Lambda integration
-    const lambdaIntegration = new apigateway.LambdaIntegration(
-      lambdaFunction,
-      {
-        requestTemplates: { 'application/json': '{ "statusCode": "200" }' },
-      }
-    );
+    const lambdaIntegration = new apigateway.LambdaIntegration(lambdaFunction, {
+      requestTemplates: { 'application/json': '{ "statusCode": "200" }' },
+    });
 
     // Add API Gateway resources and methods
     const dataResource = api.root.addResource('data');

@@ -6,10 +6,11 @@
   "po_id": "LS-trainr42",
   "team": "synth-2",
   "startedAt": "2025-12-23T00:00:00Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "S3",
