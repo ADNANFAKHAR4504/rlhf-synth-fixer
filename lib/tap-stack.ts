@@ -69,8 +69,9 @@ export class TapStack extends cdk.Stack {
     );
 
     // Detect LocalStack environment
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                         process.env.AWS_ENDPOINT_URL?.includes('4566');
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
 
     // Create VPC with private and public subnets (simplified to avoid EIP limits)
     const vpc = new ec2.Vpc(this, 'VPC', {
