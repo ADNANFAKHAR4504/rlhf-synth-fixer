@@ -1,8 +1,8 @@
-import { EC2Client, DescribeVpcsCommand, DescribeSecurityGroupsCommand, DescribeInstancesCommand } from '@aws-sdk/client-ec2';
-import { S3Client, ListBucketsCommand, GetBucketEncryptionCommand } from '@aws-sdk/client-s3';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
-import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
+import { DescribeInstancesCommand, DescribeSecurityGroupsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeLoadBalancersCommand, ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import { GetBucketEncryptionCommand, ListBucketsCommand, S3Client } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -11,7 +11,7 @@ const region = process.env.AWS_REGION || 'us-east-1';
 
 // LocalStack endpoint configuration
 const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566');
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
 const localStackEndpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
 
 // Client configuration for LocalStack
@@ -48,7 +48,7 @@ const elbClient = new ElasticLoadBalancingV2Client(clientConfig);
 
 describe('Infrastructure Integration Tests', () => {
   if (skipTests) {
-    test.skip('Skipping integration tests - no deployment outputs found', () => {});
+    test.skip('Skipping integration tests - no deployment outputs found', () => { });
     return;
   }
 
@@ -57,7 +57,7 @@ describe('Infrastructure Integration Tests', () => {
       const command = new DescribeStacksCommand({
         StackName: `TapStack${environmentSuffix}`,
       });
-      
+
       try {
         const response = await cfnClient.send(command);
         expect(response.Stacks).toHaveLength(1);
@@ -79,10 +79,10 @@ describe('Infrastructure Integration Tests', () => {
       const command = new DescribeVpcsCommand({
         VpcIds: [outputs.VPCId],
       });
-      
+
       const response = await ec2Client.send(command);
       expect(response.Vpcs).toHaveLength(1);
-      
+
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       // DNS settings are part of VPC attributes, not directly on VPC object
@@ -97,7 +97,7 @@ describe('Infrastructure Integration Tests', () => {
           },
         ],
       });
-      
+
       try {
         const response = await ec2Client.send(command);
         expect(response.SecurityGroups).toBeDefined();
@@ -116,13 +116,13 @@ describe('Infrastructure Integration Tests', () => {
       }
 
       const command = new DescribeLoadBalancersCommand({});
-      
+
       try {
         const response = await elbClient.send(command);
-        const alb = response.LoadBalancers?.find(lb => 
+        const alb = response.LoadBalancers?.find(lb =>
           lb.DNSName === outputs.LoadBalancerDNS
         );
-        
+
         if (alb) {
           expect(alb.State?.Code).toBe('active');
           expect(alb.Scheme).toBe('internet-facing');
@@ -145,11 +145,11 @@ describe('Infrastructure Integration Tests', () => {
           },
         ],
       });
-      
+
       try {
         const response = await ec2Client.send(command);
         const instances = response.Reservations?.flatMap(r => r.Instances || []) || [];
-        
+
         if (instances.length > 0) {
           expect(instances.length).toBeGreaterThanOrEqual(2); // Min capacity
           instances.forEach(instance => {
@@ -170,19 +170,19 @@ describe('Infrastructure Integration Tests', () => {
       }
 
       const listCommand = new ListBucketsCommand({});
-      
+
       try {
         const response = await s3Client.send(listCommand);
-        const tapBuckets = response.Buckets?.filter(b => 
+        const tapBuckets = response.Buckets?.filter(b =>
           b.Name?.includes(`tap-${environmentSuffix}`)
         ) || [];
-        
+
         if (tapBuckets.length > 0) {
           // Check encryption on one of the buckets
           const encryptionCommand = new GetBucketEncryptionCommand({
             Bucket: tapBuckets[0].Name,
           });
-          
+
           try {
             const encryptionResponse = await s3Client.send(encryptionCommand);
             expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
@@ -206,13 +206,13 @@ describe('Infrastructure Integration Tests', () => {
       }
 
       const command = new DescribeDBInstancesCommand({});
-      
+
       try {
         const response = await rdsClient.send(command);
-        const dbInstances = response.DBInstances?.filter(db => 
+        const dbInstances = response.DBInstances?.filter(db =>
           db.Endpoint?.Address === outputs.DatabaseEndpoint
         ) || [];
-        
+
         if (dbInstances.length > 0) {
           const db = dbInstances[0];
           expect(db.DBInstanceStatus).toBe('available');
@@ -239,7 +239,7 @@ describe('Infrastructure Integration Tests', () => {
 
       // Simple HTTP check
       const http = require('http');
-      
+
       await new Promise<void>((resolve, reject) => {
         const options = {
           hostname: outputs.LoadBalancerDNS,
@@ -248,7 +248,7 @@ describe('Infrastructure Integration Tests', () => {
           method: 'GET',
           timeout: 5000,
         };
-        
+
         const req = http.request(options, (res: any) => {
           expect(res.statusCode).toBeDefined();
           // Could be 200, 301, 302, etc.
@@ -256,19 +256,19 @@ describe('Infrastructure Integration Tests', () => {
           expect(res.statusCode).toBeLessThan(500);
           resolve();
         });
-        
+
         req.on('error', (error: any) => {
           // Load balancer might not be fully initialized
           console.warn('Could not reach load balancer:', error.message);
           resolve(); // Don't fail the test
         });
-        
+
         req.on('timeout', () => {
           req.destroy();
           console.warn('Load balancer request timed out');
           resolve(); // Don't fail the test
         });
-        
+
         req.end();
       });
     });
