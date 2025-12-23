@@ -11,5 +11,17 @@
   "subject_labels": [
     "General Infrastructure Tooling QA"
   ],
-  "aws_services": []
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "S3",
+    "RDS",
+    "CloudWatch",
+    "Secrets Manager",
+    "Systems Manager",
+    "GuardDuty",
+    "Security Groups"
+  ],
+  "wave": "P1"
 }
