@@ -6,11 +6,11 @@
   "po_id": "LS-trainr63",
   "team": "synth-2",
   "startedAt": "2025-08-11T12:53:34-05:00",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Cloud Environment Setup"
   ],
-  "aws_services": [],
+  "aws_services": ["VPC", "EC2", "AutoScaling", "IAM"],
   "wave": "P1"
 }
