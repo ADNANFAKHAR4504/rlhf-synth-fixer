@@ -20,5 +20,6 @@
     "CloudWatch",
     "SNS"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": "P0"
 }
