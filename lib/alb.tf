@@ -40,6 +40,12 @@ resource "aws_lb" "main" {
     CostCenter     = "FinOps"
     MigrationPhase = "initial"
   }
+
+  lifecycle {
+    ignore_changes = [
+      access_logs,
+    ]
+  }
 }
 
 # Target Group - Blue Environment

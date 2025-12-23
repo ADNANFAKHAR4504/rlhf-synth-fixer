@@ -290,11 +290,10 @@ resource "aws_iam_role_policy" "vpc_flow_log" {
 
 # ✅ NEW: VPC Flow Log
 resource "aws_flow_log" "main" {
-  vpc_id                   = aws_vpc.main.id
-  traffic_type             = "ALL"
-  iam_role_arn             = aws_iam_role.vpc_flow_log.arn
-  log_destination          = aws_cloudwatch_log_group.vpc_flow_log.arn
-  max_aggregation_interval = 600
+  vpc_id          = aws_vpc.main.id
+  traffic_type    = "ALL"
+  iam_role_arn    = aws_iam_role.vpc_flow_log.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
 
   tags = {
     Name           = "vpc-flow-log-${var.environment_suffix}"
