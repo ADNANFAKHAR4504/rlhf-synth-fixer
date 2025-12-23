@@ -60,6 +60,6 @@ Your CloudFormation template must meet the following requirements:
 
 ---
 
-### 🎯 Expected Output:
+### Expected Output:
 
 A **single CloudFormation YAML template** that fully implements the above infrastructure and passes validation checks. Ensure that the architecture is secure, efficient, and aligned with AWS Well-Architected Framework principles.

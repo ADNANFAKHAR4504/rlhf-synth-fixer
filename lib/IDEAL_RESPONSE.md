@@ -38,7 +38,7 @@ Resources:
     Properties:
       Description: !Sub 'KMS Key for ${EnvironmentSuffix} serverless application encryption'
       KeyPolicy:
-        Version: '2012-10-17'  # ✅ Added missing Version
+        Version: '2012-10-17'  # Added missing Version
         Statement:
           - Sid: Enable IAM User Permissions
             Effect: Allow
@@ -57,7 +57,7 @@ Resources:
               - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
             Resource: '*'
-          - Sid: Allow Lambda Service  # ✅ Added Lambda permissions
+          - Sid: Allow Lambda Service  # Added Lambda permissions
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
@@ -134,7 +134,7 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       SSESpecification:
         SSEEnabled: true
-        SSEType: KMS  # ✅ Added required SSEType
+        SSEType: KMS  # Added required SSEType
         KMSMasterKeyId: !Ref KMSKey
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -209,7 +209,7 @@ Resources:
                 Action:
                   - kms:Decrypt
                   - kms:GenerateDataKey
-                  - kms:DescribeKey  # ✅ Added missing permission
+                  - kms:DescribeKey  # Added missing permission
                 Resource: !GetAtt KMSKey.Arn
         - PolicyName: CloudWatchLogs
           PolicyDocument:
@@ -217,11 +217,11 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - logs:CreateLogGroup  # ✅ Added missing permission
+                  - logs:CreateLogGroup  # Added missing permission
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: 
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${EnvironmentSuffix}-serverless-app-function:*'  # ✅ More specific resource
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${EnvironmentSuffix}-serverless-app-function:*'  # More specific resource
 
 
   # Lambda Function - FIXED VERSION
