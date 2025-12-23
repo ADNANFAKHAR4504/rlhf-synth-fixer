@@ -6,7 +6,7 @@ I need to build a multi-region cloud development environment using AWS CDK with 
 
 **Network Configuration**: Configure internet gateways for public subnets to enable internet access. Ensure proper routing tables are set up.
 
-**EC2 Instances**: Deploy EC2 instances in each public subnet with security groups allowing only SSH (port 22) and HTTP (port 80) traffic.
+**EC2 Instances**: Deploy EC2 instances in each public subnet with security groups allowing only SSH on port 22 and HTTP on port 80 traffic.
 
 **S3 Storage**: Create an S3 bucket with versioning enabled in us-east-1. The bucket should only be accessible from the EC2 instances using IAM roles and policies. Leverage Amazon S3 Metadata for comprehensive object visibility and analysis capabilities.
 
@@ -16,7 +16,7 @@ I need to build a multi-region cloud development environment using AWS CDK with 
 
 **Resource Tagging**: Apply consistent tags to all resources including Environment, Region, and Purpose tags.
 
-**Modularity**: Structure the solution using separate CDK constructs for different resource types (networking, compute, database, storage) for reusability and maintainability.
+**Modularity**: Structure the solution using separate CDK constructs for networking, compute, database, and storage for reusability and maintainability.
 
 **CI/CD Integration**: The infrastructure should support automatic deployment when CDK code changes are detected.
 

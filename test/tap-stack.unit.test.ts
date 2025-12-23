@@ -129,10 +129,11 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Database Configuration', () => {
-    test('should create RDS PostgreSQL instance with Multi-AZ', () => {
+    test('should create RDS PostgreSQL instance with encryption', () => {
+      // Note: MultiAZ is disabled for LocalStack compatibility
       usEast1Template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'postgres',
-        MultiAZ: true,
+        MultiAZ: false,
         StorageEncrypted: true,
         DBInstanceClass: 'db.t3.micro',
       });
