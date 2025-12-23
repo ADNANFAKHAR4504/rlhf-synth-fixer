@@ -1,6 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Highly Available Web Application with Auto Scaling, RDS Failover, Static EIP, Monitoring, and IAM.
 
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W1011  # LocalStack doesn't support dynamic references for secrets
+
 Parameters:
   InstanceType:
     Type: String
