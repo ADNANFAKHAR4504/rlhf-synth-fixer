@@ -51,7 +51,7 @@ Create a multi-region disaster recovery infrastructure using **Terraform with HC
    - SNS topics deliver notifications to subscriber applications and monitoring systems
    - Configure SQS dead letter queues attached to SNS subscriptions to capture failed message deliveries with maximum receive count of 3
 
-7. **Resource Tagging**
+7. Resource Tagging
    - Tag all resources with Environment=production
    - Tag all resources with DR-Tier=critical
 
@@ -99,7 +99,7 @@ Create a multi-region disaster recovery infrastructure using **Terraform with HC
 - **High Availability**: Aurora read replicas process read queries across multiple availability zones while primary instance handles write operations
 - **Security**: Applications retrieve database credentials from Secrets Manager which automatically rotates passwords and updates Aurora cluster authentication, with KMS encrypting all data at rest
 - **Monitoring**: Aurora publishes events to SNS topics which fan out notifications to monitoring applications, with SQS dead letter queues capturing undeliverable messages
-- **Resource Naming**: All resources include environmentSuffix parameter
+- Resource Naming: All resources include environmentSuffix parameter
 - **Destroyability**: All resources can be cleanly destroyed without manual intervention
 - **Code Quality**: Well-structured HCL code with proper variable definitions and outputs
 
