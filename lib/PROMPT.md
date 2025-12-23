@@ -45,20 +45,20 @@ Create an infrastructure analysis and QA system using **CloudFormation with YAML
 ### Technical Requirements
 
 - All infrastructure defined using **CloudFormation with YAML**
-- Use **AWS Lambda** for the analysis logic (Python runtime recommended)
+- Use **AWS Lambda** with Python runtime for the analysis logic
 - Use **Amazon S3** for storing analysis reports
 - Use **AWS IAM** for roles and permissions following least-privilege
 - Use **Amazon EventBridge** for scheduled triggers
 - Use **Amazon CloudWatch** for logging and monitoring
 - Use **Amazon SNS** for notifications
-- Resource names must include **environmentSuffix** parameter for uniqueness
+- Names for all infrastructure components must include the **environmentSuffix** parameter for uniqueness
 - Follow naming convention: resource-type-environment-suffix
 - Deploy to **us-east-1** region
 
 ### Constraints
 
 - Lambda execution role must have read-only permissions for CloudFormation stack operations
-- IAM roles must follow least-privilege principle with no wildcard resources where possible
+- IAM roles must follow least-privilege principle with specific resource ARNs instead of wildcards
 - S3 bucket must have encryption enabled and public access blocked
 - All resources must be destroyable - no Retain deletion policies
 - Include proper error handling and logging in Lambda function
@@ -71,13 +71,13 @@ Create an infrastructure analysis and QA system using **CloudFormation with YAML
 - **Performance**: Completes analysis of a typical stack within 30 seconds
 - **Reliability**: Handles errors gracefully without failing the entire analysis
 - **Security**: IAM permissions follow least-privilege, S3 bucket is encrypted and private
-- **Resource Naming**: All resources include environmentSuffix parameter for uniqueness
+- **Naming Convention**: All resources include environmentSuffix parameter for uniqueness
 - **Code Quality**: Clean YAML, well-documented with inline comments, proper error handling
 
 ## What to deliver
 
 - Complete CloudFormation YAML template implementation
-- Lambda function code (inline or as separate file structure)
+- Lambda function code inline or as separate file structure
 - IAM roles with least-privilege permissions for stack auditing
 - S3 bucket with encryption and lifecycle policies
 - EventBridge rule for scheduled execution
