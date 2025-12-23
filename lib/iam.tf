@@ -87,6 +87,8 @@ resource "aws_iam_role_policy" "ecs_task" {
 
 # DMS IAM Role
 resource "aws_iam_role" "dms_vpc" {
+  count = var.enable_dms ? 1 : 0
+
   name = "dms-vpc-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
@@ -111,12 +113,16 @@ resource "aws_iam_role" "dms_vpc" {
 }
 
 resource "aws_iam_role_policy_attachment" "dms_vpc" {
-  role       = aws_iam_role.dms_vpc.name
+  count = var.enable_dms ? 1 : 0
+
+  role       = aws_iam_role.dms_vpc[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole"
 }
 
 # DMS CloudWatch Role
 resource "aws_iam_role" "dms_cloudwatch" {
+  count = var.enable_dms ? 1 : 0
+
   name = "dms-cloudwatch-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
@@ -141,6 +147,8 @@ resource "aws_iam_role" "dms_cloudwatch" {
 }
 
 resource "aws_iam_role_policy_attachment" "dms_cloudwatch" {
-  role       = aws_iam_role.dms_cloudwatch.name
+  count = var.enable_dms ? 1 : 0
+
+  role       = aws_iam_role.dms_cloudwatch[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonDMSCloudWatchLogsRole"
 }

@@ -2,6 +2,8 @@
 
 # DMS Subnet Group
 resource "aws_dms_replication_subnet_group" "main" {
+  count = var.enable_dms ? 1 : 0
+
   replication_subnet_group_id          = "dms-subnet-group-${var.environment_suffix}"
   replication_subnet_group_description = "DMS replication subnet group"
   subnet_ids                           = aws_subnet.private[*].id
@@ -16,13 +18,15 @@ resource "aws_dms_replication_subnet_group" "main" {
 
 # DMS Replication Instance
 resource "aws_dms_replication_instance" "main" {
+  count = var.enable_dms ? 1 : 0
+
   replication_instance_id     = "dms-instance-${var.environment_suffix}"
   replication_instance_class  = "dms.t3.medium"
   allocated_storage           = 100
   engine_version              = "3.5.3"
   multi_az                    = var.enable_multi_az_dms
   publicly_accessible         = false
-  replication_subnet_group_id = aws_dms_replication_subnet_group.main.id
+  replication_subnet_group_id = aws_dms_replication_subnet_group.main[0].id
   vpc_security_group_ids      = [aws_security_group.dms.id]
 
   kms_key_arn = aws_kms_key.main.arn
@@ -39,6 +43,8 @@ resource "aws_dms_replication_instance" "main" {
 
 # DMS Source Endpoint (Oracle)
 resource "aws_dms_endpoint" "source" {
+  count = var.enable_dms ? 1 : 0
+
   endpoint_id   = "source-oracle-${var.environment_suffix}"
   endpoint_type = "source"
   engine_name   = "oracle"
@@ -47,7 +53,7 @@ resource "aws_dms_endpoint" "source" {
   port          = var.source_db_port
   database_name = var.source_db_name
   username      = var.source_db_username
-  password      = random_password.source_db_password.result # ✅ Use generated password
+  password      = random_password.source_db_password[0].result # ✅ Use generated password
 
   ssl_mode = "require"
 
@@ -65,6 +71,8 @@ resource "aws_dms_endpoint" "source" {
 
 # DMS Target Endpoint (Aurora PostgreSQL)
 resource "aws_dms_endpoint" "target" {
+  count = var.enable_dms ? 1 : 0
+
   endpoint_id   = "target-postgres-${var.environment_suffix}"
   endpoint_type = "target"
   engine_name   = "aurora-postgresql"
@@ -89,10 +97,12 @@ resource "aws_dms_endpoint" "target" {
 
 # DMS Replication Task
 resource "aws_dms_replication_task" "main" {
+  count = var.enable_dms ? 1 : 0
+
   replication_task_id      = "oracle-to-postgres-${var.environment_suffix}"
-  source_endpoint_arn      = aws_dms_endpoint.source.endpoint_arn
-  target_endpoint_arn      = aws_dms_endpoint.target.endpoint_arn
-  replication_instance_arn = aws_dms_replication_instance.main.replication_instance_arn
+  source_endpoint_arn      = aws_dms_endpoint.source[0].endpoint_arn
+  target_endpoint_arn      = aws_dms_endpoint.target[0].endpoint_arn
+  replication_instance_arn = aws_dms_replication_instance.main[0].replication_instance_arn
   migration_type           = "full-load-and-cdc"
 
   table_mappings = jsonencode({

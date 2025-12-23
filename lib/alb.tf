@@ -34,6 +34,10 @@ resource "aws_lb" "main" {
   enable_http2                     = true
   enable_cross_zone_load_balancing = true
 
+  access_logs {
+    enabled = false
+  }
+
   tags = {
     Name           = "alb-${var.environment_suffix}"
     Environment    = var.environment_suffix

@@ -290,10 +290,11 @@ resource "aws_iam_role_policy" "vpc_flow_log" {
 
 # ✅ NEW: VPC Flow Log
 resource "aws_flow_log" "main" {
-  vpc_id          = aws_vpc.main.id
-  traffic_type    = "ALL"
-  iam_role_arn    = aws_iam_role.vpc_flow_log.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
+  vpc_id                   = aws_vpc.main.id
+  traffic_type             = "ALL"
+  iam_role_arn             = aws_iam_role.vpc_flow_log.arn
+  log_destination          = aws_cloudwatch_log_group.vpc_flow_log.arn
+  max_aggregation_interval = 600
 
   tags = {
     Name           = "vpc-flow-log-${var.environment_suffix}"
@@ -334,6 +335,8 @@ resource "aws_cloudwatch_log_group" "ecs_green" {
 
 # CloudWatch Log Group for DMS
 resource "aws_cloudwatch_log_group" "dms" {
+  count = var.enable_dms ? 1 : 0
+
   name              = "/dms/replication-${var.environment_suffix}"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.main.arn

@@ -57,7 +57,7 @@ output "green_target_group_arn" {
 
 output "dms_replication_instance_arn" {
   description = "DMS replication instance ARN"
-  value       = aws_dms_replication_instance.main.replication_instance_arn
+  value       = var.enable_dms ? aws_dms_replication_instance.main[0].replication_instance_arn : null
 }
 
 output "kms_key_id" {
@@ -79,6 +79,6 @@ output "db_password_secret_arn" {
 
 output "source_db_password_secret_arn" {
   description = "ARN of the Secrets Manager secret containing Source DB password"
-  value       = aws_secretsmanager_secret.source_db_password.arn
+  value       = var.enable_dms ? aws_secretsmanager_secret.source_db_password[0].arn : null
 }
 

@@ -114,3 +114,9 @@ variable "enable_multi_az_dms" {
   type        = bool
   default     = false
 }
+
+variable "enable_dms" {
+  description = "Enable DMS resources (requires LocalStack PRO or AWS)"
+  type        = bool
+  default     = false
+}

@@ -75,11 +75,14 @@ resource "aws_security_group" "rds" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "PostgreSQL from ECS"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ecs.id, aws_security_group.dms.id]
+    description = "PostgreSQL from ECS"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    security_groups = concat(
+      [aws_security_group.ecs.id],
+      var.enable_dms ? [aws_security_group.dms[0].id] : []
+    )
   }
 
   egress {
@@ -100,6 +103,8 @@ resource "aws_security_group" "rds" {
 
 # DMS Security Group
 resource "aws_security_group" "dms" {
+  count = var.enable_dms ? 1 : 0
+
   name        = "dms-sg-${var.environment_suffix}"
   description = "Security group for DMS replication instance"
   vpc_id      = aws_vpc.main.id
