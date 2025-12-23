@@ -496,6 +496,14 @@ class TapStack(cdk.Stack):
             update_policy=autoscaling.UpdatePolicy.rolling_update()
         )
 
+        # Fix for LocalStack: Override launch template version to use "$Latest" string
+        # LocalStack returns non-string for LatestVersionNumber property
+        cfn_asg = self.asg.node.default_child
+        cfn_asg.launch_template = {
+            "launchTemplateId": self.launch_template.launch_template_id,
+            "version": "$Latest"
+        }
+
         # Attach ASG to Target Group
         self.asg.attach_to_application_target_group(self.target_group)
 
