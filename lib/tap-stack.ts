@@ -153,7 +153,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // CloudWatch Log Group (simplified for LocalStack)
-    const logGroup = new logs.LogGroup(this, 'WebAppLogs', {
+    const _logGroup = new logs.LogGroup(this, 'WebAppLogs', {
       logGroupName: `/aws/webapp/${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: isLocalStack ? undefined : kmsKey,
@@ -221,7 +221,9 @@ export class TapStack extends cdk.Stack {
       subnetGroup: subnetGroup,
       storageEncrypted: !isLocalStack, // Skip encryption for LocalStack
       storageEncryptionKey: isLocalStack ? undefined : kmsKey,
-      backupRetention: isLocalStack ? cdk.Duration.days(0) : cdk.Duration.days(7),
+      backupRetention: isLocalStack
+        ? cdk.Duration.days(0)
+        : cdk.Duration.days(7),
       deleteAutomatedBackups: true,
       deletionProtection: false,
       multiAz: false,
