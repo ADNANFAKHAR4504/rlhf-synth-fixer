@@ -19,5 +19,6 @@
     "CloudWatch",
     "CloudTrail"
   ],
- "wave": "P1"
+  "wave": "P1",
+  "training_quality": 9
 }
