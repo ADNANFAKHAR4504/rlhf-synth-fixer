@@ -22,5 +22,6 @@
     "CloudWatch",
     "SQS",
     "DynamoDB"
-  ]
+  ],
+  "training_quality": 9
 }
