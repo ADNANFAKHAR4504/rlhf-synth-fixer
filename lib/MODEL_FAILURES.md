@@ -1,8 +1,8 @@
-📝 Observations on Claude Sonnet’s Output for ProjectX Security Infrastructure
-✅ Prompt Overview:
+Observations on Claude Sonnet’s Output for ProjectX Security Infrastructure
+Prompt Overview:
 The prompt provided to Claude Sonnet clearly outlined a detailed security-first infrastructure-as-code (IaC) deployment using Pulumi and Python for a company named ProjectX. It required the implementation of secure AWS infrastructure across two regions: us-west-2 and us-east-1, with modular design and strict adherence to best security practices.
 
-❌ Issues Observed in Claude Sonnet's Output:
+Issues Observed in Claude Sonnet's Output:
 No Core Project Structure Created:
 
 Claude did not create the main entry point file (main.py), which is essential for bootstrapping any Pulumi deployment.
@@ -31,7 +31,7 @@ No Modularization Despite Being Explicitly Requested:
 
 There was no separation of concerns, making the output infeasible for a real-world security-focused deployment.
 
-✅ What I Did to Improve the Outcome:
+What I Did to Improve the Outcome:
 Structured the Codebase Properly:
 
 Created a proper main.py to initialize the Pulumi program.
@@ -62,7 +62,7 @@ Wrote unit and integration tests using mocks for Pulumi components.
 
 All tests pass successfully, confirming that the infrastructure is robust and secure as specified.
 
-🚨 Final Note:
+Final Note:
 Claude Sonnet hallucinated critical infrastructure and ignored multiple core requirements, which could have led to significant deployment gaps or even insecure environments if taken to production.
 
 In contrast, the corrected implementation adheres fully to the prompt, is modular, secure, and verified by automated tests to ensure production readiness.
