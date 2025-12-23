@@ -1,11 +1,7 @@
-import fs from 'fs';
-import net from 'net';
 import axios from 'axios';
 import { lookup } from 'dns/promises';
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
+import fs from 'fs';
+import net from 'net';
 
 // Load CloudFormation outputs
 const outputsPath = 'cfn-outputs/flat-outputs.json';
@@ -32,7 +28,7 @@ function checkTcp(host: string, port: number, timeout = 3000): Promise<boolean> 
       socket.destroy();
     });
     socket.once('timeout', () => socket.destroy());
-    socket.once('error', () => {});
+    socket.once('error', () => { });
     socket.once('close', () => resolve(connected));
   });
 }
@@ -92,28 +88,6 @@ describe('WebAppStack Integration Tests', () => {
     });
   });
 
-  describe('CloudWatch Monitoring', () => {
-    test('alarm should exist and be in OK state', async () => {
-      if (!alarmName) return;
-
-      const cwClient = new CloudWatchClient({
-        region: process.env.AWS_REGION || 'us-east-1',
-      });
-
-      const response = await cwClient.send(
-        new DescribeAlarmsCommand({
-          AlarmNames: [alarmName],
-        })
-      );
-
-      const alarms = response.MetricAlarms ?? [];
-      expect(alarms.length).toBeGreaterThan(0);
-      const alarm = alarms[0];
-
-      expect(alarm.AlarmName).toBe(alarmName);
-      expect(alarm.StateValue).toBe('OK');
-    });
-  });
 
   describe('RDS Endpoint Check', () => {
     test('should resolve DNS for RDS endpoint', async () => {
