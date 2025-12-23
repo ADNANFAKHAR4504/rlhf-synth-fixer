@@ -36,6 +36,7 @@ ALLOWED_FILES=(
   ".prettierrc"
   "setup.py"
   "pyproject.toml"
+  "pytest.ini"
 )
 
 echo "Checking PR file changes..."
