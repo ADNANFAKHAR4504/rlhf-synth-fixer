@@ -1,0 +1,27 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-02T01:13:35+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "101000939",
+  "aws_services": [
+    "S3",
+    "RDS",
+    "Lambda",
+    "API Gateway",
+    "Route 53",
+    "IAM",
+    "CloudWatch",
+    "KMS",
+    "VPC",
+    "DynamoDB"
+  ],
+  "provider": "localstack",
+  "wave": "P0"
+}
