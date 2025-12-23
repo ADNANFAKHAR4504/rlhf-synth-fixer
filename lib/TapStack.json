@@ -11,9 +11,6 @@
         "Variables": {
           "AWS_NODEJS_CONNECTION_REUSE_ENABLED": 1
         }
-      },
-      "Metadata": {
-        "Comment": "Global configuration applied to all Lambda functions in this template, including runtime, timeout, memory, and environment variables for connection reuse."
       }
     }
   },
