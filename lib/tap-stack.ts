@@ -5,6 +5,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as networkfirewall from 'aws-cdk-lib/aws-networkfirewall';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -186,6 +187,81 @@ export class TapStack extends cdk.Stack {
 
     // Tag the SNS topic
     cdk.Tags.of(alarmTopic).add('Environment', environment);
+
+    // Create Network Firewall Rule Group
+    const firewallRuleGroup = new networkfirewall.CfnRuleGroup(
+      this,
+      `NFWRuleGroup-${environment}-${uniqueId}-${environmentSuffix}`,
+      {
+        ruleGroupName: `NFWRuleGroup-${environment}-${uniqueId}-${environmentSuffix}`,
+        type: 'STATEFUL',
+        capacity: 100,
+        ruleGroup: {
+          rulesSource: {
+            statefulRules: [
+              {
+                action: 'ALERT',
+                header: {
+                  protocol: 'HTTP',
+                  source: 'ANY',
+                  sourcePort: 'ANY',
+                  destination: 'ANY',
+                  destinationPort: '80',
+                  direction: 'FORWARD',
+                },
+                ruleOptions: [
+                  {
+                    keyword: 'sid',
+                    settings: ['100001'],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }
+    );
+
+    // Tag the Network Firewall Rule Group
+    cdk.Tags.of(firewallRuleGroup).add('Environment', environment);
+
+    // Create Network Firewall Policy
+    const firewallPolicy = new networkfirewall.CfnFirewallPolicy(
+      this,
+      `NFWPolicy-${environment}-${uniqueId}-${environmentSuffix}`,
+      {
+        firewallPolicyName: `NFWPolicy-${environment}-${uniqueId}-${environmentSuffix}`,
+        firewallPolicy: {
+          statelessDefaultActions: ['aws:forward_to_sfe'],
+          statelessFragmentDefaultActions: ['aws:forward_to_sfe'],
+          statefulRuleGroupReferences: [
+            {
+              resourceArn: firewallRuleGroup.attrRuleGroupArn,
+            },
+          ],
+        },
+      }
+    );
+
+    // Tag the Network Firewall Policy
+    cdk.Tags.of(firewallPolicy).add('Environment', environment);
+
+    // Create Network Firewall
+    const firewall = new networkfirewall.CfnFirewall(
+      this,
+      `NFW-${environment}-${uniqueId}-${environmentSuffix}`,
+      {
+        firewallName: `NFW-${environment}-${uniqueId}-${environmentSuffix}`,
+        firewallPolicyArn: firewallPolicy.attrFirewallPolicyArn,
+        vpcId: vpc.vpcId,
+        subnetMappings: vpc.publicSubnets.map(subnet => ({
+          subnetId: subnet.subnetId,
+        })),
+      }
+    );
+
+    // Tag the Network Firewall
+    cdk.Tags.of(firewall).add('Environment', environment);
 
     // Create CloudWatch alarm for CPU utilization
     const cpuAlarm = new cloudwatch.Alarm(
