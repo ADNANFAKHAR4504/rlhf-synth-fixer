@@ -12,7 +12,7 @@ Create DynamoDB tables with Point-in-Time Recovery enabled for each environment.
 Configure CloudWatch to collect metrics from the EC2 instances, Lambda functions, DynamoDB tables, and ALB. Set up alarms that trigger when EC2 CPU usage is high, when Lambda functions error out, or when DynamoDB throttling occurs. These alarms should send notifications so we can respond to issues.
 
 **Security and Access Control**
-Create IAM roles for Lambda functions that allow them to read/write to DynamoDB tables and S3 buckets. EC2 instances need roles to send logs to CloudWatch and access Systems Manager Parameter Store for configuration values. Keep permissions tight - Lambda should only access its specific DynamoDB table and S3 bucket, not everything.
+Create IAM roles for Lambda functions that grant read/write access to DynamoDB tables and S3 buckets. EC2 instances need roles to send logs to CloudWatch and retrieve configuration from Systems Manager Parameter Store. Keep IAM policies scoped tightly - each Lambda should only access its specific DynamoDB table and S3 bucket, not everything.
 
 **Configuration Management**
 Store environment-specific settings in Systems Manager Parameter Store so Lambda functions and EC2 instances can retrieve configuration without hardcoding values. Things like database connection strings, API endpoints, feature flags should live there.
