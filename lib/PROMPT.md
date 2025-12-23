@@ -15,18 +15,20 @@ Create an enterprise-grade observability platform using **Terraform with HCL** f
 ### Core Requirements
 
 1. **Centralized Logging Infrastructure**
-   - Aggregate logs from all payment processing services
-   - Store logs in structured format for analysis
+   - CloudWatch Log Groups aggregate logs from all payment processing services
+   - Payment APIs send application logs to CloudWatch log streams
+   - CloudWatch stores logs in structured format for analysis with KMS encryption
    - Enable log retention with lifecycle policies (7-30 days)
    - Support log filtering and querying capabilities
-   - Include encryption at rest for sensitive payment data
+   - Lambda functions connect to CloudWatch for centralized logging
 
 2. **Distributed Tracing System**
-   - Trace payment transactions across microservices
+   - X-Ray traces payment transactions as they flow across microservices
+   - API Gateway forwards trace headers to downstream Lambda functions
+   - Lambda functions propagate X-Ray traces to DynamoDB and external APIs
    - Identify performance bottlenecks in transaction flow
-   - Track API calls between services
-   - Correlate traces with logs and metrics
-   - Support trace sampling to control costs
+   - X-Ray console queries CloudWatch metrics for correlated analysis
+   - Support trace sampling rules to control costs
 
 3. **Metrics Collection and Visualization**
    - Collect custom metrics from payment applications
@@ -36,11 +38,12 @@ Create an enterprise-grade observability platform using **Terraform with HCL** f
    - Visualize system-level metrics (CPU, memory, network)
 
 4. **Alerting and Incident Management**
-   - Alert on critical payment processing failures
-   - Notify on security anomalies
-   - Escalate based on severity levels
-   - Support multiple notification channels (email, SNS)
-   - Track alert history and response times
+   - CloudWatch Alarms trigger when payment failure thresholds are breached
+   - Alarms publish notifications to SNS topics for team alerting
+   - EventBridge rules detect security configuration changes and route to SNS
+   - SNS delivers alerts through email subscriptions to on-call engineers
+   - CloudWatch logs track alert history and response times
+   - Security Hub findings flow to SNS for centralized incident management
 
 5. **Performance Monitoring**
    - Monitor end-to-end transaction latency
@@ -50,12 +53,13 @@ Create an enterprise-grade observability platform using **Terraform with HCL** f
    - Detect performance degradation trends
 
 6. **Security Monitoring and Compliance**
-   - Monitor AWS account security posture
-   - Track API calls and user activities (audit trails)
-   - Detect suspicious patterns and anomalies
-   - Generate compliance reports for PCI DSS
-   - Alert on security configuration changes
-   - Track resource configuration compliance
+   - CloudTrail captures all AWS API calls and sends logs to S3 bucket
+   - EventBridge monitors CloudTrail events for unauthorized access attempts
+   - AWS Config tracks resource configurations and evaluates compliance rules
+   - Config sends compliance change notifications to EventBridge
+   - Security Hub aggregates findings from Config and other security services
+   - Security Hub connects to SNS for security alert distribution
+   - CloudWatch dashboards visualize security metrics from multiple sources
 
 ### Technical Requirements
 
