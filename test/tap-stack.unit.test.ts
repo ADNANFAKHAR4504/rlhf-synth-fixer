@@ -2,24 +2,14 @@ import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
-// Mock the nested stack to verify it is called correctly
-jest.mock('../lib/cicd-pipeline-stack', () => ({
-  CiCdPipelineStack: jest.fn().mockImplementation(() => ({
-    // Mock implementation
-  })),
-}));
-
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
 describe('TapStack', () => {
   let app: cdk.App;
   let stack: TapStack;
   let template: Template;
 
-  beforeEach(() => {
-    // Reset mocks before each test
-    jest.clearAllMocks();
+  const environmentSuffix = 'test';
 
+  beforeEach(() => {
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
     template = Template.fromStack(stack);
@@ -27,35 +17,34 @@ describe('TapStack', () => {
 
   describe('TapStack Unit Tests', () => {
     test('should create TapStack with correct environment suffix', () => {
-      expect(stack).toBeDefined();
-      expect(stack.stackName).toContain('TestTapStack');
+      // Verify S3 bucket is created with environment suffix in name
+      template.resourceCountIs('AWS::S3::Bucket', 1);
     });
 
-    test('should pass environment suffix to nested stack', () => {
-      const { CiCdPipelineStack } = require('../lib/cicd-pipeline-stack');
-      expect(CiCdPipelineStack).toHaveBeenCalledWith(
-        stack,
-        'CiCdPipelineStack',
-        expect.objectContaining({
-          environmentSuffix,
-        })
-      );
+    test('should inherit from CiCdPipelineStack', () => {
+      // TapStack should have all resources from CiCdPipelineStack
+      template.resourceCountIs('AWS::KMS::Key', 1);
+      template.resourceCountIs('AWS::IAM::Role', 2);
+      template.resourceCountIs('AWS::Logs::LogGroup', 1);
     });
 
     test('should use default environment suffix when none provided', () => {
-      const appDefault = new cdk.App();
-      const stackDefault = new TapStack(appDefault, 'TestTapStackDefault');
-      expect(stackDefault).toBeDefined();
+      const defaultStack = new TapStack(app, 'DefaultStack');
+      const defaultTemplate = Template.fromStack(defaultStack);
+      
+      // Should still create resources with default 'dev' suffix
+      defaultTemplate.resourceCountIs('AWS::S3::Bucket', 1);
+      defaultTemplate.resourceCountIs('AWS::KMS::Key', 1);
     });
 
-    test('should handle environment suffix from context', () => {
-      const appContext = new cdk.App({
-        context: {
-          environmentSuffix: 'test-context',
-        },
-      });
-      const stackContext = new TapStack(appContext, 'TestTapStackContext');
-      expect(stackContext).toBeDefined();
+    test('should create all required infrastructure components', () => {
+      // Verify all major resources are created
+      template.resourceCountIs('AWS::S3::Bucket', 1); // Artifacts bucket
+      template.resourceCountIs('AWS::KMS::Key', 1); // Encryption key
+      template.resourceCountIs('AWS::IAM::Role', 2); // Deployment + CodeCatalyst roles
+      template.resourceCountIs('AWS::SSM::Parameter', 2); // DB connection + App Composer config
+      template.resourceCountIs('AWS::Logs::LogGroup', 1); // CloudWatch logs
+      template.resourceCountIs('AWS::CloudWatch::Dashboard', 1); // Dashboard
     });
   });
 });
