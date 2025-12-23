@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-ls-trainr45",
+  "team": "synth-2",
+  "startedAt": "2025-08-11T11:35:28-05:00",
+  "subtask": "CI/CD Pipeline Integration",
+  "provider": "localstack",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "s3",
+    "codebuild",
+    "codepipeline",
+    "iam",
+    "cloudwatch",
+    "sns",
+    "sqs",
+    "lambda",
+    "events"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "ls-trainr45",
+    "pr": "Pr890"
+  }
+}
