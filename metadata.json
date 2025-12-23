@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291833",
+  "team": "synth-2",
+  "startedAt": "2025-08-05T08:58:20.684Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "lambda",
+    "s3",
+    "iam",
+    "logs"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291833",
+    "pr": "Pr553"
+  }
+}
