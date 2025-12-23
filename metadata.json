@@ -21,5 +21,6 @@
     "SQS",
     "CloudWatch",
     "Budgets"
-  ]
+  ],
+  "wave": "P1"
 }
