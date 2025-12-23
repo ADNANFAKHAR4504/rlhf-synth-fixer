@@ -120,12 +120,15 @@ export class TapStack extends cdk.Stack {
       this,
       'LaunchConfig',
       {
-        imageId: ec2.MachineImage.latestAmazonLinux2().getImage(this)
-          .imageId,
+        imageId: ec2.MachineImage.latestAmazonLinux2().getImage(this).imageId,
         instanceType: 't3.micro',
-        iamInstanceProfile: new iam.CfnInstanceProfile(this, 'ASGInstanceProfile', {
-          roles: [ec2Role.roleName],
-        }).ref,
+        iamInstanceProfile: new iam.CfnInstanceProfile(
+          this,
+          'ASGInstanceProfile',
+          {
+            roles: [ec2Role.roleName],
+          }
+        ).ref,
         securityGroups: [ec2SecurityGroup.securityGroupId],
         userData: cdk.Fn.base64(userData.render()),
       }
