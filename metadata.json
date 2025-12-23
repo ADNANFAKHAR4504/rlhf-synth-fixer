@@ -1,9 +1,9 @@
 {
-  "platform": "analysis",
-  "language": "py",
+  "platform": "cdk",
+  "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "229226",
+  "po_id": "LS-229226",
   "team": "synth-2",
   "startedAt": "2025-07-26T20:55:25.870Z",
   "subtask": "Infrastructure QA and Management",

@@ -285,6 +285,7 @@ export class WebServerStack extends cdk.Stack {
         : undefined,
       // Deletion protection for production
       deletionProtection: props?.environmentSuffix === 'prod',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // CloudWatch Alarms for EC2
