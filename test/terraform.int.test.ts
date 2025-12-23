@@ -100,6 +100,8 @@ type StructuredOutputs = {
 function readStructuredOutputs(): StructuredOutputs {
   // Try multiple possible output file locations
   const possiblePaths = [
+    path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json"),
+    path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json"),
     path.resolve(process.cwd(), "lib/terraform.tfstate.d/outputs.json"),
     path.resolve(process.cwd(), "lib/.terraform/outputs.json"),
     path.resolve(process.cwd(), "tf-outputs/all-outputs.json"),
