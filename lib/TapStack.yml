@@ -427,6 +427,7 @@ Resources:
             Ebs:
               Encrypted: true
               VolumeType: gp3
+              VolumeSize: 20
         UserData: !Base64 |
           #!/bin/bash -xe
           yum update -y
@@ -440,7 +441,6 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub ${AWS::StackName}-ASG
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
