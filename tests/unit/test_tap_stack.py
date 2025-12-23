@@ -215,13 +215,10 @@ class TestTapStack:
     # ========== CLOUDWATCH LOGS TESTS ==========
 
     def test_lambda_log_group_created(self, template):
-        """Test CloudWatch log group is created for Lambda"""
-        template.resource_count_is("AWS::Logs::LogGroup", 1)
-
-        template.has_resource_properties("AWS::Logs::LogGroup", {
-            "LogGroupName": "/aws/lambda/tap-test-lambda",
-            "RetentionInDays": 731  # 2 years
-        })
+        """Test CloudWatch log group is NOT explicitly created (for LocalStack compatibility)"""
+        # Note: log_retention removed for LocalStack compatibility
+        # CloudWatch log groups will be created automatically by Lambda at runtime
+        template.resource_count_is("AWS::Logs::LogGroup", 0)
 
     # ========== CLOUDWATCH ALARMS TESTS ==========
 
@@ -342,8 +339,9 @@ class TestTapStack:
         # Verify:
         # 1. Lambda function exists
         template.resource_count_is("AWS::Lambda::Function", 2)
-        # 2. CloudWatch log group exists
-        template.resource_count_is("AWS::Logs::LogGroup", 1)
+        # 2. CloudWatch log group NOT explicitly created (for LocalStack compatibility)
+        # Note: CloudWatch log groups will be created automatically by Lambda at runtime
+        template.resource_count_is("AWS::Logs::LogGroup", 0)
         # 3. CloudWatch alarms exist
         template.resource_count_is("AWS::CloudWatch::Alarm", 3)
         # 4. Lambda role has CloudWatch permissions
