@@ -243,11 +243,18 @@ testSuite('High-Availability Stack Integration Tests', () => {
       expect(SecurityGroups!.length).toBeGreaterThanOrEqual(1);
       const albSg = SecurityGroups![0];
 
+      // Helper to check if protocol is TCP (LocalStack may return 'tcp', 'TCP', or '6')
+      const isTcpProtocol = (protocol: string | undefined) => {
+        if (!protocol) return false;
+        const p = protocol.toLowerCase();
+        return p === 'tcp' || p === '6';
+      };
+
       const httpRule = albSg.IpPermissions?.find(
-        p => p.FromPort === 80 && p.ToPort === 80 && p.IpProtocol === 'tcp'
+        p => p.FromPort === 80 && p.ToPort === 80 && isTcpProtocol(p.IpProtocol)
       );
       const httpsRule = albSg.IpPermissions?.find(
-        p => p.FromPort === 443 && p.ToPort === 443 && p.IpProtocol === 'tcp'
+        p => p.FromPort === 443 && p.ToPort === 443 && isTcpProtocol(p.IpProtocol)
       );
 
       // Verify rules exist first
@@ -379,8 +386,15 @@ testSuite('High-Availability Stack Integration Tests', () => {
       expect(albSgResponse.SecurityGroups!.length).toBeGreaterThanOrEqual(1);
       const albSg = albSgResponse.SecurityGroups![0];
 
+      // Helper to check if protocol is TCP (LocalStack may return 'tcp', 'TCP', or '6')
+      const isTcpProtocol = (protocol: string | undefined) => {
+        if (!protocol) return false;
+        const p = protocol.toLowerCase();
+        return p === 'tcp' || p === '6';
+      };
+
       const ingressRule = instanceSg.IpPermissions?.find(
-        p => p.FromPort === 8080 && p.ToPort === 8080
+        p => p.FromPort === 8080 && p.ToPort === 8080 && isTcpProtocol(p.IpProtocol)
       );
       expect(ingressRule).toBeDefined();
       expect(ingressRule?.UserIdGroupPairs?.[0].GroupId).toBe(albSg.GroupId);
