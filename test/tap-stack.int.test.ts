@@ -289,7 +289,7 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
     expect(dist).toBeDefined();
   });
 
-  test('RDS instance is available and encrypted', async () => {
+  (isLocalStack ? test.skip : test)('RDS instance is available and encrypted', async () => {
     const res = await rds.send(new DescribeDBInstancesCommand({
       DBInstanceIdentifier: outputs.RDSInstanceId,
     }));

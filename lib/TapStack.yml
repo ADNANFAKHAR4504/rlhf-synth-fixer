@@ -371,6 +371,7 @@ Resources:
           Value: DevOps
   
   RDSInstance:
+    Condition: NotLocalStack
     Type: AWS::RDS::DBInstance
     Properties:
       Engine: postgres
@@ -679,10 +680,12 @@ Outputs:
     Description: Private Subnet 2 ID
 
   RDSInstanceId:
+    Condition: NotLocalStack
     Value: !Ref RDSInstance
     Description: RDS Instance ID
 
   RDSEndpoint:
+    Condition: NotLocalStack
     Value: !GetAtt RDSInstance.Endpoint.Address
     Description: RDS Endpoint Address
 
