@@ -12,11 +12,11 @@ Create a multi-tier architecture where:
 
 4. **EC2 to S3 Integration**: EC2 instances should have IAM roles that grant them read/write access to an S3 application bucket for storing user uploads and application assets. Use VPC Gateway Endpoints for S3 to keep traffic within the AWS network.
 
-5. **Monitoring and Alerting Pipeline**: CloudWatch should collect metrics from EC2 instances (CPU, memory) and RDS (connections, CPU). Configure CloudWatch Alarms that trigger SNS notifications when thresholds are breached (e.g., CPU > 80%, high response times).
+5. **Monitoring and Alerting Pipeline**: CloudWatch should collect metrics from EC2 instances like CPU and memory, and from RDS like connections and CPU. Configure CloudWatch Alarms that trigger SNS notifications when thresholds are breached, such as CPU above 80% or high response times.
 
 ## Security Requirements
 
-- All data at rest encrypted using KMS keys (S3 buckets and RDS storage)
+- All data at rest encrypted using KMS keys for S3 buckets and RDS storage
 - Security groups following least-privilege: ALB accepts 80/443, web servers only accept traffic from ALB, database only accepts traffic from web servers
 - IAM roles for EC2 instances instead of access keys
 - S3 buckets with block public access and SSL-only policies
