@@ -1,6 +1,7 @@
 """
 Unit tests for TapStack component
 """
+import os
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 import pulumi
@@ -191,6 +192,108 @@ class TestComponentIntegration(unittest.TestCase):
         self.assertIsNotNone(args.regions)
         self.assertIsNotNone(args.tags)
         self.assertIsNotNone(args.environment_suffix)
+
+
+class TestComputeInfrastructureLocalStack(unittest.TestCase):
+    """Test ComputeInfrastructure LocalStack skip logic"""
+
+    @patch.dict(os.environ, {"AWS_ENDPOINT_URL": "http://localhost:4566"})
+    def test_compute_skips_ec2_in_localstack(self):
+        """Test ComputeInfrastructure skips EC2 creation in LocalStack"""
+        from lib.components.compute import ComputeInfrastructure
+        import pulumi
+
+        # Mock outputs
+        mock_vpc_id = pulumi.Output.from_input("vpc-123")
+        mock_subnet_ids = pulumi.Output.from_input(["subnet-1", "subnet-2"])
+        mock_sg_id = pulumi.Output.from_input("sg-123")
+
+        # Create compute infrastructure (should skip EC2)
+        compute = ComputeInfrastructure(
+            name="test-compute",
+            vpc_id=mock_vpc_id,
+            private_subnet_ids=mock_subnet_ids,
+            security_group_id=mock_sg_id,
+            environment="test",
+            region="us-east-1",
+            tags={"Test": "Tag"}
+        )
+
+        # Verify mock instance IDs are set
+        self.assertIsNotNone(compute.instance_ids)
+        self.assertIsNone(compute.launch_template)
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_compute_creates_ec2_when_not_localstack(self):
+        """Test ComputeInfrastructure creates EC2 instances when not in LocalStack"""
+        from lib.components.compute import ComputeInfrastructure
+        import pulumi
+
+        # Mock outputs
+        mock_vpc_id = pulumi.Output.from_input("vpc-123")
+        mock_subnet_ids = pulumi.Output.from_input(["subnet-1", "subnet-2"])
+        mock_sg_id = pulumi.Output.from_input("sg-123")
+
+        # Create compute infrastructure (should create EC2)
+        compute = ComputeInfrastructure(
+            name="test-compute",
+            vpc_id=mock_vpc_id,
+            private_subnet_ids=mock_subnet_ids,
+            security_group_id=mock_sg_id,
+            environment="test",
+            region="us-east-1",
+            tags={"Test": "Tag"}
+        )
+
+        # Verify EC2 resources are created
+        self.assertIsNotNone(compute.instance_ids)
+        self.assertIsNotNone(compute.launch_template)
+
+
+class TestMonitoringInfrastructure(unittest.TestCase):
+    """Test MonitoringInfrastructure component with different scenarios"""
+
+    def test_monitoring_with_empty_instance_ids(self):
+        """Test MonitoringInfrastructure handles empty instance IDs"""
+        from lib.components.monitoring import MonitoringInfrastructure
+        import pulumi
+
+        # Mock empty instance IDs
+        mock_instance_ids = pulumi.Output.from_input([])
+
+        # Create monitoring infrastructure
+        monitoring = MonitoringInfrastructure(
+            name="test-monitoring",
+            instance_ids=mock_instance_ids,
+            environment="test",
+            region="us-east-1",
+            tags={"Test": "Tag"}
+        )
+
+        # Verify dashboard is created
+        self.assertIsNotNone(monitoring.dashboard)
+        self.assertIsNotNone(monitoring.dashboard_name)
+
+    def test_monitoring_with_instance_ids(self):
+        """Test MonitoringInfrastructure with instance IDs"""
+        from lib.components.monitoring import MonitoringInfrastructure
+        import pulumi
+
+        # Mock instance IDs
+        mock_instance_ids = pulumi.Output.from_input(["i-123", "i-456"])
+
+        # Create monitoring infrastructure
+        monitoring = MonitoringInfrastructure(
+            name="test-monitoring",
+            instance_ids=mock_instance_ids,
+            environment="test",
+            region="us-east-1",
+            tags={"Test": "Tag"}
+        )
+
+        # Verify dashboard is created
+        self.assertIsNotNone(monitoring.dashboard)
+        self.assertIsNotNone(monitoring.dashboard_name)
 
 
 class TestTapStackWithMocks(unittest.TestCase):
