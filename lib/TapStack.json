@@ -13,7 +13,8 @@
       "Description": "Unique suffix for resource naming to avoid conflicts",
       "AllowedPattern": "^[a-z0-9-]+$",
       "MinLength": 3,
-      "MaxLength": 20
+      "MaxLength": 20,
+      "Default": "dev"
     },
     "Environment": {
       "Type": "String",
