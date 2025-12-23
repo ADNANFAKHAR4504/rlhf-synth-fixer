@@ -122,6 +122,7 @@ describe('TapStack Integration Tests', () => {
   let stackOutputs: Record<string, string> = {};
   let stackResources: any[] = [];
   let accountId: string;
+  let stackExists = false;
 
   beforeAll(async () => {
     try {
@@ -154,11 +155,24 @@ describe('TapStack Integration Tests', () => {
       });
       const resourcesResponse = await cloudFormationClient.send(describeResourcesCommand);
       stackResources = resourcesResponse.StackResources || [];
-    } catch (error) {
-      console.error('Failed to fetch stack information:', error);
-      throw error;
+      stackExists = true;
+    } catch (error: any) {
+      if (error.name === 'ValidationError' && error.message?.includes('does not exist')) {
+        console.warn(`⚠️  Stack '${stackName}' does not exist. Integration tests will be skipped.`);
+        console.warn('   Deploy the stack first using: npm run localstack:cfn:deploy');
+        stackExists = false;
+      } else {
+        console.error('Failed to fetch stack information:', error);
+        throw error;
+      }
     }
   }, 60000);
+
+  beforeEach(() => {
+    if (!stackExists) {
+      throw new Error(`Stack '${stackName}' does not exist. Deploy the infrastructure before running integration tests.`);
+    }
+  });
 
   describe('Stack Deployment', () => {
     test('should have CloudFormation stack in successful state', async () => {
