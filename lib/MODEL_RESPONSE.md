@@ -89,7 +89,7 @@ export class SecureFinancialDataProcessingStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // 🔹 VPC & Endpoints
+    //  VPC & Endpoints
     // Create VPC with 3 private subnets across 3 AZs - NO internet access
     const vpc = new ec2.Vpc(this, 'SecureVPC', {
       vpcName: 'secure-financial-vpc',
@@ -183,13 +183,13 @@ export class SecureFinancialDataProcessingStack extends cdk.Stack {
       privateDnsEnabled: true,
     });
 
-    // 🔹 SNS Topic for Security Alerts
+    //  SNS Topic for Security Alerts
     const securityAlertTopic = new sns.Topic(this, 'SecurityAlertTopic', {
       topicName: 'secure-financial-security-alerts',
       displayName: 'Security Alerts for Financial Data Processing',
     });
 
-    // 🔹 KMS Keys
+    //  KMS Keys
     // Customer-managed KMS key for input bucket
     const inputBucketKey = new kms.Key(this, 'InputBucketKMSKey', {
       alias: 'alias/secure-financial-input-bucket',
@@ -217,7 +217,7 @@ export class SecureFinancialDataProcessingStack extends cdk.Stack {
       pendingWindow: cdk.Duration.days(30),
     });
 
-    // 🔹 S3 Buckets
+    //  S3 Buckets
     // Input bucket with KMS encryption
     const inputBucket = new s3.Bucket(this, 'InputDataBucket', {
       bucketName: `secure-financial-input-${this.account}-${this.region}`,
@@ -283,7 +283,7 @@ export class SecureFinancialDataProcessingStack extends cdk.Stack {
       ],
     });
 
-    // 🔹 DynamoDB Table
+    //  DynamoDB Table
     const transactionTable = new dynamodb.Table(this, 'TransactionMetadataTable', {
       tableName: 'secure-financial-transactions',
       partitionKey: { name: 'transactionId', type: dynamodb.AttributeType.STRING },
@@ -295,7 +295,7 @@ export class SecureFinancialDataProcessingStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // 🔹 Lambda Functions
+    //  Lambda Functions
     // CloudWatch Log Group for Lambda with 7-year retention
     const lambdaLogGroup = new logs.LogGroup(this, 'ProcessorLambdaLogGroup', {
       logGroupName: '/aws/lambda/secure-financial-processor',
@@ -571,7 +571,7 @@ export class SecureFinancialDataProcessingStack extends cdk.Stack {
       resources: [transactionTable.tableArn],
     }));
 
-    // 🔹 Logs & Alarms
+    //  Logs & Alarms
     // Metric filter for unauthorized access attempts
     const unauthorizedAccessFilter = new logs.MetricFilter(this, 'UnauthorizedAccessFilter', {
       logGroup: lambdaLogGroup,
