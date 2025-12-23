@@ -17,6 +17,6 @@
     "s3",
     "iam",
     "cloudwatch-logs"
-  ]
+  ],
   "wave": "P0"
 }
