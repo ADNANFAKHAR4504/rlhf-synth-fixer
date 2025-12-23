@@ -18,7 +18,7 @@ Create an enterprise-grade observability platform using **Terraform with HCL** f
    - CloudWatch Log Groups aggregate logs from all payment processing services
    - Payment APIs send application logs to CloudWatch log streams
    - CloudWatch stores logs in structured format for analysis with KMS encryption
-   - Enable log retention with lifecycle policies (7-30 days)
+   - Enable log retention with lifecycle policies between 7 and 30 days
    - Support log filtering and querying capabilities
    - Lambda functions connect to CloudWatch for centralized logging
 
@@ -32,10 +32,10 @@ Create an enterprise-grade observability platform using **Terraform with HCL** f
 
 3. **Metrics Collection and Visualization**
    - Collect custom metrics from payment applications
-   - Create dashboards for business KPIs (transaction volume, success rates)
-   - Track latency percentiles (p50, p95, p99)
+   - Create dashboards for business KPIs like transaction volume and success rates
+   - Track latency percentiles p50, p95, and p99
    - Monitor error rates and failure patterns
-   - Visualize system-level metrics (CPU, memory, network)
+   - Visualize system-level metrics for CPU, memory, and network
 
 4. **Alerting and Incident Management**
    - CloudWatch Alarms trigger when payment failure thresholds are breached
@@ -73,31 +73,31 @@ Create an enterprise-grade observability platform using **Terraform with HCL** f
 - Use **Config** for configuration tracking and compliance
 - Use **Security Hub** for centralized security findings
 - All names must include the environmentSuffix variable for uniqueness
-- Follow naming convention: `{resource-type}-{environment-suffix}`
+- Follow naming convention: resource-type dash environment-suffix
 - Deploy to **us-east-1** region
-- All infrastructure must be destroyable (no Retain policies, no deletion protection)
+- All infrastructure must be destroyable with no Retain policies and no deletion protection
 
 ### Deployment Requirements (CRITICAL)
 
 - All named AWS components MUST include the environmentSuffix variable to prevent naming conflicts
-- Pattern: `payment-logs-${var.environment_suffix}` or `trace-data-${var.environment_suffix}`
-- All resources must be fully destroyable (set `skip_final_snapshot = true` for databases, no retain policies)
+- Example patterns: payment-logs-SUFFIX or trace-data-SUFFIX where SUFFIX is the environment variable
+- All resources must be fully destroyable: set skip_final_snapshot to true for databases, no retain policies
 - AWS Config IAM role must use correct managed policy: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-- Do NOT create GuardDuty detector in code (account-level resource, manually enabled)
-- Include proper error handling and logging for all Lambda functions (if used)
-- Tag all resources with `Environment`, `Project`, and `ManagedBy` for cost tracking
+- Do NOT create GuardDuty detector in code as it is an account-level resource that must be manually enabled
+- Include proper error handling and logging for all Lambda functions if used
+- Tag all resources with Environment, Project, and ManagedBy for cost tracking
 
 ### Constraints
 
 - Maintain PCI DSS compliance for payment data handling
 - Encrypt all logs and data at rest using AWS managed keys
 - Implement least privilege IAM roles for all services
-- Keep CloudWatch log retention between 7-30 days to manage costs
-- Use X-Ray sampling rules to control tracing costs (sample 5-10% of requests)
-- Avoid expensive resources (prefer serverless, avoid NAT gateways)
+- Keep CloudWatch log retention between 7 and 30 days to manage costs
+- Use X-Ray sampling rules to control tracing costs: sample 5-10% of requests
+- Avoid expensive resources: prefer serverless, avoid NAT gateways
 - All dashboards should focus on payment-specific KPIs
 - Security monitoring must detect unauthorized access attempts
-- Performance monitoring must track SLAs (99.9% uptime, sub-500ms latency)
+- Performance monitoring must track SLAs with 99.9% uptime and sub-500ms latency
 
 ## Success Criteria
 
