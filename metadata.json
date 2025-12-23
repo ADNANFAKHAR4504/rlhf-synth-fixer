@@ -9,8 +9,9 @@
   "subtask": "IaC Program Optimization",
   "provider": "localstack",
   "subject_labels": [
-    "IaC Diagnosis/Edits"
+    "IaC Program Optimization"
   ],
   "aws_services": ["EC2", "VPC", "Auto Scaling", "ALB", "RDS", "S3", "CloudFront", "CloudWatch", "IAM", "KMS", "SNS"],
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality_score": 9
 }
