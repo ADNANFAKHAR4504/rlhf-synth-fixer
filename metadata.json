@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "turn_type": "multi",
+  "po_id": "synth-101000809",
+  "team": "synth",
+  "startedAt": "2025-11-03T12:55:59Z",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "ALB",
+    "AutoScaling",
+    "CloudWatch",
+    "ECR",
+    "ECS",
+    "Fargate",
+    "IAM",
+    "RDS",
+    "Route53",
+    "SecretsManager",
+    "SecurityGroups",
+    "VPC"
+  ],
+  "provider": "localstack",
+  "wave": "P0"
+}
