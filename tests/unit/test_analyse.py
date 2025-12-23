@@ -234,6 +234,22 @@ class TestAnalyzeCompositeAlarms:
         assert len(result) == 1
         assert result[0]['status'] == 'missing'
 
+    @patch('analyse.boto3.client')
+    def test_analyze_composite_alarms_error(self, mock_boto_client):
+        """Test when error occurs retrieving composite alarms"""
+        mock_cw_client = Mock()
+        mock_boto_client.return_value = mock_cw_client
+
+        mock_cw_client.describe_alarms.side_effect = Exception('API Error')
+
+        analyzer = InfrastructureAnalyzer('test')
+        analyzer.cloudwatch_client = mock_cw_client
+        result = analyzer.analyze_composite_alarms()
+
+        assert len(result) == 1
+        assert result[0]['status'] == 'error'
+        assert 'API Error' in result[0]['error']
+
 
 class TestAnalyzeDashboards:
     """Test analyze_dashboards method"""
@@ -282,6 +298,25 @@ class TestAnalyzeDashboards:
         assert len(result) == 1
         assert result[0]['status'] == 'missing'
 
+    @patch('analyse.boto3.client')
+    def test_analyze_dashboards_error(self, mock_boto_client):
+        """Test when generic error occurs retrieving dashboard"""
+        mock_cw_client = Mock()
+        mock_boto_client.return_value = mock_cw_client
+
+        # Mock exceptions attribute
+        dashboard_not_found = type('DashboardNotFoundError', (Exception,), {})
+        mock_cw_client.exceptions = type('exceptions', (), {'DashboardNotFoundError': dashboard_not_found})()
+        mock_cw_client.get_dashboard.side_effect = Exception('API Error')
+
+        analyzer = InfrastructureAnalyzer('test')
+        analyzer.cloudwatch_client = mock_cw_client
+        result = analyzer.analyze_dashboards()
+
+        assert len(result) == 1
+        assert result[0]['status'] == 'error'
+        assert 'API Error' in result[0]['error']
+
 
 class TestAnalyzeMetricFilters:
     """Test analyze_metric_filters method"""
@@ -310,11 +345,33 @@ class TestAnalyzeMetricFilters:
         assert result[0]['status'] == 'found'
 
     @patch('analyse.boto3.client')
+    def test_analyze_metric_filters_log_group_not_found(self, mock_boto_client):
+        """Test when log group is not found"""
+        mock_logs_client = Mock()
+        mock_boto_client.return_value = mock_logs_client
+
+        # Mock ResourceNotFoundException
+        resource_not_found = type('ResourceNotFoundException', (Exception,), {})
+        mock_logs_client.exceptions = type('exceptions', (), {'ResourceNotFoundException': resource_not_found})()
+        mock_logs_client.describe_metric_filters.side_effect = resource_not_found()
+
+        analyzer = InfrastructureAnalyzer('test')
+        analyzer.logs_client = mock_logs_client
+        result = analyzer.analyze_metric_filters()
+
+        # Returns 3 entries (one per log group), all with log_group_not_found status
+        assert len(result) == 3
+        assert all(entry['status'] == 'log_group_not_found' for entry in result)
+
+    @patch('analyse.boto3.client')
     def test_analyze_metric_filters_with_error(self, mock_boto_client):
         """Test when error occurs retrieving metric filters"""
         mock_logs_client = Mock()
         mock_boto_client.return_value = mock_logs_client
 
+        # Mock exceptions attribute properly
+        resource_not_found = type('ResourceNotFoundException', (Exception,), {})
+        mock_logs_client.exceptions = type('exceptions', (), {'ResourceNotFoundException': resource_not_found})()
         mock_logs_client.describe_metric_filters.side_effect = Exception('API Error')
 
         analyzer = InfrastructureAnalyzer('test')
@@ -397,6 +454,132 @@ class TestGenerateRecommendations:
         assert len(recommendations) > 0
         assert any('kms' in rec['message'].lower() or 'encrypt' in rec['message'].lower()
                    for rec in recommendations)
+
+    @patch('analyse.boto3.client')
+    def test_generate_recommendations_missing_alarms(self, mock_boto_client):
+        """Test recommendations for missing alarms"""
+        analyzer = InfrastructureAnalyzer('test')
+
+        analysis = {
+            'log_groups': [],
+            'alarms': [{'status': 'missing', 'name': 'test-alarm'}],
+            'composite_alarms': [],
+            'dashboards': [],
+            'metric_filters': []
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        assert len(recommendations) > 0
+        assert any('alarm' in rec['message'].lower() for rec in recommendations)
+
+    @patch('analyse.boto3.client')
+    def test_generate_recommendations_alarm_without_sns(self, mock_boto_client):
+        """Test recommendations for alarm without SNS action"""
+        analyzer = InfrastructureAnalyzer('test')
+
+        analysis = {
+            'log_groups': [],
+            'alarms': [{'status': 'found', 'name': 'test-alarm', 'has_sns_action': False}],
+            'composite_alarms': [],
+            'dashboards': [],
+            'metric_filters': []
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        assert len(recommendations) > 0
+        assert any('sns' in rec['message'].lower() for rec in recommendations)
+
+    @patch('analyse.boto3.client')
+    def test_generate_recommendations_missing_composite_alarm(self, mock_boto_client):
+        """Test recommendations for missing composite alarm"""
+        analyzer = InfrastructureAnalyzer('test')
+
+        analysis = {
+            'log_groups': [],
+            'alarms': [],
+            'composite_alarms': [{'status': 'missing', 'name': 'multi-service-failure-test'}],
+            'dashboards': [],
+            'metric_filters': []
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        assert len(recommendations) > 0
+        assert any('composite' in rec['message'].lower() for rec in recommendations)
+
+    @patch('analyse.boto3.client')
+    def test_generate_recommendations_missing_dashboard(self, mock_boto_client):
+        """Test recommendations for missing dashboard"""
+        analyzer = InfrastructureAnalyzer('test')
+
+        analysis = {
+            'log_groups': [],
+            'alarms': [],
+            'composite_alarms': [],
+            'dashboards': [{'status': 'missing', 'name': 'payment-monitoring-test'}],
+            'metric_filters': []
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        assert len(recommendations) > 0
+        assert any('dashboard' in rec['message'].lower() for rec in recommendations)
+
+    @patch('analyse.boto3.client')
+    def test_generate_recommendations_dashboard_wrong_widgets(self, mock_boto_client):
+        """Test recommendations for dashboard with wrong widget count"""
+        analyzer = InfrastructureAnalyzer('test')
+
+        analysis = {
+            'log_groups': [],
+            'alarms': [],
+            'composite_alarms': [],
+            'dashboards': [{'status': 'found', 'name': 'payment-monitoring-test', 'compliant': False, 'widget_count': 5}],
+            'metric_filters': []
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        assert len(recommendations) > 0
+        assert any('widget' in rec['message'].lower() for rec in recommendations)
+
+    @patch('analyse.boto3.client')
+    def test_generate_recommendations_no_metric_filters(self, mock_boto_client):
+        """Test recommendations for missing metric filters"""
+        analyzer = InfrastructureAnalyzer('test')
+
+        analysis = {
+            'log_groups': [],
+            'alarms': [],
+            'composite_alarms': [],
+            'dashboards': [],
+            'metric_filters': [{'log_group': '/aws/test', 'filter_count': 0, 'status': 'found'}]
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        assert len(recommendations) > 0
+        assert any('metric filter' in rec['message'].lower() for rec in recommendations)
+
+    @patch('analyse.boto3.client')
+    def test_generate_recommendations_wrong_retention(self, mock_boto_client):
+        """Test recommendations for wrong retention days"""
+        analyzer = InfrastructureAnalyzer('test')
+
+        analysis = {
+            'log_groups': [{'status': 'found', 'name': '/aws/test', 'kms_encrypted': True, 'retention_days': 14}],
+            'alarms': [],
+            'composite_alarms': [],
+            'dashboards': [],
+            'metric_filters': []
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        assert len(recommendations) > 0
+        assert any('retention' in rec['message'].lower() for rec in recommendations)
 
 
 class TestCalculateComplianceScore:
