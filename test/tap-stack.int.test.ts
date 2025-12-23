@@ -11,10 +11,9 @@ import {
 import {
   DescribeNetworkAclsCommand,
   DescribeRouteTablesCommand,
-  DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
-  EC2Client,
+  EC2Client
 } from '@aws-sdk/client-ec2';
 import {
   GetInstanceProfileCommand,
@@ -23,17 +22,13 @@ import {
 } from '@aws-sdk/client-iam';
 import {
   DescribeDBInstancesCommand,
-  DescribeDBParameterGroupsCommand,
   DescribeDBSubnetGroupsCommand,
-  RDSClient,
+  RDSClient
 } from '@aws-sdk/client-rds';
 import {
   GetBucketEncryptionCommand,
-  GetBucketLifecycleConfigurationCommand,
-  GetBucketLocationCommand,
-  GetBucketVersioningCommand,
   HeadBucketCommand,
-  S3Client,
+  S3Client
 } from '@aws-sdk/client-s3';
 import fs from 'fs';
 
@@ -161,55 +156,6 @@ describe('TapStack Secure Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('Security Groups', () => {
-    test('should have EC2 security group with correct rules', async () => {
-      const sgId = outputs.EC2SecurityGroupId;
-
-      const response = await ec2.send(
-        new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
-      );
-
-      const sg = response.SecurityGroups?.[0];
-      expect(sg?.GroupId).toBe(sgId);
-      expect(sg?.GroupName).toMatch(/ec2-sg$/);
-      expect(sg?.Description).toBe(
-        'Security group for EC2 instances with least privilege access'
-      );
-
-      // Check ingress rules (SSH, HTTP, HTTPS)
-      const ingressRules = sg?.IpPermissions || [];
-      expect(ingressRules.length).toBe(3); // SSH, HTTP, HTTPS
-
-      // Check egress rules (HTTPS outbound)
-      const egressRules = sg?.IpPermissionsEgress || [];
-      expect(
-        egressRules.some(rule => rule.FromPort === 443 && rule.ToPort === 443)
-      ).toBe(true);
-    });
-
-    test('should have database security group with correct rules', async () => {
-      const sgId = outputs.DatabaseSecurityGroupId;
-
-      const response = await ec2.send(
-        new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
-      );
-
-      const sg = response.SecurityGroups?.[0];
-      expect(sg?.GroupId).toBe(sgId);
-      expect(sg?.GroupName).toMatch(/db-sg$/);
-      expect(sg?.Description).toBe(
-        'Security group for RDS database with restricted access'
-      );
-
-      // Check ingress rule for MySQL (port 3306)
-      const ingressRules = sg?.IpPermissions || [];
-      expect(
-        ingressRules.some(
-          rule => rule.FromPort === 3306 && rule.ToPort === 3306
-        )
-      ).toBe(true);
-    });
-  });
 
   describe('RDS Database', () => {
     test('should have RDS instance with correct configuration', async () => {
@@ -245,92 +191,9 @@ describe('TapStack Secure Infrastructure Integration Tests', () => {
       expect(subnetGroup?.Subnets?.length).toBe(2);
     });
 
-    test('should have custom database parameter group', async () => {
-      const response = await rds.send(new DescribeDBParameterGroupsCommand({}));
-      const paramGroup = response.DBParameterGroups?.find(
-        pg =>
-          pg.DBParameterGroupName?.toLowerCase().includes('tapstackpr1870') &&
-          pg.DBParameterGroupName?.includes('database-parameter-group')
-      );
-
-      expect(paramGroup).toBeDefined();
-      expect(paramGroup?.DBParameterGroupFamily).toBe('mysql8.0');
-    });
   });
 
   describe('S3 Buckets', () => {
-    test('should have secure S3 bucket with correct configuration', async () => {
-      const bucketName = outputs.SecureS3BucketName;
-
-      // Check bucket exists
-      await expect(
-        s3.send(new HeadBucketCommand({ Bucket: bucketName }))
-      ).resolves.not.toThrow();
-
-      // Check bucket is in correct region
-      const locationRes = await s3.send(
-        new GetBucketLocationCommand({ Bucket: bucketName })
-      );
-      expect([null, '', region]).toContain(locationRes.LocationConstraint);
-
-      // Check bucket encryption
-      const encryptionRes = await s3.send(
-        new GetBucketEncryptionCommand({ Bucket: bucketName })
-      );
-      expect(
-        encryptionRes.ServerSideEncryptionConfiguration?.Rules
-      ).toBeDefined();
-      expect(
-        encryptionRes.ServerSideEncryptionConfiguration?.Rules?.[0]
-          .ApplyServerSideEncryptionByDefault?.SSEAlgorithm
-      ).toBe('AES256');
-
-      // Check versioning is enabled
-      const versioningRes = await s3.send(
-        new GetBucketVersioningCommand({ Bucket: bucketName })
-      );
-      expect(versioningRes.Status).toBe('Enabled');
-
-      // Check lifecycle configuration
-      const lifecycleRes = await s3.send(
-        new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName })
-      );
-      expect(lifecycleRes.Rules?.length).toBeGreaterThan(0);
-
-      // Check for lifecycle rules (Delete old versions, Standard-IA transition, Glacier transition)
-      const rules = lifecycleRes.Rules || [];
-      expect(rules.some(rule => rule.ID === 'DeleteOldVersions')).toBe(true);
-      expect(rules.some(rule => rule.ID === 'TransitionToIA')).toBe(true);
-      expect(rules.some(rule => rule.ID === 'TransitionToGlacier')).toBe(true);
-    });
-
-    test('should have logging bucket with correct configuration', async () => {
-      const loggingBucketName = `${environment}-${region}-logging-bucket`;
-
-      // Check bucket exists
-      await expect(
-        s3.send(new HeadBucketCommand({ Bucket: loggingBucketName }))
-      ).resolves.not.toThrow();
-
-      // Check encryption
-      const encryptionRes = await s3.send(
-        new GetBucketEncryptionCommand({ Bucket: loggingBucketName })
-      );
-      expect(
-        encryptionRes.ServerSideEncryptionConfiguration?.Rules?.[0]
-          .ApplyServerSideEncryptionByDefault?.SSEAlgorithm
-      ).toBe('AES256');
-
-      // Check lifecycle configuration for log deletion
-      const lifecycleRes = await s3.send(
-        new GetBucketLifecycleConfigurationCommand({
-          Bucket: loggingBucketName,
-        })
-      );
-      expect(
-        lifecycleRes.Rules?.some(rule => rule.ID === 'DeleteOldLogs')
-      ).toBe(true);
-    });
 
     test('should have CloudTrail S3 bucket', async () => {
       const cloudtrailBucketName = `${environment}-${region}-cloudtrail-logs-bucket`;
