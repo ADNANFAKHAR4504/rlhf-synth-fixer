@@ -7,17 +7,17 @@
 set -e
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🔍 Claude Review: Validating Prompt Quality"
+echo ":mag: Claude Review: Validating Prompt Quality"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 PROMPT_FILE="lib/PROMPT.md"
 
 if [ ! -f "$PROMPT_FILE" ]; then
-  echo "❌ PROMPT.md not found at: $PROMPT_FILE"
+  echo ":x: PROMPT.md not found at: $PROMPT_FILE"
   exit 1
 fi
 
-echo "✅ Found PROMPT.md"
+echo ":white_check_mark: Found PROMPT.md"
 echo ""
 
 # Initialize validation flags
@@ -30,7 +30,7 @@ LLM_GENERATED_FAIL=false
 # CHECK 1: Service Connectivity Requirements
 # ============================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📋 CHECK 1: Service Connectivity Pattern"
+echo ":clipboard: CHECK 1: Service Connectivity Pattern"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Expert-grade prompts should describe how services connect and interact."
@@ -94,13 +94,12 @@ if [ $CONNECTIVITY_COUNT -gt 0 ]; then
   echo ""
 fi
 
-
 # Require at least 2 different connectivity patterns
 if [ $CONNECTIVITY_COUNT -ge 2 ]; then
-  echo "✅ PASS: Prompt describes service connectivity (found $CONNECTIVITY_COUNT patterns)"
+  echo ":white_check_mark: PASS: Prompt describes service connectivity (found $CONNECTIVITY_COUNT patterns)"
   CONNECTIVITY_PASS=true
 else
-  echo "❌ FAIL: Prompt lacks clear service connectivity patterns"
+  echo ":x: FAIL: Prompt lacks clear service connectivity patterns"
   echo ""
   echo "Examples of good connectivity descriptions:"
   echo "  ✓ 'S3 bucket that connects to Lambda for processing'"
@@ -112,7 +111,7 @@ else
   echo "  ✗ 'Deploy S3 and EC2'"
   echo "  ✗ 'Create a Lambda function'"
   echo ""
-  echo "💡 TIP: Review .claude/prompts/claude-prompt-quality-review.md for examples of"
+  echo ":bulb: TIP: Review .claude/prompts/claude-prompt-quality-review.md for examples of"
   echo "        connector-based prompts. Remember: examples show quality principles,"
   echo "        not exact templates to copy. Focus on service integration patterns."
   echo ""
@@ -124,7 +123,7 @@ echo ""
 # CHECK 2: Complexity & Multi-Service Architecture
 # ============================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📋 CHECK 2: Complexity & Architecture Depth"
+echo ":clipboard: CHECK 2: Complexity & Architecture Depth"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -177,10 +176,10 @@ echo ""
 
 # Require at least 2 services for meaningful connectivity
 if [ $SERVICE_COUNT -ge 2 ]; then
-  echo "✅ PASS: Multi-service architecture (found $SERVICE_COUNT services)"
+  echo ":white_check_mark: PASS: Multi-service architecture (found $SERVICE_COUNT services)"
   COMPLEXITY_PASS=true
 else
-  echo "❌ FAIL: Prompt is too simple (only $SERVICE_COUNT service)"
+  echo ":x: FAIL: Prompt is too simple (only $SERVICE_COUNT service)"
   echo ""
   echo "Expert-grade prompts should involve multiple AWS services"
   echo "working together to solve a real-world scenario."
@@ -193,7 +192,7 @@ echo ""
 # CHECK 3: Security Validation (Conditional)
 # ============================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📋 CHECK 3: Security Validation (Conditional)"
+echo ":clipboard: CHECK 3: Security Validation (Conditional)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -222,7 +221,7 @@ for pattern in "${SECURITY_FOCUS_PATTERNS[@]}"; do
 done
 
 if [ "$SECURITY_FOCUSED" = true ]; then
-  echo "🔒 Prompt appears to be security-focused. Running security validation..."
+  echo ":lock: Prompt appears to be security-focused. Running security validation..."
   echo ""
 
   # Check for overly permissive IAM policies
@@ -249,7 +248,7 @@ if [ "$SECURITY_FOCUSED" = true ]; then
   done
 
   if [ $INSECURE_COUNT -gt 0 ]; then
-    echo "❌ FAIL: Insecure security configuration detected"
+    echo ":x: FAIL: Insecure security configuration detected"
     echo ""
     echo "Found $INSECURE_COUNT overly permissive pattern(s):"
     for p in "${FOUND_INSECURE[@]}"; do
@@ -265,11 +264,11 @@ if [ "$SECURITY_FOCUSED" = true ]; then
     echo ""
     SECURITY_PASS=false
   else
-    echo "✅ PASS: Security configuration appears appropriate"
+    echo ":white_check_mark: PASS: Security configuration appears appropriate"
     SECURITY_PASS=true
   fi
 else
-  echo "ℹ️  Prompt is not security-focused. Skipping security validation."
+  echo ":information_source:  Prompt is not security-focused. Skipping security validation."
   echo ""
   echo "Security validation is only enforced when the prompt explicitly deals with:"
   echo "  • IAM roles, policies, or permissions"
@@ -286,7 +285,7 @@ echo ""
 # CHECK 4: LLM-Generated Content Detection
 # ============================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📋 CHECK 4: LLM-Generated Content Detection"
+echo ":clipboard: CHECK 4: LLM-Generated Content Detection"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -296,7 +295,7 @@ LLM_INDICATOR_COUNT=0
 EMOJI_PATTERN='[\x{1F300}-\x{1F9FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]|[\x{1F1E0}-\x{1F1FF}]|[\x{1FA00}-\x{1FAFF}]'
 
 if grep -Pq "$EMOJI_PATTERN" "$PROMPT_FILE" 2>/dev/null; then
-  echo "❌ FAIL: Emojis detected in PROMPT.md"
+  echo ":x: FAIL: Emojis detected in PROMPT.md"
   echo ""
   grep -Pn "$EMOJI_PATTERN" "$PROMPT_FILE" 2>/dev/null | head -5 | while read -r line; do
     echo "  Line $line"
@@ -312,7 +311,7 @@ fi
 # 2. En dash detection (–)
 if grep -q '–' "$PROMPT_FILE"; then
   EN_DASH_COUNT=$(grep -o '–' "$PROMPT_FILE" | wc -l)
-  echo "❌ FAIL: En dashes (–) detected ($EN_DASH_COUNT occurrence(s))"
+  echo ":x: FAIL: En dashes (–) detected ($EN_DASH_COUNT occurrence(s))"
   echo "Human prompts use regular hyphens (-), not en dashes (–)"
   echo ""
   LLM_GENERATED_FAIL=true
@@ -322,7 +321,7 @@ fi
 # 3. Em dash detection (—)
 if grep -q '—' "$PROMPT_FILE"; then
   EM_DASH_COUNT=$(grep -o '—' "$PROMPT_FILE" | wc -l)
-  echo "❌ FAIL: Em dashes (—) detected ($EM_DASH_COUNT occurrence(s))"
+  echo ":x: FAIL: Em dashes (—) detected ($EM_DASH_COUNT occurrence(s))"
   echo "Human prompts use regular hyphens (-), not em dashes (—)"
   echo ""
   LLM_GENERATED_FAIL=true
@@ -332,7 +331,7 @@ fi
 # 4. Square bracket detection (discouraged completely)
 SQUARE_BRACKET_COUNT=$(grep -o '\[' "$PROMPT_FILE" | wc -l)
 if [ $SQUARE_BRACKET_COUNT -gt 0 ]; then
-  echo "❌ FAIL: Square brackets detected ($SQUARE_BRACKET_COUNT occurrence(s))"
+  echo ":x: FAIL: Square brackets detected ($SQUARE_BRACKET_COUNT occurrence(s))"
   echo "Square brackets suggest template-style or formal documentation language."
   echo "Human prompts should use natural language without brackets."
   echo ""
@@ -350,7 +349,7 @@ CURLY_BRACKET_COUNT=$(grep -o '{' "$PROMPT_FILE" | wc -l)
 TOTAL_BRACKET_COUNT=$((ROUND_BRACKET_COUNT + CURLY_BRACKET_COUNT))
 
 if [ $TOTAL_BRACKET_COUNT -gt 1 ]; then
-  echo "❌ FAIL: Too many brackets detected ($TOTAL_BRACKET_COUNT total: $ROUND_BRACKET_COUNT round, $CURLY_BRACKET_COUNT curly)"
+  echo ":x: FAIL: Too many brackets detected ($TOTAL_BRACKET_COUNT total: $ROUND_BRACKET_COUNT round, $CURLY_BRACKET_COUNT curly)"
   echo "Maximum 1 bracket pair allowed. Excessive brackets suggest formal/template language."
   echo ""
   LLM_GENERATED_FAIL=true
@@ -371,7 +370,7 @@ for pattern in "${FORMAL_ABBREV_PATTERNS[@]}"; do
   if grep -iEq "$pattern" "$PROMPT_FILE"; then
     FORMAL_ABBREV_COUNT=$((FORMAL_ABBREV_COUNT + 1))
     ABBREV_MATCHES=$(grep -ion "$pattern" "$PROMPT_FILE" | head -3)
-    echo "⚠️  Formal abbreviation detected: $pattern"
+    echo ":warning:  Formal abbreviation detected: $pattern"
     echo "$ABBREV_MATCHES" | while read -r line; do
       echo "  $line"
     done
@@ -380,7 +379,7 @@ done
 
 if [ $FORMAL_ABBREV_COUNT -gt 0 ]; then
   echo ""
-  echo "❌ FAIL: Formal abbreviations detected ($FORMAL_ABBREV_COUNT type(s))"
+  echo ":x: FAIL: Formal abbreviations detected ($FORMAL_ABBREV_COUNT type(s))"
   echo "Human prompts rarely use formal abbreviations like 'e.g.', 'i.e.', etc."
   echo "This suggests LLM-polished or academic writing style."
   echo ""
@@ -391,7 +390,7 @@ fi
 # 7. Perfect punctuation patterns (semicolons, colons in lists)
 SEMICOLON_COUNT=$(grep -o ';' "$PROMPT_FILE" | wc -l)
 if [ $SEMICOLON_COUNT -gt 2 ]; then
-  echo "⚠️  WARNING: Multiple semicolons detected ($SEMICOLON_COUNT)"
+  echo ":warning:  WARNING: Multiple semicolons detected ($SEMICOLON_COUNT)"
   echo "Excessive semicolon usage suggests formal/polished writing."
   echo ""
   # Not failing on this alone, but counting as indicator
@@ -401,11 +400,11 @@ fi
 # Summary
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ "$LLM_GENERATED_FAIL" = false ] && [ $LLM_INDICATOR_COUNT -eq 0 ]; then
-  echo "✅ PASS: No LLM-generation indicators found"
+  echo ":white_check_mark: PASS: No LLM-generation indicators found"
 elif [ "$LLM_GENERATED_FAIL" = false ] && [ $LLM_INDICATOR_COUNT -gt 0 ]; then
-  echo "⚠️  WARNING: $LLM_INDICATOR_COUNT minor indicator(s) detected, but within acceptable limits"
+  echo ":warning:  WARNING: $LLM_INDICATOR_COUNT minor indicator(s) detected, but within acceptable limits"
 else
-  echo "❌ FAIL: $LLM_INDICATOR_COUNT LLM-generation indicator(s) detected"
+  echo ":x: FAIL: $LLM_INDICATOR_COUNT LLM-generation indicator(s) detected"
 fi
 echo ""
 
@@ -413,18 +412,18 @@ echo ""
 # FINAL VALIDATION RESULT
 # ============================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📊 VALIDATION SUMMARY"
+echo ":bar_chart: VALIDATION SUMMARY"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Service Connectivity:  $([ "$CONNECTIVITY_PASS" = true ] && echo "✅ PASS" || echo "❌ FAIL")"
-echo "Complexity/Multi-svc:  $([ "$COMPLEXITY_PASS" = true ] && echo "✅ PASS" || echo "❌ FAIL")"
-echo "Security Validation:   $([ "$SECURITY_PASS" = true ] && echo "✅ PASS" || echo "❌ FAIL (if security-focused)")"
-echo "LLM-Generated Check:   $([ "$LLM_GENERATED_FAIL" = false ] && echo "✅ PASS" || echo "❌ FAIL")"
+echo "Service Connectivity:  $([ "$CONNECTIVITY_PASS" = true ] && echo ":white_check_mark: PASS" || echo ":x: FAIL")"
+echo "Complexity/Multi-svc:  $([ "$COMPLEXITY_PASS" = true ] && echo ":white_check_mark: PASS" || echo ":x: FAIL")"
+echo "Security Validation:   $([ "$SECURITY_PASS" = true ] && echo ":white_check_mark: PASS" || echo ":x: FAIL (if security-focused)")"
+echo "LLM-Generated Check:   $([ "$LLM_GENERATED_FAIL" = false ] && echo ":white_check_mark: PASS" || echo ":x: FAIL")"
 echo ""
 
 # Exit code logic
 if [ "$LLM_GENERATED_FAIL" = true ]; then
-  echo "❌ VALIDATION FAILED: LLM-generated content detected"
+  echo ":x: VALIDATION FAILED: LLM-generated content detected"
   echo ""
   echo "This prompt does not meet the quality bar for expert training data."
   echo "Please rewrite lib/PROMPT.md as a genuine human developer request."
@@ -433,7 +432,7 @@ if [ "$LLM_GENERATED_FAIL" = true ]; then
 fi
 
 if [ "$CONNECTIVITY_PASS" = false ] || [ "$COMPLEXITY_PASS" = false ]; then
-  echo "❌ VALIDATION FAILED: Prompt quality insufficient"
+  echo ":x: VALIDATION FAILED: Prompt quality insufficient"
   echo ""
   echo "The prompt must describe:"
   echo "  1. How multiple AWS services connect and interact (not just 'deploy X and Y')"
@@ -452,7 +451,7 @@ if [ "$CONNECTIVITY_PASS" = false ] || [ "$COMPLEXITY_PASS" = false ]; then
   echo "  'Create EC2 instances and RDS database' (no integration shown)"
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "📚 QUALITY GUIDANCE & EXAMPLES"
+  echo ":books: QUALITY GUIDANCE & EXAMPLES"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
   echo "Review .claude/prompts/claude-prompt-quality-review.md for:"
@@ -461,7 +460,7 @@ if [ "$CONNECTIVITY_PASS" = false ] || [ "$COMPLEXITY_PASS" = false ]; then
   echo "  • Examples for common subcategories (Security, CI/CD, Multi-Env, etc.)"
   echo "  • Guidance on applying these principles flexibly"
   echo ""
-  echo "⚠️  IMPORTANT: Examples are NOT exhaustive or rigid templates!"
+  echo ":warning:  IMPORTANT: Examples are NOT exhaustive or rigid templates!"
   echo "    - Not all subcategories have examples (that's OK)"
   echo "    - Prompts don't need to match examples exactly"
   echo "    - Focus: Does it describe HOW services connect?"
@@ -471,7 +470,7 @@ if [ "$CONNECTIVITY_PASS" = false ] || [ "$COMPLEXITY_PASS" = false ]; then
 fi
 
 if [ "$SECURITY_PASS" = false ]; then
-  echo "❌ VALIDATION FAILED: Insecure configuration detected"
+  echo ":x: VALIDATION FAILED: Insecure configuration detected"
   echo ""
   echo "This prompt is security-focused but contains overly permissive configurations."
   echo "Please follow least privilege principle and avoid wildcard permissions."
@@ -479,7 +478,7 @@ if [ "$SECURITY_PASS" = false ]; then
   exit 1
 fi
 
-echo "✅ VALIDATION PASSED: Prompt meets quality standards"
+echo ":white_check_mark: VALIDATION PASSED: Prompt meets quality standards"
 echo ""
 echo "This prompt describes service connectivity and represents expert-grade"
 echo "infrastructure as code training data."
