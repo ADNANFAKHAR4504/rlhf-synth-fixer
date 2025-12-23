@@ -8,7 +8,7 @@ The template must be pure YAML with no JSON, no YAML anchors or aliases, and mus
 
 Include complete sections for Parameters, Conditions, Metadata, Resources, and Outputs. Use Mappings only when truly needed.
 
-Connection-focused summary
+Connection-focused summary:
 
 Create a VPC with three private subnets and a DB subnet group. Place an Aurora MySQL cluster into that subnet group and attach a DB security group that only allows inbound MySQL traffic from the application tier security group.
 
