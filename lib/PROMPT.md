@@ -6,7 +6,7 @@ We're working with a financial services company that needs to implement a zero-t
 
 The core problem is establishing a robust role-based access control system with proper encryption key hierarchies. We need to ensure that every role follows least-privilege principles, enforce MFA for all role assumptions, and implement time-based access controls that prevent sensitive operations outside business hours. This is critical for their audit requirements and overall security posture.
 
-We're tasked with building this infrastructure using **Terraform with HCL** for a multi-account AWS deployment. The solution needs to support production-grade financial services requirements with strict compliance controls.
+We're tasked with building this infrastructure using Terraform with HCL for a multi-account AWS deployment. The solution needs to support production-grade financial services requirements with strict compliance controls.
 
 ## What we need to build
 
@@ -22,20 +22,20 @@ Create a comprehensive security infrastructure using **Terraform with HCL** that
    - Apply custom permission boundaries to service-linked roles for ECS and RDS
 
 2. **KMS Key Hierarchy**
-   - Implement separate KMS keys for application data and infrastructure secrets
+   - Implement separate KMS keys that integrate with IAM roles for application data and infrastructure secrets
    - Configure automatic key rotation with 365-day rotation period
-   - Set up key policies that restrict encrypt/decrypt operations to specific roles only
-   - Enable encryption at rest for Terraform state using KMS
+   - Set up key policies that restrict encrypt/decrypt operations and connect to specific roles only
+   - Enable encryption at rest for Terraform state that communicates with KMS
 
 3. **Time-Based Access Controls**
-   - Implement IAM policies with explicit deny statements for sensitive operations outside business hours (9 AM - 6 PM EST)
-   - Configure session policies limiting assumed role sessions to 1 hour maximum
+   - Implement IAM policies with explicit deny statements for sensitive operations outside business hours
+   - Configure session policies that trigger limitations on assumed role sessions to 1 hour maximum
    - Ensure all policies enforce least-privilege access patterns
 
 4. **Audit and Compliance**
-   - Create CloudWatch Log groups for IAM activity with 90-day retention
+   - Create CloudWatch Log groups that collect and publish IAM activity with 90-day retention
    - Tag all resources with Owner, Environment, and CostCenter for cost attribution
-   - Ensure all resources use temporary credentials via STS (no IAM user access keys)
+   - Ensure all resources connect through STS to use temporary credentials
 
 ### Technical Requirements
 
@@ -45,13 +45,13 @@ Create a comprehensive security infrastructure using **Terraform with HCL** that
 - Use **CloudWatch Logs** for audit trails
 - Use **STS** for temporary credential generation
 - Use **ECS** and **RDS** service-linked roles with permission boundaries
-- Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `{resource-type}-${var.environment_suffix}`
+- All resource names must include environmentSuffix for uniqueness
+- Follow naming convention with resource-type and environment_suffix pattern
 - Deploy to **us-east-1** region
 
 ### Constraints
 
-- All IAM policies must use explicit deny statements for actions outside business hours (9 AM - 6 PM EST)
+- All IAM policies must use explicit deny statements for actions outside business hours
 - MFA must be enforced for all role assumptions without exceptions
 - KMS keys must have automatic rotation enabled with 365-day rotation period
 - No use of IAM user access keys - only temporary credentials via STS
@@ -59,7 +59,7 @@ Create a comprehensive security infrastructure using **Terraform with HCL** that
 - Permission boundaries must restrict access to us-east-1 region only
 - CloudTrail must be excluded - use CloudWatch Logs for audit trails instead
 - Each role must have a unique session name pattern for attribution
-- All resources must be destroyable (no prevent_destroy lifecycle rules for testing)
+- All resources must be destroyable with no prevent_destroy lifecycle rules for testing
 - Terraform state must be configured with encryption at rest using KMS
 
 ## Success Criteria
@@ -68,7 +68,7 @@ Create a comprehensive security infrastructure using **Terraform with HCL** that
 - **Security**: KMS keys with automatic rotation and role-specific access policies
 - **Compliance**: Time-based access controls preventing operations outside business hours
 - **Auditability**: CloudWatch Logs capturing all IAM activity with 90-day retention
-- **Resource Naming**: All resources include environmentSuffix for multi-environment support
+- **Naming Convention**: All resources include environmentSuffix for multi-environment support
 - **Code Quality**: Modular Terraform HCL code, well-tested, fully documented
 
 ## What to deliver
