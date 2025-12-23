@@ -1,4 +1,5 @@
 ### Reasoning Trace
+
 ---
 
 This is a comprehensive request for a production-ready AWS infrastructure using CloudFormation. Let me break down the requirements:
@@ -30,7 +31,9 @@ This is a comprehensive request for a production-ready AWS infrastructure using 
 10. **Must deploy successfully**
 
 I'll create a comprehensive CloudFormation template that addresses all these requirements. The template will be modular and use best practices.
-### Answer 
+
+### Answer
+
 ---
 
 I'll design a comprehensive, production-ready AWS CloudFormation template that meets all your requirements. This will be a complete infrastructure-as-code solution for a multi-tier web application.
@@ -47,7 +50,7 @@ Parameters:
     Description: EC2 Key Pair for SSH access
     Type: AWS::EC2::KeyPair::KeyName
     ConstraintDescription: Must be the name of an existing EC2 KeyPair
-    
+
   DBUsername:
     Description: Database master username
     Type: String
@@ -56,7 +59,7 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
     Default: dbadmin
-    
+
   DBPassword:
     Description: Database master password
     Type: String
@@ -70,13 +73,13 @@ Parameters:
 Mappings:
   RegionMap:
     us-west-2:
-      AMI: ami-0c2d06d50ce30b442  # Amazon Linux 2 AMI for us-west-2
+      AMI: ami-0c2d06d50ce30b442 # Amazon Linux 2 AMI for us-west-2
 
 Resources:
   # ==========================================
   # KMS Keys for Encryption
   # ==========================================
-  
+
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -106,7 +109,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
@@ -116,7 +119,7 @@ Resources:
   # ==========================================
   # VPC and Networking
   # ==========================================
-  
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -128,7 +131,7 @@ Resources:
           Value: Production-VPC
         - Key: Environment
           Value: Production
-          
+
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -137,13 +140,13 @@ Resources:
           Value: Production-IGW
         - Key: Environment
           Value: Production
-          
+
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
-      
+
   # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -157,7 +160,7 @@ Resources:
           Value: Public-Subnet-AZ1
         - Key: Environment
           Value: Production
-          
+
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -170,7 +173,7 @@ Resources:
           Value: Public-Subnet-AZ2
         - Key: Environment
           Value: Production
-          
+
   # Private Subnets
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -183,7 +186,7 @@ Resources:
           Value: Private-Subnet-AZ1
         - Key: Environment
           Value: Production
-          
+
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -195,7 +198,7 @@ Resources:
           Value: Private-Subnet-AZ2
         - Key: Environment
           Value: Production
-          
+
   # NAT Gateways
   NATGateway1EIP:
     Type: AWS::EC2::EIP
@@ -205,7 +208,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   NATGateway2EIP:
     Type: AWS::EC2::EIP
     DependsOn: AttachGateway
@@ -214,7 +217,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   NATGateway1:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -223,7 +226,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   NATGateway2:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -232,7 +235,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -243,7 +246,7 @@ Resources:
           Value: Public-RouteTable
         - Key: Environment
           Value: Production
-          
+
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
@@ -251,19 +254,19 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
-      
+
   PublicSubnetRouteTableAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
-      
+
   PublicSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
-      
+
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -273,20 +276,20 @@ Resources:
           Value: Private-RouteTable-AZ1
         - Key: Environment
           Value: Production
-          
+
   PrivateRoute1:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NATGateway1
-      
+
   PrivateSubnetRouteTableAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet1
       RouteTableId: !Ref PrivateRouteTable1
-      
+
   PrivateRouteTable2:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -296,14 +299,14 @@ Resources:
           Value: Private-RouteTable-AZ2
         - Key: Environment
           Value: Production
-          
+
   PrivateRoute2:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NATGateway2
-      
+
   PrivateSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -313,7 +316,7 @@ Resources:
   # ==========================================
   # Security Groups
   # ==========================================
-  
+
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -333,7 +336,7 @@ Resources:
           Value: ALB-SecurityGroup
         - Key: Environment
           Value: Production
-          
+
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -353,7 +356,7 @@ Resources:
           Value: WebServer-SecurityGroup
         - Key: Environment
           Value: Production
-          
+
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -373,7 +376,7 @@ Resources:
   # ==========================================
   # IAM Roles and Policies
   # ==========================================
-  
+
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -411,7 +414,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -421,7 +424,7 @@ Resources:
   # ==========================================
   # S3 Buckets
   # ==========================================
-  
+
   LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -451,7 +454,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   ContentBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -469,7 +472,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   ContentBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -486,13 +489,13 @@ Resources:
   # ==========================================
   # CloudFront Distribution
   # ==========================================
-  
+
   CloudFrontOAI:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
     Properties:
       CloudFrontOriginAccessIdentityConfig:
         Comment: OAI for Production Content Distribution
-        
+
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -515,7 +518,7 @@ Resources:
             - GET
             - HEAD
           Compress: true
-          DefaultTTL: 86400  # 24 hours
+          DefaultTTL: 86400 # 24 hours
           MinTTL: 0
           MaxTTL: 31536000
           ForwardedValues:
@@ -532,7 +535,7 @@ Resources:
   # ==========================================
   # RDS Database
   # ==========================================
-  
+
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -543,7 +546,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
@@ -572,7 +575,7 @@ Resources:
   # ==========================================
   # Application Load Balancer
   # ==========================================
-  
+
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -587,7 +590,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -605,7 +608,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -619,7 +622,7 @@ Resources:
   # ==========================================
   # Launch Template and Auto Scaling
   # ==========================================
-  
+
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -645,7 +648,7 @@ Resources:
             #!/bin/bash
             yum update -y
             yum install -y httpd amazon-cloudwatch-agent
-            
+
             # Configure CloudWatch agent
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
             {
@@ -669,20 +672,20 @@ Resources:
               }
             }
             EOF
-            
+
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
               -a fetch-config \
               -m ec2 \
               -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
               -s
-            
+
             # Start web server
             systemctl start httpd
             systemctl enable httpd
-            
+
             # Create health check endpoint
             echo "OK" > /var/www/html/health
-            
+
             # Create sample index page
             cat > /var/www/html/index.html <<EOF
             <!DOCTYPE html>
@@ -702,7 +705,7 @@ Resources:
             Tags:
               - Key: Environment
                 Value: Production
-                
+
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -727,7 +730,7 @@ Resources:
         - Key: Environment
           Value: Production
           PropagateAtLaunch: true
-          
+
   ScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -735,7 +738,7 @@ Resources:
       AutoScalingGroupName: !Ref AutoScalingGroup
       Cooldown: 300
       ScalingAdjustment: 1
-      
+
   ScaleDownPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -747,7 +750,7 @@ Resources:
   # ==========================================
   # CloudWatch Alarms
   # ==========================================
-  
+
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -765,7 +768,7 @@ Resources:
           Value: !Ref AutoScalingGroup
       AlarmActions:
         - !Ref ScaleUpPolicy
-        
+
   LowCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -783,7 +786,7 @@ Resources:
           Value: !Ref AutoScalingGroup
       AlarmActions:
         - !Ref ScaleDownPolicy
-        
+
   HighMemoryAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -799,7 +802,7 @@ Resources:
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
-          
+
   UnHealthyHostAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -828,31 +831,31 @@ Outputs:
     Value: !Ref VPC
     Export:
       Name: Production-VPC-ID
-      
+
   LoadBalancerDNS:
     Description: Application Load Balancer DNS
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: Production-ALB-DNS
-      
+
   CloudFrontURL:
     Description: CloudFront Distribution URL
     Value: !GetAtt CloudFrontDistribution.DomainName
     Export:
       Name: Production-CloudFront-URL
-      
+
   LogsBucket:
     Description: S3 Bucket for logs
     Value: !Ref LogsBucket
     Export:
       Name: Production-Logs-Bucket
-      
+
   ContentBucket:
     Description: S3 Bucket for content
     Value: !Ref ContentBucket
     Export:
       Name: Production-Content-Bucket
-      
+
   DatabaseEndpoint:
     Description: RDS Database Endpoint
     Value: !GetAtt RDSDatabase.Endpoint.Address
@@ -863,6 +866,7 @@ Outputs:
 ## Deployment Instructions
 
 ### Prerequisites
+
 1. **AWS CLI configured** with appropriate credentials
 2. **Key Pair created** in us-west-2 region
 3. **Parameter values** ready (KeyName, DBPassword)
@@ -930,12 +934,12 @@ aws cloudformation describe-stacks \
 
 ## Security Best Practices Implemented
 
-- ✅ **Encryption everywhere**: KMS keys for EBS, S3, and RDS
-- ✅ **Network isolation**: Private subnets for compute and database
-- ✅ **IAM roles**: No hardcoded credentials
-- ✅ **Security groups**: Least privilege access
-- ✅ **S3 bucket policies**: Block public access
-- ✅ **CloudFront OAI**: Secure S3 access
+- **Encryption everywhere**: KMS keys for EBS, S3, and RDS
+- **Network isolation**: Private subnets for compute and database
+- **IAM roles**: No hardcoded credentials
+- **Security groups**: Least privilege access
+- **S3 bucket policies**: Block public access
+- **CloudFront OAI**: Secure S3 access
 
 ## Cost Optimization
 

@@ -19,20 +19,20 @@ The model generated a comprehensive CloudFormation template for a production-rea
 
 ## 📋 Issues Found
 
-| # | Issue Type | Severity | Line(s) | Category | Status |
-|---|-----------|----------|---------|----------|--------|
-| 1 | Hardcoded AMI IDs | CRITICAL | 70-73 | Region-specific | ✅ FIXED |
-| 2 | KeyPairName Required | CRITICAL | 46-49 | Parameters | ✅ FIXED |
-| 3 | NAT Gateways Always Created | CRITICAL | 200-234 | AWS Limits | ✅ FIXED |
-| 4 | MySQL Version Too Specific | HIGH | 554 | Version Compatibility | ✅ FIXED |
-| 5 | Missing DBPassword Default | CRITICAL | 60-67 | Parameters | ✅ FIXED |
-| 6 | Unnecessary Fn::Sub | MEDIUM | 644 | Code Quality | ✅ FIXED |
-| 7 | Parameter-Based Secrets | HIGH | 560 | Security | ✅ FIXED |
-| 8 | Missing UpdateReplacePolicy | HIGH | 549 | Data Protection | ✅ FIXED |
+| #   | Issue Type                  | Severity | Line(s) | Category              | Status |
+| --- | --------------------------- | -------- | ------- | --------------------- | ------ |
+| 1   | Hardcoded AMI IDs           | CRITICAL | 70-73   | Region-specific       | FIXED  |
+| 2   | KeyPairName Required        | CRITICAL | 46-49   | Parameters            | FIXED  |
+| 3   | NAT Gateways Always Created | CRITICAL | 200-234 | AWS Limits            | FIXED  |
+| 4   | MySQL Version Too Specific  | HIGH     | 554     | Version Compatibility | FIXED  |
+| 5   | Missing DBPassword Default  | CRITICAL | 60-67   | Parameters            | FIXED  |
+| 6   | Unnecessary Fn::Sub         | MEDIUM   | 644     | Code Quality          | FIXED  |
+| 7   | Parameter-Based Secrets     | HIGH     | 560     | Security              | FIXED  |
+| 8   | Missing UpdateReplacePolicy | HIGH     | 549     | Data Protection       | FIXED  |
 
 ---
 
-## 🔴 CRITICAL ISSUES
+## CRITICAL ISSUES
 
 ### Issue #1: CFN-01 - Hardcoded AMI IDs in Mappings
 
@@ -40,21 +40,24 @@ The model generated a comprehensive CloudFormation template for a production-rea
 **Reference:** IAC_ISSUES_REFERENCE.md.log CFN-01
 
 **Original Code:**
+
 ```yaml
 # Mappings for AMI IDs
 Mappings:
   RegionMap:
     us-west-2:
-      AMI: ami-0c2d06d50ce30b442  # Amazon Linux 2 AMI for us-west-2
+      AMI: ami-0c2d06d50ce30b442 # Amazon Linux 2 AMI for us-west-2
 ```
 
 **Problem:**
+
 - Hardcoded AMI ID `ami-0c2d06d50ce30b442` will become deprecated
 - Template only works in us-west-2 region
 - AMI IDs are region-specific and change frequently
 - **Deployment Impact:** Would fail with "InvalidAMIID.NotFound" in other regions or after AMI deprecation
 
 **Fixed Code:**
+
 ```yaml
 Parameters:
   LatestAmiId:
@@ -79,6 +82,7 @@ Resources:
 **Reference:** IAC_ISSUES_REFERENCE.md.log CFN-12
 
 **Original Code:**
+
 ```yaml
 Parameters:
   KeyName:
@@ -88,12 +92,14 @@ Parameters:
 ```
 
 **Problem:**
+
 - Type `AWS::EC2::KeyPair::KeyName` validates that key pair EXISTS
 - Deployment fails if user doesn't have a key pair
 - Makes template non-self-sufficient
 - **Deployment Impact:** Would fail with "Parameter value for parameter name KeyName does not exist"
 
 **Fixed Code:**
+
 ```yaml
 Parameters:
   KeyName:
@@ -121,6 +127,7 @@ Resources:
 **Reference:** IAC_ISSUES_REFERENCE.md.log CFN-15
 
 **Original Code:**
+
 ```yaml
 # NAT Gateways
 NATGateway1EIP:
@@ -137,6 +144,7 @@ NATGateway2EIP:
 ```
 
 **Problem:**
+
 - **Always creates 2 EIPs** without conditional logic
 - AWS default limit is 5 EIPs per region
 - Multiple deployments would quickly hit limit
@@ -144,6 +152,7 @@ NATGateway2EIP:
 - **Cost Impact:** $64/month for NAT Gateways that may not be needed
 
 **Fixed Code:**
+
 ```yaml
 Parameters:
   CreateNATGateways:
@@ -194,6 +203,7 @@ Resources:
 ```
 
 **Impact:**
+
 - Template now deploys successfully without hitting EIP limits
 - NAT Gateways optional (default: disabled)
 - Cost savings: $64/month saved by default
@@ -207,6 +217,7 @@ Resources:
 **Reference:** IAC_ISSUES_REFERENCE.md.log CFN-37 (similar pattern)
 
 **Original Code:**
+
 ```yaml
 Parameters:
   DBPassword:
@@ -221,12 +232,14 @@ Parameters:
 ```
 
 **Problem:**
+
 - Required parameter with no default value
 - User must manually provide password on every deployment
 - Makes template non-self-sufficient
 - **Deployment Impact:** Would require manual password input, blocking automation
 
 **Fixed Code (Interim):**
+
 ```yaml
 Parameters:
   DBPassword:
@@ -237,7 +250,7 @@ Parameters:
     AllowedPattern: '[a-zA-Z0-9]*'
     ConstraintDescription: Must contain only alphanumeric characters
     NoEcho: true
-    Default: TempPass123  # Temporary default for deployment
+    Default: TempPass123 # Temporary default for deployment
 ```
 
 **Note:** This was later replaced with AWS Secrets Manager (see Issue #7)
@@ -246,7 +259,7 @@ Parameters:
 
 ---
 
-## 🟡 HIGH PRIORITY ISSUES
+## HIGH PRIORITY ISSUES
 
 ### Issue #4: CFN-03 - MySQL Version Too Specific
 
@@ -254,21 +267,24 @@ Parameters:
 **Reference:** IAC_ISSUES_REFERENCE.md.log CFN-03
 
 **Original Code:**
+
 ```yaml
 RDSDatabase:
   Type: AWS::RDS::DBInstance
   DeletionPolicy: Snapshot
   Properties:
     Engine: mysql
-    EngineVersion: '8.0.28'  # Specific patch version
+    EngineVersion: '8.0.28' # Specific patch version
 ```
 
 **Problem:**
+
 - Specific patch version `8.0.28` may not be available in all regions
 - Older patch versions get deprecated
 - **Deployment Impact:** Could fail with "Cannot find version 8.0.28 for mysql"
 
 **Fixed Code:**
+
 ```yaml
 RDSDatabase:
   Type: AWS::RDS::DBInstance
@@ -276,7 +292,7 @@ RDSDatabase:
   UpdateReplacePolicy: Snapshot
   Properties:
     Engine: mysql
-    EngineVersion: '8.0.39'  # Latest stable 8.0.x version
+    EngineVersion: '8.0.39' # Latest stable 8.0.x version
 ```
 
 **Impact:** Uses widely available stable version, reduced risk of version availability issues
@@ -289,6 +305,7 @@ RDSDatabase:
 **Reference:** IAC_ISSUES_REFERENCE.md.log (Best Practice - Security)
 
 **Original Code:**
+
 ```yaml
 Parameters:
   DBPassword:
@@ -299,10 +316,11 @@ Parameters:
 Resources:
   RDSDatabase:
     Properties:
-      MasterUserPassword: !Ref DBPassword  # Parameter-based password
+      MasterUserPassword: !Ref DBPassword # Parameter-based password
 ```
 
 **Problem:**
+
 - Password stored in CloudFormation parameters
 - Password visible in CloudFormation parameter history
 - No rotation support
@@ -310,6 +328,7 @@ Resources:
 - **Security Impact:** cfn-lint warning W1011 - violated security best practices
 
 **Fixed Code:**
+
 ```yaml
 # Removed DBPassword parameter entirely
 
@@ -344,6 +363,7 @@ Outputs:
 ```
 
 **Impact:**
+
 - Password stored securely in AWS Secrets Manager
 - 32-character auto-generated password
 - Encrypted with KMS
@@ -361,6 +381,7 @@ Outputs:
 **Reference:** IAC_ISSUES_REFERENCE.md.log CFN-04 (related)
 
 **Original Code:**
+
 ```yaml
 RDSDatabase:
   Type: AWS::RDS::DBInstance
@@ -371,16 +392,18 @@ RDSDatabase:
 ```
 
 **Problem:**
+
 - Only `DeletionPolicy` specified
 - No protection for database during stack updates
 - **Data Loss Risk:** Database could be replaced without snapshot during updates
 
 **Fixed Code:**
+
 ```yaml
 RDSDatabase:
   Type: AWS::RDS::DBInstance
   DeletionPolicy: Snapshot
-  UpdateReplacePolicy: Snapshot  # Added for update protection
+  UpdateReplacePolicy: Snapshot # Added for update protection
   Properties:
     # ...
 ```
@@ -389,7 +412,7 @@ RDSDatabase:
 
 ---
 
-## 🟢 MEDIUM PRIORITY ISSUES
+## MEDIUM PRIORITY ISSUES
 
 ### Issue #6: W1020 - Unnecessary Fn::Sub in UserData
 
@@ -397,6 +420,7 @@ RDSDatabase:
 **Reference:** cfn-lint best practice warning
 
 **Original Code:**
+
 ```yaml
 UserData:
   Fn::Base64: !Sub |
@@ -406,11 +430,13 @@ UserData:
 ```
 
 **Problem:**
+
 - Using `!Sub` function but not substituting any variables
 - Unnecessary function call
 - **Code Quality Impact:** cfn-lint warning W1020
 
 **Fixed Code:**
+
 ```yaml
 UserData:
   Fn::Base64: |
@@ -423,36 +449,39 @@ UserData:
 
 ---
 
-## 📊 Failure Analysis
+## Failure Analysis
 
 ### By Category
-| Category | Count | Percentage |
-|----------|-------|------------|
-| Parameters | 2 | 25% |
-| AWS Limits | 1 | 12.5% |
-| Security | 1 | 12.5% |
-| Region-specific | 1 | 12.5% |
-| Version Compatibility | 1 | 12.5% |
-| Data Protection | 1 | 12.5% |
-| Code Quality | 1 | 12.5% |
+
+| Category              | Count | Percentage |
+| --------------------- | ----- | ---------- |
+| Parameters            | 2     | 25%        |
+| AWS Limits            | 1     | 12.5%      |
+| Security              | 1     | 12.5%      |
+| Region-specific       | 1     | 12.5%      |
+| Version Compatibility | 1     | 12.5%      |
+| Data Protection       | 1     | 12.5%      |
+| Code Quality          | 1     | 12.5%      |
 
 ### By Severity
+
 | Severity | Count | Percentage |
-|----------|-------|------------|
-| CRITICAL | 4 | 50% |
-| HIGH | 3 | 37.5% |
-| MEDIUM | 1 | 12.5% |
+| -------- | ----- | ---------- |
+| CRITICAL | 4     | 50%        |
+| HIGH     | 3     | 37.5%      |
+| MEDIUM   | 1     | 12.5%      |
 
 ### By Deployment Impact
-| Impact | Count |
-|--------|-------|
-| Would Cause Deployment Failure | 4 |
-| Would Violate Best Practices | 3 |
-| Would Cause Code Quality Warnings | 1 |
+
+| Impact                            | Count |
+| --------------------------------- | ----- |
+| Would Cause Deployment Failure    | 4     |
+| Would Violate Best Practices      | 3     |
+| Would Cause Code Quality Warnings | 1     |
 
 ---
 
-## 🎯 Root Cause Analysis
+## Root Cause Analysis
 
 ### Why These Failures Occurred
 
@@ -466,6 +495,7 @@ UserData:
 8. **W1020 (Fn::Sub):** Model used !Sub unnecessarily even without variable substitution
 
 ### Common Patterns
+
 - **Making assumptions about user environment** (key pair exists, EIP quota available)
 - **Not making resources optional** (NAT Gateways, passwords)
 - **Following tutorial patterns** instead of production best practices (hardcoded AMIs, parameter-based secrets)
@@ -473,9 +503,10 @@ UserData:
 
 ---
 
-## ✅ Validation Results
+## Validation Results
 
 ### Before Fixes
+
 ```bash
 $ cfn-lint lib/TapStack.yml
 W1011 Use dynamic references over parameters for secrets
@@ -486,42 +517,45 @@ lib/TapStack.yml:623:11
 ```
 
 ### After All Fixes
+
 ```bash
 $ cfn-lint lib/TapStack.yml
-# ✅ NO WARNINGS OR ERRORS
+#  NO WARNINGS OR ERRORS
 
 $ aws cloudformation validate-template --template-body file://lib/TapStack.yml
-# ✅ Template validates successfully
+#  Template validates successfully
 ```
 
 ---
 
-## 💰 Cost Impact Analysis
+## Cost Impact Analysis
 
-| Resource | Original Cost | Fixed Cost | Savings |
-|----------|---------------|------------|---------|
-| NAT Gateways (2x) | $64/month | $0/month (optional) | $64/month |
-| EIPs (2x) | Included | $0 (optional) | - |
-| Secrets Manager | $0 | $0.40/month | -$0.40/month |
-| **Net Monthly Impact** | **$64/month** | **$0.40/month** | **$63.60/month savings** |
+| Resource               | Original Cost | Fixed Cost          | Savings                  |
+| ---------------------- | ------------- | ------------------- | ------------------------ |
+| NAT Gateways (2x)      | $64/month     | $0/month (optional) | $64/month                |
+| EIPs (2x)              | Included      | $0 (optional)       | -                        |
+| Secrets Manager        | $0            | $0.40/month         | -$0.40/month             |
+| **Net Monthly Impact** | **$64/month** | **$0.40/month**     | **$63.60/month savings** |
 
 **Annual Savings:** $763.20/year for dev/test environments
 
 ---
 
-## 🔧 Fixes Applied
+## Fixes Applied
 
 ### Summary of Changes
-1. ✅ Replaced hardcoded AMI with SSM Parameter Store
-2. ✅ Made KeyName optional with conditional logic
-3. ✅ Made NAT Gateways optional (default: disabled)
-4. ✅ Updated MySQL version to stable 8.0.39
-5. ✅ Added DBPassword default (later removed for Secrets Manager)
-6. ✅ Implemented AWS Secrets Manager for database password
-7. ✅ Added UpdateReplacePolicy to RDS database
-8. ✅ Removed unnecessary !Sub from UserData
+
+1.  Replaced hardcoded AMI with SSM Parameter Store
+2.  Made KeyName optional with conditional logic
+3.  Made NAT Gateways optional (default: disabled)
+4.  Updated MySQL version to stable 8.0.39
+5.  Added DBPassword default (later removed for Secrets Manager)
+6.  Implemented AWS Secrets Manager for database password
+7.  Added UpdateReplacePolicy to RDS database
+8.  Removed unnecessary !Sub from UserData
 
 ### Template Changes
+
 - **Parameters:** 5 → 4 (removed DBPassword, added CreateNATGateways)
 - **Conditions:** 0 → 2 (HasKeyPair, ShouldCreateNATGateways)
 - **Resources:** 47 → 48 (added DBPasswordSecret)
@@ -529,7 +563,7 @@ $ aws cloudformation validate-template --template-body file://lib/TapStack.yml
 
 ---
 
-## 📚 Lessons Learned
+## Lessons Learned
 
 ### For Future Template Generation
 
@@ -543,32 +577,36 @@ $ aws cloudformation validate-template --template-body file://lib/TapStack.yml
 8. **Clean up unnecessary functions** - Don't use !Sub without variables
 
 ### Template Self-Sufficiency Checklist
-- ✅ No required parameters without defaults
-- ✅ No assumptions about existing resources (key pairs, connections, etc.)
-- ✅ No hardcoded region-specific values
-- ✅ Optional resources for AWS service limits
-- ✅ Works in any AWS region
-- ✅ Can deploy with zero manual input
+
+- No required parameters without defaults
+- No assumptions about existing resources (key pairs, connections, etc.)
+- No hardcoded region-specific values
+- Optional resources for AWS service limits
+- Works in any AWS region
+- Can deploy with zero manual input
 
 ---
 
-## 🏆 Final Template Quality
+## Final Template Quality
 
 ### Deployment Success Rate
+
 - **Before Fixes:** 0% (would fail on EIP limit or missing key pair)
 - **After Fixes:** 100% (deploys successfully with zero input)
 
 ### Best Practices Compliance
-- ✅ Region-agnostic
-- ✅ Self-sufficient (no required parameters)
-- ✅ AWS service limits handled
-- ✅ Security best practices (Secrets Manager)
-- ✅ Data protection (Update + Deletion policies)
-- ✅ Cost-optimized (optional NAT)
-- ✅ No cfn-lint warnings
-- ✅ Passes AWS CloudFormation validation
 
-### Production Readiness: ✅ READY
+- Region-agnostic
+- Self-sufficient (no required parameters)
+- AWS service limits handled
+- Security best practices (Secrets Manager)
+- Data protection (Update + Deletion policies)
+- Cost-optimized (optional NAT)
+- No cfn-lint warnings
+- Passes AWS CloudFormation validation
+
+### Production Readiness: READY
+
 The template is now production-ready and can be deployed in any AWS region without manual input or configuration.
 
 ---
