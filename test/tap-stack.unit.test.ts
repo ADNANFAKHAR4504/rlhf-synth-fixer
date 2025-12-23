@@ -23,27 +23,27 @@ describe('TapStack', () => {
       expect(stack.stackName).toBe('TestTapStack');
     });
 
-    test('TapStack passes environment suffix to nested stack', () => {
+    test('TapStack passes environment suffix to resources', () => {
       const testSuffix = 'unittest';
       stack = new TapStack(app, 'TestTapStack', {
         environmentSuffix: testSuffix,
       });
 
-      // The nested stack should be created with the correct props
-      const nestedStacks = stack.node.children.filter(
-        child => child instanceof ServerlessStack
-      );
-      expect(nestedStacks.length).toBe(1);
+      // TapStack creates resources directly - verify stack is created
+      const template = Template.fromStack(stack);
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: `corp-user-data-bucket-${testSuffix}`,
+      });
     });
 
     test('TapStack uses default environment suffix when not provided', () => {
       stack = new TapStack(app, 'TestTapStack');
 
-      // Should use 'dev' as default
-      const nestedStacks = stack.node.children.filter(
-        child => child instanceof ServerlessStack
-      );
-      expect(nestedStacks.length).toBe(1);
+      // Should use 'dev' as default - verify in resource names
+      const template = Template.fromStack(stack);
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'corp-user-data-bucket-dev',
+      });
     });
 
     test('TapStack uses context environment suffix when props not provided', () => {
@@ -55,11 +55,11 @@ describe('TapStack', () => {
       });
       stack = new TapStack(app, 'TestTapStack');
 
-      // Should use context value
-      const nestedStacks = stack.node.children.filter(
-        child => child instanceof ServerlessStack
-      );
-      expect(nestedStacks.length).toBe(1);
+      // Should use context value - verify in resource names
+      const template = Template.fromStack(stack);
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'corp-user-data-bucket-fromcontext',
+      });
     });
 
     test('TapStack prefers props over context for environment suffix', () => {
@@ -75,11 +75,11 @@ describe('TapStack', () => {
         environmentSuffix: 'fromprops',
       });
 
-      // Should use props value, not context
-      const nestedStacks = stack.node.children.filter(
-        child => child instanceof ServerlessStack
-      );
-      expect(nestedStacks.length).toBe(1);
+      // Should use props value, not context - verify in resource names
+      const template = Template.fromStack(stack);
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'corp-user-data-bucket-fromprops',
+      });
     });
   });
 

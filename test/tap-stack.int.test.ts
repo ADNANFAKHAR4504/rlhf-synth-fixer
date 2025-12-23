@@ -34,29 +34,41 @@ try {
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// LocalStack configuration
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('4566');
-const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
+// Detect LocalStack from outputs URL or environment variables
+const outputsUrl = outputs.ApiGatewayUrl || '';
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || 
+  process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+  process.env.LOCALSTACK_ENDPOINT?.includes('localhost') ||
+  outputsUrl.includes('localhost.localstack.cloud') ||
+  outputsUrl.includes('localhost:4566');
+
+const endpoint = process.env.AWS_ENDPOINT_URL || process.env.LOCALSTACK_ENDPOINT || 'http://localhost:4566';
+
+// Use us-east-1 as default for LocalStack (LocalStack default region)
+const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+
+// Common client config for LocalStack
+const localStackConfig = isLocalStack ? {
+  endpoint,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test',
+  },
+} : {};
 
 // AWS clients with LocalStack support
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-  ...(isLocalStack && {
-    endpoint,
-    forcePathStyle: true,
-  }),
+  region: awsRegion,
+  ...localStackConfig,
+  ...(isLocalStack && { forcePathStyle: true }),
 });
 const lambdaClient = new LambdaClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  ...(isLocalStack && {
-    endpoint,
-  }),
+  region: awsRegion,
+  ...localStackConfig,
 });
 const apiGatewayClient = new APIGatewayClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  ...(isLocalStack && {
-    endpoint,
-  }),
+  region: awsRegion,
+  ...localStackConfig,
 });
 
 describe('Serverless Infrastructure Integration Tests', () => {
