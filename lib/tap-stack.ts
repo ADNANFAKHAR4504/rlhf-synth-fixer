@@ -168,9 +168,12 @@ export class TapStack extends cdk.Stack {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
       ],
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
     });
+
+    // Explicitly set VPC attributes using CfnVPC to ensure DNS hostnames are enabled
+    const cfnVpc = vpc.node.defaultChild as ec2.CfnVPC;
+    cfnVpc.enableDnsHostnames = true;
+    cfnVpc.enableDnsSupport = true;
 
     // Tag VPC
     cdk.Tags.of(vpc).add('iac-rlhf-amazon', 'true');
@@ -233,6 +236,7 @@ export class TapStack extends cdk.Stack {
       versioned: true,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
+      bucketKeyEnabled: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
       serverAccessLogsBucket: accessLogsBucket,
@@ -398,6 +402,16 @@ export class TapStack extends cdk.Stack {
     });
 
     // ====================================================================================
+    // Instance Profile for EC2 Role
+    // ====================================================================================
+
+    // Create an instance profile explicitly to ensure it's attached to instances
+    const instanceProfile = new iam.CfnInstanceProfile(this, 'EC2InstanceProfile', {
+      instanceProfileName: `ec2-instance-profile${config.nameSuffix}`,
+      roles: [ec2Role.roleName],
+    });
+
+    // ====================================================================================
     // Launch Template for ASG
     // ====================================================================================
 
@@ -512,6 +526,21 @@ EOF`,
       // This avoids KMS key state issues during ASG instance launches
       requireImdsv2: true,
     });
+
+    // Ensure the launch template uses the instance profile and IMDSv2
+    const cfnLaunchTemplate = launchTemplate.node.defaultChild as ec2.CfnLaunchTemplate;
+    const existingData = cfnLaunchTemplate.launchTemplateData as any;
+    cfnLaunchTemplate.launchTemplateData = {
+      ...existingData,
+      iamInstanceProfile: {
+        arn: instanceProfile.attrArn,
+      },
+      metadataOptions: {
+        ...existingData?.metadataOptions,
+        httpTokens: 'required',
+        httpPutResponseHopLimit: 1,
+      },
+    };
 
     // ====================================================================================
     // Auto Scaling Group
@@ -758,7 +787,7 @@ EOF`,
     });
 
     new cdk.CfnOutput(this, 'ElasticIPAddress', {
-      value: elasticIp.ref,
+      value: elasticIp.attrPublicIp,
       description: 'Elastic IP Address',
       exportName: `elastic-ip${config.nameSuffix}`,
     });
