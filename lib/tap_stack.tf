@@ -56,6 +56,7 @@ variable "master_username" {
 variable "master_password" {
   description = "Master password for Aurora database (minimum 8 characters)"
   type        = string
+  default     = "Test1234"  # Default for LocalStack testing
   sensitive   = true
   validation {
     condition     = length(var.master_password) >= 8
