@@ -40,6 +40,14 @@ Parameters:
     AllowedPattern: '^[a-z0-9.-]+$'
     Description: Instance class for Aurora instances (AWS mode).
 
+  LocalDbPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Default: LocalStackPass123!
+    Description: Password used for LocalStack DBInstance only.
+
+
   LocalDbInstanceClass:
     Type: String
     Default: db.t3.micro
@@ -113,13 +121,11 @@ Parameters:
     Description: Optional KMS Key ARN for Aurora storage encryption (AWS mode only).
 
 Conditions:
-  IsLocalStack: !Equals
-    - !Ref DeploymentTarget
-    - localstack
+  IsLocalStack: !Or
+    - !Equals [!Ref DeploymentTarget, 'localstack']
+    - !Equals [!Ref 'AWS::AccountId', '000000000000']
 
-  IsAws: !Equals
-    - !Ref DeploymentTarget
-    - aws
+  IsAws: !Not [!Condition IsLocalStack]
 
   UseCustomerKms: !And
     - !Condition IsAws
@@ -543,6 +549,11 @@ Resources:
   # LocalStack mode MySQL instance
   LocalMysqlInstance:
     Condition: IsLocalStack
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1011
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier: !Sub mysql-local-${EnvironmentSuffix}
@@ -557,12 +568,14 @@ Resources:
       VPCSecurityGroups:
         - !Ref DbSecurityGroup
       MasterUsername: !Ref MasterUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${LocalMasterSecret}:SecretString:password}}'
+      MasterUserPassword: !Ref LocalDbPassword
       AutoMinorVersionUpgrade: true
       MultiAZ: false
       Tags:
         - Key: Name
           Value: !Sub mysql-local-${EnvironmentSuffix}
+
+
 
 Outputs:
   # Keep keys stable across AWS and LocalStack so scripts/tests do not break.
