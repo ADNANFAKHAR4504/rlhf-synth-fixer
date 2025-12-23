@@ -414,40 +414,40 @@ describe('Terraform Observability Stack - Integration Tests', () => {
   //   });
   // });
 
-  describe('X-Ray Sampling Rules Configuration', () => {
-    let samplingRules: any[];
+  // X-Ray Sampling Rules Configuration tests disabled for LocalStack compatibility
+  // Note: X-Ray sampling rules are commented out in main.tf due to LocalStack limitations
+  // describe('X-Ray Sampling Rules Configuration', () => {
+  //   let samplingRules: any[];
 
-    beforeAll(async () => {
-      const command = new GetSamplingRulesCommand({});
-      const response = await xrayClient.send(command);
-      samplingRules = response.SamplingRuleRecords || [];
-    });
+  //   beforeAll(async () => {
+  //     const command = new GetSamplingRulesCommand({});
+  //     const response = await xrayClient.send(command);
+  //     samplingRules = response.SamplingRuleRecords || [];
+  //   });
 
-    // X-Ray sampling rules tests disabled for LocalStack compatibility
-    // Note: X-Ray sampling rules are commented out in main.tf due to LocalStack limitations
-    // test('payment transactions sampling rule should exist', () => {
-    //   const rule = samplingRules.find(r => r.SamplingRule?.RuleName === outputs.xray_sampling_rule_payment);
+  //   test('payment transactions sampling rule should exist', () => {
+  //     const rule = samplingRules.find(r => r.SamplingRule?.RuleName === outputs.xray_sampling_rule_payment);
 
-    //   expect(rule).toBeDefined();
-    //   expect(rule?.SamplingRule?.RuleName).toBe(outputs.xray_sampling_rule_payment);
-    // });
+  //     expect(rule).toBeDefined();
+  //     expect(rule?.SamplingRule?.RuleName).toBe(outputs.xray_sampling_rule_payment);
+  //   });
 
-    // test('payment transactions rule should target payment API', () => {
-    //   const rule = samplingRules.find(r => r.SamplingRule?.RuleName === outputs.xray_sampling_rule_payment);
+  //   test('payment transactions rule should target payment API', () => {
+  //     const rule = samplingRules.find(r => r.SamplingRule?.RuleName === outputs.xray_sampling_rule_payment);
 
-    //   expect(rule?.SamplingRule?.URLPath).toBe('/api/payment/*');
-    //   expect(rule?.SamplingRule?.HTTPMethod).toBe('POST');
-    //   expect(rule?.SamplingRule?.Priority).toBe(1000);
-    // });
+  //     expect(rule?.SamplingRule?.URLPath).toBe('/api/payment/*');
+  //     expect(rule?.SamplingRule?.HTTPMethod).toBe('POST');
+  //     expect(rule?.SamplingRule?.Priority).toBe(1000);
+  //   });
 
-    // test('default sampling rule should exist', () => {
-    //   const rule = samplingRules.find(r => r.SamplingRule?.RuleName === `def-${environmentSuffix}`);
+  //   test('default sampling rule should exist', () => {
+  //     const rule = samplingRules.find(r => r.SamplingRule?.RuleName === `def-${environmentSuffix}`);
 
-    //   expect(rule).toBeDefined();
-    //   expect(rule?.SamplingRule?.Priority).toBe(5000);
-    //   expect(rule?.SamplingRule?.FixedRate).toBe(0.05);
-    // });
-  });
+  //     expect(rule).toBeDefined();
+  //     expect(rule?.SamplingRule?.Priority).toBe(5000);
+  //     expect(rule?.SamplingRule?.FixedRate).toBe(0.05);
+  //   });
+  // });
 
   describe('SSM Parameters Configuration', () => {
     test('X-Ray sampling rate parameter should exist', async () => {
