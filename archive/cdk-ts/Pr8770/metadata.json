@@ -13,9 +13,16 @@
   ],
   "aws_services": [
     "S3",
-    "EC2",
     "Lambda",
+    "VPC",
     "IAM"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
 }
