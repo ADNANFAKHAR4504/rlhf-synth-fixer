@@ -1,13 +1,13 @@
 {
   "platform": "cdk",
   "language": "ts",
-  "provider": "localstack",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "291857",
-  "team": "5",
-  "startedAt": "2025-08-03T12:50:51.522Z",
+  "po_id": "LS-291857",
+  "team": "synth-2",
+  "startedAt": "2025-12-23T10:30:00Z",
   "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup"
   ],
@@ -16,5 +16,10 @@
     "VPC",
     "IAM",
     "CloudWatch"
-  ]
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291857",
+    "pr": "Pr432"
+  }
 }
