@@ -187,9 +187,9 @@ describe("Terraform Fraud Detection System - Unit Tests", () => {
       expect(content).toMatch(/fraud-detector-\$\{var\.environment_suffix\}/);
     });
 
-    test("configures Lambda with container image", () => {
-      expect(content).toMatch(/package_type\s*=\s*"Image"/);
-      expect(content).toMatch(/image_uri/);
+    test("configures Lambda with zip deployment", () => {
+      expect(content).toMatch(/runtime\s*=\s*"python3\.11"/);
+      expect(content).toMatch(/handler\s*=\s*"index\.handler"/);
     });
 
     test("configures Lambda memory size from variable", () => {
@@ -416,19 +416,23 @@ describe("Terraform Fraud Detection System - Unit Tests", () => {
   });
 
   describe("Lambda Application", () => {
-    test("Lambda Dockerfile exists", () => {
-      const exists = fs.existsSync(path.join(libPath, "lambda/Dockerfile"));
-      expect(exists).toBe(true);
+    let lambdaContent: string;
+
+    beforeAll(() => {
+      lambdaContent = fs.readFileSync(path.join(libPath, "lambda.tf"), "utf8");
     });
 
-    test("Lambda application code exists", () => {
-      const exists = fs.existsSync(path.join(libPath, "lambda/app.py"));
-      expect(exists).toBe(true);
+    test("Lambda code is embedded in archive_file", () => {
+      expect(lambdaContent).toMatch(/data\s+"archive_file"\s+"lambda_zip"/);
     });
 
-    test("Lambda requirements.txt exists", () => {
-      const exists = fs.existsSync(path.join(libPath, "lambda/requirements.txt"));
-      expect(exists).toBe(true);
+    test("Lambda code includes handler function", () => {
+      expect(lambdaContent).toMatch(/def handler\(event, context\)/);
+    });
+
+    test("Lambda code includes DynamoDB operations", () => {
+      expect(lambdaContent).toMatch(/dynamodb/i);
+      expect(lambdaContent).toMatch(/put_item/i);
     });
   });
 
