@@ -23,15 +23,19 @@ Tags.of(app).add('Project', 'SecureInfrastructure');
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
-// Deploy to primary region (us-west-1)
+// Deploy to primary region
+// In LocalStack, use us-east-1 (matches CI script default region)
+// In real AWS, use us-west-1 for primary region
 // Stack naming: TapStack{environmentSuffix}-Primary to match CI/CD script pattern grep "TapStack${env_suffix}"
+const primaryRegion = isLocalStack ? 'us-east-1' : 'us-west-1';
+
 new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
   stackName: `TapStack${environmentSuffix}-Primary`,
   environmentSuffix: environmentSuffix,
   isPrimaryRegion: true,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-1',
+    region: primaryRegion,
   },
 });
 

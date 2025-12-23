@@ -35,9 +35,11 @@ export class TapStack extends cdk.Stack {
     });
 
     // VPC with secure configuration
+    // LocalStack Community Edition has limitations with NAT Gateways and EIP allocations
+    // Use PRIVATE_ISOLATED subnets instead of PRIVATE_WITH_EGRESS for LocalStack
     const vpc = new ec2.Vpc(this, 'SecureVpc', {
       maxAzs: 2,
-      natGateways: 1, // Reduced to 1 NAT Gateway to stay within EIP limits
+      natGateways: isLocalStack ? 0 : 1, // Disable NAT Gateways in LocalStack
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -47,7 +49,8 @@ export class TapStack extends cdk.Stack {
         {
           cidrMask: 24,
           name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          // Use PRIVATE_ISOLATED in LocalStack (no NAT Gateway), PRIVATE_WITH_EGRESS in real AWS
+          subnetType: isLocalStack ? ec2.SubnetType.PRIVATE_ISOLATED : ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
           cidrMask: 24,

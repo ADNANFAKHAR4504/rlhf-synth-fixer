@@ -28,15 +28,19 @@ Tags.of(app).add('Project', 'SecureInfrastructure');
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
-// Deploy to primary region (us-west-1)
+// Deploy to primary region
+// In LocalStack, use us-east-1 (matches CI script default region)
+// In real AWS, use us-west-1 for primary region
 // Stack naming: TapStack{environmentSuffix}-Primary to match CI/CD script pattern grep "TapStack${env_suffix}"
+const primaryRegion = isLocalStack ? 'us-east-1' : 'us-west-1';
+
 new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
   stackName: `TapStack${environmentSuffix}-Primary`,
   environmentSuffix: environmentSuffix,
   isPrimaryRegion: true,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-1',
+    region: primaryRegion,
   },
 });
 
@@ -95,9 +99,11 @@ export class TapStack extends cdk.Stack {
     });
 
     // VPC with secure configuration
+    // LocalStack Community Edition has limitations with NAT Gateways and EIP allocations
+    // Use PRIVATE_ISOLATED subnets instead of PRIVATE_WITH_EGRESS for LocalStack
     const vpc = new ec2.Vpc(this, 'SecureVpc', {
       maxAzs: 2,
-      natGateways: 1, // Reduced to 1 NAT Gateway to stay within EIP limits
+      natGateways: isLocalStack ? 0 : 1, // Disable NAT Gateways in LocalStack
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -107,7 +113,8 @@ export class TapStack extends cdk.Stack {
         {
           cidrMask: 24,
           name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          // Use PRIVATE_ISOLATED in LocalStack (no NAT Gateway), PRIVATE_WITH_EGRESS in real AWS
+          subnetType: isLocalStack ? ec2.SubnetType.PRIVATE_ISOLATED : ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
           cidrMask: 24,
@@ -422,7 +429,10 @@ export class TapStack extends cdk.Stack {
 
 ### 1. **LocalStack Compatibility**
 - Detects LocalStack environment via `AWS_ENDPOINT_URL`
+- Primary region uses us-east-1 in LocalStack (matches CI script default)
 - Conditionally skips secondary region deployment for LocalStack
+- NAT Gateways disabled in LocalStack (EIP allocation limitation)
+- Private subnets use PRIVATE_ISOLATED in LocalStack (no NAT dependency)
 - WAF resources are skipped in LocalStack (Pro-only feature)
 - S3 path-style access enabled in cdk.json
 
@@ -436,7 +446,7 @@ export class TapStack extends cdk.Stack {
 ### 3. **High Availability**
 - Multi-region deployment (us-west-1 and us-east-1) in real AWS
 - Single-region deployment for LocalStack testing
-- Multi-AZ VPC configuration with 1 NAT gateway
+- Multi-AZ VPC configuration with 1 NAT gateway (0 in LocalStack)
 - Database with 7-day backup retention
 - Isolated database subnets for enhanced security
 
