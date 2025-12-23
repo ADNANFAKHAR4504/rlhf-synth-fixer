@@ -175,13 +175,37 @@ jq --argjson valid_subtasks "$VALID_SUBTASKS" \
   # Only include fields allowed by schema (additionalProperties: false)
   # ═══════════════════════════════════════════════════════════════════════
   
+  # Capture original po_id before transformation for migration tracking
+  (.po_id // .task_id // "unknown") as $orig_po_id |
+  
+  # Check if this is already a migrated task (po_id starts with LS-)
+  (if ($orig_po_id | startswith("LS-")) then true else false end) as $already_migrated |
+  
+  # Determine the original po_id (for tracking lineage)
+  (if $already_migrated then
+    (.migrated_from.po_id // .original_po_id // ($orig_po_id | ltrimstr("LS-")))
+  else
+    $orig_po_id
+  end) as $final_original_po_id |
+  
+  # Determine the original PR (for tracking lineage)
+  (.migrated_from.pr // .original_pr_id // null) as $final_original_pr |
+  
+  # Build the new po_id with LS- prefix (if not already migrated)
+  (if $already_migrated then
+    $orig_po_id
+  else
+    "LS-" + $orig_po_id
+  end) as $new_po_id |
+  
+  # Build base object
   {
     platform: (.platform | validate_platform),
     language: (.language | validate_language),
     complexity: (.complexity | validate_complexity),
     turn_type: (.turn_type | validate_turn_type),
-    po_id: (.po_id // .task_id // "unknown"),
-    team: (.team | validate_team),
+    po_id: $new_po_id,
+    team: "synth-2",
     startedAt: (.startedAt | validate_started_at),
     subtask: (.subtask | enforce_subtask_string),
     provider: "localstack",
@@ -191,8 +215,20 @@ jq --argjson valid_subtasks "$VALID_SUBTASKS" \
       | map(select(. as $l | $valid_labels | index($l)))
       | if length == 0 then ["General Infrastructure Tooling QA"] else . end
     ),
-    aws_services: (.aws_services // [])
+    aws_services: (.aws_services // []),
+    wave: (.wave // "P1")
   }
+  # Add migrated_from object only if we have the original PR reference
+  + (if $final_original_pr != null then
+      {
+        migrated_from: {
+          po_id: $final_original_po_id,
+          pr: $final_original_pr
+        }
+      }
+    else
+      {}
+    end)
 ' "$METADATA_FILE" > "${METADATA_FILE}.tmp"
 
 # Validate the result is valid JSON
@@ -216,8 +252,20 @@ log_success "metadata.json sanitized successfully"
 # Show key fields
 echo "  Platform:       $(jq -r '.platform' "$METADATA_FILE")"
 echo "  Language:       $(jq -r '.language' "$METADATA_FILE")"
+echo "  Team:           $(jq -r '.team' "$METADATA_FILE")"
 echo "  Subtask:        $(jq -r '.subtask' "$METADATA_FILE")"
 echo "  Provider:       $(jq -r '.provider' "$METADATA_FILE")"
 echo "  Subject Labels: $(jq -r '.subject_labels | length' "$METADATA_FILE") items"
+echo "  Wave:           $(jq -r '.wave // "not set"' "$METADATA_FILE")"
+echo ""
+echo "  Migration Tracking:"
+echo "    PO ID:              $(jq -r '.po_id' "$METADATA_FILE")"
+if jq -e '.migrated_from' "$METADATA_FILE" &>/dev/null; then
+  echo "    migrated_from:"
+  echo "      po_id:          $(jq -r '.migrated_from.po_id // "N/A"' "$METADATA_FILE")"
+  echo "      pr:             $(jq -r '.migrated_from.pr // "N/A"' "$METADATA_FILE")"
+else
+  echo "    migrated_from:      (not set - provide original_pr_id to enable)"
+fi
 echo ""
 

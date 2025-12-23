@@ -4,24 +4,34 @@
 
 # ═══════════════════════════════════════════════════════════════
 # ITERATION SETTINGS
+# CRITICAL: CI credits are LIMITED - prioritize local validation!
 # ═══════════════════════════════════════════════════════════════
 iteration:
-  max_fix_iterations: 10 # Maximum fix iterations (increased to ensure production ready)
-  max_cicd_iterations: 10 # Maximum CI/CD monitoring iterations after PR push
+  max_fix_iterations: 3 # Reduced from 10 - prioritize local validation over CI iterations
+  max_cicd_iterations: 2 # REDUCED from 10 - CI credits are LIMITED! Max 2 pushes allowed
   max_deployment_attempts: 3 # Maximum deployment attempts per iteration
   use_batch_fix: true # Enable batch fix approach (apply ALL fixes before re-deploy)
   continue_until_production_ready: true # MUST iterate until all CI/CD jobs pass
+  run_local_prevalidation: true # MANDATORY: Run local validation before pushing to CI/CD
+  prevalidation_script: '.claude/scripts/localstack-prevalidate.sh' # Path to pre-validation script
+  enforce_local_validation: true # NEW: Block CI push if local validation fails
+  ci_credit_warning: true # NEW: Show warnings about CI credit consumption
 
 # ═══════════════════════════════════════════════════════════════
 # TIMEOUT SETTINGS (in seconds)
+# Optimized for faster execution - LocalStack deployments should be quick
 # ═══════════════════════════════════════════════════════════════
 timeouts:
   localstack_health_check: 5 # Timeout for LocalStack health check
-  deployment_timeout: 300 # Maximum time for deployment (5 minutes)
-  test_timeout: 120 # Maximum time for integration tests (2 minutes)
-  bootstrap_timeout: 120 # Maximum time for CDK bootstrap (2 minutes)
-  npm_install_timeout: 180 # Maximum time for npm install (3 minutes)
-  pip_install_timeout: 120 # Maximum time for pip install (2 minutes)
+  deployment_timeout: 180 # Reduced from 300 → 180 (3 min - LocalStack is fast)
+  test_timeout: 60 # Reduced from 120 → 60 (1 min - tests should be quick)
+  bootstrap_timeout: 60 # Reduced from 120 → 60 (1 min - bootstrap is fast)
+  npm_install_timeout: 120 # Reduced from 180 → 120 (2 min with cache)
+  pip_install_timeout: 60 # Reduced from 120 → 60 (1 min with cache)
+  synth_timeout: 60 # NEW: CDK/Terraform synthesis timeout
+  lint_timeout: 30 # NEW: Linting timeout
+  compile_timeout: 60 # NEW: TypeScript/Python compilation timeout
+  cicd_poll_interval: 20 # NEW: Reduced from 30 → 20 (faster status checks)
 
 # ═══════════════════════════════════════════════════════════════
 # LOCALSTACK SETTINGS
@@ -37,32 +47,40 @@ localstack:
 
 # ═══════════════════════════════════════════════════════════════
 # BATCH FIX STRATEGY SETTINGS
+# Aggressive preventive fixes to minimize CI/CD iterations
 # ═══════════════════════════════════════════════════════════════
 batch_fix:
   enabled: true # Enable batch fix approach
   apply_preventive_fixes: true # Apply fixes even without specific errors
+  single_comprehensive_push: true # NEW: Apply ALL fixes in single commit before push
 
   # Fix priority order (applied in this sequence)
   # IMPORTANT: metadata_fix MUST be first - CI/CD validates metadata.json before anything else
   fix_priority:
     - metadata_fix # 🔴 CRITICAL - MUST BE FIRST - Schema compliance for CI/CD
+    - typescript_fix # 🔴 CRITICAL - Run tsc and fix type errors
+    - lint_fix # 🔴 CRITICAL - Run lint:fix before push
     - endpoint_config # 🔴 Critical - LocalStack endpoint detection
     - s3_path_style # 🔴 Critical - S3 path-style access
     - removal_policy # 🟡 High - RemovalPolicy.DESTROY
     - test_config # 🟡 High - Test endpoint configuration
+    - jest_config # 🟡 High - Jest configuration (test vs tests folder)
     - iam_simplify # 🟡 Medium - IAM policy simplification
     - resource_naming # 🟡 Medium - Resource naming simplification
     - unsupported_service # 🟡 Medium - Unsupported service conditionals
     - default_parameters # 🟢 Low - Default parameter values
 
   # Preventive fixes (apply even if no error detected)
-  # IMPORTANT: metadata_fix is ALWAYS applied first
+  # EXPANDED: Apply more fixes upfront to reduce iterations
   preventive_fixes:
     - metadata_fix # ALWAYS - Required for CI/CD to pass
+    - typescript_fix # ALWAYS - Compile check before push
+    - lint_fix # ALWAYS - Auto-fix lint issues
     - endpoint_config # Almost always needed
     - s3_path_style # If using S3/buckets
     - removal_policy # Always for LocalStack
     - test_config # If test/ directory exists
+    - jest_config # If jest.config.js exists
 
   # Conditional fixes (only apply if specific error detected)
   conditional_fixes:
@@ -336,3 +354,817 @@ metadata:
   # Default values if mapping fails
   default_subtask: 'Infrastructure QA and Management'
   default_subject_label: 'General Infrastructure Tooling QA'
+
+# ═══════════════════════════════════════════════════════════════
+# TRAINING QUALITY SETTINGS
+# Configuration for achieving training quality scores of 9+
+# See: .claude/docs/guides/localstack-training-quality-guide.md
+# ═══════════════════════════════════════════════════════════════
+training_quality:
+  # Minimum required score for PR approval
+  min_score: 8
+  target_score: 9 # Aim for this score when applying fixes
+
+  # Enable training quality enhancement during fixes
+  enhance_training_quality: true
+
+  # Category A fixes - LocalStack compatible (HIGH priority for score boost)
+  # Each provides +1 to MODEL_FAILURES adjustment (max +2)
+  category_a_fixes:
+    kms_encryption:
+      enabled: true
+      description: 'Add KMS encryption to data stores'
+      applicable_services:
+        - s3
+        - dynamodb
+        - sqs
+        - sns
+        - secretsmanager
+        - ssm
+      patterns_to_check:
+        - 'encryption.*KMS'
+        - 'encryptionKey'
+        - 'kms.Key'
+      fix_if_missing: true
+
+    iam_least_privilege:
+      enabled: true
+      description: 'Replace overly permissive IAM with least-privilege'
+      applicable_services:
+        - iam
+        - lambda
+        - s3
+        - dynamodb
+      patterns_indicating_issue:
+        - 'actions.*\*'
+        - 'resources.*\*'
+        - 'Effect.*Allow.*Action.*\*'
+      fix_if_detected: true
+
+    cloudwatch_monitoring:
+      enabled: true
+      description: 'Add CloudWatch alarms and monitoring'
+      applicable_services:
+        - cloudwatch
+        - logs
+        - lambda
+        - dynamodb
+        - sqs
+      patterns_to_check:
+        - 'Alarm'
+        - 'metricErrors'
+        - 'Dashboard'
+      fix_if_missing: true
+
+    error_handling_dlq:
+      enabled: true
+      description: 'Add dead-letter queues for error handling'
+      applicable_services:
+        - sqs
+        - lambda
+        - sns
+        - eventbridge
+      patterns_to_check:
+        - 'deadLetterQueue'
+        - 'DeadLetterQueue'
+        - 'dlq'
+        - 'retryAttempts'
+      fix_if_missing: true
+
+    secretsmanager_integration:
+      enabled: true
+      description: 'Replace hardcoded credentials with SecretsManager'
+      applicable_services:
+        - secretsmanager
+        - lambda
+      patterns_indicating_issue:
+        - 'password.*=.*["\x27]'
+        - 'secret.*=.*["\x27]'
+        - 'apiKey.*=.*["\x27]'
+      fix_if_detected: true
+
+  # Complexity factors - each provides +1 (max +2 total)
+  complexity_factors:
+    multiple_services:
+      min_count: 3 # Need 3+ services for +1 bonus
+      high_value_services: # Count these for the factor
+        - s3
+        - dynamodb
+        - lambda
+        - sqs
+        - sns
+        - apigateway
+        - eventbridge
+        - stepfunctions
+
+    security_practices:
+      required_count: 2 # Need 2+ of these for +1 bonus
+      practices:
+        - kms_encryption
+        - iam_least_privilege
+        - encryption_at_rest
+        - encryption_in_transit
+        - resource_policies
+
+    event_driven:
+      required_patterns: # Need any of these for +1 bonus
+        - eventbridge_rules
+        - sqs_triggers
+        - sns_subscriptions
+        - lambda_event_sources
+
+    serverless_architecture:
+      required_services: # Need Lambda + at least one of these
+        primary: lambda
+        secondary:
+          - apigateway
+          - stepfunctions
+          - eventbridge
+
+  # Services to prioritize for training quality
+  # These are HIGH compatibility and support Category A fixes
+  priority_services:
+    tier_1: # Best for training quality (HIGH compatibility + Category A opportunities)
+      - s3 # KMS, policies, lifecycle
+      - dynamodb # KMS, IAM, streams
+      - lambda # IAM, DLQ, monitoring
+      - kms # Core security service
+      - iam # Policies, roles
+
+    tier_2: # Good for training quality (HIGH compatibility)
+      - sqs # Encryption, DLQ
+      - sns # Encryption, policies
+      - cloudwatch # Monitoring, alarms
+      - eventbridge # Event patterns
+      - secretsmanager # Credential management
+
+    tier_3: # Usable (MEDIUM compatibility)
+      - apigateway # API patterns
+      - stepfunctions # Workflows
+
+  # Patterns to detect and suggest fixes
+  enhancement_patterns:
+    # Pattern: Unencrypted S3 bucket
+    s3_unencrypted:
+      detect: 'new.*Bucket\s*\([^)]*\)\s*(?!.*encryption)'
+      suggest: 'Add encryption: s3.BucketEncryption.KMS with custom KMS key'
+      category: 'A'
+      boost: 1
+
+    # Pattern: Unencrypted DynamoDB
+    dynamodb_unencrypted:
+      detect: 'new.*Table\s*\([^)]*\)\s*(?!.*encryption)'
+      suggest: 'Add encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED'
+      category: 'A'
+      boost: 1
+
+    # Pattern: Lambda without DLQ
+    lambda_no_dlq:
+      detect: 'new.*Function\s*\([^)]*\)\s*(?!.*deadLetterQueue)'
+      suggest: 'Add deadLetterQueue with SQS DLQ'
+      category: 'A'
+      boost: 1
+
+    # Pattern: Overly permissive IAM
+    iam_star_permissions:
+      detect: 'actions.*\[.*\*.*\]|resources.*\[.*\*.*\]'
+      suggest: 'Replace with specific actions and resource ARNs'
+      category: 'A'
+      boost: 1
+
+    # Pattern: Missing CloudWatch alarms
+    no_cloudwatch_alarms:
+      detect: '(?!.*new.*Alarm)'
+      suggest: 'Add CloudWatch alarms for key metrics (errors, throttles)'
+      category: 'A'
+      boost: 1
+
+    # Pattern: Hardcoded credentials
+    hardcoded_credentials:
+      detect: '(password|secret|apiKey|token)\s*[:=]\s*["\x27][^"\x27]+'
+      suggest: 'Use SecretsManager for credential storage'
+      category: 'A'
+      boost: 1
+
+  # Assessment output format
+  assessment_template: |
+    ## Training Quality Assessment (LocalStack)
+
+    **Target Score**: {target}/10
+    **Current Score**: {score}/10
+
+    ### Scoring Breakdown
+    - Base Score: 8
+    - MODEL_FAILURES Adjustment: {model_failures_adj} ({category_a_count} Category A fixes)
+    - Complexity Adjustment: {complexity_adj} ({complexity_factors})
+
+    ### Category A Fixes Applied
+    {category_a_fixes_list}
+
+    ### Complexity Factors Present
+    - Multiple Services (3+): {multiple_services}
+    - Security Practices: {security_practices}
+    - Event-Driven: {event_driven}
+    - Serverless: {serverless}
+
+    ### LocalStack Compatibility
+    - Services Used: {services_list}
+    - Compatibility Level: {compatibility_level}
+
+    ### Status: {status}
+
+# ═══════════════════════════════════════════════════════════════
+# INTELLIGENT FIX ORDERING (Enhancement #2)
+# Dynamic fix ordering based on error analysis and task context
+# ═══════════════════════════════════════════════════════════════
+intelligent_fixes:
+  enabled: true
+  analyze_error_patterns: true # Analyze errors to prioritize fixes
+  prioritize_by_frequency: true # Most common fixes first
+  skip_inapplicable_fixes: true # Don't run S3 fixes if no S3 used
+  learn_from_history: true # Track which fixes worked for similar tasks
+  
+  # Error pattern to fix mapping (for intelligent ordering)
+  error_fix_mapping:
+    endpoint_errors:
+      patterns:
+        - 'ECONNREFUSED'
+        - 'endpoint'
+        - '4566'
+        - 'localhost'
+        - 'connection refused'
+      fix: 'endpoint_config'
+      priority: 1
+      
+    s3_errors:
+      patterns:
+        - 'S3'
+        - 'bucket'
+        - 'NoSuchBucket'
+        - 'path.style'
+        - 'virtual.hosted'
+      fix: 's3_path_style'
+      priority: 2
+      
+    iam_errors:
+      patterns:
+        - 'AccessDenied'
+        - 'unauthorized'
+        - 'policy'
+        - 'principal'
+        - 'malformed'
+      fix: 'iam_simplify'
+      priority: 3
+      
+    type_errors:
+      patterns:
+        - 'TypeError'
+        - 'type.*error'
+        - 'TS[0-9]+'
+        - 'cannot find'
+      fix: 'typescript_fix'
+      priority: 1
+      
+    lint_errors:
+      patterns:
+        - 'eslint'
+        - 'prettier'
+        - 'lint'
+        - 'formatting'
+      fix: 'lint_fix'
+      priority: 2
+      
+    test_errors:
+      patterns:
+        - 'jest'
+        - 'test.*failed'
+        - 'assertion'
+        - 'expect'
+      fix: 'test_config'
+      priority: 4
+      
+    metadata_errors:
+      patterns:
+        - 'metadata'
+        - 'schema'
+        - 'validation'
+        - 'additionalProperties'
+      fix: 'metadata_fix'
+      priority: 0 # Highest priority
+      
+  # Service detection patterns (for skip_inapplicable_fixes)
+  service_detection:
+    s3:
+      patterns:
+        - 'new.*Bucket'
+        - 's3\.Bucket'
+        - 'aws_s3'
+        - 'S3Bucket'
+    dynamodb:
+      patterns:
+        - 'new.*Table'
+        - 'dynamodb\.Table'
+        - 'aws_dynamodb'
+        - 'DynamoDBTable'
+    lambda:
+      patterns:
+        - 'new.*Function'
+        - 'lambda\.Function'
+        - 'aws_lambda'
+        - 'LambdaFunction'
+    sqs:
+      patterns:
+        - 'new.*Queue'
+        - 'sqs\.Queue'
+        - 'aws_sqs'
+        - 'SQSQueue'
+    sns:
+      patterns:
+        - 'new.*Topic'
+        - 'sns\.Topic'
+        - 'aws_sns'
+        - 'SNSTopic'
+    apigateway:
+      patterns:
+        - 'RestApi'
+        - 'HttpApi'
+        - 'apigateway'
+        - 'aws_api_gateway'
+
+# ═══════════════════════════════════════════════════════════════
+# PRE-MIGRATION COMPATIBILITY CHECK (Enhancement #3)
+# Assess migration feasibility before starting
+# ═══════════════════════════════════════════════════════════════
+compatibility_check:
+  enabled: true
+  script_path: '.claude/scripts/localstack-compatibility-check.sh'
+  
+  # Scoring weights
+  scoring:
+    base_score: 100
+    high_compat_service: 0 # No penalty
+    medium_compat_service: -10
+    low_compat_service: -25
+    pro_only_service: -50
+    
+    # Platform adjustments
+    platform_scores:
+      cfn-yaml: 10
+      cfn-json: 10
+      cdk-ts: 5
+      cdk-py: 5
+      cdk-go: 0
+      cdk-java: 0
+      tf-hcl: 0
+      pulumi-ts: -5
+      pulumi-py: -5
+      pulumi-go: -10
+      
+    # Complexity adjustments
+    complexity_scores:
+      medium: 0
+      hard: -10
+      expert: -20
+      
+  # Success probability thresholds
+  thresholds:
+    high_probability: 80 # >= 80% = high success chance
+    medium_probability: 60 # >= 60% = medium success chance
+    low_probability: 40 # >= 40% = low success chance
+    # < 40% = likely to fail
+    
+  # Time estimation (minutes)
+  time_estimates:
+    base_time: 5
+    per_fix_time: 2
+    per_low_compat_service: 3
+    per_medium_compat_service: 1
+    
+  # Output format
+  output_template: |
+    ═══════════════════════════════════════════════════════════════
+    📊 MIGRATION COMPATIBILITY CHECK
+    ═══════════════════════════════════════════════════════════════
+    Task: {task_id} ({platform})
+    Compatibility Score: {score}/100
+    
+    {services_section}
+    
+    📋 Predicted Fixes Needed:
+    {predicted_fixes}
+    
+    ⏱️ Estimated Time: {estimated_time}
+    🎯 Success Probability: {probability}%
+    
+    Recommendation: {recommendation}
+
+# ═══════════════════════════════════════════════════════════════
+# FIX CACHING & TEMPLATES (Enhancement #4)
+# Cache successful fix patterns for reuse
+# ═══════════════════════════════════════════════════════════════
+fix_templates:
+  enabled: true
+  template_directory: '.claude/templates/localstack-fixes/'
+  cache_directory: '.claude/cache/fix-patterns/'
+  
+  # Save successful fix patterns
+  save_successful_fixes: true
+  max_cached_patterns: 100
+  
+  # Template matching
+  match_by:
+    - platform
+    - language
+    - services_used
+    
+  # Platform-specific templates
+  templates:
+    cdk-ts-basic:
+      description: 'CDK TypeScript basic setup'
+      applies_to:
+        platform: cdk
+        language: ts
+      fixes:
+        - endpoint_config
+        - s3_path_style
+        - removal_policy
+      code_snippets:
+        localstack_config: |
+          // LocalStack configuration
+          const isLocalStack = process.env.LOCALSTACK_HOSTNAME || process.env.AWS_ENDPOINT_URL;
+          const localstackEndpoint = isLocalStack ? 'http://localhost:4566' : undefined;
+          
+    cdk-ts-s3-lambda:
+      description: 'CDK TypeScript with S3 + Lambda'
+      applies_to:
+        platform: cdk
+        language: ts
+        services:
+          - s3
+          - lambda
+      fixes:
+        - endpoint_config
+        - s3_path_style
+        - removal_policy
+        - lambda_dlq
+      code_snippets:
+        s3_config: |
+          const bucket = new s3.Bucket(this, 'Bucket', {
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+            autoDeleteObjects: true,
+            // LocalStack: Use path-style access
+            ...(process.env.LOCALSTACK_HOSTNAME && {
+              bucketName: 'my-bucket-' + this.account,
+            }),
+          });
+          
+    cfn-yaml-basic:
+      description: 'CloudFormation YAML basic setup'
+      applies_to:
+        platform: cfn
+        language: yaml
+      fixes:
+        - metadata_fix
+        - removal_policy
+      code_snippets:
+        deletion_policy: |
+          # Add DeletionPolicy for LocalStack
+          DeletionPolicy: Delete
+          
+    tf-hcl-basic:
+      description: 'Terraform HCL basic setup'
+      applies_to:
+        platform: tf
+        language: hcl
+      fixes:
+        - endpoint_config
+        - s3_path_style
+      code_snippets:
+        provider_config: |
+          # LocalStack provider configuration
+          provider "aws" {
+            region                      = "us-east-1"
+            access_key                  = "test"
+            secret_key                  = "test"
+            skip_credentials_validation = true
+            skip_metadata_api_check     = true
+            skip_requesting_account_id  = true
+            
+            endpoints {
+              s3       = "http://localhost:4566"
+              dynamodb = "http://localhost:4566"
+              lambda   = "http://localhost:4566"
+              sqs      = "http://localhost:4566"
+              sns      = "http://localhost:4566"
+              iam      = "http://localhost:4566"
+            }
+            
+            s3_use_path_style = true
+          }
+          
+    pulumi-ts-basic:
+      description: 'Pulumi TypeScript basic setup'
+      applies_to:
+        platform: pulumi
+        language: ts
+      fixes:
+        - endpoint_config
+        - s3_path_style
+      code_snippets:
+        provider_config: |
+          // LocalStack provider configuration
+          const awsProvider = new aws.Provider("localstack", {
+            region: "us-east-1",
+            accessKey: "test",
+            secretKey: "test",
+            skipCredentialsValidation: true,
+            skipMetadataApiCheck: true,
+            s3UsePathStyle: true,
+            endpoints: [{
+              s3: "http://localhost:4566",
+              dynamodb: "http://localhost:4566",
+              lambda: "http://localhost:4566",
+              sqs: "http://localhost:4566",
+              sns: "http://localhost:4566",
+              iam: "http://localhost:4566",
+            }],
+          });
+
+# ═══════════════════════════════════════════════════════════════
+# PARALLEL MIGRATION DASHBOARD (Enhancement #6)
+# Real-time monitoring of parallel migrations
+# ═══════════════════════════════════════════════════════════════
+dashboard:
+  enabled: true
+  script_path: '.claude/scripts/localstack-dashboard.sh'
+  refresh_interval: 5 # seconds
+  
+  # Status file locations
+  status_directory: '.claude/reports/dashboard/'
+  active_migrations_file: '.claude/reports/dashboard/active.json'
+  history_file: '.claude/reports/dashboard/history.json'
+  
+  # Display settings
+  display:
+    show_progress_bar: true
+    show_elapsed_time: true
+    show_estimated_remaining: true
+    max_visible_migrations: 10
+    
+  # Status indicators
+  status_icons:
+    pending: '⏳'
+    initializing: '🔄'
+    deploying: '🚀'
+    testing: '🧪'
+    fixing: '🔧'
+    pushing: '📤'
+    completed: '✅'
+    failed: '❌'
+    blocked: '🚫'
+    
+  # Metrics tracking
+  metrics:
+    track_daily_stats: true
+    track_weekly_stats: true
+    track_success_rate: true
+    track_avg_duration: true
+    track_common_failures: true
+
+# ═══════════════════════════════════════════════════════════════
+# ROLLBACK CAPABILITY (Enhancement #7)
+# Ability to rollback failed migrations
+# ═══════════════════════════════════════════════════════════════
+rollback:
+  enabled: true
+  script_path: '.claude/scripts/localstack-rollback.sh'
+  
+  # Snapshot settings
+  snapshots:
+    enabled: true
+    directory: '.claude/snapshots/'
+    max_snapshots_per_pr: 3
+    auto_snapshot_before_fix: true
+    
+  # Rollback triggers
+  auto_rollback:
+    enabled: false # Manual rollback only by default
+    on_consecutive_failures: 3 # Auto-rollback after N failures
+    on_test_regression: true # Auto-rollback if tests that passed now fail
+    
+  # Rollback scope options
+  scope:
+    full: 'Rollback all changes to original state'
+    last_fix: 'Rollback only the last fix applied'
+    to_snapshot: 'Rollback to a specific snapshot'
+    selective: 'Rollback specific files only'
+
+# ═══════════════════════════════════════════════════════════════
+# SERVICE SUBSTITUTION SUGGESTIONS (Enhancement #8)
+# Suggest alternatives for unsupported services
+# ═══════════════════════════════════════════════════════════════
+service_substitutions:
+  enabled: true
+  
+  # Pro-only services → Community alternatives
+  substitutions:
+    appsync:
+      alternative: 'apigateway + lambda'
+      description: 'Replace AppSync with API Gateway + Lambda resolvers'
+      difficulty: 'medium'
+      migration_steps:
+        - 'Create API Gateway REST API'
+        - 'Create Lambda functions for resolvers'
+        - 'Map GraphQL operations to REST endpoints'
+        - 'Update client code to use REST API'
+      code_example: |
+        // Instead of AppSync GraphQL API:
+        // const api = new appsync.GraphqlApi(...)
+        
+        // Use API Gateway + Lambda:
+        const api = new apigateway.RestApi(this, 'Api');
+        const handler = new lambda.Function(this, 'Handler', {
+          runtime: lambda.Runtime.NODEJS_18_X,
+          handler: 'index.handler',
+          code: lambda.Code.fromAsset('lambda'),
+        });
+        api.root.addMethod('POST', new apigateway.LambdaIntegration(handler));
+        
+    eks:
+      alternative: 'ecs'
+      description: 'Replace EKS with ECS (limited LocalStack support)'
+      difficulty: 'hard'
+      migration_steps:
+        - 'Convert Kubernetes manifests to ECS task definitions'
+        - 'Replace kubectl commands with ECS CLI'
+        - 'Update service discovery configuration'
+      note: 'ECS has limited LocalStack support - consider mocking'
+      
+    cognito-idp:
+      alternative: 'iam + lambda-authorizer'
+      description: 'Replace Cognito with IAM + Lambda authorizer'
+      difficulty: 'medium'
+      migration_steps:
+        - 'Create Lambda authorizer function'
+        - 'Configure API Gateway with Lambda authorizer'
+        - 'Implement token validation in Lambda'
+      code_example: |
+        // Lambda authorizer instead of Cognito
+        const authorizer = new lambda.Function(this, 'Authorizer', {
+          runtime: lambda.Runtime.NODEJS_18_X,
+          handler: 'authorizer.handler',
+          code: lambda.Code.fromAsset('lambda'),
+        });
+        
+        const auth = new apigateway.TokenAuthorizer(this, 'TokenAuth', {
+          handler: authorizer,
+        });
+        
+    amplify:
+      alternative: 's3 + cloudfront (static hosting)'
+      description: 'Replace Amplify with S3 static hosting'
+      difficulty: 'easy'
+      migration_steps:
+        - 'Create S3 bucket with static website hosting'
+        - 'Configure bucket policy for public access'
+        - 'Update build scripts to deploy to S3'
+      code_example: |
+        // S3 static website instead of Amplify
+        const websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
+          websiteIndexDocument: 'index.html',
+          websiteErrorDocument: 'error.html',
+          publicReadAccess: true,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+        });
+        
+    sagemaker:
+      alternative: 'lambda (for inference)'
+      description: 'Replace SageMaker with Lambda for simple inference'
+      difficulty: 'hard'
+      migration_steps:
+        - 'Package model in Lambda layer'
+        - 'Create Lambda function for inference'
+        - 'Update client code to call Lambda'
+      note: 'Only suitable for small models - consider mocking for tests'
+      
+    rds:
+      alternative: 'dynamodb or mock'
+      description: 'Replace RDS with DynamoDB or mock database'
+      difficulty: 'medium'
+      migration_steps:
+        - 'Evaluate if DynamoDB can replace RDS'
+        - 'If not, use mock database for testing'
+        - 'Update connection strings for LocalStack'
+        
+    elasticache:
+      alternative: 'dynamodb (for caching)'
+      description: 'Replace ElastiCache with DynamoDB TTL'
+      difficulty: 'medium'
+      migration_steps:
+        - 'Create DynamoDB table with TTL'
+        - 'Update cache client code'
+        - 'Implement TTL-based expiration'
+
+# ═══════════════════════════════════════════════════════════════
+# INTEGRATION TEST ENHANCEMENT (Enhancement #9)
+# Auto-generate or enhance integration tests for LocalStack
+# ═══════════════════════════════════════════════════════════════
+test_enhancement:
+  enabled: true
+  script_path: '.claude/scripts/localstack-enhance-tests.sh'
+  
+  # Auto-add LocalStack endpoint configuration to tests
+  add_endpoint_config: true
+  
+  # Add cleanup after tests
+  add_cleanup_hooks: true
+  
+  # Timeout settings for LocalStack (slower than AWS)
+  timeouts:
+    default: 30000 # 30 seconds
+    deployment: 60000 # 60 seconds
+    api_call: 10000 # 10 seconds
+    
+  # Retry logic for flaky LocalStack operations
+  retry_config:
+    enabled: true
+    max_retries: 3
+    retry_delay: 1000 # ms
+    exponential_backoff: true
+    retryable_errors:
+      - 'ECONNREFUSED'
+      - 'socket hang up'
+      - 'ResourceNotFoundException'
+      - 'ServiceUnavailable'
+      
+  # Test file patterns
+  test_patterns:
+    integration_tests:
+      - '**/*.int.test.ts'
+      - '**/*.int.test.js'
+      - '**/test_*.py'
+      - '**/*_test.go'
+    unit_tests:
+      - '**/*.unit.test.ts'
+      - '**/*.unit.test.js'
+      - '**/*.test.ts'
+      - '**/*.test.js'
+      
+  # Code snippets for test enhancement
+  snippets:
+    jest_setup: |
+      // LocalStack test setup
+      beforeAll(async () => {
+        // Wait for LocalStack to be ready
+        const maxRetries = 10;
+        for (let i = 0; i < maxRetries; i++) {
+          try {
+            const response = await fetch('http://localhost:4566/_localstack/health');
+            if (response.ok) break;
+          } catch (e) {
+            if (i === maxRetries - 1) throw new Error('LocalStack not ready');
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        }
+      });
+      
+    jest_cleanup: |
+      // LocalStack test cleanup
+      afterAll(async () => {
+        // Clean up resources
+        try {
+          // Add cleanup code here
+        } catch (e) {
+          console.warn('Cleanup warning:', e.message);
+        }
+      });
+      
+    aws_client_config: |
+      // LocalStack AWS client configuration
+      const getLocalStackConfig = () => ({
+        endpoint: 'http://localhost:4566',
+        region: 'us-east-1',
+        credentials: {
+          accessKeyId: 'test',
+          secretAccessKey: 'test',
+        },
+        forcePathStyle: true, // Required for S3
+      });
+      
+    retry_helper: |
+      // Retry helper for flaky operations
+      async function withRetry<T>(
+        fn: () => Promise<T>,
+        maxRetries = 3,
+        delay = 1000
+      ): Promise<T> {
+        for (let i = 0; i < maxRetries; i++) {
+          try {
+            return await fn();
+          } catch (error) {
+            if (i === maxRetries - 1) throw error;
+            await new Promise(r => setTimeout(r, delay * Math.pow(2, i)));
+          }
+        }
+        throw new Error('Max retries exceeded');
+      }

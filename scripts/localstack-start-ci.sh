@@ -58,13 +58,18 @@ if docker ps -a | grep -q localstack; then
     docker rm localstack 2>/dev/null || true
 fi
 
-# LocalStack enables all services by default when SERVICES is not set
-# Only set SERVICES if explicitly provided via environment variable
+# LocalStack Pro 4.12+ requires explicit service configuration
+# Enable core services needed for CDK/CloudFormation deployments
 if [ -n "$LOCALSTACK_SERVICES" ]; then
     SERVICES="$LOCALSTACK_SERVICES"
     echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
 else
-    echo -e "${BLUE}📋 All LocalStack services enabled (default)${NC}"
+    # Default services for CDK/CFN/Terraform/Pulumi deployments
+    # Include all commonly needed services to avoid "service not enabled" errors
+    # elasticloadbalancing is separate from elb and elbv2 in LocalStack
+    SERVICES="acm,apigateway,cloudformation,cloudfront,cloudwatch,dynamodb,ec2,ecr,ecs,elb,elbv2,events,iam,kms,lambda,logs,rds,route53,s3,secretsmanager,sns,sqs,ssm,sts,autoscaling,wafv2"
+    echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
+    echo -e "${YELLOW}💡 To customize, set LOCALSTACK_SERVICES environment variable${NC}"
 fi
 
 # Check for LocalStack API Key
@@ -87,13 +92,17 @@ DOCKER_CMD="docker run -d \
   -e DEBUG=1 \
   -e DATA_DIR=/tmp/localstack/data \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
-  -e ENFORCE_IAM=0"
-
-# Add SERVICES only if explicitly set
-if [ -n "$SERVICES" ]; then
-    DOCKER_CMD="$DOCKER_CMD \
-  -e SERVICES=\"${SERVICES}\""
-fi
+  -e ENFORCE_IAM=0 \
+  -e RDS_MYSQL_DOCKER=0 \
+  -e RDS_PG_DOCKER=0 \
+  -e LAMBDA_EXECUTOR=local \
+  -e LAMBDA_REMOVE_CONTAINERS=1 \
+  -e CFN_PER_RESOURCE_TIMEOUT=600 \
+  -e CFN_MAX_RESOURCE_RETRIES=30 \
+  -e EC2_EBS_MAX_VOLUME_SIZE=500 \
+  -e EC2_DOWNLOAD_DEFAULT_IMAGES=0 \
+  -e DISABLE_CORS_CHECKS=1 \
+  -e SKIP_INFRA_DOWNLOADS=1"
 
 # Add API key if available (required for Pro features)
 if [ -n "$LOCALSTACK_API_KEY" ]; then
@@ -125,7 +134,7 @@ if ! command -v curl &> /dev/null; then
 fi
 
 # Give LocalStack more time to start before checking (Pro image needs more initialization time)
-echo -e "${BLUE}⏱️  Waiting 10 seconds for LocalStack to initialize...${NC}"
+echo -e "${BLUE}⏱️  Waiting 60 seconds for LocalStack to initialize...${NC}"
 sleep 60
 
 while [ $attempt -lt $max_attempts ]; do

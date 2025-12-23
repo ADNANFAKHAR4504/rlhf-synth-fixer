@@ -354,18 +354,18 @@ async function main(): Promise<void> {
       ...(taskSubCategory ? { subject_labels: [taskSubCategory] } : {}),
       ...(resourcesText && resourcesText.trim().length > 0
         ? {
-          aws_services: resourcesText
-            .split(',')
-            .map(s => s.trim())
-            .filter(s => s.length > 0),
-        }
+            aws_services: resourcesText
+              .split(',')
+              .map(s => s.trim())
+              .filter(s => s.length > 0),
+          }
         : {}),
       ...(deployEnv
         ? {
-          task_config: {
-            deploy_env: deployEnv,
-          },
-        }
+            task_config: {
+              deploy_env: deployEnv,
+            },
+          }
         : {}),
     };
 
@@ -451,20 +451,36 @@ async function main(): Promise<void> {
 
 services:
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack-pro:stable
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=\${SERVICES:-s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs}
+      - SERVICES=\${SERVICES:-s3,lambda,dynamodb,cloudformation,cloudfront,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs,ecr,vpc,secretsmanager,ssm,autoscaling,elb,elbv2,wafv2,acm,kms,route53}
       - DEBUG=1
       - DATA_DIR=/tmp/localstack/data
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - S3_SKIP_SIGNATURE_VALIDATION=1
+      - ENFORCE_IAM=0
+      - RDS_MYSQL_DOCKER=0
+      - RDS_PG_DOCKER=0
+      - LAMBDA_EXECUTOR=local
+      - LAMBDA_REMOVE_CONTAINERS=1
+      - CFN_PER_RESOURCE_TIMEOUT=600
+      - CFN_MAX_RESOURCE_RETRIES=30
+      - EC2_EBS_MAX_VOLUME_SIZE=500
+      - EC2_DOWNLOAD_DEFAULT_IMAGES=0
+      - DISABLE_CORS_CHECKS=1
+      - SKIP_INFRA_DOWNLOADS=1
     volumes:
       - "\${TMPDIR:-/tmp}/localstack:/tmp/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
 `;
 
-        const dockerComposePath = path.join(__dirname, '..', 'docker-compose.yml');
+        const dockerComposePath = path.join(
+          __dirname,
+          '..',
+          'docker-compose.yml'
+        );
         await fs.writeFile(dockerComposePath, dockerComposeContent, 'utf8');
         console.log('✓ Created docker-compose.yml');
 
@@ -477,7 +493,11 @@ export AWS_DEFAULT_REGION=us-east-1
 `;
 
         const localStackConfigPath = path.join(libDir, 'localstack-env.sh');
-        await fs.writeFile(localStackConfigPath, localStackConfigContent, 'utf8');
+        await fs.writeFile(
+          localStackConfigPath,
+          localStackConfigContent,
+          'utf8'
+        );
         console.log('✓ Created lib/localstack-env.sh');
 
         // Create LocalStack README in lib
@@ -529,7 +549,11 @@ docker-compose down
 `;
 
         const localStackReadmePath = path.join(libDir, 'LOCALSTACK.md');
-        await fs.writeFile(localStackReadmePath, localStackReadmeContent, 'utf8');
+        await fs.writeFile(
+          localStackReadmePath,
+          localStackReadmeContent,
+          'utf8'
+        );
         console.log('✓ Created lib/LOCALSTACK.md');
       }
 

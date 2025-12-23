@@ -23,23 +23,34 @@ The `metadata.json` file is **CRITICAL** for all synthetic task generation workf
 
 ```typescript
 interface TaskMetadata {
-  platform: string; // REQUIRED: IaC platform (cdk, cdktf, cfn, tf, pulumi)
-  language: string; // REQUIRED: Programming language (ts, py, js, go, java, hcl, yaml, json)
+  // === REQUIRED FIELDS ===
+  platform: string; // REQUIRED: IaC platform (cdk, cdktf, cfn, tf, pulumi, analysis, cicd)
+  language: string; // REQUIRED: Programming language (ts, py, js, go, java, hcl, yaml, json, sh, yml)
   complexity: string; // REQUIRED: Task complexity (medium, hard, expert)
   turn_type: string; // REQUIRED: Turn type (single, multi)
-  po_id: string; // REQUIRED: Task ID (e.g., "1maext", "synth-abc123")
-  team: string; // REQUIRED: Team identifier (1-6, synth, synth-N, stf) - read from settings.local.json if present
+  po_id: string; // REQUIRED: Task ID (e.g., "trainr97", "LS-trainr97" for migrated tasks)
+  team: string; // REQUIRED: Team identifier (2-6, synth, synth-1, synth-2, stf)
   startedAt: string; // REQUIRED: ISO 8601 timestamp
-  subtask: string; // REQUIRED: Main subtask category
-  subject_labels?: string[]; // OPTIONAL: Array of subject labels
-  aws_services?: string[]; // OPTIONAL: Array of AWS service names
-  region?: string; // OPTIONAL: AWS region (defaults to us-east-1)
-  task_config?: {
-    // OPTIONAL: Platform-specific configuration
-    deploy_env: string; // For Terraform: tfvars file name
+  subtask: string; // REQUIRED: Main subtask category (SINGLE STRING, not array!)
+  provider: string; // REQUIRED: "aws" or "localstack"
+  subject_labels: string[]; // REQUIRED: Array of subject labels (min 1 item)
+  aws_services: string[]; // REQUIRED: Array of AWS service names (can be empty [])
+  wave: string; // REQUIRED: "P0" or "P1"
+
+  // === OPTIONAL MIGRATION TRACKING OBJECT (for LocalStack-migrated tasks) ===
+  migrated_from?: {
+    po_id: string; // Original task PO ID before migration (e.g., "trainr97")
+    pr: string; // Original PR number before migration (e.g., "Pr7179")
   };
 }
 ```
+
+### LocalStack Migration PO ID Pattern
+
+When a task is migrated to LocalStack:
+- `po_id` becomes: `LS-{ORIGINAL_PO_ID}` (e.g., `LS-trainr97`)
+- `migrated_from.po_id` stores: the original PO ID (e.g., `trainr97`)
+- `migrated_from.pr` stores: the original PR number (e.g., `Pr7179`)
 
 ## Field Requirements
 

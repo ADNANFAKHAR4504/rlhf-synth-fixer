@@ -29,17 +29,131 @@ See `.claude/config/localstack.yaml` for full configuration options.
 
 This command uses modular shell scripts in `.claude/scripts/` for better maintainability:
 
-| Script                            | Description                                      |
-| --------------------------------- | ------------------------------------------------ |
-| `localstack-common.sh`            | Common functions, config loading, error handling |
-| `localstack-init.sh`              | Environment validation and initialization        |
-| `localstack-select-task.sh`       | Task selection logic                             |
-| `localstack-fetch-github.sh`      | Fetch tasks from GitHub PRs                      |
-| `localstack-sanitize-metadata.sh` | Sanitize metadata.json for schema compliance     |
-| `localstack-create-pr.sh`         | Create GitHub PR with migrated code              |
-| `localstack-update-log.sh`        | Update migration log with file locking           |
+| Script                            | Description                                                           |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `localstack-common.sh`            | Common functions, config loading, error handling                      |
+| `localstack-init.sh`              | Environment validation and initialization                             |
+| `localstack-select-task.sh`       | Task selection logic                                                  |
+| `localstack-fetch-github.sh`      | Fetch tasks from GitHub PRs                                           |
+| `localstack-sanitize-metadata.sh` | Sanitize metadata.json for schema compliance (sets team to `synth-2`) |
+| `localstack-create-pr.sh`         | Create GitHub PR with migrated code                                   |
+| `localstack-update-log.sh`        | Update migration log with file locking                                |
+| `localstack-compatibility-check.sh` | **NEW**: Pre-migration compatibility assessment                     |
+| `localstack-dashboard.sh`         | **NEW**: Real-time migration dashboard                                |
+| `localstack-rollback.sh`          | **NEW**: Rollback failed migrations                                   |
+| `localstack-enhance-tests.sh`     | **NEW**: Auto-enhance tests for LocalStack                            |
 
 All scripts use `set -euo pipefail` for strict error handling and trap handlers for cleanup.
+
+## Enhanced Features
+
+### Pre-Migration Compatibility Check
+
+Before starting a migration, assess the success probability:
+
+```bash
+# Check compatibility for a task
+.claude/scripts/localstack-compatibility-check.sh ./archive/cdk-ts/Pr7179
+
+# JSON output for automation
+.claude/scripts/localstack-compatibility-check.sh --json Pr7179
+```
+
+Output includes:
+- Compatibility score (0-100)
+- Service categorization (high/medium/low/pro-only)
+- Predicted fixes needed
+- Estimated migration time
+- Success probability
+
+### Real-Time Dashboard
+
+Monitor parallel migrations in real-time:
+
+```bash
+# Live dashboard (auto-refreshes)
+.claude/scripts/localstack-dashboard.sh
+
+# One-time status
+.claude/scripts/localstack-dashboard.sh --status
+
+# View history
+.claude/scripts/localstack-dashboard.sh --history
+
+# Full statistics
+.claude/scripts/localstack-dashboard.sh --stats
+```
+
+### Rollback Capability
+
+Rollback failed migrations to a previous state:
+
+```bash
+# Rollback to latest snapshot
+.claude/scripts/localstack-rollback.sh Pr7179
+
+# Full rollback to original state
+.claude/scripts/localstack-rollback.sh Pr7179 --full
+
+# Rollback only the last fix (git revert)
+.claude/scripts/localstack-rollback.sh Pr7179 --last-fix
+
+# Rollback to specific snapshot
+.claude/scripts/localstack-rollback.sh Pr7179 --to-snapshot 2
+
+# List available snapshots
+.claude/scripts/localstack-rollback.sh Pr7179 --list
+```
+
+### Test Enhancement
+
+Auto-enhance integration tests for LocalStack compatibility:
+
+```bash
+# Analyze test files
+.claude/scripts/localstack-enhance-tests.sh ./worktree/localstack-Pr7179
+
+# Apply automatic enhancements
+.claude/scripts/localstack-enhance-tests.sh --fix ./worktree/localstack-Pr7179
+```
+
+Creates helper files with:
+- LocalStack endpoint configuration
+- Retry logic for flaky operations
+- Proper timeouts
+- Setup/cleanup hooks
+
+### Fix Templates
+
+Pre-built templates for common LocalStack fixes in `.claude/templates/localstack-fixes/`:
+
+| Template                  | Description                                    |
+| ------------------------- | ---------------------------------------------- |
+| `cdk-ts-endpoint.ts`      | CDK TypeScript endpoint configuration          |
+| `cdk-ts-s3-bucket.ts`     | CDK TypeScript S3 bucket with LocalStack setup |
+| `tf-hcl-provider.tf`      | Terraform HCL LocalStack provider              |
+| `pulumi-ts-config.ts`     | Pulumi TypeScript LocalStack configuration     |
+| `cfn-yaml-parameters.yaml`| CloudFormation YAML LocalStack parameters      |
+
+### Service Substitution Suggestions
+
+When Pro-only services are detected, the system suggests alternatives. See `service_substitutions` in `.claude/config/localstack.yaml`:
+
+| Pro-Only Service | Suggested Alternative            |
+| ---------------- | -------------------------------- |
+| AppSync          | API Gateway + Lambda             |
+| EKS              | ECS (limited support)            |
+| Cognito          | IAM + Lambda Authorizer          |
+| Amplify          | S3 Static Hosting                |
+| SageMaker        | Lambda (for simple inference)    |
+
+### Intelligent Fix Ordering
+
+Fixes are automatically ordered based on error analysis. See `intelligent_fixes` in `.claude/config/localstack.yaml`:
+
+1. **Error Pattern Analysis**: Matches errors to specific fixes
+2. **Service Detection**: Skips inapplicable fixes
+3. **Priority-Based Ordering**: Critical fixes first
 
 ## Usage
 
@@ -75,6 +189,18 @@ All scripts use `set -euo pipefail` for strict error handling and trap handlers 
 # Terminal 1: /localstack-migrate --no-reset Pr7179
 # Terminal 2: /localstack-migrate --no-reset Pr7180
 # Terminal 3: /localstack-migrate --no-reset Pr7181
+
+# NEW: Pre-migration compatibility check
+/localstack-migrate --check Pr7179
+
+# NEW: Show real-time dashboard
+/localstack-migrate --dashboard
+
+# NEW: Enhance tests for LocalStack
+/localstack-migrate --enhance-tests Pr7179
+
+# NEW: Rollback a failed migration
+/localstack-migrate --rollback Pr7179
 ```
 
 ## Workflow
@@ -348,17 +474,32 @@ fi
 
 ### Step 6: Setup Working Directory
 
+> **Note**: This step uses the shared worktree setup pattern for consistency and parallel execution safety.
+
 ```bash
 echo "═══════════════════════════════════════════════════"
 echo "📁 SETTING UP WORKING DIRECTORY"
 echo "═══════════════════════════════════════════════════"
 echo ""
 
-WORK_DIR="worktree/localstack-${PR_ID}"
+WORK_DIR="$PROJECT_ROOT/worktree/localstack-${PR_ID}"
+
+# ═══════════════════════════════════════════════════════════════
+# WORKTREE SETUP - Use shared patterns for consistency
+# For localstack-migrate, we use a work directory (not git worktree)
+# because we're copying files from archive, not checking out a branch
+# ═══════════════════════════════════════════════════════════════
 
 # Clean existing work directory
 if [ -d "$WORK_DIR" ]; then
   echo "🧹 Cleaning existing work directory..."
+
+  # If it's a git worktree, remove it properly
+  if git worktree list 2>/dev/null | grep -q "$WORK_DIR"; then
+    cd "$PROJECT_ROOT"
+    git worktree remove "$WORK_DIR" --force 2>/dev/null || true
+  fi
+
   rm -rf "$WORK_DIR"
 fi
 
@@ -371,16 +512,35 @@ echo "📋 Copied task files"
 
 # Copy project-level files needed for deployment
 for file in package.json tsconfig.json jest.config.js babel.config.js; do
-  if [ -f "$file" ] && [ ! -f "$WORK_DIR/$file" ]; then
-    cp "$file" "$WORK_DIR/" 2>/dev/null || true
+  if [ -f "$PROJECT_ROOT/$file" ] && [ ! -f "$WORK_DIR/$file" ]; then
+    cp "$PROJECT_ROOT/$file" "$WORK_DIR/" 2>/dev/null || true
   fi
 done
 
-# Copy scripts directory (needed for deployment)
+# Copy scripts directory (needed for deployment) - but NOT .claude/scripts
 mkdir -p "$WORK_DIR/scripts"
-cp scripts/localstack-*.sh "$WORK_DIR/scripts/" 2>/dev/null || true
+for script in "$PROJECT_ROOT/scripts/localstack-"*.sh; do
+  [ -f "$script" ] && cp "$script" "$WORK_DIR/scripts/" 2>/dev/null || true
+done
 
-echo "✅ Working directory ready"
+# Verify the work directory structure
+echo ""
+echo "🔍 Verifying work directory..."
+if [ -f "$WORK_DIR/metadata.json" ]; then
+  echo "   ✅ metadata.json found"
+else
+  echo "   ❌ metadata.json missing!"
+  exit 1
+fi
+
+if [ -d "$WORK_DIR/lib" ]; then
+  echo "   ✅ lib/ directory found"
+else
+  echo "   ⚠️ lib/ directory missing (may be expected for some platforms)"
+fi
+
+echo ""
+echo "✅ Working directory ready: $WORK_DIR"
 echo ""
 ```
 
@@ -567,6 +727,13 @@ Exit code 0 if fixed, 1 if unable to fix, 2 if unsupported services.
 > - `localstack-sanitize-metadata.sh` - Sanitizes metadata.json for schema compliance
 > - `localstack-create-pr.sh` - Creates PR with git worktrees for parallel safety
 > - `localstack-update-log.sh` - Updates migration log with file locking
+
+> **🏷️ Required Labels**: All PRs created by localstack-migrate automatically include:
+>
+> - `synth-2` - Identifies PRs created by the synth-2 team/process
+> - `localstack` - Identifies PRs for LocalStack-compatible tasks
+> - `<platform>` - Platform type from metadata.json (e.g., `cdk`, `cfn`, `tf`, `pulumi`)
+> - `<language>` - Language from metadata.json (e.g., `ts`, `py`, `go`, `java`)
 
 ```bash
 log_header "📦 CREATING PULL REQUEST (Parallel-Safe)"

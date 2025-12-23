@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Infrastructure Task Data Schema",
+  "title": "IAC Automation Metadata Schema",
   "type": "object",
   "required": [
     "platform",
@@ -13,9 +13,13 @@
     "subtask",
     "provider",
     "subject_labels",
-    "aws_services"
+    "aws_services",
+    "wave"
   ],
   "additionalProperties": false,
+  "definitions": {
+    "localstack_migration_comment": "The migrated_from object is OPTIONAL and only populated for LocalStack-migrated tasks. When present, po_id should follow pattern LS-{ORIGINAL_PO_ID}"
+  },
   "properties": {
     "platform": {
       "type": "string",
@@ -62,7 +66,7 @@
     "po_id": {
       "type": "string",
       "minLength": 1,
-      "description": "Purchase Order ID or Project Identifier"
+      "description": "Task Identifier"
     },
     "team": {
       "type": "string",
@@ -129,6 +133,34 @@
         "type": "string"
       },
       "description": "List of AWS services used, e.g., VPC, Lambda, S3"
+    },
+    "wave": {
+      "type": "string",
+      "enum": [
+        "P0",
+        "P1"
+      ]
+    },
+    "migrated_from": {
+      "type": "object",
+      "description": "Migration tracking object. Only populated for LocalStack-migrated tasks.",
+      "additionalProperties": false,
+      "required": [
+        "po_id",
+        "pr"
+      ],
+      "properties": {
+        "po_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Original task PO ID before LocalStack migration (e.g., trainr97)"
+        },
+        "pr": {
+          "type": "string",
+          "pattern": "^Pr[0-9]+$",
+          "description": "Original PR number before LocalStack migration (e.g., Pr7179)"
+        }
+      }
     }
   }
 }

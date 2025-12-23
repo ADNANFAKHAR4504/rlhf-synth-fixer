@@ -1,0 +1,60 @@
+[INFO] Starting Currency Exchange API infrastructure analysis
+[INFO] Environment Suffix: pr8004
+[INFO] AWS Region: us-east-1
+[INFO] Analyzing Currency Exchange API infrastructure
+[INFO] Environment Suffix: pr8004
+[INFO] AWS Region: us-east-1
+  [STEP] Analyzing Lambda functions...
+  [STEP] Analyzing API Gateway...
+  [STEP] Analyzing CloudWatch Log Groups...
+  [STEP] Analyzing IAM Roles...
+  [STEP] Analyzing X-Ray Tracing...
+  [STEP] Analyzing API Throttling...
+
+======================================================================
+Currency Exchange API Infrastructure Analysis Report
+======================================================================
+Environment Suffix: pr8004
+Region: us-east-1
+Timestamp: 2025-12-08T15:31:24.724141+00:00
+Compliance Score: 0.0%
+
+----------------------------------------------------------------------
+Lambda Functions:
+  [MISSING] currency-converter-pr8004
+
+----------------------------------------------------------------------
+API Gateway:
+  [MISSING] currency-exchange-api-pr8004
+
+----------------------------------------------------------------------
+CloudWatch Log Groups:
+  [MISSING] /aws/lambda/currency-converter-pr8004
+  [MISSING] /aws/apigateway/currency-api-pr8004
+
+----------------------------------------------------------------------
+IAM Roles:
+  [MISSING] currency-converter-lambda-role-pr8004
+  [MISSING] currency-api-gateway-cloudwatch-pr8004
+
+----------------------------------------------------------------------
+X-Ray Tracing:
+  Status: error
+  Recent Traces: 0
+
+----------------------------------------------------------------------
+API Throttling:
+  Status: no_usage_plans
+
+----------------------------------------------------------------------
+Recommendations:
+  [CRITICAL] Lambda function 'currency-converter-pr8004' is missing.
+  [CRITICAL] API Gateway 'currency-exchange-api-pr8004' is missing.
+  [HIGH] CloudWatch Log Group '/aws/lambda/currency-converter-pr8004' is missing.
+  [HIGH] CloudWatch Log Group '/aws/apigateway/currency-api-pr8004' is missing.
+  [CRITICAL] IAM role 'currency-converter-lambda-role-pr8004' is missing.
+  [CRITICAL] IAM role 'currency-api-gateway-cloudwatch-pr8004' is missing.
+  [HIGH] No usage plans configured. Set up rate limiting.
+
+======================================================================
+[RESULT] Infrastructure is non-compliant
