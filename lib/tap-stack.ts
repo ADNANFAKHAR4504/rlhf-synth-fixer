@@ -41,7 +41,7 @@ export class TapStack extends cdk.Stack {
       region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
 
       // Resource naming suffix
-      nameSuffix: environmentSuffix,
+      nameSuffix: environmentSuffix + timestamp,
 
       // EC2 Configuration
       ec2AmiId: 'ami-0156001f0548e90b1', // Amazon Linux 2 AMI in us-east-1
