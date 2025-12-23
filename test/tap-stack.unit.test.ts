@@ -35,6 +35,23 @@ describe('Stack Structure', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
   });
+
+  test('TapStack configures LocalStack endpoints when AWS_ENDPOINT_URL is set', () => {
+    // Set LocalStack environment variable
+    process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackLocalStack');
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates with LocalStack configuration
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+    expect(synthesized).toContain('http://localhost:4566');
+
+    // Clean up
+    delete process.env.AWS_ENDPOINT_URL;
+  });
 });
 
 // add more test suites and cases as needed

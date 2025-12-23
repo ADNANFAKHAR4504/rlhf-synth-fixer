@@ -39,7 +39,9 @@ export class TapStack extends TerraformStack {
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // Provider with LocalStack compatibility
-    const isLocalStack = process.env.AWS_ENDPOINT_URL || process.env.LOCALSTACK_HOSTNAME;
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL || process.env.LOCALSTACK_HOSTNAME;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const awsProviderConfig: any = {
       region: awsRegion,
       defaultTags: defaultTags,
@@ -53,13 +55,15 @@ export class TapStack extends TerraformStack {
       awsProviderConfig.skipMetadataApiCheck = true;
       awsProviderConfig.skipRequestingAccountId = true;
       awsProviderConfig.s3UsePathStyle = true;
-      awsProviderConfig.endpoints = [{
-        ec2: endpoint,
-        cloudwatch: endpoint,
-        logs: endpoint,
-        iam: endpoint,
-        s3: endpoint,
-      }];
+      awsProviderConfig.endpoints = [
+        {
+          ec2: endpoint,
+          cloudwatch: endpoint,
+          logs: endpoint,
+          iam: endpoint,
+          s3: endpoint,
+        },
+      ];
     }
 
     new AwsProvider(this, 'aws', awsProviderConfig);
