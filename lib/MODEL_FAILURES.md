@@ -66,11 +66,11 @@ The model correctly implemented all security requirements:
 
 **Integration test validation**:
 ```
-✓ should have encryption enabled
-✓ should block all public access
-✓ should have versioning enabled
-✓ IAM role should follow least-privilege
-✓ S3 bucket should have proper security settings
+- should have encryption enabled
+- should block all public access
+- should have versioning enabled
+- IAM role should follow least-privilege
+- S3 bucket should have proper security settings
 ```
 
 **Why this matters**: Security was a primary requirement, and the model implemented it flawlessly.
@@ -122,9 +122,9 @@ The model created a sophisticated Lambda function with:
 
 **Integration test validation**:
 ```
-✓ should invoke successfully and analyze stacks (6666 ms)
-✓ should complete full analysis workflow (13499 ms)
-✓ should handle multiple stack analyses (16246 ms)
+- should invoke successfully and analyze stacks (6666 ms)
+- should complete full analysis workflow (13499 ms)
+- should handle multiple stack analyses (16246 ms)
 ```
 
 **Lambda function analyzed**:
@@ -153,10 +153,10 @@ The model correctly implemented comprehensive monitoring:
 
 **Integration test validation**:
 ```
-✓ should have log group created (3706 ms)
-✓ should have error alarm configured
-✓ should have critical findings alarm configured
-✓ both alarms should have SNS actions configured
+- should have log group created (3706 ms)
+- should have error alarm configured
+- should have critical findings alarm configured
+- both alarms should have SNS actions configured
 ```
 
 **Why this matters**: Proactive monitoring prevents issues from going unnoticed.
