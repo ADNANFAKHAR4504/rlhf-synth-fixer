@@ -11,6 +11,7 @@ import {
   DescribeLoadBalancersCommand,
   DescribeListenersCommand,
   DescribeTargetHealthCommand,
+  DescribeTargetGroupsCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   AutoScalingClient,
@@ -22,6 +23,7 @@ import {
   BackupClient,
   DescribeBackupVaultCommand,
 } from '@aws-sdk/client-backup';
+import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import * as fs from 'fs';
 
 // --- Test Configuration ---
@@ -36,6 +38,10 @@ const elbv2Client = new ElasticLoadBalancingV2Client({ region: REGION });
 const asgClient = new AutoScalingClient({ region: REGION });
 const snsClient = new SNSClient({ region: REGION });
 const backupClient = new BackupClient({ region: REGION });
+const stsClient = new STSClient({ region: REGION });
+
+// Track if we're running in LocalStack
+let isLocalStack = false;
 
 // --- Read Deployed Stack Outputs ---
 let outputs: { [key: string]: string } = {};
@@ -61,6 +67,15 @@ testSuite('High-Availability Stack Integration Tests', () => {
   let asgName: string;
 
   beforeAll(async () => {
+    // Check if we're running in LocalStack
+    try {
+      const identity = await stsClient.send(new GetCallerIdentityCommand({}));
+      isLocalStack = identity.Account === '000000000000';
+    } catch {
+      // If we can't determine, assume not LocalStack
+      isLocalStack = false;
+    }
+
     // Find the ALB ARN using its DNS name from the outputs
     const albResponse = await elbv2Client.send(
       new DescribeLoadBalancersCommand({})
@@ -71,18 +86,41 @@ testSuite('High-Availability Stack Integration Tests', () => {
     if (!alb || !alb.LoadBalancerArn)
       throw new Error('Could not find deployed Application Load Balancer');
     albArn = alb.LoadBalancerArn;
-    vpcId = alb.VpcId!; // Find the ASG name using tags
+    vpcId = alb.VpcId!;
 
+    // Get target groups for the ALB to find the associated ASG
+    const targetGroupsResponse = await elbv2Client.send(
+      new DescribeTargetGroupsCommand({
+        LoadBalancerArn: albArn,
+      })
+    );
+    const targetGroupArn = targetGroupsResponse.TargetGroups?.[0]?.TargetGroupArn;
+
+    // Find the ASG - try multiple strategies for LocalStack compatibility
     const asgResponse = await asgClient.send(
       new DescribeAutoScalingGroupsCommand({})
     );
 
-    const asg = asgResponse.AutoScalingGroups?.find(g =>
-      g.AutoScalingGroupName?.startsWith(STACK_NAME)
-    );
-    if (!asg || !asg.AutoScalingGroupName)
+    let foundAsg = asgResponse.AutoScalingGroups?.find(g => {
+      // First, try to match by target group ARN (most reliable)
+      if (targetGroupArn && g.TargetGroupARNs?.includes(targetGroupArn)) {
+        return true;
+      }
+      // Second, try to match by name pattern (for non-LocalStack)
+      if (g.AutoScalingGroupName?.startsWith(STACK_NAME)) {
+        return true;
+      }
+      return false;
+    });
+
+    // Last resort: if still not found and there's only one ASG, use it (LocalStack case)
+    if (!foundAsg && asgResponse.AutoScalingGroups && asgResponse.AutoScalingGroups.length === 1) {
+      foundAsg = asgResponse.AutoScalingGroups[0];
+    }
+
+    if (!foundAsg || !foundAsg.AutoScalingGroupName)
       throw new Error('Could not find deployed Auto Scaling Group');
-    asgName = asg.AutoScalingGroupName;
+    asgName = foundAsg.AutoScalingGroupName;
   });
 
   describe('🌐 Networking Infrastructure', () => {
@@ -269,6 +307,11 @@ testSuite('High-Availability Stack Integration Tests', () => {
 
   describe('🔄 Backup & Monitoring', () => {
     test('Backup Vault should exist', async () => {
+      // Skip in LocalStack as Backup resources are conditionally created
+      if (isLocalStack) {
+        console.log('Skipping Backup Vault test in LocalStack');
+        return;
+      }
       const vaultName = `${STACK_NAME}-Vault`;
       const { BackupVaultName } = await backupClient.send(
         new DescribeBackupVaultCommand({ BackupVaultName: vaultName })
