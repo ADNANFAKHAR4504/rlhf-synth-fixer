@@ -1,16 +1,18 @@
 # Secure VPC Infrastructure for Financial Trading Platform
 
-Hey team,
+## Overview
 
-We're helping a financial services startup build out their AWS environment for a new trading platform. They need rock-solid network infrastructure that meets PCI-DSS compliance requirements - we're talking full network segmentation with isolated environments for different workloads. The business is pretty specific about what they need here, and compliance is non-negotiable.
+Design and implement AWS network infrastructure for a financial trading platform requiring PCI-DSS compliance. The infrastructure must provide network segmentation with isolated environments for different workload tiers.
 
-I've been asked to create this infrastructure using **CFN with YAML**. The platform needs to support a multi-tier application architecture with proper separation between web-facing resources, application servers, and databases. We're building this from scratch in us-east-1, and everything needs to be production-ready from day one.
+Implementation platform: CloudFormation with YAML syntax.
 
-The key challenge here is setting up the networking foundation that can handle their trading platform's requirements while maintaining strict security boundaries. We need multiple availability zones for high availability, separate subnet tiers for different workload types, and all the connectivity infrastructure to make it work seamlessly.
+The architecture supports multi-tier application deployment with separation between web-facing resources, application servers, and database instances. Target region: us-east-1.
 
-## What we need to build
+Primary technical challenge: Establish network foundation supporting trading platform operations while maintaining security boundaries through multi-availability zone deployment, tiered subnet architecture, and integrated connectivity infrastructure.
 
-Create a production-ready VPC infrastructure using **CFN with YAML** for a multi-tier financial trading application.
+## Objective
+
+Create production-ready VPC infrastructure using CloudFormation with YAML for multi-tier financial trading application.
 
 ### Core Networking Requirements
 
@@ -64,7 +66,7 @@ Create a production-ready VPC infrastructure using **CFN with YAML** for a multi
 
 ### Technical Requirements
 
-- All infrastructure defined using **CFN with YAML**
+- All infrastructure defined using CloudFormation with YAML
 - Use AWS VPC for network foundation
 - Use EC2 services (NAT Gateway, Internet Gateway)
 - Use CloudWatch for VPC Flow Logs
@@ -102,7 +104,7 @@ Create a production-ready VPC infrastructure using **CFN with YAML** for a multi
 - Monitoring: VPC Flow Logs enabled and sending to CloudWatch with 7-day retention
 - Network ACLs: Deny-by-default with explicit allows following least privilege
 
-## What to deliver
+## Deliverables
 
 - Complete CFN YAML template implementation
 - VPC with DNS enabled (10.0.0.0/16)
