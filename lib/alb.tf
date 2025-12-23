@@ -24,6 +24,8 @@ resource "aws_acm_certificate" "main" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
+  count = var.enable_alb ? 1 : 0
+
   name               = "alb-${var.environment_suffix}"
   internal           = false
   load_balancer_type = "application"
@@ -106,7 +108,9 @@ resource "aws_lb_target_group" "green" {
 
 # HTTP Listener - ✅ IMPROVED: Now redirects to HTTPS
 resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.main.arn
+  count = var.enable_alb ? 1 : 0
+
+  load_balancer_arn = aws_lb.main[0].arn
   port              = "80"
   protocol          = "HTTP"
 
@@ -123,7 +127,9 @@ resource "aws_lb_listener" "http" {
 
 # ✅ SECURITY FIX: HTTPS Listener enabled for production compliance
 resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.main.arn
+  count = var.enable_alb ? 1 : 0
+
+  load_balancer_arn = aws_lb.main[0].arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"

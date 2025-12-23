@@ -126,3 +126,9 @@ variable "enable_vpc_flow_log" {
   type        = bool
   default     = false
 }
+
+variable "enable_alb" {
+  description = "Enable ALB resources (may not be compatible with LocalStack due to health_check_logs)"
+  type        = bool
+  default     = false
+}
