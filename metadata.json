@@ -21,5 +21,6 @@
     "SecretsManager",
     "CloudWatch",
     "IAM"
-  ]
+  ],
+  "wave": "P0"
 }
