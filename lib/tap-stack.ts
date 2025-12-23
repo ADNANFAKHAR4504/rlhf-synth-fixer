@@ -116,14 +116,22 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create Auto Scaling Group
+    // Note: Using inline properties instead of LaunchTemplate for LocalStack compatibility
     const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'ASG', {
       vpc: vpc,
-      launchTemplate: launchTemplate,
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
+      machineImage: ec2.MachineImage.latestAmazonLinux2(),
+      userData: userData,
+      role: ec2Role,
+      securityGroup: ec2SecurityGroup,
       minCapacity: environment === 'production' ? 2 : 1,
       maxCapacity: environment === 'production' ? 6 : 3,
       desiredCapacity: environment === 'production' ? 2 : 1,
       vpcSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC, // Use public subnets instead
+        subnetType: ec2.SubnetType.PUBLIC,
       },
     });
 
