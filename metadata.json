@@ -6,13 +6,9 @@
   "po_id": "291590",
   "team": "synth-2",
   "startedAt": "2025-08-21T10:25:51.176Z",
-  "subtask": "Security and Compliance Implementation",
+  "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security Configuration",
-    "Network Configuration",
-    "Access Control",
-    "Monitoring Setup",
-    "General Infrastructure Tooling QA"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "EC2",
