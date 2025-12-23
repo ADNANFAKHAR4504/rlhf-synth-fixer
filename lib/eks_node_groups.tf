@@ -129,6 +129,7 @@ resource "aws_launch_template" "eks_node_group" {
 }
 
 # Frontend Node Group (t3.large)
+# NOTE: depends on backend to avoid LocalStack parallel creation issues
 resource "aws_eks_node_group" "frontend" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "frontend-${var.environment_suffix}"
@@ -166,6 +167,7 @@ resource "aws_eks_node_group" "frontend" {
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
     aws_iam_role_policy_attachment.eks_container_registry_policy,
+    aws_eks_node_group.backend,  # LocalStack: create sequentially to avoid issues
   ]
 
   lifecycle {
