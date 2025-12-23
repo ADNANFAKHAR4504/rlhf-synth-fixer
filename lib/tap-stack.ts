@@ -629,35 +629,45 @@ EOF`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const backupPlan = new backup.BackupPlan(this, 'BackupPlan', {
-      backupPlanName: `infrastructure-backup-plan${config.nameSuffix}`,
-      backupVault: backupVault,
-      backupPlanRules: [
-        new backup.BackupPlanRule({
-          ruleName: 'DailyBackup',
-          scheduleExpression: Schedule.cron({
-            hour: '3',
-            minute: '0',
+    // Note: AWS Backup service has limited support in LocalStack
+    // Only create BackupPlan if running in actual AWS (not LocalStack)
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('127.0.0.1');
+
+    if (!isLocalStack) {
+      const backupPlan = new backup.BackupPlan(this, 'BackupPlan', {
+        backupPlanName: `infrastructure-backup-plan${config.nameSuffix}`,
+        backupVault: backupVault,
+        backupPlanRules: [
+          new backup.BackupPlanRule({
+            ruleName: 'DailyBackup',
+            scheduleExpression: Schedule.cron({
+              hour: '3',
+              minute: '0',
+            }),
+            deleteAfter: cdk.Duration.days(config.backupRetentionDays),
           }),
-          deleteAfter: cdk.Duration.days(config.backupRetentionDays),
-        }),
-      ],
-    });
+        ],
+      });
 
-    backupPlan.addSelection('EC2Selection', {
-      backupSelectionName: `ec2-selection${config.nameSuffix}`,
-      resources: [
-        backup.BackupResource.fromTag(
-          'aws:autoscaling:groupName',
-          autoScalingGroup.autoScalingGroupName
-        ),
-      ],
-      allowRestores: true,
-    });
+      backupPlan.addSelection('EC2Selection', {
+        backupSelectionName: `ec2-selection${config.nameSuffix}`,
+        resources: [
+          backup.BackupResource.fromTag(
+            'aws:autoscaling:groupName',
+            autoScalingGroup.autoScalingGroupName
+          ),
+        ],
+        allowRestores: true,
+      });
 
-    // Tag backup
+      // Tag backup
+      cdk.Tags.of(backupPlan).add('iac-rlhf-amazon', 'true');
+    }
+
+    // Tag backup vault
     cdk.Tags.of(backupVault).add('iac-rlhf-amazon', 'true');
-    cdk.Tags.of(backupPlan).add('iac-rlhf-amazon', 'true');
 
     // ====================================================================================
     // Parameter Store
