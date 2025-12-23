@@ -46,12 +46,10 @@ class ComputeInfrastructure(pulumi.ComponentResource):
             # Create empty instances list and mock instance IDs for outputs
             self.instances = pulumi.Output.from_input([])
             # Return mock instance IDs so monitoring component doesn't fail
-            self.instance_ids = pulumi.Output.from_input([
-                f"i-mock-{name}-1",
-                f"i-mock-{name}-2"
-            ])
+            mock_ids = [f"i-mock-{name}-1", f"i-mock-{name}-2"]
+            self.instance_ids = pulumi.Output.from_input(mock_ids)
             
-            pulumi.log.info(f"Using mock instance IDs: {self.instance_ids}")
+            pulumi.log.info(f"Using mock instance IDs: {mock_ids}")
             return
 
         # Get the latest Amazon Linux 2 AMI for the specific region
