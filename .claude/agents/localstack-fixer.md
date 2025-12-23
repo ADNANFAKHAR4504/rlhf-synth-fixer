@@ -2302,13 +2302,20 @@ The schema has `additionalProperties: false`, meaning ONLY these fields are allo
 - `language` - enum: ts, js, py, java, go, hcl, yaml, json, sh, yml
 - `complexity` - enum: medium, hard, expert
 - `turn_type` - enum: single, multi
-- `po_id` - string (min 1 char)
+- `po_id` - string (min 1 char) - For migrated tasks: `LS-{ORIGINAL_PO_ID}` pattern
 - `team` - enum: 2, 3, 4, 5, 6, synth, synth-1, synth-2, stf
 - `startedAt` - ISO 8601 datetime
 - `subtask` - **SINGLE STRING enum** (see below) - NOT an array!
 - `provider` - enum: aws, localstack
 - `subject_labels` - array of enums (see below)
 - `aws_services` - array of strings
+- `wave` - enum: P0, P1
+
+**Optional Migration Tracking Object (for LocalStack-migrated tasks):**
+
+- `migrated_from` - object: Contains original task references
+  - `migrated_from.po_id` - string: Original task PO ID before migration (e.g., "trainr97")
+  - `migrated_from.pr` - string: Original PR number before migration (e.g., "Pr7179")
 
 ### CRITICAL: `subtask` vs `subject_labels` Type Enforcement
 
