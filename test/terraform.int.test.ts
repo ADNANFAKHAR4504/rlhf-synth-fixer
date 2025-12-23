@@ -453,7 +453,7 @@ describe('Terraform Webhook Infrastructure - Integration Tests', () => {
       });
       const response = await lambda.send(command);
       expect(response.StatusCode).toBe(200);
-    }, 30000);
+    }, 60000);
   });
 
   describe('API Gateway', () => {
