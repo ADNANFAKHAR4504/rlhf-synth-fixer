@@ -1,0 +1,24 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-24T04:02:55+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "101912564",
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "Step Functions",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "provider": "localstack",
+  "wave": "P0"
+}
