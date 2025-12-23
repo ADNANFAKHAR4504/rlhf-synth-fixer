@@ -6,21 +6,23 @@ Your task is to create a Python CDK application that sets up a secure IAM role f
 
 ### Requirements
 
-* **IAM Role with AssumeRole Policy:** Create an IAM Role that AWS Lambda service connects to and assumes. Lambda functions will use this role to access S3 securely.
+Here's what the solution needs to do:
 
-* **Customer Managed Policy:** The role must attach a policy granting s3:GetObject and s3:ListBucket permissions. The policy connects these actions to a specific S3 bucket and uses a Condition that restricts access to the apps/tap/* prefix only.
+- IAM Role with AssumeRole Policy: Create an IAM Role that AWS Lambda service connects to and assumes. Lambda functions will use this role to access S3 securely.
 
-* **Service Flow:** Lambda assumes the IAM role, which grants access to S3. The policy uses IAM conditions to limit what S3 paths Lambda can read from.
+- Customer Managed Policy: The role must attach a policy granting s3:GetObject and s3:ListBucket permissions. The policy connects these actions to a specific S3 bucket and uses a Condition that restricts access to only the apps/tap/ prefix and its subpaths.
 
-* **Tagging:** Tag all resources with Environment: Production and Owner: DevOps for tracking.
+- Service Flow: Lambda assumes the IAM role, which grants access to S3. The policy uses IAM conditions to limit what S3 paths Lambda can read from.
 
-* **Security:** Use least-privilege IAM policies with specific resource ARNs rather than wildcards.
+- Tagging: Tag all resources with Environment: Production and Owner: DevOps for tracking.
+
+- Security: Use least-privilege IAM policies with specific resource ARNs rather than broad permissions.
 
 ### Technical Specifications
 
-* Language: Python
-* Framework: AWS CDK  
-* Region: us-east-1
+- Language: Python
+- Framework: AWS CDK  
+- Region: us-east-1
 
 ### Deliverable
 
