@@ -18,9 +18,5 @@
     "EC2",
     "S3"
   ],
-  "wave": "P1",
-  "migrated_from": {
-    "po_id": "323",
-    "pr": "Pr659"
-  }
+  "wave": "P1"
 }
