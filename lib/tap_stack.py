@@ -538,6 +538,8 @@ class TapStack(cdk.Stack):
 
     def _create_backup(self):
         """Create AWS Backup solution"""
+        # pylint: disable=attribute-defined-outside-init
+        # Note: This method is disabled for LocalStack (see __init__)
         # Backup Vault
         self.backup_vault = backup.BackupVault(
             self, f"{self.resource_prefix}-backup-vault",
