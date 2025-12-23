@@ -1,0 +1,471 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Robust and secure AWS environment with VPC, S3, Lambda, and RDS PostgreSQL
+
+Parameters:
+  DBUsername:
+    Type: String
+    Default: 'postgres'
+    Description: 'Database master username'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Default: '/myapp/database/password'
+    Description: >-
+      SSM Parameter Store parameter name containing the database password
+
+  DBPasswordParameterName:
+    Type: String
+    Default: '/myapp/database/password'
+    Description: >-
+      Name of the SSM Parameter Store parameter containing the database password
+    AllowedPattern: '^[a-zA-Z0-9/_-]+$'
+
+  AZ1:
+    Type: String
+    Default: us-west-2a
+    Description: Primary AZ
+  AZ2:
+    Type: String
+    Default: us-west-2b
+    Description: Secondary AZ (set same as AZ1 if only one AZ is enabled)
+
+  Environment:
+    Type: String
+    Default: 'production'
+    Description: 'Environment name for resource naming'
+    AllowedValues: ['development', 'staging', 'production']
+
+Resources:
+  # Note: SSM Parameter /myapp/database/password must exist before deployment
+  # Created via: aws ssm put-parameter --name "/myapp/database/password" \
+  #   --value "SecurePassword123!" --type "SecureString" --region us-west-2
+
+  # VPC Configuration
+  MyAppVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-VPC-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Internet Gateway
+  MyAppInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-IGW-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Attach Internet Gateway to VPC
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyAppVPC
+      InternetGatewayId: !Ref MyAppInternetGateway
+
+  # Public Subnets for NAT Gateways
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyAppVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Ref AZ1
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-Public-Subnet-1-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyAppVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Ref AZ2
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-Public-Subnet-2-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Private Subnets for RDS and Lambda
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyAppVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Ref AZ1
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-Private-Subnet-1-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyAppVPC
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Ref AZ2
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-Private-Subnet-2-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # NAT Gateway resources removed for LocalStack Community compatibility
+  # LocalStack Community Edition does not fully support EIP AllocationId
+  # Private subnets will route through Internet Gateway for LocalStack testing
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyAppVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-Public-RT-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyAppVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-Private-RT-1-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyAppVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-Private-RT-2-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Subnet Route Table Associations
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  # NAT Gateways removed for LocalStack Community compatibility
+  # Private subnets will use Internet Gateway directly in LocalStack testing environment
+
+  # Routes
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyAppInternetGateway
+
+  # Private subnets route directly to Internet Gateway for LocalStack compatibility
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyAppInternetGateway
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyAppInternetGateway
+
+  # S3 Bucket for Access Logs
+  MyAppS3AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub >-
+        myapp-access-logs-${Environment}-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub >-
+                  arn:aws:s3:::myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}/*
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Security Group for Lambda
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'MyApp-Lambda-SG-${Environment}'
+      GroupDescription: Security group for Lambda function
+      VpcId: !Ref MyAppVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-Lambda-SG-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Function
+  MyAppLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'MyApp-S3-Event-Handler-${Environment}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Code:
+        ZipFile: |
+          import json
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def lambda_handler(event, context):
+              logger.info(f"Received S3 event: {json.dumps(event)}")
+
+              for record in event['Records']:
+                  bucket = record['s3']['bucket']['name']
+                  key = record['s3']['object']['key']
+                  logger.info(f"Object {key} was created in bucket {bucket}")
+
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Successfully processed S3 event')
+              }
+      Timeout: 60
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Primary S3 Bucket with Access Logging
+  MyAppS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub >-
+        myapp-primary-${Environment}-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref MyAppS3AccessLogsBucket
+        LogFilePrefix: 'access-logs/'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Permission for S3
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref MyAppLambdaFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt MyAppS3Bucket.Arn
+
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub 'myapp-db-subnet-group-${Environment}'
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-DB-Subnet-Group-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Security Group for RDS
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'MyApp-Database-SG-${Environment}'
+      GroupDescription: Security group for RDS PostgreSQL database
+      VpcId: !Ref MyAppVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: Allow access from Lambda security group
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-Database-SG-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # RDS PostgreSQL Instance
+  MyAppRDSInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DBInstanceIdentifier: !Sub 'myapp-postgres-db-${Environment}'
+      DBInstanceClass: db.t3.medium
+      Engine: postgres
+      EngineVersion: '13.15'
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Sub '{{resolve:ssm-secure:${DBPassword}}}'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      MultiAZ: false
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyApp-PostgreSQL-DB-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  PrimaryS3BucketName:
+    Description: 'Name of the primary S3 bucket'
+    Value: !Ref MyAppS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-PrimaryS3Bucket'
+
+  AccessLogsS3BucketName:
+    Description: 'Name of the S3 access logs bucket'
+    Value: !Ref MyAppS3AccessLogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AccessLogsS3Bucket'
+
+  RDSInstanceEndpoint:
+    Description: 'RDS PostgreSQL instance endpoint'
+    Value: !GetAtt MyAppRDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSEndpoint'
+
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref MyAppVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC'
+
+  LambdaFunctionArn:
+    Description: 'Lambda function ARN'
+    Value: !GetAtt MyAppLambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunction'
+
+  DatabasePasswordParameterName:
+    Description: 'SSM Parameter Store name for database password'
+    Value: !Ref DBPasswordParameterName
+    Export:
+      Name: !Sub '${AWS::StackName}-DBPasswordParameterName'
