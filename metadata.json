@@ -10,7 +10,7 @@
   "provider": "localstack",
   "wave": "P0",
   "subject_labels": [
-    "Multi-Environment Consistency and Replication"
+    "Multi-Environment Consistency"
   ],
   "aws_services": [
     "s3",
