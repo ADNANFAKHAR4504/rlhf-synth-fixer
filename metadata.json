@@ -6,11 +6,16 @@
   "po_id": "LS-291329",
   "team": "synth-2",
   "startedAt": "2025-08-03T05:33:35.034Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "IAM",
+    "CloudWatch Logs"
+  ],
   "wave": "P1"
 }
