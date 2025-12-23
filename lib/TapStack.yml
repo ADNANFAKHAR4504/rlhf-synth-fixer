@@ -999,6 +999,12 @@ Outputs:
       Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Target-Group-ARN'
 
   # Compute Resources
+  EC2LaunchTemplateId:
+    Description: 'EC2 Launch Template ID'
+    Value: !Ref LaunchTemplate
+    Export:
+      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Launch-Template-ID'
+
   EC2LaunchTemplateLatestVersionNumber:
     Description: 'EC2 Launch Template Latest Version Number'
     Value: !GetAtt LaunchTemplate.LatestVersionNumber
@@ -1048,6 +1054,12 @@ Outputs:
     Value: !GetAtt EC2InstanceProfile.Arn
     Export:
       Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-EC2-Instance-Profile-ARN'
+
+  EC2InstanceProfileName:
+    Description: 'EC2 Instance Profile Name'
+    Value: !Ref EC2InstanceProfile
+    Export:
+      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-EC2-Instance-Profile-Name'
 
   # CloudWatch Log Groups
   ApplicationLogGroupName:
