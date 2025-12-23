@@ -454,8 +454,9 @@ describe('TAP Stack - EKS Cluster Infrastructure Unit Tests', () => {
       expect(networkingContent).toContain('kubernetes.io/role/internal-elb');
     });
 
-    test('should use IRSA for service accounts', () => {
-      expect(iamContent).toContain('AssumeRoleWithWebIdentity');
+    test('should use simplified IAM roles without OIDC for LocalStack', () => {
+      expect(iamContent).toContain('Simplified IAM role without OIDC due to LocalStack limitation');
+      expect(iamContent).toContain('AssumeRole');
     });
   });
 
