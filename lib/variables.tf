@@ -52,6 +52,7 @@ variable "db_username" {
 }
 
 variable "db_password" {
+  default     = "test_password_123!LocalStack"
   description = "Master password for RDS PostgreSQL"
   type        = string
   sensitive   = true
