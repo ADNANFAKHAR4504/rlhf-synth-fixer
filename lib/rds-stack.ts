@@ -98,16 +98,17 @@ export class RdsStack extends cdk.Stack {
     });
 
     // Create a read replica for read scaling
-    new rds.DatabaseInstanceReadReplica(this, 'ReadReplica', {
-      sourceDatabaseInstance: this.database,
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      vpc: props.vpc,
-      securityGroups: [props.databaseSg],
-      deleteAutomatedBackups: false,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    // Disabled for LocalStack - read replicas cause parameter validation errors
+    // new rds.DatabaseInstanceReadReplica(this, 'ReadReplica', {
+    //   sourceDatabaseInstance: this.database,
+    //   instanceType: ec2.InstanceType.of(
+    //     ec2.InstanceClass.T3,
+    //     ec2.InstanceSize.MICRO
+    //   ),
+    //   vpc: props.vpc,
+    //   securityGroups: [props.databaseSg],
+    //   deleteAutomatedBackups: false,
+    //   removalPolicy: cdk.RemovalPolicy.DESTROY,
+    // });
   }
 }
