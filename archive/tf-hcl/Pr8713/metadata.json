@@ -23,5 +23,12 @@
     "vpc"
   ],
   "provider": "localstack",
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
