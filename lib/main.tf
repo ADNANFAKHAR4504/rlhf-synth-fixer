@@ -256,21 +256,24 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
 }
 
 # VPC Flow Logs
-resource "aws_flow_log" "main" {
-  log_destination_type     = "cloud-watch-logs"
-  log_destination          = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  iam_role_arn             = aws_iam_role.vpc_flow_logs.arn
-  vpc_id                   = aws_vpc.main.id
-  traffic_type             = "ALL"
-  max_aggregation_interval = 60
-
-  tags = merge(
-    var.common_tags,
-    {
-      Name = "flow-log-vpc-${var.environment_suffix}"
-    }
-  )
-}
+# NOTE: Commented out due to LocalStack compatibility issue
+# Error: Invalid Flow Log Max Aggregation Interval
+# LocalStack may have limited support for VPC Flow Logs with CloudWatch destination
+# resource "aws_flow_log" "main" {
+#   log_destination_type     = "cloud-watch-logs"
+#   log_destination          = aws_cloudwatch_log_group.vpc_flow_logs.arn
+#   iam_role_arn             = aws_iam_role.vpc_flow_logs.arn
+#   vpc_id                   = aws_vpc.main.id
+#   traffic_type             = "ALL"
+#   max_aggregation_interval = 60
+#
+#   tags = merge(
+#     var.common_tags,
+#     {
+#       Name = "flow-log-vpc-${var.environment_suffix}"
+#     }
+#   )
+# }
 
 # Data source for availability zones
 data "aws_availability_zones" "available" {
