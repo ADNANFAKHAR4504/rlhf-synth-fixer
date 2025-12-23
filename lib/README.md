@@ -57,7 +57,7 @@ export TF_VAR_ami_id=$(aws ec2 describe-images \
   --output text)
 
 # Set database password
-export TF_VAR_db_password="YourSecurePassword123!"
+# export TF_VAR_db_password="<set-your-secure-password-here>"
 
 # Plan and apply
 terraform plan -var-file="lib/dev.tfvars"
