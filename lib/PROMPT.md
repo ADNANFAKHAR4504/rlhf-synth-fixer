@@ -1,63 +1,40 @@
-# CDKTF (Python) Configuration for Secure & Highly Available AWS Production Environment
+# Python CDKTF for Production VPC Environment
 
-**Description:**  
-Using **Python CDK for Terraform (CDKTF)**, implement a secure, highly available AWS production environment in the `us-east-1` region.  
-The project should have:  
-- **TapStack.py** – defines all AWS resources.  
-- **tap.py** – entrypoint for synthesizing the Terraform configuration.  
-The synthesized Terraform output must pass `terraform validate` and meet all requirements below.
+Need to build a production VPC setup using Python CDKTF. The infrastructure should handle a multi-tier application with proper security and high availability.
 
----
+## What I need
 
-## Requirements
+### Core networking
 
-1. **AWS Provider**
-   - Use AWS provider version `>= 3.0`.
+Set up a VPC with CIDR 10.0.0.0/16 across 2 availability zones in us-east-1. Need both public and private subnets:
+- Public subnets for internet-facing resources - 10.0.1.0/24 and 10.0.2.0/24
+- Private subnets for app servers - 10.0.10.0/24 and 10.0.11.0/24
 
-2. **Tagging**
-   - All resources must include:
-     ```python
-     tags = {
-         "Environment": "Production"
-     }
-     ```
+Private subnets need outbound internet access through NAT gateways placed in the public subnets. Make sure each private subnet routes through its own NAT gateway for high availability.
 
-3. **VPC**
-   - CIDR block: `10.0.0.0/16`
-   - Deploy across **two Availability Zones**.
-   - Create:
-     - **1 public subnet** in each AZ.
-     - **1 private subnet** in each AZ.
+### Application servers
 
-4. **NAT Gateway**
-   - Place a NAT Gateway in **each public subnet**.
-   - Ensure private subnets have outbound internet access via these NAT Gateways.
+Launch t2.micro EC2 instances in the private subnets. These will run the application tier and need to be isolated from direct internet access.
 
-5. **EC2 Instances**
-   - Launch **t2.micro** instances in **private subnets** (application servers).
+The instances must write application logs to an S3 bucket, so set up IAM roles with the right permissions for S3 read/write access to that specific bucket.
 
-6. **S3 Logs Bucket**
-   - S3 bucket for logs with **server-side encryption enabled**.
+### Security
 
-7. **IAM Role & Policy**
-   - EC2 instances must have permissions to read/write to the S3 log bucket.
+Create security groups that restrict SSH access to 203.0.113.0/24 only. Don't open up unnecessary ports - keep it locked down to what's actually needed.
 
-8. **Security Groups**
-   - Restrict inbound traffic to only required ports.
-   - SSH access allowed **only** from `203.0.113.0/24`.
+Enable server-side encryption on the S3 logs bucket.
 
-9. **CloudWatch Alarms**
-   - Create alarms for EC2 CPU utilization exceeding **70%**.
+### Monitoring
 
----
+Set up CloudWatch alarms that trigger when EC2 CPU usage goes over 70%. Need to know if the instances are getting overloaded.
 
-## Constraints
-- Use only AWS provider version **>= 3.0**.
-- All resources must have `"Environment": "Production"` tag.
-- Must synthesize to valid Terraform configuration and pass `terraform validate`.
+### Tags and standards
 
----
+Everything needs to be tagged with Environment: Production. Use AWS provider version 3.0 or higher.
 
-## Output Format
-- **TapStack.py** → Defines all AWS infrastructure resources.
-- **tap.py** → CDKTF App entrypoint to synthesize the stack.
+## Project structure
+
+- tap_stack.py - all the resource definitions go here
+- tap.py - entrypoint that synthesizes the Terraform config
+
+The synthesized output should pass terraform validate.
