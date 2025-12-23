@@ -183,6 +183,17 @@ rpm -U ./amazon-cloudwatch-agent.rpm`),
       }
     );
 
+    // LocalStack fix: Explicitly set LaunchTemplate version
+    // LocalStack requires the version to be a string, not a reference
+    if (isLocalStack) {
+      const cfnAsg = autoScalingGroup.node
+        .defaultChild as autoscaling.CfnAutoScalingGroup;
+      cfnAsg.launchTemplate = {
+        launchTemplateId: launchTemplate.launchTemplateId!,
+        version: '$Latest',
+      };
+    }
+
     // Auto Scaling Policies
     // Target tracking scaling policy for CPU utilization
     // This policy will handle both scale-out (at 70%) and scale-in (at 30%)
