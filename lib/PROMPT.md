@@ -17,8 +17,8 @@ Create a highly available VPC infrastructure with Transit Gateway connectivity u
 1. **VPC Foundation**
    - Create VPC with 10.0.0.0/16 CIDR block
    - Deploy across 3 availability zones in us-east-1
-   - All resource names must include **environmentSuffix** parameter for uniqueness
-   - Follow naming convention: `{resource-type}-${var.environment_suffix}`
+   - All resource names must include environmentSuffix parameter for uniqueness
+   - Follow naming convention: resource-type-environment-suffix format
 
 2. **Subnet Architecture**
    - Deploy 3 public subnets: 10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24
@@ -38,8 +38,8 @@ Create a highly available VPC infrastructure with Transit Gateway connectivity u
    - Use specific route tables, not default associations
 
 5. **VPC Endpoints**
-   - Create VPC Endpoints for S3 (Gateway type)
-   - Create VPC Endpoints for DynamoDB (Gateway type)
+   - Create VPC Endpoints for S3 using Gateway type
+   - Create VPC Endpoints for DynamoDB using Gateway type
    - Enable private DNS for interface endpoints
 
 6. **Network Security**
@@ -61,12 +61,12 @@ Create a highly available VPC infrastructure with Transit Gateway connectivity u
 - Use **aws_vpc_endpoint** for S3 and DynamoDB endpoints
 - Use **aws_flow_log** for VPC Flow Logs
 - Use **aws_network_acl** for network access control
-- Resource names must include **environmentSuffix** variable for uniqueness
+- All names must include environmentSuffix variable for uniqueness
 - Deploy to **us-east-1** region
 - Terraform version 1.5+ with AWS provider 5.x required
 - Use modular structure for better organization
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements - CRITICAL
 
 - All resources must be destroyable - NO Retain policies
 - Use DESTROY removal policies or deletion protection disabled
@@ -97,7 +97,7 @@ All resources must use consistent tagging:
 - **Network Segmentation**: Proper isolation between public, private, and database subnets
 - **Security**: Network ACLs and flow logs capturing all traffic
 - **Compliance**: All traffic logged to S3 with encryption and lifecycle policies
-- **Resource Naming**: All resources include environmentSuffix for uniqueness
+- **Naming Convention**: All resources include environmentSuffix for uniqueness
 - **Destroyability**: All resources can be destroyed without manual intervention
 
 ## What to deliver
@@ -109,6 +109,6 @@ All resources must use consistent tagging:
 - VPC Endpoints for S3 and DynamoDB
 - Network ACLs with explicit allow/deny rules
 - VPC Flow Logs with S3 storage and lifecycle policy
-- Output values for critical resource IDs (VPC ID, Transit Gateway ID, subnet IDs)
+- Output values for critical resource IDs including VPC ID, Transit Gateway ID, and subnet IDs
 - Variables file for environmentSuffix and other configurable parameters
 - Documentation explaining the architecture and deployment steps
