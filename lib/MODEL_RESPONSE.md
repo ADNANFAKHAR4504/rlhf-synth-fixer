@@ -678,7 +678,7 @@ export TF_VAR_ami_id=$(aws ec2 describe-images \
   --output text)
 
 # Set database password
-export TF_VAR_db_password="SecurePassword123!"
+# export TF_VAR_db_password="<set-your-secure-password-here>"
 
 # For dev environment
 terraform init -backend-config="key=multi-env/dev/terraform.tfstate"
