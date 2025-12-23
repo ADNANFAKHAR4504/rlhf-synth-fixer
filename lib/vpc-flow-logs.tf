@@ -45,11 +45,10 @@ resource "aws_s3_bucket_public_access_block" "vpc_flow_logs" {
 resource "aws_flow_log" "main" {
   count = var.enable_vpc_flow_logs ? 1 : 0
 
-  log_destination          = aws_s3_bucket.vpc_flow_logs.arn
-  log_destination_type     = "s3"
-  traffic_type             = "ALL"
-  vpc_id                   = aws_vpc.main.id
-  max_aggregation_interval = 600
+  log_destination      = aws_s3_bucket.vpc_flow_logs.arn
+  log_destination_type = "s3"
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.main.id
 
   tags = merge(
     local.common_tags,
