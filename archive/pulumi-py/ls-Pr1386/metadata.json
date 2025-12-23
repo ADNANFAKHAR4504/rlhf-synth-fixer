@@ -1,0 +1,43 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291676",
+  "team": "synth-2",
+  "startedAt": "2025-08-15T21:27:47.138Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": "",
+  "aws_services": [
+    "S3",
+    "KMS",
+    "CloudFront",
+    "WAFv2",
+    "Route53",
+    "ACM",
+    "IAM",
+    "CloudWatch"
+  ],
+  "migrated_from": {
+    "original_pr_id": "Pr1386",
+    "original_pr_url": "https://github.com/TuringGpt/iac-test-automations/pull/1386",
+    "migration_date": "2025-12-23T11:11:15Z",
+    "localstack_compatible": true,
+    "fixes_applied": [
+      "make_cloudfront_optional",
+      "make_waf_optional",
+      "make_acm_conditional",
+      "make_route53_conditional",
+      "update_stack_outputs",
+      "enhance_kms_options",
+      "update_unit_tests",
+      "update_integration_tests",
+      "add_localstack_detection"
+    ],
+    "iterations_used": 1
+  }
+}
