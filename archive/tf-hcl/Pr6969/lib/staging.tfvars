@@ -1,0 +1,14 @@
+environment             = "staging"
+pr_number               = "pr6969staging"
+aws_region              = "us-east-1"
+vpc_cidr                = "10.1.0.0/16"
+db_instance_class       = "db.t3.small"
+ec2_instance_type       = "t3.small"
+backup_retention_period = 7
+rds_cpu_threshold       = 70
+instance_count          = 2
+db_username             = "dbadmin"
+db_password             = ""
+ssh_key_name            = ""
+ami_id                  = ""
+alb_internal            = false

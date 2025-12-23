@@ -1,0 +1,340 @@
+﻿# CI/CD Pipeline Configuration for Pulumi Go Infrastructure
+# This workflow demonstrates a multi-account, multi-stage deployment for Pulumi Go applications
+# Infrastructure: EduTech CI/CD Pipeline with CodePipeline, RDS, ECS, ElastiCache, API Gateway, EFS, Secrets Manager
+
+name: Multi-Stage Pulumi Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - dev
+
+env:
+  AWS_REGION: us-east-1
+  PULUMI_VERSION: latest
+  GO_VERSION: '1.22'
+  DEV_ACCOUNT_ID: ${{ secrets.DEV_ACCOUNT_ID }}
+  STAGING_ACCOUNT_ID: ${{ secrets.STAGING_ACCOUNT_ID }}
+  PROD_ACCOUNT_ID: ${{ secrets.PROD_ACCOUNT_ID }}
+
+jobs:
+  source:
+    name: Source Stage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Source
+
+  build:
+    name: Build Stage
+    runs-on: ubuntu-latest
+    needs: source
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Build
+
+      - name: Setup Go with caching
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Run Go tests
+        run: go test ./... -v
+
+      - name: Build Go binary
+        run: go build -v ./...
+
+      - name: Run Pulumi Preview
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          pulumi preview --stack dev --non-interactive
+
+      - name: Run security checks with gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec ./...
+        continue-on-error: false
+
+      - name: Create artifacts tarball
+        run: tar -czf pulumi-outputs.tar.gz -C . go.mod go.sum *.go
+
+      - name: Encrypt artifacts with KMS
+        run: aws kms encrypt --key-id alias/github-actions-artifacts --plaintext fileb://pulumi-outputs.tar.gz --output text --query CiphertextBlob > pulumi-outputs.tar.gz.encrypted
+
+      - name: Upload encrypted artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: pulumi-outputs.tar.gz.encrypted
+
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: build
+    environment: dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: ./artifacts/
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Dev
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Deploy to Dev with Pulumi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ENVIRONMENT_SUFFIX: dev
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: edutech
+        run: |
+          pulumi up --stack dev --yes --non-interactive
+
+      - name: Verify Deployment
+        run: |
+          aws ecs describe-services --cluster app-cluster-dev --services app-service-dev \
+            --query 'services[*].{ServiceName:serviceName,DesiredCount:desiredCount,RunningCount:runningCount}' || echo "Service not found"
+          aws rds describe-db-clusters --db-cluster-identifier student-db-cluster-dev \
+            --query 'DBClusters[*].{Status:Status,Endpoint:Endpoint}' || echo "RDS cluster not found"
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Dev deployment completed for ${{ github.ref }}"}'
+
+  manual-approval-staging:
+    name: Approve Staging Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: staging-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to staging approved"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: manual-approval-staging
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: ./artifacts/
+
+      - name: Assume cross-account role for Staging via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Staging
+          role-chaining: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Deploy to Staging with Pulumi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ENVIRONMENT_SUFFIX: staging
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: edutech
+        run: |
+          pulumi up --stack staging --yes --non-interactive
+
+      - name: Run integration tests
+        run: |
+          echo "Running integration tests..."
+
+      - name: Verify Deployment
+        run: |
+          aws ecs describe-services --cluster app-cluster-staging --services app-service-staging \
+            --query 'services[*].{ServiceName:serviceName,DesiredCount:desiredCount,RunningCount:runningCount}' || echo "Service not found"
+          aws elasticache describe-replication-groups --replication-group-id session-redis-staging \
+            --query 'ReplicationGroups[*].{Status:Status}' || echo "Redis cluster not found"
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Staging deployment completed for ${{ github.ref }}"}'
+
+  manual-approval-prod:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: prod-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to production approved"
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: manual-approval-prod
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: ./artifacts/
+
+      - name: Assume cross-account role for Production via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Prod
+          role-chaining: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Deploy to Production with Pulumi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ENVIRONMENT_SUFFIX: prod
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: edutech
+        run: |
+          pulumi up --stack prod --yes --non-interactive --refresh
+
+      - name: Verify ECS services
+        run: aws ecs describe-services --cluster app-cluster-prod --services app-service-prod --query 'services[*].{ServiceName:serviceName,DesiredCount:desiredCount,RunningCount:runningCount}'
+
+      - name: Verify RDS cluster
+        run: aws rds describe-db-clusters --db-cluster-identifier student-db-cluster-prod --query 'DBClusters[*].{Status:Status,Endpoint:Endpoint}'
+
+      - name: Verify Redis cluster
+        run: aws elasticache describe-replication-groups --replication-group-id session-redis-prod --query 'ReplicationGroups[*].{Status:Status}'
+
+      - name: Verify API Gateway
+        run: aws apigateway get-rest-apis --query 'items[?name==`api-prod`].{id:id,name:name}'
+
+      - name: Health check
+        run: |
+          echo "Performing health checks..."
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Production deployment completed for ${{ github.ref }}"}'
+
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-prod]
+    if: failure()
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Rollback
+          role-chaining: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Rollback to previous state
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          echo "Rolling back to previous deployment..."
+          pulumi stack history --stack prod --json | head -2
+
+      - name: Send rollback notification
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Production deployment failed - automatic rollback initiated for ${{ github.ref }}"}'

@@ -39,6 +39,14 @@ case "$LANGUAGE" in
     echo "✅ Go build completed successfully"
     ;;
 
+  yaml|json)
+    echo "⏭️ Skipping build for CloudFormation $LANGUAGE project (no TypeScript compilation needed)"
+    ;;
+
+  hcl)
+    echo "⏭️ Skipping build for Terraform HCL project (language=$LANGUAGE, no TypeScript compilation needed)"
+    ;;
+
   *)
     echo "📦 Running generic build (npm)..."
     npm run build

@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-19T08:41:06+00:00",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "high-availability",
+    "rds",
+    "route53"
+  ],
+  "po_id": "101912410",
+  "aws_services": [
+    "RDS",
+    "Aurora",
+    "Route53",
+    "VPC",
+    "CloudWatch",
+    "KMS",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

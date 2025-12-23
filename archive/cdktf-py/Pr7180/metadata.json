@@ -1,0 +1,30 @@
+{
+  "po_id": "z9j0h6",
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-24T18:04:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon DynamoDB",
+    "Amazon S3",
+    "AWS KMS",
+    "Amazon VPC",
+    "Amazon CloudWatch Logs",
+    "Amazon EventBridge",
+    "AWS IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

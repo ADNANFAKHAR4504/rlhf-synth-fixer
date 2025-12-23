@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "s6e8u3n2",
+  "team": "synth",
+  "startedAt": "2025-12-02T20:18:42+05:30",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "CloudWatch",
+    "EventBridge",
+    "IAM",
+    "EC2",
+    "RDS",
+    "VPC"
+  ],
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

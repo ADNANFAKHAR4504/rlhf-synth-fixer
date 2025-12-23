@@ -1,0 +1,900 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Aurora Global Database for Cross-Region Disaster Recovery - Financial Trading Platform with 99.99% uptime SLA",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming uniqueness",
+      "Default": "dev"
+    },
+    "DBUsername": {
+      "Type": "String",
+      "Description": "Master username for Aurora database",
+      "Default": "admin",
+      "NoEcho": true,
+      "MinLength": 1,
+      "MaxLength": 16,
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+    },
+    "DBPassword": {
+      "Type": "String",
+      "Description": "Master password for Aurora database",
+      "Default": "TradingDB2024!Secure",
+      "NoEcho": true,
+      "MinLength": 8,
+      "MaxLength": 41
+    },
+    "VpcCidr": {
+      "Type": "String",
+      "Description": "CIDR block for VPC",
+      "Default": "10.0.0.0/16"
+    },
+    "DomainName": {
+      "Type": "String",
+      "Description": "Domain name for Route 53 health checks",
+      "Default": "trading-platform.internal"
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": { "Ref": "VpcCidr" },
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-vpc-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-igw-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "VPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "InternetGatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-public-subnet-1-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-public-subnet-2-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": "10.0.10.0/24",
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-private-subnet-1-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": "10.0.11.0/24",
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-private-subnet-2-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": "10.0.12.0/24",
+        "AvailabilityZone": { "Fn::Select": [2, { "Fn::GetAZs": "" }] },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-private-subnet-3-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-public-rt-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "VPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": { "Ref": "PublicRouteTable" },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PublicSubnet1" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PublicSubnet2" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-private-rt-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PrivateSubnet1" },
+        "RouteTableId": { "Ref": "PrivateRouteTable" }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PrivateSubnet2" },
+        "RouteTableId": { "Ref": "PrivateRouteTable" }
+      }
+    },
+    "PrivateSubnet3RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PrivateSubnet3" },
+        "RouteTableId": { "Ref": "PrivateRouteTable" }
+      }
+    },
+    "KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": { "Fn::Sub": "KMS key for Aurora encryption us-east-1 ${EnvironmentSuffix}" },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Id": "aurora-key-policy",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow RDS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "rds.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant",
+                "kms:ReEncrypt*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:CallerAccount": { "Ref": "AWS::AccountId" }
+                }
+              }
+            },
+            {
+              "Sid": "Allow CloudWatch Logs",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": { "Fn::Sub": "logs.${AWS::Region}.amazonaws.com" }
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-kms-us-east-1-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "KMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": { "Fn::Sub": "alias/trading-db-us-east-1-${EnvironmentSuffix}" },
+        "TargetKeyId": { "Ref": "KMSKey" }
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "DBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": { "Fn::Sub": "trading-db-sg-${EnvironmentSuffix}" },
+        "GroupDescription": "Security group for Aurora database access - restricts to application tier only",
+        "VpcId": { "Ref": "VPC" },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": "10.0.0.0/16",
+            "Description": "MySQL access from VPC application tier"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-sg-${EnvironmentSuffix}" }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": { "Fn::Sub": "trading-db-subnets-us-east-1-${EnvironmentSuffix}" },
+        "DBSubnetGroupDescription": "Subnet group for Aurora Global Database primary cluster spanning multiple AZs",
+        "SubnetIds": [
+          { "Ref": "PrivateSubnet1" },
+          { "Ref": "PrivateSubnet2" },
+          { "Ref": "PrivateSubnet3" }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-subnets-us-east-1-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "DBClusterParameterGroup": {
+      "Type": "AWS::RDS::DBClusterParameterGroup",
+      "Properties": {
+        "Description": "Aurora MySQL 8.0 cluster parameter group for trading database",
+        "Family": "aurora-mysql8.0",
+        "Parameters": {
+          "character_set_server": "utf8mb4",
+          "collation_server": "utf8mb4_unicode_ci",
+          "time_zone": "UTC",
+          "binlog_format": "ROW"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-cluster-params-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "DBParameterGroup": {
+      "Type": "AWS::RDS::DBParameterGroup",
+      "Properties": {
+        "Description": "Aurora MySQL 8.0 instance parameter group",
+        "Family": "aurora-mysql8.0",
+        "Parameters": {
+          "slow_query_log": "1",
+          "long_query_time": "2",
+          "log_output": "FILE"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-instance-params-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "DBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": { "Fn::Sub": "trading-db-secret-${EnvironmentSuffix}" },
+        "Description": "Secret for Aurora database master password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": { "Fn::Sub": "{\"username\": \"${DBUsername}\", \"fallback_password\": \"${DBPassword}\"}" },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "KmsKeyId": { "Ref": "KMSKey" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-secret-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          }
+        ]
+      }
+    },
+    "GlobalCluster": {
+      "Type": "AWS::RDS::GlobalCluster",
+      "Properties": {
+        "GlobalClusterIdentifier": { "Fn::Sub": "trading-db-global-${EnvironmentSuffix}" },
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "StorageEncrypted": true,
+        "DeletionProtection": false
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryDBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "Properties": {
+        "DBClusterIdentifier": { "Fn::Sub": "trading-db-us-east-1-cluster-${EnvironmentSuffix}" },
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "MasterUsername": { "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}" },
+        "MasterUserPassword": { "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}" },
+        "DatabaseName": "tradingdb",
+        "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
+        "DBClusterParameterGroupName": { "Ref": "DBClusterParameterGroup" },
+        "VpcSecurityGroupIds": [{ "Ref": "DBSecurityGroup" }],
+        "StorageEncrypted": true,
+        "KmsKeyId": { "Ref": "KMSKey" },
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+        "EnableCloudwatchLogsExports": ["error", "general", "slowquery", "audit"],
+        "GlobalClusterIdentifier": { "Ref": "GlobalCluster" },
+        "CopyTagsToSnapshot": true,
+        "EnableIAMDatabaseAuthentication": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-us-east-1-cluster-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Region",
+            "Value": "us-east-1"
+          },
+          {
+            "Key": "Role",
+            "Value": "Primary"
+          },
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecretTargetAttachment": {
+      "Type": "AWS::SecretsManager::SecretTargetAttachment",
+      "Properties": {
+        "SecretId": { "Ref": "DBSecret" },
+        "TargetId": { "Ref": "PrimaryDBCluster" },
+        "TargetType": "AWS::RDS::DBCluster"
+      }
+    },
+    "EnhancedMonitoringRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": { "Fn::Sub": "rds-enhanced-monitoring-role-${EnvironmentSuffix}" },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "monitoring.rds.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "rds-enhanced-monitoring-role-${EnvironmentSuffix}" }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryDBInstanceWriter": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": { "Fn::Sub": "trading-db-us-east-1-writer-${EnvironmentSuffix}" },
+        "DBClusterIdentifier": { "Ref": "PrimaryDBCluster" },
+        "Engine": "aurora-mysql",
+        "DBInstanceClass": "db.r6g.2xlarge",
+        "DBParameterGroupName": { "Ref": "DBParameterGroup" },
+        "PubliclyAccessible": false,
+        "EnablePerformanceInsights": true,
+        "PerformanceInsightsKMSKeyId": { "Ref": "KMSKey" },
+        "PerformanceInsightsRetentionPeriod": 7,
+        "MonitoringInterval": 60,
+        "MonitoringRoleArn": { "Fn::GetAtt": ["EnhancedMonitoringRole", "Arn"] },
+        "AutoMinorVersionUpgrade": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-us-east-1-writer-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Role",
+            "Value": "Writer"
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "PrimaryDBInstanceReader": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": { "Fn::Sub": "trading-db-us-east-1-reader-${EnvironmentSuffix}" },
+        "DBClusterIdentifier": { "Ref": "PrimaryDBCluster" },
+        "Engine": "aurora-mysql",
+        "DBInstanceClass": "db.r6g.2xlarge",
+        "DBParameterGroupName": { "Ref": "DBParameterGroup" },
+        "PubliclyAccessible": false,
+        "EnablePerformanceInsights": true,
+        "PerformanceInsightsKMSKeyId": { "Ref": "KMSKey" },
+        "PerformanceInsightsRetentionPeriod": 7,
+        "MonitoringInterval": 60,
+        "MonitoringRoleArn": { "Fn::GetAtt": ["EnhancedMonitoringRole", "Arn"] },
+        "AutoMinorVersionUpgrade": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-us-east-1-reader-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Role",
+            "Value": "Reader"
+          }
+        ]
+      },
+      "DependsOn": ["PrimaryDBInstanceWriter"],
+      "DeletionPolicy": "Delete"
+    },
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": { "Fn::Sub": "trading-db-alerts-${EnvironmentSuffix}" },
+        "DisplayName": "Aurora Global Database Critical Alerts",
+        "KmsMasterKeyId": { "Ref": "KMSKey" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-alerts-${EnvironmentSuffix}" }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SNSTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowCloudWatchAlarms",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudwatch.amazonaws.com"
+              },
+              "Action": "sns:Publish",
+              "Resource": { "Ref": "SNSTopic" }
+            }
+          ]
+        },
+        "Topics": [{ "Ref": "SNSTopic" }]
+      }
+    },
+    "CPUAlarmWriter": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "trading-db-writer-cpu-high-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alert when writer instance CPU exceeds 80% - indicates potential performance bottleneck",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": { "Ref": "PrimaryDBInstanceWriter" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "SNSTopic" }],
+        "OKActions": [{ "Ref": "SNSTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "CPUAlarmReader": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "trading-db-reader-cpu-high-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alert when reader instance CPU exceeds 80%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": { "Ref": "PrimaryDBInstanceReader" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "SNSTopic" }],
+        "OKActions": [{ "Ref": "SNSTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DatabaseConnectionsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "trading-db-connections-high-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alert when database connections exceed threshold - may indicate connection leak or high load",
+        "MetricName": "DatabaseConnections",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 100,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": { "Ref": "PrimaryDBCluster" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "SNSTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "FreeableMemoryAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "trading-db-memory-low-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alert when freeable memory drops below 1GB - risk of OOM",
+        "MetricName": "FreeableMemory",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 1073741824,
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": { "Ref": "PrimaryDBInstanceWriter" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "SNSTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "ReplicationLagAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "trading-db-replication-lag-high-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alert when global replication lag exceeds 1000ms - critical for disaster recovery RPO",
+        "MetricName": "AuroraGlobalDBReplicationLag",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 3,
+        "Threshold": 1000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": { "Ref": "PrimaryDBCluster" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "SNSTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "WriteIOPSAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "trading-db-write-iops-high-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alert when write IOPS are consistently high",
+        "MetricName": "VolumeWriteIOPs",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 3,
+        "Threshold": 10000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": { "Ref": "PrimaryDBCluster" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "SNSTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DeadlocksAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "trading-db-deadlocks-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alert when deadlocks are detected - indicates transaction contention issues",
+        "MetricName": "Deadlocks",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": { "Ref": "PrimaryDBInstanceWriter" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "SNSTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "PrimaryHealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Properties": {
+        "HealthCheckConfig": {
+          "Type": "CLOUDWATCH_METRIC",
+          "AlarmIdentifier": {
+            "Name": { "Fn::Sub": "trading-db-writer-cpu-high-${EnvironmentSuffix}" },
+            "Region": { "Ref": "AWS::Region" }
+          },
+          "InsufficientDataHealthStatus": "Healthy"
+        },
+        "HealthCheckTags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-primary-health-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Region",
+            "Value": "us-east-1"
+          },
+          {
+            "Key": "DomainName",
+            "Value": { "Ref": "DomainName" }
+          }
+        ]
+      },
+      "DependsOn": ["CPUAlarmWriter"]
+    },
+    "SecondaryHealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Properties": {
+        "HealthCheckConfig": {
+          "Type": "CALCULATED",
+          "ChildHealthChecks": [],
+          "HealthThreshold": 1
+        },
+        "HealthCheckTags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-secondary-health-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Region",
+            "Value": "eu-west-1"
+          }
+        ]
+      }
+    },
+    "CloudWatchDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": { "Fn::Sub": "TradingDB-Health-${EnvironmentSuffix}" },
+        "DashboardBody": {
+          "Fn::Sub": [
+            "{\"widgets\":[{\"type\":\"metric\",\"x\":0,\"y\":0,\"width\":12,\"height\":6,\"properties\":{\"title\":\"CPU Utilization\",\"metrics\":[[\"AWS/RDS\",\"CPUUtilization\",\"DBInstanceIdentifier\",\"${WriterInstance}\"],[\"AWS/RDS\",\"CPUUtilization\",\"DBInstanceIdentifier\",\"${ReaderInstance}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"x\":12,\"y\":0,\"width\":12,\"height\":6,\"properties\":{\"title\":\"Database Connections\",\"metrics\":[[\"AWS/RDS\",\"DatabaseConnections\",\"DBClusterIdentifier\",\"${Cluster}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"x\":0,\"y\":6,\"width\":12,\"height\":6,\"properties\":{\"title\":\"Freeable Memory\",\"metrics\":[[\"AWS/RDS\",\"FreeableMemory\",\"DBInstanceIdentifier\",\"${WriterInstance}\"],[\"AWS/RDS\",\"FreeableMemory\",\"DBInstanceIdentifier\",\"${ReaderInstance}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"x\":12,\"y\":6,\"width\":12,\"height\":6,\"properties\":{\"title\":\"Global Replication Lag\",\"metrics\":[[\"AWS/RDS\",\"AuroraGlobalDBReplicationLag\",\"DBClusterIdentifier\",\"${Cluster}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"x\":0,\"y\":12,\"width\":12,\"height\":6,\"properties\":{\"title\":\"Write IOPS\",\"metrics\":[[\"AWS/RDS\",\"VolumeWriteIOPs\",\"DBClusterIdentifier\",\"${Cluster}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"x\":12,\"y\":12,\"width\":12,\"height\":6,\"properties\":{\"title\":\"Read IOPS\",\"metrics\":[[\"AWS/RDS\",\"VolumeReadIOPs\",\"DBClusterIdentifier\",\"${Cluster}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}}]}",
+            {
+              "WriterInstance": { "Ref": "PrimaryDBInstanceWriter" },
+              "ReaderInstance": { "Ref": "PrimaryDBInstanceReader" },
+              "Cluster": { "Ref": "PrimaryDBCluster" }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "VpcId": {
+      "Description": "VPC ID for the trading platform",
+      "Value": { "Ref": "VPC" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-VpcId" }
+      }
+    },
+    "GlobalClusterIdentifier": {
+      "Description": "Aurora Global Cluster Identifier",
+      "Value": { "Ref": "GlobalCluster" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-GlobalClusterId" }
+      }
+    },
+    "PrimaryClusterEndpoint": {
+      "Description": "Primary cluster writer endpoint for real-time transactions",
+      "Value": { "Fn::GetAtt": ["PrimaryDBCluster", "Endpoint.Address"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-PrimaryEndpoint" }
+      }
+    },
+    "PrimaryClusterReadEndpoint": {
+      "Description": "Primary cluster reader endpoint for read replicas",
+      "Value": { "Fn::GetAtt": ["PrimaryDBCluster", "ReadEndpoint.Address"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-PrimaryReadEndpoint" }
+      }
+    },
+    "PrimaryClusterPort": {
+      "Description": "Aurora cluster port",
+      "Value": { "Fn::GetAtt": ["PrimaryDBCluster", "Endpoint.Port"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-PrimaryPort" }
+      }
+    },
+    "KMSKeyId": {
+      "Description": "KMS Key ID for Aurora encryption",
+      "Value": { "Ref": "KMSKey" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-KMSKeyId" }
+      }
+    },
+    "KMSKeyArn": {
+      "Description": "KMS Key ARN for Aurora encryption",
+      "Value": { "Fn::GetAtt": ["KMSKey", "Arn"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-KMSKeyArn" }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "SNS Topic ARN for critical database alerts",
+      "Value": { "Ref": "SNSTopic" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-SNSTopicArn" }
+      }
+    },
+    "DBSecurityGroupId": {
+      "Description": "Security Group ID for database access",
+      "Value": { "Ref": "DBSecurityGroup" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-DBSecurityGroupId" }
+      }
+    },
+    "PrimaryHealthCheckId": {
+      "Description": "Route53 Health Check ID for primary region",
+      "Value": { "Ref": "PrimaryHealthCheck" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-PrimaryHealthCheckId" }
+      }
+    },
+    "SecondaryHealthCheckId": {
+      "Description": "Route53 Health Check ID for secondary region",
+      "Value": { "Ref": "SecondaryHealthCheck" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-SecondaryHealthCheckId" }
+      }
+    },
+    "CloudWatchDashboardName": {
+      "Description": "CloudWatch Dashboard name for database health monitoring",
+      "Value": { "Fn::Sub": "TradingDB-Health-${EnvironmentSuffix}" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-DashboardName" }
+      }
+    },
+    "EnhancedMonitoringRoleArn": {
+      "Description": "IAM Role ARN for RDS Enhanced Monitoring",
+      "Value": { "Fn::GetAtt": ["EnhancedMonitoringRole", "Arn"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-MonitoringRoleArn" }
+      }
+    }
+  }
+}

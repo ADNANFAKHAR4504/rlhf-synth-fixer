@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "t45a6h",
+  "team": "synth",
+  "startedAt": "2025-11-17T23:00:00Z",
+  "subtask": "Application Deployment",
+  "aws_services": [
+    "ECS",
+    "ECR",
+    "ALB",
+    "CloudMap",
+    "CloudWatch",
+    "AutoScaling",
+    "IAM",
+    "SecretsManager",
+    "XRay"
+  ],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

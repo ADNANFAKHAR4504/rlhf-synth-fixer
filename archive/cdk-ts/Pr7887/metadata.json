@@ -1,0 +1,32 @@
+{
+  "po_id": "y8q4p7r3",
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-04T00:00:00.000Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "ECS",
+    "Fargate",
+    "ALB",
+    "VPC",
+    "EC2",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "IAM",
+    "ECR"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

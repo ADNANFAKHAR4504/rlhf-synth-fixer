@@ -1,0 +1,200 @@
+# CI/CD Pipeline Configuration for Product Catalog Data Pipeline
+# AWS CDK Python Stack - Real-time Inventory Processing
+
+name: Product Catalog Data Pipeline CI/CD
+
+# Pipeline orchestration (workflow simulation)
+workflow:
+  stages:
+    - validate
+    - build
+    - test
+    - deploy
+    - integration-test
+    - monitoring
+
+# Job Definitions
+jobs:
+  # Validation Stage
+  validate-infrastructure:
+    stage: validate
+    description: "Validate CDK infrastructure code and configuration"
+    steps:
+      - name: "Validate CDK syntax"
+        command: "cdk synth --validate-only"
+      - name: "Run Python linting"
+        command: "pylint lib/"
+      - name: "Run type checking"
+        command: "mypy lib/"
+      - name: "Validate metadata"
+        command: "python -m json.tool metadata.json"
+
+  security-scan:
+    stage: validate
+    description: "Security and vulnerability scanning"
+    steps:
+      - name: "Scan dependencies"
+        command: "pip audit"
+      - name: "Check for secrets"
+        command: "trufflehog scan ."
+      - name: "Run security checks"
+        command: "bandit -r lib/"
+
+  # Build Stage
+  build-infrastructure:
+    stage: build
+    dependencies:
+      - validate-infrastructure
+    description: "Build and synthesize CDK stack"
+    steps:
+      - name: "Install dependencies"
+        command: "pip install -r requirements.txt"
+      - name: "Install Lambda layer dependencies"
+        command: "pip install -r lib/lambda/layer/python/requirements.txt -t lib/lambda/layer/python/"
+      - name: "Synthesize CDK stack"
+        command: "cdk synth"
+      - name: "Generate CloudFormation template"
+        command: "cdk synth > cdk.out/template.yaml"
+
+  # Test Stage
+  unit-tests:
+    stage: test
+    dependencies:
+      - build-infrastructure
+    description: "Run unit tests with coverage"
+    steps:
+      - name: "Run pytest with coverage"
+        command: "pytest test/ --cov=lib --cov-report=json --cov-report=term"
+      - name: "Validate coverage threshold"
+        command: 'python -c ''import json; assert json.load(open("coverage.json"))["totals"]["percent_covered"] >= 80'''
+    coverage_threshold: 80
+
+  # Deploy Stage
+  deploy-infrastructure:
+    stage: deploy
+    dependencies:
+      - unit-tests
+    description: "Deploy CDK stack to AWS"
+    environment: pr7589
+    steps:
+      - name: "CDK bootstrap (if needed)"
+        command: "cdk bootstrap"
+      - name: "Deploy stack"
+        command: "cdk deploy --require-approval never --context environmentSuffix=${ENVIRONMENT_SUFFIX}"
+      - name: "Capture outputs"
+        command: "cdk deploy --outputs-file outputs.json"
+    outputs:
+      - KinesisStreamName
+      - DatabaseEndpoint
+      - RedisEndpoint
+      - ArchiveBucket
+      - LambdaFunctionArn
+      - VpcId
+      - SecretArn
+
+  # Integration Test Stage
+  integration-tests:
+    stage: integration-test
+    dependencies:
+      - deploy-infrastructure
+    description: "Run integration tests against deployed infrastructure"
+    steps:
+      - name: "Wait for resources"
+        command: "sleep 30"
+      - name: "Test Kinesis stream"
+        command: "aws kinesis describe-stream --stream-name inventory-updates-${ENVIRONMENT_SUFFIX}"
+      - name: "Test RDS accessibility"
+        command: "aws rds describe-db-instances --query 'DBInstances[?DBInstanceIdentifier==*]'"
+      - name: "Test ElastiCache cluster"
+        command: "aws elasticache describe-cache-clusters --query 'CacheClusters[*].CacheClusterStatus'"
+      - name: "Test S3 bucket"
+        command: "aws s3 ls s3://product-inventory-archive-${ENVIRONMENT_SUFFIX}"
+      - name: "Test Lambda function"
+        command: "aws lambda get-function --function-name inventory-processor-${ENVIRONMENT_SUFFIX}"
+      - name: "Verify secrets in Secrets Manager"
+        command: "aws secretsmanager describe-secret --secret-id product-catalog-db-credentials-${ENVIRONMENT_SUFFIX}"
+      - name: "Test Kinesis to Lambda integration"
+        command: "aws lambda list-event-source-mappings --function-name inventory-processor-${ENVIRONMENT_SUFFIX}"
+      - name: "Verify S3 lifecycle rules"
+        command: "aws s3api get-bucket-lifecycle-configuration --bucket product-inventory-archive-${ENVIRONMENT_SUFFIX}"
+
+  # Monitoring Setup
+  setup-monitoring:
+    stage: monitoring
+    dependencies:
+      - integration-tests
+    description: "Configure CloudWatch monitoring and alarms"
+    steps:
+      - name: "Create CloudWatch dashboard"
+        command: "aws cloudwatch put-dashboard --dashboard-name product-catalog-${ENVIRONMENT_SUFFIX}"
+      - name: "Setup Lambda error alarm"
+        command: "aws cloudwatch put-metric-alarm --alarm-name lambda-errors-${ENVIRONMENT_SUFFIX}"
+      - name: "Setup Kinesis iterator age alarm"
+        command: "aws cloudwatch put-metric-alarm --alarm-name kinesis-iterator-age-${ENVIRONMENT_SUFFIX}"
+      - name: "Setup RDS CPU alarm"
+        command: "aws cloudwatch put-metric-alarm --alarm-name rds-cpu-high-${ENVIRONMENT_SUFFIX}"
+      - name: "Setup ElastiCache memory alarm"
+        command: "aws cloudwatch put-metric-alarm --alarm-name redis-memory-${ENVIRONMENT_SUFFIX}"
+
+# Environment Configuration
+environments:
+  pr7589:
+    region: us-east-1
+    account: "342597974367"
+    variables:
+      ENVIRONMENT_SUFFIX: "pr7589"
+      AWS_REGION: "us-east-1"
+
+# Quality Gates
+quality_gates:
+  - name: "Code Coverage"
+    threshold: 80
+    metric: "coverage.percent_covered"
+
+  - name: "Security Score"
+    threshold: 0
+    metric: "vulnerabilities.high"
+
+  - name: "Build Success"
+    threshold: 0
+    metric: "build.failed_steps"
+
+  - name: "Deployment Success"
+    threshold: 0
+    metric: "deployment.errors"
+
+  - name: "Stream Processing"
+    threshold: 1000
+    metric: "kinesis.records_per_minute"
+
+# Notification Configuration
+notifications:
+  on_success:
+    - type: github-comment
+      message: "CI/CD Pipeline completed successfully - Product Catalog Data Pipeline deployed"
+
+  on_failure:
+    - type: github-comment
+      message: "CI/CD Pipeline failed - check logs for details"
+    - type: email
+      recipients:
+        - ops-team@example.com
+
+# Rollback Strategy
+rollback:
+  automatic: true
+  conditions:
+    - deployment_failure
+    - integration_test_failure
+  steps:
+    - name: "Destroy failed deployment"
+      command: "cdk destroy --force"
+    - name: "Clean up resources"
+      command: "aws cloudformation delete-stack --stack-name TapStack-${ENVIRONMENT_SUFFIX}"
+
+# Resource Tags
+tags:
+  Environment: "pr7589"
+  ManagedBy: "CDK"
+  Project: "ProductCatalogDataPipeline"
+  CostCenter: "Engineering"

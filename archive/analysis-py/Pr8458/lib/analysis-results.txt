@@ -1,0 +1,67 @@
+2025-12-19 14:04:10,450 - INFO - Found credentials in environment variables.
+2025-12-19 14:04:10,528 - INFO - Starting comprehensive IAM security audit...
+2025-12-19 14:04:10,528 - INFO - Auditing MFA compliance...
+2025-12-19 14:04:10,530 - INFO - Auditing access keys...
+2025-12-19 14:04:10,532 - INFO - Auditing zombie users...
+2025-12-19 14:04:10,534 - INFO - Auditing password policy...
+2025-12-19 14:04:10,537 - INFO - Auditing overprivileged users...
+2025-12-19 14:04:10,539 - INFO - Auditing dangerous policies...
+2025-12-19 14:04:10,539 - INFO - Auditing role session durations...
+2025-12-19 14:04:10,544 - INFO - Auditing privilege escalation paths...
+2025-12-19 14:04:10,545 - INFO - Auditing role trust policies...
+2025-12-19 14:04:10,559 - INFO - Auditing S3 cross-account access...
+2025-12-19 14:04:10,561 - INFO - Auditing zombie roles...
+2025-12-19 14:04:10,561 - INFO - Completed: Password Policy
+2025-12-19 14:04:10,582 - ERROR - Error getting credential report: 'State'
+2025-12-19 14:04:10,582 - INFO - Auditing inline policies for privilege creep...
+2025-12-19 14:04:10,586 - ERROR - Error getting credential report: 'State'
+2025-12-19 14:04:10,587 - ERROR - Error getting credential report: 'State'
+2025-12-19 14:04:10,588 - INFO - Completed: MFA Compliance
+2025-12-19 14:04:10,588 - INFO - Completed: Access Keys
+2025-12-19 14:04:10,589 - INFO - Completed: Zombie Users
+2025-12-19 14:04:10,594 - INFO - Completed: S3 Cross-Account
+2025-12-19 14:04:10,688 - INFO - Completed: Dangerous Policies
+2025-12-19 14:04:10,835 - INFO - Completed: Trust Policies
+2025-12-19 14:04:10,847 - INFO - Completed: Zombie Roles
+2025-12-19 14:04:10,883 - INFO - Completed: Role Session Duration
+2025-12-19 14:04:11,060 - INFO - Completed: Overprivileged Users
+2025-12-19 14:04:11,111 - INFO - Completed: Privilege Escalation
+2025-12-19 14:04:11,139 - INFO - Completed: Inline Policies
+2025-12-19 14:04:11,141 - INFO - Generating reports...
+2025-12-19 14:04:11,142 - INFO - Reports generated: iam_security_audit.json, least_privilege_recommendations.json
+2025-12-19 14:04:11,142 - INFO - Audit completed successfully!
+
+====================================================================================================
+IAM SECURITY AUDIT SUMMARY - TOP 20 HIGH-RISK FINDINGS
+====================================================================================================
+
++--------------+------------+----------+------------------------------+-----------------------------------------------------------------+
+|   Risk Score | Severity   | Type     | Principal                    | Issue                                                           |
++==============+============+==========+==============================+=================================================================+
+|           10 | HIGH       | Account  | AWS Account                  | Password policy has 6 weakness(es): Password minimum length ... |
++--------------+------------+----------+------------------------------+-----------------------------------------------------------------+
+|           10 | CRITICAL   | S3Bucket | test-open-bucket             | Bucket allows unrestricted cross-account access                 |
++--------------+------------+----------+------------------------------+-----------------------------------------------------------------+
+|           10 | CRITICAL   | Policy   | DangerousPolicy              | Contains 1 privilege escalation path(s) in managed policy "D... |
++--------------+------------+----------+------------------------------+-----------------------------------------------------------------+
+|           10 | CRITICAL   | Policy   | PrivEscPolicy                | Contains 2 privilege escalation path(s) in managed policy "P... |
++--------------+------------+----------+------------------------------+-----------------------------------------------------------------+
+|            9 | HIGH       | Role     | CrossAccountRoleNoExternalId | Role allows cross-account access from 123456789012 without E... |
++--------------+------------+----------+------------------------------+-----------------------------------------------------------------+
+|            8 | HIGH       | Policy   | DangerousPolicy              | Policy grants 4 risky actions on all resources without condi... |
++--------------+------------+----------+------------------------------+-----------------------------------------------------------------+
+|            8 | HIGH       | Policy   | PrivEscPolicy                | Policy grants 3 risky actions on all resources without condi... |
++--------------+------------+----------+------------------------------+-----------------------------------------------------------------+
+|            5 | MEDIUM     | Role     | LongSessionRole              | Role has session duration of 24 hours (max should be 12)        |
++--------------+------------+----------+------------------------------+-----------------------------------------------------------------+
+
+Total Findings: 8
+Critical: 3
+High: 4
+Medium: 1
+Low: 0
+
+Privilege Escalation Paths Found: 3
+
+====================================================================================================
+

@@ -343,7 +343,7 @@ if [ -z "$SUBTASK" ] || [ "$SUBTASK" = "" ]; then
         *"Application"*|*"Deployment"*|*"Serverless"*)
             SUBTASK="Application Deployment"
             ;;
-        *"CI"*"CD"*|*"Pipeline"*)
+        *"CI"*|*"CD"*|*"Pipeline"*)
             SUBTASK="CI/CD Pipeline Integration"
             ;;
         *"Failure"*|*"Recovery"*|*"Availability"*)
@@ -370,6 +370,7 @@ fi
 case "$PLATFORM" in
     cloudformation) PLATFORM="cfn" ;;
     # cdk, cdktf, pulumi, tf, cfn remain as-is (already lowercase)
+    *) : ;; # No change for other platforms (: is a no-op)
 esac
 
 # Normalize language to match CLI tool format (must be lowercase abbreviated form)
@@ -379,6 +380,7 @@ case "$LANGUAGE" in
     javascript) LANGUAGE="js" ;;
     terraform) LANGUAGE="hcl" ;;
     # go, java, yaml, json, hcl remain as-is (already lowercase)
+    *) : ;; # No change for other languages (: is a no-op)
 esac
 
 # CRITICAL: Use exact difficulty value as complexity (no mapping)
@@ -972,6 +974,41 @@ EOF
 fi
 
 log_info "Created PROMPT.md"
+
+# Copy ci-cd.yml reference file for CI/CD Pipeline Integration tasks
+if [ "$SUBTASK" = "CI/CD Pipeline Integration" ]; then
+    CICD_YML_TEMPLATE="$(dirname "$0")/../../templates/cicd-yml/lib/ci-cd.yml"
+    CICD_YML_DEST="$OUTPUT_DIR/lib/ci-cd.yml"
+    
+    if [ -f "$CICD_YML_TEMPLATE" ]; then
+        # Ensure lib directory exists
+        mkdir -p "$OUTPUT_DIR/lib"
+        
+        # Copy the ci-cd.yml file
+        cp "$CICD_YML_TEMPLATE" "$CICD_YML_DEST"
+        log_info "Copied ci-cd.yml reference file to lib/"
+    else
+        log_error "Warning: ci-cd.yml template not found at $CICD_YML_TEMPLATE"
+    fi
+fi
+
+# Copy optimize.py script for IaC Optimization tasks
+# Check if subject_labels contains "IaC Optimization"
+if echo "$SUBJECT_LABELS" | grep -q "IaC Optimization"; then
+    OPTIMIZE_TEMPLATE="$(dirname "$0")/../../templates/optimize/optimize.py"
+    OPTIMIZE_DEST="$OUTPUT_DIR/lib/optimize.py"
+    
+    if [ -f "$OPTIMIZE_TEMPLATE" ]; then
+        # Ensure lib directory exists
+        mkdir -p "$OUTPUT_DIR/lib"
+        
+        # Copy the optimize.py file
+        cp "$OPTIMIZE_TEMPLATE" "$OPTIMIZE_DEST"
+        log_info "Copied optimize.py optimization script to lib/"
+    else
+        log_error "Warning: optimize.py template not found at $OPTIMIZE_TEMPLATE"
+    fi
+fi
 
 # Validate metadata
 REQUIRED=("platform" "language" "complexity" "turn_type" "team" "startedAt" "subtask" "po_id")

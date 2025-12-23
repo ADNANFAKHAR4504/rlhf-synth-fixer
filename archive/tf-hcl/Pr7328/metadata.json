@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "r1z4o2a6",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-11-26T04:44:00.000Z",
+  "subtask": "Failure Recovery Automation",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "Aurora",
+    "RDS",
+    "S3",
+    "Route53",
+    "CloudWatch",
+    "SNS",
+    "AWS Backup",
+    "IAM",
+    "KMS"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

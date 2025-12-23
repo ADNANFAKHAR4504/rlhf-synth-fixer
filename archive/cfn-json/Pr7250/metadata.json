@@ -1,0 +1,31 @@
+{
+  "task_id": "g1l0y0k7",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "g1l0y0k7",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-11-25T13:25:00Z",
+  "subtask": "Security, Compliance, and Governance",
+  "aws_services": [
+    "VPC",
+    "Lambda",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "Config",
+    "SNS",
+    "SSM"
+  ],
+  "subject_labels": [
+    "Security Configuration As Code"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

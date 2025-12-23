@@ -1,0 +1,29 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "c4h6k0",
+  "team": "synth",
+  "startedAt": "2025-11-24T14:00:26+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "EventBridge",
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "SQS",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

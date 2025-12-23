@@ -1,0 +1,35 @@
+{
+  "task_id": "101912418",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "region": "us-east-1",
+  "subtask": "AWS CloudFormation",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "security-configuration-as-code"
+  ],
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-19T08:03:05.067296",
+  "po_id": "101912418",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Lambda",
+    "DynamoDB",
+    "Kinesis",
+    "KMS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

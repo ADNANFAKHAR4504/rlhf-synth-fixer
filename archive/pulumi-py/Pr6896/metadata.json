@@ -1,0 +1,34 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912376",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "team": "synth",
+  "startedAt": "2025-11-19T13:09:00+00:00",
+  "subtask": "Infrastructure as Code",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "multi-environment-consistency-&-replication"
+  ],
+  "aws_services": [
+    "EC2",
+    "ECS",
+    "RDS",
+    "DynamoDB",
+    "ELBv2",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Logs"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

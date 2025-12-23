@@ -1,0 +1,9 @@
+name: cicd-pipeline-integration
+runtime:
+  name: nodejs
+description: CI/CD Pipeline Integration for Multi-Service Application
+main: bin/tap.ts
+config:
+  environmentSuffix:
+    type: string
+    default: dev

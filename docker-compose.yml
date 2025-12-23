@@ -1,20 +1,27 @@
 version: '3.8'
 
 services:
-  tap:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: tap-container
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/.venv
-    environment:
-      - NODE_ENV=development
-      - ENVIRONMENT_SUFFIX=dev
+  localstack:
+    image: localstack/localstack-pro:stable
     ports:
-      - "3000:3000"
-    command: /bin/bash -c "tail -f /dev/null"
-    stdin_open: true
-    tty: true
+      - "4566:4566"
+    environment:
+      - SERVICES=${SERVICES:-s3,lambda,dynamodb,cloudformation,cloudfront,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs,ecr,vpc,secretsmanager,ssm,autoscaling,elb,elbv2,wafv2,acm,kms,route53}
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - S3_SKIP_SIGNATURE_VALIDATION=1
+      - ENFORCE_IAM=0
+      - RDS_MYSQL_DOCKER=0
+      - RDS_PG_DOCKER=0
+      - LAMBDA_EXECUTOR=local
+      - LAMBDA_REMOVE_CONTAINERS=1
+      - CFN_PER_RESOURCE_TIMEOUT=600
+      - CFN_MAX_RESOURCE_RETRIES=30
+      - EC2_EBS_MAX_VOLUME_SIZE=500
+      - EC2_DOWNLOAD_DEFAULT_IMAGES=0
+      - DISABLE_CORS_CHECKS=1
+      - SKIP_INFRA_DOWNLOADS=1
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"

@@ -1,0 +1,232 @@
+# CI/CD Pipeline Configuration
+# Platform: AWS CodePipeline with CDK
+# Description: Node.js application CI/CD pipeline with staging and production deployment
+
+name: Node.js Application CI/CD Pipeline
+
+# Pipeline trigger configuration
+on:
+  push:
+    branches:
+      - main
+
+# Define the CI/CD jobs/stages
+jobs:
+  # Source stage - CodeCommit integration
+  source:
+    runs-on: codepipeline
+    environment: source
+    steps:
+      - name: Checkout from CodeCommit
+        uses: aws/codecommit-source
+        with:
+          repository: app-repo-${environmentSuffix}
+          branch: main
+          trigger: POLL
+
+  # Build and test stage
+  build:
+    runs-on: codebuild
+    needs: source
+    environment: build
+    steps:
+      - name: Setup Node.js 18
+        uses: aws/codebuild-standard-7.0
+        with:
+          runtime: nodejs18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Package artifacts
+        run: |
+          mkdir -p artifacts
+          cp -r . artifacts/
+
+    artifacts:
+      files:
+        - '**/*'
+      name: BuildArtifacts
+
+    logging:
+      cloudwatch:
+        logGroup: /aws/codebuild/test-project-${environmentSuffix}
+        retention: 7
+
+  # Staging deployment stage
+  deploy-staging:
+    runs-on: codebuild
+    needs: build
+    environment: staging
+    steps:
+      - name: Setup Node.js 18
+        uses: aws/codebuild-standard-7.0
+        with:
+          runtime: nodejs18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Deploy to staging
+        run: npm run deploy:staging
+        env:
+          ENVIRONMENT: staging
+
+    logging:
+      cloudwatch:
+        logGroup: /aws/codebuild/staging-deploy-${environmentSuffix}
+        retention: 7
+
+  # Manual approval gate
+  approval:
+    runs-on: manual
+    needs: deploy-staging
+    environment: approval
+    steps:
+      - name: Manual approval required
+        uses: aws/manual-approval
+        with:
+          notificationTopic: pipeline-notifications-${environmentSuffix}
+          message: "Please review staging deployment before promoting to production"
+
+  # Production deployment stage
+  deploy-production:
+    runs-on: codebuild
+    needs: approval
+    environment: production
+    steps:
+      - name: Setup Node.js 18
+        uses: aws/codebuild-standard-7.0
+        with:
+          runtime: nodejs18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Deploy to production
+        run: npm run deploy:production
+        env:
+          ENVIRONMENT: production
+
+    logging:
+      cloudwatch:
+        logGroup: /aws/codebuild/production-deploy-${environmentSuffix}
+        retention: 7
+
+# Notification configuration
+notifications:
+  on_failure:
+    - type: sns
+      topic: pipeline-notifications-${environmentSuffix}
+      events:
+        - PIPELINE_EXECUTION_FAILED
+        - STAGE_EXECUTION_FAILED
+        - ACTION_EXECUTION_FAILED
+
+# IAM and security configuration
+security:
+  iam_roles:
+    - CodePipelineServiceRole
+    - CodeBuildServiceRole
+    - CloudWatchEventsRole
+
+  least_privilege: true
+
+  secrets:
+    managed_by: AWS Secrets Manager
+
+# Artifact storage
+artifacts:
+  bucket: pipeline-artifacts-${environmentSuffix}-${AWS_ACCOUNT_ID}-${AWS_REGION}
+  versioning: enabled
+  encryption: S3_MANAGED
+  removalPolicy: DESTROY
+  autoDeleteObjects: true
+
+# CloudWatch monitoring
+monitoring:
+  logs:
+    retention_days: 7
+    log_groups:
+      - /aws/codebuild/test-project-${environmentSuffix}
+      - /aws/codebuild/staging-deploy-${environmentSuffix}
+      - /aws/codebuild/production-deploy-${environmentSuffix}
+
+  events:
+    - rule: pipeline-failure-${environmentSuffix}
+      pattern:
+        source: aws.codepipeline
+        detail-type: CodePipeline Pipeline Execution State Change
+        detail:
+          state: FAILED
+      targets:
+        - sns: pipeline-notifications-${environmentSuffix}
+
+# Pipeline parameters
+parameters:
+  environmentSuffix:
+    description: Unique suffix for resource naming to prevent conflicts
+    type: string
+    required: true
+
+  nodeVersion:
+    description: Node.js runtime version
+    type: string
+    default: "18"
+
+  region:
+    description: AWS region for deployment
+    type: string
+    default: us-east-1
+
+# Resource configuration
+resources:
+  s3:
+    - name: ArtifactBucket
+      versioning: true
+      encryption: S3_MANAGED
+
+  codecommit:
+    - name: Repository
+      description: Node.js application repository
+
+  codebuild:
+    - name: TestProject
+      runtime: nodejs18
+      computeType: SMALL
+
+    - name: StagingProject
+      runtime: nodejs18
+      computeType: SMALL
+
+    - name: ProductionProject
+      runtime: nodejs18
+      computeType: SMALL
+
+  codepipeline:
+    - name: Pipeline
+      restartExecutionOnUpdate: true
+
+  sns:
+    - name: NotificationTopic
+      displayName: CI/CD Pipeline Notifications
+
+  cloudwatch:
+    - name: PipelineFailureRule
+      eventPattern: pipeline-failures
+
+# Best practices implemented
+best_practices:
+  - Multi-stage pipeline (source, build, staging, approval, production)
+  - Manual approval gate before production
+  - CloudWatch logging with 7-day retention
+  - IAM least-privilege permissions
+  - Versioned artifact storage
+  - Automated failure notifications
+  - Environment-specific configurations
+  - Unique resource naming with environmentSuffix
+  - Full destroyability (no retained resources)
+  - Node.js 18 runtime as specified

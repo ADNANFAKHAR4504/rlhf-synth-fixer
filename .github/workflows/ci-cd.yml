@@ -12,12 +12,12 @@ on:
   workflow_dispatch:
     inputs:
       environment_suffix:
-        description: "Environment suffix for resource naming (e.g., pr123, dev, test)"
+        description: 'Environment suffix for resource naming (e.g., pr123, dev, test)'
         required: false
-        default: "manual"
+        default: 'manual'
         type: string
       skip_cleanup:
-        description: "Skip cleanup/destroy step after deployment"
+        description: 'Skip cleanup/destroy step after deployment'
         required: false
         default: false
         type: boolean
@@ -26,25 +26,25 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: "22.17.0"
-  GO_VERSION: "1.23.12"
+  NODE_VERSION: '22.17.0'
+  GO_VERSION: '1.23.12'
   # Use PR number for resource isolation, manual input, or fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.inputs.environment_suffix || (github.event.number && format('pr{0}', github.event.number)) || 'dev' }}
-  S3_RELEASE_BUCKET_NAME: "iac-rlhf-aws-release-342597974367-us-east-1"
-  TERRAFORM_STATE_BUCKET: "iac-rlhf-tf-states-342597974367"
-  TERRAFORM_STATE_BUCKET_REGION: "us-east-1"
+  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release-342597974367-us-east-1'
+  TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states-342597974367'
+  TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
   TERRAFORM_STATE_BUCKET_KEY: ${{ github.event.pull_request.number }}
-  PULUMI_STATE_BUCKET: "iac-rlhf-pulumi-states-342597974367"
-  PULUMI_BUCKET_REGION: "us-east-1"
+  PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states-342597974367'
+  PULUMI_BUCKET_REGION: 'us-east-1'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-  PULUMI_ORG: "organization"
+  PULUMI_ORG: 'organization'
   AWS_REGION: ${{ vars.AWS_REGION }}
   CDK_DEFAULT_REGION: ${{ vars.CDK_DEFAULT_REGION || vars.AWS_REGION || 'us-east-1' }}
   CURRENT_ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  MODEL_S3_URI: "s3://social-platform-sagemaker-342597974367-dev/model.tar.gz"
+  MODEL_S3_URI: 's3://social-platform-sagemaker-342597974367-dev/model.tar.gz'
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
@@ -61,6 +61,7 @@ jobs:
       language: ${{ steps.metadata.outputs.language }}
       po_id: ${{ steps.metadata.outputs.po_id }}
       team: ${{ steps.metadata.outputs.team }}
+      provider: ${{ steps.metadata.outputs.provider }}
       subtask: ${{ steps.metadata.outputs.subtask }}
       subject_labels: ${{ steps.metadata.outputs.subject_labels }}
       analysis_subject_label: ${{ env.IAC_ANALYSIS_SUBJECT_LABEL }}
@@ -74,17 +75,87 @@ jobs:
       - name: Fetch base branch
         run: git fetch origin main:main
 
-      # - name: Check Project Files
-      #   id: check-files
-      #   run: ./scripts/check-project-files.sh
+      - name: Validate metadata.json
+        uses: cardinalby/schema-validator-action@v3
+        with:
+          file: 'metadata.json'
+          schema: 'config/schemas/metadata.schema.json'
+
+      - name: Check Project Files
+        id: check-files
+        run: ./scripts/check-project-files.sh
 
       - name: Detect metadata and validate project
         id: metadata
         run: ./scripts/detect-metadata.sh
 
+  claude-review-prompt-quality:
+    runs-on: ubuntu-24.04
+    name: 'Claude Review: Prompt Quality'
+    needs: detect-metadata
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+
+      - name: Check if prompt quality review file exists
+        id: check-prompt-file
+        run: |
+          if [ -f .claude/prompts/claude-prompt-quality-review.md ]; then
+            echo "file_exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Prompt quality review file found"
+          else
+            echo "file_exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Prompt quality review file not found - skipping this check"
+            echo "This is expected for PRs created before this feature was merged to main"
+          fi
+
+      - name: Prepare Claude prompt
+        if: steps.check-prompt-file.outputs.file_exists == 'true'
+        id: prepare-prompt
+        run: |
+          PROMPT=$(cat .claude/prompts/claude-prompt-quality-review.md)
+          {
+            echo 'CLAUDE_PROMPT<<PROMPT_EOF'
+            echo "$PROMPT"
+            echo 'PROMPT_EOF'
+          } >> $GITHUB_ENV
+
+      - name: Run Claude Prompt Quality Review
+        if: steps.check-prompt-file.outputs.file_exists == 'true'
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_tools: 'Bash,Read,Grep,Glob'
+          trigger_phrase: ''
+          custom_instructions: '${{ env.CLAUDE_PROMPT }}'
+      
+      - name: Verify Prompt Quality Validation Result
+        run: |
+          echo "Verifying prompt quality validation result..."
+          # Run the validation script directly to check if it passes
+          if bash .claude/scripts/claude-validate-prompt-quality.sh; then
+            echo "✅ Prompt quality validation PASSED"
+            exit 0
+          else
+            echo "❌ Prompt quality validation FAILED"
+            echo "::error::Prompt quality validation failed. Check the Claude review comment for details."
+            exit 1
+          fi
+
   validate-commit-message:
     name: Validate Commit Message
+    needs: [detect-metadata, claude-review-prompt-quality]
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -104,11 +175,63 @@ jobs:
       - name: Validate commit message
         run: npx commitlint --last
 
+  validate-jest-config:
+    name: Validate Jest Config
+    runs-on: ubuntu-24.04
+    needs: [detect-metadata, validate-commit-message]
+    # Only run for TypeScript/JavaScript projects (Jest is not used for Python, Go, Java)
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && (needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js') }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate jest.config.js test folder
+        run: |
+          echo "🔍 Validating jest.config.js configuration..."
+          echo "Language: ${{ needs.detect-metadata.outputs.language }}"
+
+          # Valid config requires ONLY 'test/' directory (singular)
+          # Do NOT include 'tests/' - that's for Python/Go/Java projects using their own test runners
+          ROOTS_LINE=$(grep 'roots:' jest.config.js || echo '')
+
+          # Check for the correct configuration: only 'test/' folder
+          if echo "$ROOTS_LINE" | grep -q "roots: \['<rootDir>/test'\]"; then
+            echo "✅ jest.config.js validation passed - using 'test/' folder (singular)"
+            echo "Found: $ROOTS_LINE"
+          else
+            echo ""
+            echo "❌ ERROR: jest.config.js has incorrect roots configuration!"
+            echo ""
+            echo "Expected: roots: ['<rootDir>/test']"
+            echo "Found:    $ROOTS_LINE"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Jest is ONLY used for TypeScript/JavaScript projects."
+            echo "TS/JS projects must use 'test/' folder (singular)."
+            echo ""
+            echo "Other languages use their own test runners:"
+            echo "  - Python: pytest with 'tests/' folder"
+            echo "  - Go: go test with 'tests/' folder"
+            echo "  - Java: JUnit/Gradle with 'tests/' folder"
+            echo ""
+            echo "Do NOT add 'tests/' to Jest roots - it will break validation!"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            exit 1
+          fi
+
   build:
     name: Build
     runs-on: ubuntu-24.04
-    needs: detect-metadata
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
+    needs: [detect-metadata, claude-review-prompt-quality, validate-commit-message, validate-jest-config]
+    if: |
+      always() &&
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) &&
+      needs.claude-review-prompt-quality.result == 'success' &&
+      needs.validate-commit-message.result == 'success' &&
+      (needs.validate-jest-config.result == 'success' || needs.validate-jest-config.result == 'skipped')
     environment: dev
 
     steps:
@@ -119,10 +242,19 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
-          upload-artifacts: "true"
+          download-artifacts: 'false'
+          upload-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
+
+      - name: Validate Stack Naming
+        run: |
+          echo "🔍 Validating stack naming conventions..."
+          if [ -f "scripts/validate-stack-naming.sh" ]; then
+            ./scripts/validate-stack-naming.sh || echo "⚠️ Stack naming validation found issues (non-blocking)"
+          else
+            echo "⚠️ validate-stack-naming.sh not found, skipping"
+          fi
 
       - name: Build
         run: ./scripts/build.sh
@@ -138,7 +270,12 @@ jobs:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    if: |
+      always() &&
+      needs.build.result == 'success' &&
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)
     environment: dev
     permissions:
       contents: read
@@ -161,7 +298,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -278,8 +415,16 @@ jobs:
   analysis:
     name: Analysis
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, lint, unit-tests]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && needs.lint.result == 'success' && needs.unit-tests.result == 'success' }}
+    needs: [detect-metadata, claude-review-prompt-quality, lint, unit-tests]
+    if: |
+      always() &&
+      needs.claude-review-prompt-quality.result == 'success' &&
+      needs.lint.result == 'success' &&
+      needs.unit-tests.result == 'success' &&
+      github.event_name == 'pull_request' &&
+      github.event.action != 'closed' &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label)
     environment: dev
     env:
       AWS_ENDPOINT_URL: http://127.0.0.1:5001
@@ -320,8 +465,8 @@ jobs:
   cicd-pipeline-optimization:
     name: CICD Pipeline Optimization
     runs-on: ubuntu-24.04
-    needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    needs: [detect-metadata, claude-review-prompt-quality, validate-commit-message]
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) && needs.claude-review-prompt-quality.result == 'success' && needs.validate-commit-message.result == 'success' }}
     environment: dev
     permissions:
       contents: write
@@ -351,8 +496,15 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, synth]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
+    needs: [detect-metadata, claude-review-prompt-quality, synth]
+    if: |
+      always() &&
+      needs.claude-review-prompt-quality.result == 'success' &&
+      (needs.synth.result == 'success' || needs.synth.result == 'skipped') &&
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)
     environment: dev
 
     steps:
@@ -363,9 +515,10 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
+          provider: ${{ needs.detect-metadata.outputs.provider }}
 
       - name: Download build artifacts (dist/)
         if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
@@ -373,6 +526,20 @@ jobs:
         with:
           name: build-dist
           path: dist
+
+      - name: Validate Stack Naming Before Deploy
+        run: |
+          echo "🔍 Validating stack naming conventions before deployment..."
+          if [ -f "scripts/validate-stack-naming.sh" ]; then
+            ./scripts/validate-stack-naming.sh || echo "⚠️ Stack naming validation found issues (non-blocking)"
+          fi
+
+          # Source and print stack configuration
+          if [ -f "scripts/stack-config.sh" ]; then
+            source scripts/stack-config.sh
+            bash scripts/stack-config.sh --print
+          fi
+
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
@@ -386,7 +553,8 @@ jobs:
 
       # (Removed DynamoDB lock table step per PR review)
 
-      - name: Bootstrap
+      - name: Bootstrap (AWS only)
+        if: ${{ needs.detect-metadata.outputs.provider != 'localstack' }}
         run: ./scripts/bootstrap.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -395,8 +563,38 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+      - name: Skip Bootstrap (LocalStack)
+        if: ${{ needs.detect-metadata.outputs.provider == 'localstack' }}
+        run: |
+          echo "ℹ️ Skipping AWS bootstrap for LocalStack deployment"
+          echo "LocalStack bootstrap will be handled during deployment"
+
+      - name: Start LocalStack (if provider is localstack)
+        if: ${{ needs.detect-metadata.outputs.provider == 'localstack' }}
+        run: ./scripts/localstack-start-ci.sh
+        env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
+
       - name: Deploy
-        run: ./scripts/deploy.sh
+        run: |
+          if [ "${{ needs.detect-metadata.outputs.provider }}" == "localstack" ]; then
+            echo "Deploying to LocalStack..."
+            export AWS_ENDPOINT_URL=http://localhost:4566
+            # Use s3.localhost.localstack.cloud for S3 endpoint to ensure proper bucket name parsing
+            export AWS_ENDPOINT_URL_S3=http://s3.localhost.localstack.cloud:4566
+            export AWS_ACCESS_KEY_ID=test
+            export AWS_SECRET_ACCESS_KEY=test
+            export AWS_DEFAULT_REGION=us-east-1
+            export AWS_REGION=us-east-1
+            export LOCALSTACK_API_KEY="${{ secrets.LOCALSTACK_API_KEY }}"
+            # Force S3 path-style addressing for LocalStack
+            export AWS_S3_FORCE_PATH_STYLE=true
+            export AWS_S3_USE_PATH_STYLE=1
+            ./scripts/localstack-ci-deploy.sh
+          else
+            echo "Deploying to AWS..."
+            ./scripts/deploy.sh
+          fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           REPOSITORY: ${{ github.repository }}
@@ -425,7 +623,12 @@ jobs:
     name: IaC Optimization
     runs-on: ubuntu-24.04
     needs: [detect-metadata, deploy]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, 'IaC Optimization')}}
+    if: |
+      always() &&
+      needs.deploy.result == 'success' &&
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      contains(needs.detect-metadata.outputs.subject_labels, 'IaC Optimization')
     environment: dev
 
     steps:
@@ -439,6 +642,7 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
+          provider: ${{ needs.detect-metadata.outputs.provider }}
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
@@ -462,8 +666,14 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, build]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
+    needs: [detect-metadata, claude-review-prompt-quality, build]
+    if: |
+      always() &&
+      needs.claude-review-prompt-quality.result == 'success' &&
+      needs.build.result == 'success' &&
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -477,7 +687,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -490,7 +700,12 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    if: |
+      always() &&
+      needs.lint.result == 'success' &&
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)
     environment: qa
 
     steps:
@@ -501,7 +716,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -555,6 +770,7 @@ jobs:
             coverage/
             cov.json
 
+
   # mocked-integration-tests:
   #   name: Mocked Integration Tests
   #   runs-on: ubuntu-24.04
@@ -583,7 +799,15 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
+    if: |
+      always() &&
+      needs.deploy.result == 'success' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.unit-tests.result == 'success' || needs.unit-tests.result == 'skipped') &&
+      (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') &&
+      !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) &&
+      !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)
 
     steps:
       - name: Checkout code
@@ -593,9 +817,10 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
+          provider: ${{ needs.detect-metadata.outputs.provider }}
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
@@ -603,31 +828,58 @@ jobs:
           name: cfn-outputs
           path: .
 
-      - name: Configure AWS
+      - name: Configure AWS (if provider is aws)
+        if: ${{ needs.detect-metadata.outputs.provider == 'aws' || needs.detect-metadata.outputs.provider == '' }}
         uses: ./.github/actions/configure-aws
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
-      - name: Run integration tests against live environment
-        run: ./scripts/integration-tests.sh
+      - name: Start LocalStack (if provider is localstack)
+        if: ${{ needs.detect-metadata.outputs.provider == 'localstack' }}
+        run: ./scripts/localstack-start-ci.sh
+        env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
+
+      - name: Run integration tests
+        run: |
+          if [ "${{ needs.detect-metadata.outputs.provider }}" == "localstack" ]; then
+            echo "Deploying to LocalStack and running integration tests..."
+            export AWS_ENDPOINT_URL=http://localhost:4566
+            # Use s3.localhost.localstack.cloud for S3 endpoint to ensure proper bucket name parsing
+            export AWS_ENDPOINT_URL_S3=http://s3.localhost.localstack.cloud:4566
+            export AWS_ACCESS_KEY_ID=test
+            export AWS_SECRET_ACCESS_KEY=test
+            export AWS_DEFAULT_REGION=us-east-1
+            export AWS_REGION=us-east-1
+            export LOCALSTACK_API_KEY="${{ secrets.LOCALSTACK_API_KEY }}"
+            # Force S3 path-style addressing for LocalStack
+            export AWS_S3_FORCE_PATH_STYLE=true
+            export AWS_S3_USE_PATH_STYLE=1
+            ./scripts/localstack-ci-deploy.sh && ./scripts/localstack-ci-test.sh
+          else
+            echo "Running integration tests against AWS..."
+            ./scripts/integration-tests.sh
+          fi
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          CI: "1" # Set CI for the entire step
+          CI: '1' # Set CI for the entire step
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+
   claude-code-action:
     runs-on: ubuntu-24.04
-    name: "Claude Review"
+    name: 'Claude Review'
     needs:
       [
         detect-metadata,
+        claude-review-prompt-quality,
         integration-tests-live,
         analysis,
         cicd-pipeline-optimization,
@@ -636,8 +888,10 @@ jobs:
     # For all other subject labels: Require int-tests to succeed
     if: |
       always() && !cancelled() &&
+      github.event_name == 'pull_request' &&
       (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') &&
       (needs.cicd-pipeline-optimization.result == 'success' || needs.cicd-pipeline-optimization.result == 'skipped') &&
+      needs.claude-review-prompt-quality.result == 'success' &&
       (
         (
           (contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) ||
@@ -706,247 +960,542 @@ jobs:
             echo "📋 Using standard IaC review criteria"
           fi
 
+      - name: Prepare Claude system prompt
+        id: prepare-prompt
+        run: |
+          # Read system prompt from file
+          SYSTEM_PROMPT=$(cat .claude/prompts/claude-review-system-prompt.md)
+
+          # Store in GITHUB_ENV using heredoc (no expression limit)
+          {
+            echo 'SYSTEM_PROMPT_CONTENT<<PROMPT_EOF'
+            echo "$SYSTEM_PROMPT"
+            echo 'PROMPT_EOF'
+          } >> $GITHUB_ENV
+
       - name: Run Claude PR Review Action
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: "Review this pull request's infrastructure code changes, validate file formats and compliance, and provide a comprehensive code review. You MUST post your review findings as a comment on this pull request when complete."
-          claude_args: |
-            --allowedTools "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
-            --system-prompt "CRITICAL: You MUST post a GitHub comment on this pull request when your review is complete. This is mandatory and non-negotiable.
+          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
+          trigger_phrase: ''
+          custom_instructions: '${{ env.SYSTEM_PROMPT_CONTENT }}'
 
-            # Determine Review Type
+      - name: Verify metadata.json Updated
+        id: verify_metadata
+        run: |
+          echo "🔍 Verifying Claude updated metadata.json with training_quality..."
 
-            First, check the subject_labels in metadata.json to determine the review type:
-            ```bash
-            SUBJECT_LABELS=$(jq -r '.subject_labels[]?' metadata.json 2>/dev/null || echo "")
-            if echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
-              REVIEW_TYPE="cicd-pipeline"
-            else
-              REVIEW_TYPE="iac-standard"
+          if [ ! -f "metadata.json" ]; then
+            echo "::error::metadata.json not found after Claude review"
+            exit 1
+          fi
+
+          # Check if training_quality field exists and is a valid number
+          TRAINING_QUALITY=$(jq -r '.training_quality // empty' metadata.json 2>/dev/null || echo "")
+
+          if [ -z "$TRAINING_QUALITY" ]; then
+            echo "⚠️ WARNING: Claude did not update metadata.json with training_quality"
+            echo "⚠️ Will attempt to extract score from PR comment instead"
+            echo "metadata_updated=false" >> $GITHUB_OUTPUT
+          elif [[ ! "$TRAINING_QUALITY" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+            echo "⚠️ WARNING: training_quality value '$TRAINING_QUALITY' is not a valid number"
+            echo "metadata_updated=false" >> $GITHUB_OUTPUT
+          else
+            echo "✅ metadata.json updated with training_quality: $TRAINING_QUALITY"
+            echo "metadata_updated=true" >> $GITHUB_OUTPUT
+            echo "training_quality=$TRAINING_QUALITY" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify Claude Posted Review Comment
+        id: verify_comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Verifying Claude posted a review comment..."
+
+          # Get the timestamp of when Claude action started (approximate)
+          CLAUDE_START_TIME=$(date -u -d '2 minutes ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-2M +%Y-%m-%dT%H:%M:%SZ)
+
+          # Fetch comments from the last few minutes
+          RECENT_COMMENTS=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --jq ".[].body" 2>/dev/null || echo "")
+
+          # Check if any comment contains Claude review markers
+          if echo "$RECENT_COMMENTS" | grep -q "metadata.json Validation\|Code Review Summary\|Training Quality"; then
+            echo "✅ Claude successfully posted a review comment"
+            echo "comment_posted=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ WARNING: Claude action completed but no review comment was found"
+            echo "⚠️ This may be due to known issues with anthropics/claude-code-action@beta"
+            echo "comment_posted=false" >> $GITHUB_OUTPUT
+            
+            # Post a fallback notification comment
+            COMMENT_BODY=$(cat << 'COMMENT_EOF'
+          ## ⚠️ Claude Review Job Completed With Issues
+
+          Status: The Claude review job ran but failed to post the review results.
+
+          Possible Causes:
+          - Known issue with anthropics/claude-code-action@beta (#548, #557, #567)
+          - GitHub API rate limiting
+          - Network connectivity issues
+
+          Action Required: Please check the GitHub Actions logs for the Claude review step.
+
+          Next Steps: The workflow will continue with quality gate validation using metadata.json as fallback.
+          COMMENT_EOF
+          )
+            COMMENT_BODY="${COMMENT_BODY}
+
+          Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          ---
+          Posted by CI/CD Pipeline | $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT_BODY" || echo "⚠️ Failed to post fallback comment (non-blocking)"
+          fi
+
+      - name: Check for Critical Issues in Claude Review
+        id: check_critical
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Checking for critical validation failures in Claude review..."
+
+          # Fetch all PR comments with timestamps, sorted by creation time
+          # Only check the MOST RECENT Claude review comment (identified by review markers)
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --jq 'sort_by(.created_at) | reverse | .[].body' > all_comments_sorted.txt
+
+          # Find the most recent Claude review comment (contains review markers)
+          # Claude reviews contain specific markers like "metadata.json Validation", "SCORE:", etc.
+          CLAUDE_COMMENT=""
+          while IFS= read -r -d '' comment || [[ -n "$comment" ]]; do
+            if echo "$comment" | grep -qE "(metadata\.json Validation|Code Review Summary|Training Quality|SCORE:[0-9]+|## 📋)"; then
+              CLAUDE_COMMENT="$comment"
+              break
             fi
-            echo "Review type: $REVIEW_TYPE"
-            ```
+          done < <(gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --jq 'sort_by(.created_at) | reverse | .[] | .body + "\u0000"')
 
-            # CI/CD Pipeline Review (If REVIEW_TYPE=cicd-pipeline)
+          if [ -z "$CLAUDE_COMMENT" ]; then
+            echo "⚠️ No Claude review comment found with expected markers"
+            echo "Checking all recent comments as fallback..."
+            # Fallback: use the most recent comment
+            CLAUDE_COMMENT=$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+              --jq 'sort_by(.created_at) | reverse | .[0].body // empty')
+          fi
 
-            If this is a CI/CD Pipeline task, follow these specialized review criteria:
+          if [ -z "$CLAUDE_COMMENT" ]; then
+            echo "⚠️ No comments found on PR"
+            echo "critical_issues_found=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
-            ## Step 1: Read CI/CD Pipeline Review Guidelines
-            Read and follow `.claude/prompts/cicd-pipeline-review.md` for complete scoring criteria.
+          # Save the most recent Claude comment for checking
+          echo "$CLAUDE_COMMENT" > latest_claude_comment.txt
+          echo "📝 Checking Claude's review comment ($(echo "$CLAUDE_COMMENT" | wc -c) bytes)"
 
-            ## Step 2: Validate lib/ci-cd.yml
+          # ============================================================
+          # IMPROVED ERROR DETECTION WITH CLEAR, USER-FRIENDLY MESSAGES
+          # Each issue type has: detection, explanation, and fix steps
+          # ============================================================
 
-            The CI/CD pipeline configuration is in `lib/ci-cd.yml`. Review it against these critical criteria:
+          CRITICAL_FOUND=false
+          ISSUE_TYPE=""
+          ISSUE_QUOTE=""
 
-            ### Security (3 points - CRITICAL)
-            1. **Secrets Management (2 points)** - NO hardcoded secrets, all use `${{ secrets.* }}` or `${{ vars.* }}`
-            2. **IAM & Authentication (1 point)** - Proper OIDC or GitHub Secrets authentication
+          # Helper function to build clear error message
+          build_error_output() {
+            local issue_type="$1"
+            local quote="$2"
+            local what_happened="$3"
+            local why_matters="$4"
+            local how_to_fix="$5"
+            
+            echo ""
+            echo "════════════════════════════════════════════════════════════════"
+            echo "❌ CLAUDE REVIEW FAILED"
+            echo "════════════════════════════════════════════════════════════════"
+            echo ""
+            echo "WHAT HAPPENED:"
+            echo "  $what_happened"
+            echo ""
+            echo "FROM CLAUDE'S REVIEW:"
+            echo "  \"$quote\""
+            echo ""
+            echo "WHY THIS MATTERS:"
+            echo "  $why_matters"
+            echo ""
+            echo "HOW TO FIX:"
+            echo "$how_to_fix"
+            echo ""
+            echo "════════════════════════════════════════════════════════════════"
+          }
 
-            If ANY hardcoded secrets found: **Automatic FAIL (score = 0)**
+          # -------------------------------------------------------------------
+          # CHECK 1: Metadata validation failed
+          # -------------------------------------------------------------------
+          if grep -qE "Metadata validation FAILED|❌.*[Mm]etadata|❌.*[Vv]alidation.*FAILED" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="metadata_validation"
+            ISSUE_QUOTE=$(grep -oE ".*[Mm]etadata validation FAILED.*|❌.*[Mm]etadata.*|❌.*[Vv]alidation.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "Metadata Validation Failed" \
+              "$ISSUE_QUOTE" \
+              "Your metadata.json file has errors that need to be fixed." \
+              "The metadata.json file tells the system how to process your PR. Invalid values will cause the pipeline to fail." \
+              "  1. Open metadata.json in your project root
+            2. Check for these common issues:
+               - platform: must be one of: cdk, cdktf, cfn, tf, pulumi, cicd, analysis
+               - language: must match your platform (e.g., ts for CDK, hcl for Terraform)
+               - subtask: must be an exact match from the allowed list
+               - subject_labels: must be an array, not a string
+            3. Run: bash .claude/scripts/validate-metadata.sh metadata.json
+            4. Fix any errors shown, then push your changes"
 
-            ### Architecture (3 points)
-            1. **Multi-stage deployment (2 points)** - Dev → Staging → Prod with approval gates
-            2. **Job dependencies & artifacts (1 point)** - Proper `needs:` relationships and artifact management
+          # -------------------------------------------------------------------
+          # CHECK 2: Security issue - credentials in code
+          # -------------------------------------------------------------------
+          elif grep -qiE "HARDCODED SECRETS FOUND|❌.*hardcoded.*secret|❌.*credential|❌.*password|❌.*api.?key" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="hardcoded_credentials"
+            ISSUE_QUOTE=$(grep -oiE ".*HARDCODED SECRETS FOUND.*|.*❌.*hardcoded.*|.*❌.*credential.*|.*❌.*password.*|.*❌.*api.?key.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "Security Issue - Credentials in Code" \
+              "$ISSUE_QUOTE" \
+              "Claude found passwords, API keys, or AWS credentials written directly in your code." \
+              "Credentials in code are a security risk. They can be exposed if code is shared or pushed to a repository." \
+              "  1. Find the file mentioned in Claude's review above
+            2. Remove the hardcoded credentials
+            3. Replace with environment variables:
+               BEFORE: const apiKey = \"sk-abc123...\"
+               AFTER:  const apiKey = process.env.API_KEY
+            4. Or use AWS Secrets Manager for sensitive values
+            5. Push your changes"
 
-            ### Configuration Management (2 points)
-            1. **Environment variables & parameterization** - Reusable env vars, workflow_dispatch inputs
+          # -------------------------------------------------------------------
+          # CHECK 3: AI-generated content in PROMPT files
+          # -------------------------------------------------------------------
+          elif grep -qiE "❌.*emojis? found|❌.*ai-generated|CRITICAL.*emoji|CRITICAL.*ai-generated" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="ai_generated_content"
+            ISSUE_QUOTE=$(grep -oiE ".*❌.*emojis? found.*|.*❌.*ai-generated.*|.*CRITICAL.*emoji.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "AI-Generated Content Detected" \
+              "$ISSUE_QUOTE" \
+              "Your PROMPT.md file contains emojis or patterns that indicate it was written by AI." \
+              "PROMPT.md files must be human-written. AI-generated prompts reduce training data quality." \
+              "  1. Open lib/PROMPT.md
+            2. Remove ALL emojis (🚀, 💡, ✨, 📝, etc.)
+            3. Remove AI-style formatting like:
+               - Excessive bullet points
+               - \"Let's\" or \"I'll help you\" phrases
+               - Overly structured headings
+            4. Rewrite in natural, conversational language
+            5. Push your changes"
 
-            ### Requirements Compliance (2 points)
-            1. **lib/ci-cd.yml patterns (1.5 points)** - Follows specification and best practices
-            2. **PROMPT requirements (0.5 points)** - All requirements from lib/PROMPT.md implemented
+          # -------------------------------------------------------------------
+          # CHECK 4: Platform/language mismatch
+          # -------------------------------------------------------------------
+          elif grep -qiE "❌.*platform.*mismatch|❌.*language.*mismatch|platform.*language.*invalid" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="platform_mismatch"
+            ISSUE_QUOTE=$(grep -oiE ".*❌.*platform.*|.*❌.*language.*|.*mismatch.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "Platform/Language Mismatch" \
+              "$ISSUE_QUOTE" \
+              "Your metadata.json says one thing, but your code is written differently." \
+              "The platform and language in metadata.json must match your actual code files." \
+              "  1. Check your metadata.json platform and language fields
+            2. Verify they match your code:
+               - CDK TypeScript: platform=cdk, language=ts
+               - Terraform: platform=tf, language=hcl
+               - CloudFormation: platform=cfn, language=yaml
+               - Pulumi Python: platform=pulumi, language=py
+            3. Update metadata.json to match your actual code
+            4. Push your changes"
 
-            ## Step 3: Calculate Score (Total: 10 points)
+          # -------------------------------------------------------------------
+          # CHECK 5: BLOCKED status
+          # -------------------------------------------------------------------
+          elif grep -q "BLOCKED:" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="blocked"
+            ISSUE_QUOTE=$(grep -o "BLOCKED:.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "PR Blocked" \
+              "$ISSUE_QUOTE" \
+              "Claude has blocked this PR due to issues that must be resolved." \
+              "Blocked PRs cannot proceed until the specified issues are fixed." \
+              "  1. Read Claude's full review comment above
+            2. Address each issue mentioned after 'BLOCKED:'
+            3. Push your fixes"
 
-            Sum all category scores directly (no conversion needed).
-            - Minimum passing score: 8/10
+          # -------------------------------------------------------------------
+          # CHECK 6: Missing required files
+          # -------------------------------------------------------------------
+          elif grep -qiE "❌.*missing|❌.*not found|❌.*required.*file" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="missing_files"
+            ISSUE_QUOTE=$(grep -oiE ".*❌.*missing.*|.*❌.*not found.*|.*❌.*required.*file.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "Missing Required Files" \
+              "$ISSUE_QUOTE" \
+              "Your PR is missing one or more required files." \
+              "Certain files are required for the review process to complete." \
+              "  1. Check which files are missing from Claude's review
+            2. Required files typically include:
+               - lib/PROMPT.md (the task prompt)
+               - lib/MODEL_RESPONSE.md (AI model's response)
+               - lib/IDEAL_RESPONSE.md (expected correct response)
+               - lib/MODEL_FAILURES.md (analysis of model errors)
+            3. Create the missing files in the lib/ directory
+            4. Push your changes"
 
-            ## Step 4: Update metadata.json with Training Quality
+          # -------------------------------------------------------------------
+          # CHECK 7: SCORE:0 (Claude's deliberate failure signal)
+          # -------------------------------------------------------------------
+          elif grep -qE "^SCORE:0$|SCORE:0[^0-9]" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="score_zero"
+            # Try to find the reason Claude gave score 0
+            ISSUE_QUOTE=$(grep -B5 "SCORE:0" latest_claude_comment.txt | grep -iE "issue|error|fail|problem|missing|invalid" | head -1 | cut -c1-150)
+            if [ -z "$ISSUE_QUOTE" ]; then
+              ISSUE_QUOTE="SCORE:0 - Claude found critical issues requiring fixes"
+            fi
+            
+            build_error_output \
+              "Review Score: 0/10" \
+              "$ISSUE_QUOTE" \
+              "Claude gave your PR a score of 0, indicating critical issues." \
+              "A score of 0 means the PR has fundamental problems that must be fixed." \
+              "  1. Read Claude's FULL review comment above carefully
+            2. Look for sections marked with ❌ or 'Issues'
+            3. Fix ALL identified problems
+            4. Push your changes for a new review"
 
-            **MANDATORY ACTION**: You MUST update metadata.json with the training quality score using the Bash tool.
+          # -------------------------------------------------------------------
+          # CHECK 8: Explicit CRITICAL marker
+          # -------------------------------------------------------------------
+          elif grep -qE "❌ CRITICAL:|❌.*CRITICAL|CRITICAL.*❌" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="critical_marker"
+            ISSUE_QUOTE=$(grep -oE ".*❌.*CRITICAL.*|.*CRITICAL.*❌.*" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "Critical Issue Found" \
+              "$ISSUE_QUOTE" \
+              "Claude marked a critical issue that blocks this PR." \
+              "Critical issues must be resolved before the PR can proceed." \
+              "  1. Read Claude's review comment above
+            2. Find the section marked CRITICAL
+            3. Follow Claude's instructions to fix the issue
+            4. Push your changes"
 
-            After calculating your score, execute this command using the Bash tool (replace <score> with actual numeric value 0-10):
+          # -------------------------------------------------------------------
+          # CHECK 9: Claude explicitly requested failure
+          # -------------------------------------------------------------------
+          elif grep -q "Exit with code 1 to fail the job" latest_claude_comment.txt; then
+            CRITICAL_FOUND=true
+            ISSUE_TYPE="explicit_failure"
+            ISSUE_QUOTE=$(grep -B3 "Exit with code 1" latest_claude_comment.txt | head -1 | cut -c1-150)
+            
+            build_error_output \
+              "Review Failed" \
+              "$ISSUE_QUOTE" \
+              "Claude determined this PR should not proceed in its current state." \
+              "The review found issues that require your attention." \
+              "  1. Read Claude's full review comment above
+            2. Address all issues mentioned
+            3. Push your fixes"
+          fi
 
-            ```bash
-            jq --argjson tq <score> '.training_quality = $tq' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json && echo "Updated training_quality to <score>/10" && cat metadata.json
-            ```
+          # -------------------------------------------------------------------
+          # POST RESULT
+          # -------------------------------------------------------------------
+          if [ "$CRITICAL_FOUND" = true ]; then
+            # Build user-friendly PR comment based on issue type
+            case "$ISSUE_TYPE" in
+              metadata_validation)
+                FIX_STEPS="1. Open \`metadata.json\` in your project root
+          2. Run the validation script: \`bash .claude/scripts/validate-metadata.sh metadata.json\`
+          3. Fix the errors shown by the script
+          4. Common fixes:
+             - Ensure \`platform\` is one of: cdk, cdktf, cfn, tf, pulumi, cicd, analysis
+             - Ensure \`language\` matches your platform
+             - Ensure \`subject_labels\` is an array: \`[\"Label Name\"]\`
+          5. Push your changes"
+                ;;
+              hardcoded_credentials)
+                FIX_STEPS="1. Find the file mentioned in Claude's review
+          2. Remove hardcoded credentials (passwords, API keys, AWS keys)
+          3. Replace with environment variables:
+             \`\`\`
+             // Before
+             const apiKey = \"sk-abc123...\";
+             
+             // After  
+             const apiKey = process.env.API_KEY;
+             \`\`\`
+          4. Or use AWS Secrets Manager for sensitive values
+          5. Push your changes"
+                ;;
+              ai_generated_content)
+                FIX_STEPS="1. Open \`lib/PROMPT.md\`
+          2. Remove ALL emojis (🚀, 💡, ✨, 📝, ✅, ❌, etc.)
+          3. Remove AI-style writing patterns
+          4. Rewrite in natural, human language
+          5. Push your changes"
+                ;;
+              platform_mismatch)
+                FIX_STEPS="1. Check your \`metadata.json\` platform and language
+          2. Verify they match your actual code:
+             - CDK + TypeScript → \`platform: cdk, language: ts\`
+             - Terraform → \`platform: tf, language: hcl\`
+             - CloudFormation → \`platform: cfn, language: yaml\`
+          3. Update metadata.json accordingly
+          4. Push your changes"
+                ;;
+              missing_files)
+                FIX_STEPS="1. Create missing files in the \`lib/\` directory:
+             - \`lib/PROMPT.md\` - The task prompt
+             - \`lib/MODEL_RESPONSE.md\` - AI model's response
+             - \`lib/IDEAL_RESPONSE.md\` - Expected correct response
+             - \`lib/MODEL_FAILURES.md\` - Analysis of model errors
+          2. Push your changes"
+                ;;
+              *)
+                FIX_STEPS="1. Read Claude's full review comment above
+          2. Address all issues marked with ❌
+          3. Push your fixes"
+                ;;
+            esac
+            
+            FAILURE_COMMENT="## ❌ Claude Review Failed
 
-            Example if score is 10:
-            ```bash
-            jq --argjson tq 10 '.training_quality = $tq' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json && echo "Updated training_quality to 10/10" && cat metadata.json
-            ```
+          **What happened:** Claude's review found issues that need to be fixed before this PR can proceed.
 
-            **Verification**: After running the command, verify the output shows training_quality field was added to metadata.json.
+          **Issue found:**
+          > $ISSUE_QUOTE
 
-            **CRITICAL**: Do NOT skip this step. The metadata.json MUST be updated before posting the review comment.
+          ---
 
-            **Note**: CI/CD Pipeline tasks do NOT require aws_services field. Do NOT flag aws_services as missing for CI/CD tasks.
+          ### How to Fix
 
-            ## Step 5: Post Review Comment
+          $FIX_STEPS
 
-            Post a GitHub comment with the format specified in `.claude/prompts/cicd-pipeline-review.md`.
+          ---
 
-            ## Step 6: Output Score
+          📖 **Need more details?** Read Claude's full review comment above for specific information.
 
-            At the very end of your output, on its own line:
-            ```
-            SCORE:<numeric_value>
-            ```
-
-            Example: `SCORE:8`
-
-            ---
-
-            # Standard IaC Review (If REVIEW_TYPE=iac-standard)
-
-            If this is NOT a CI/CD Pipeline task, follow the standard review process:
-
-            CRITICAL: you MUST validate the latest PROMPT file format, and add a github comment if it appears to be AI-generated rather than human-written:
-            1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
-            2. Read the PROMPT files
-            3. Assess whether the content looks human-generated or AI-generated
-            4. Look for signs of AI generation such as:
-                - Emojis or special symbols (icons) used for formatting
-                - Table structures
-                - Overly formal or template-like language
-                - Logs are allowed when we have multiple prompt files. 
-                - Perfect formatting that suggests AI assistance
-                - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
-            5. If  any PROMPT file appears to be AI-generated rather than human-written, fail the job by exiting with code 1.
-            6. Also validate that for each PROMPT file, there is a corresponding MODEL_RESPONSE file (e.g., PROMPT.md -> MODEL_RESPONSE.md, PROMPT2.md -> MODEL_RESPONSE2.md, etc.) and that it is well-formatted.
-            7. PROMPT2.md and PROMPT3.md are optional, but if they exist, they must also be validated and it can contain Deployment/Test/Error logs as well.
-
-            CRITICAL: you MUST validate lib/IDEAL_RESPONSE.md, read .claude/agents/iac-infra-qa-trainer.md to understand how that file should have been created.
-            1. Read lib/IDEAL_RESPONSE.md if it exists
-            2. lib/IDEAL_RESPONSE.md should be well-formatted, markdown.
-            3. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
-            4. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
-            5. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
-            6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, fail the job by exiting with code 1.
-
-            CRITICAL WARNING - FILE CONTEXT:
-            - lib/MODEL_RESPONSE.md = Initial model output (MAY contain errors like Maven, multi-stack, etc.)
-            - lib/IDEAL_RESPONSE.md = Final corrected code (THIS is what you validate for platform/language compliance)
-            - lib/MODEL_FAILURES.md = Documentation of what WAS FIXED (past tense) - NOT current errors!
-
-            When validating platform/language compliance, you MUST:
-            1. Run: bash ./.claude/scripts/validate-code-platform.sh
-            2. This script checks lib/IDEAL_RESPONSE.md (NOT MODEL_RESPONSE.md) against metadata.json
-            3. If MODEL_FAILURES.md mentions "Maven → Gradle" or "multi-stack → single stack", those are PAST fixes
-            4. DO NOT report those as current problems in IDEAL_RESPONSE.md
-            5. Only validate what is CURRENTLY in lib/IDEAL_RESPONSE.md
-
-            Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes, but allow the metadata.json file to be updated.
-            Important: The Metadata Enhancement phase in .claude/agents/iac-code-reviewer.md is very important for this project. Make sure that the
-            metadata.json file is updated with the required fields:
-
-            For standard IaC tasks:
-            - training_quality (required)
-            - aws_services (required)
-
-            For CI/CD Pipeline tasks (subject_label: "CI/CD Pipeline" OR platform: "cicd"):
-            - training_quality (required)
-            - aws_services (NOT required - CI/CD pipelines don't deploy AWS services)
-
-            If metadata.json is missing required fields for the task type, add a github comment indicating the issue.
-
-            This validation is mandatory and must be completed before any other review activities.
-
-            Now follow the instructions in .claude/agents/iac-code-reviewer.md
-
-            ---
-
-            # ⚠️ CRITICAL: Final Output Format (Both Review Types)
-
-            **MANDATORY**: Your GitHub comment MUST end with this exact line:
-
-            SCORE:X
-
-            Where X is a number from 0 to 10 (your training quality score).
-
-            **Format Requirements:**
-            - Must be on its own line (no other text on that line)
-            - Must be the LAST line of your GitHub comment
-            - Must use exact format: SCORE:8 (no spaces between SCORE: and number)
-            - Score must be 0-10 (scores > 10 will be rejected as false matches)
-            - Do NOT use compliance scores (like 12/17) or other metrics
-
-            **Examples of VALID formats:**
-            ```
-            SCORE:10
-            SCORE:8
-            SCORE:6
-            ```
-
-            **Examples of INVALID formats:**
-            ```
-            SCORE: 8 (extra space)
-            Training Quality Score: 8/10 (wrong format, but acceptable as fallback)
-            Compliance Score: 12/17 (will be rejected - exceeds maximum)
-            ```
-
-            **MANDATORY FINAL STEPS**:
-            1. Update metadata.json with training_quality field (primary source)
-            2. Post comprehensive GitHub comment with review findings
-            3. End comment with SCORE:X line where X is 0-10
-
-            **What happens if you don't follow this:**
-            - Without SCORE line: Score defaults to 0, build FAILS
-            - Score > 10: Rejected as false match, score set to 0, build FAILS
-            - Without metadata.json update: Fallback to comment parsing, less reliable
-
-            After posting the comment with the SCORE line, finish execution successfully.
-            Do not exit with a non-zero code unless explicitly instructed by the workflow."
+          🔗 **CI Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            
+            gh pr comment ${{ github.event.pull_request.number }} --body "$FAILURE_COMMENT" || echo "⚠️ Failed to post failure comment"
+            
+            echo "critical_issues_found=true" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "✅ No critical issues found in Claude's review"
+            echo "critical_issues_found=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Extract Claude Quality Score from PR Comment
         id: extract
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🔍 Fetching latest Claude review comment..."
-          gh pr view ${{ github.event.pull_request.number }} --comments --json comments \
-            | jq -r '.comments[].body' > all_comments.txt
+          echo "🔍 Fetching most recent Claude review comment..."
 
-          echo "🍀 Searching for Claude quality score patterns..."
-
-          # 1️⃣ Try to find most flexible Claude score pattern
-          # Matches things like:
-          # SCORE:9, Score: 9, Training Quality: **9.2/10**, Final Score ⭐️: 8.5/10, etc.
-          SCORE=$(grep -Poi \
-            '(?i)(score|training\s*quality|training\s*score|final\s*score|estimated\s*score)[^0-9]{0,15}([0-9]+(\.[0-9]+)?)' \
-            all_comments.txt | grep -Po '[0-9]+(\.[0-9]+)?' | tail -1)
-
-          # 2️⃣ If not found, try clean "SCORE:" line (in case of strict format)
-          if [ -z "$SCORE" ]; then
-            SCORE=$(grep -Poi '^\s*\*?\**\s*SCORE\s*[:=-]?\s*\**\*?\s*([0-9]+(\.[0-9]+)?)' all_comments.txt | grep -Po '[0-9]+(\.[0-9]+)?' | tail -1)
+          # Use the latest Claude comment file if it exists from previous step
+          # Otherwise, fetch and find the most recent Claude review comment
+          if [ -f "latest_claude_comment.txt" ] && [ -s "latest_claude_comment.txt" ]; then
+            echo "📝 Using cached latest Claude comment from previous step"
+            cp latest_claude_comment.txt claude_review.txt
+          else
+            echo "📝 Fetching Claude review comment from API..."
+            # Find the most recent Claude review comment (contains review markers)
+            CLAUDE_COMMENT=""
+            while IFS= read -r -d '' comment || [[ -n "$comment" ]]; do
+              if echo "$comment" | grep -qE "(metadata\.json Validation|Code Review Summary|Training Quality|SCORE:[0-9]+|## 📋)"; then
+                CLAUDE_COMMENT="$comment"
+                break
+              fi
+            done < <(gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+              --jq 'sort_by(.created_at) | reverse | .[] | .body + "\u0000"')
+            
+            if [ -z "$CLAUDE_COMMENT" ]; then
+              echo "⚠️ No Claude review comment found, using most recent comment"
+              CLAUDE_COMMENT=$(gh api \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+                --jq 'sort_by(.created_at) | reverse | .[0].body // empty')
+            fi
+            echo "$CLAUDE_COMMENT" > claude_review.txt
           fi
 
-          # 3️⃣ If still not found, check for any “X/10” patterns (sometimes Claude just ends with 9/10)
-          if [ -z "$SCORE" ]; then
-            SCORE=$(grep -Poi '\b([0-9]+(\.[0-9]+)?)/10\b' all_comments.txt | grep -Po '^[0-9]+(\.[0-9]+)?' | tail -1)
+          echo "🍀 Searching for Claude quality score in review comment..."
+
+          # 1️⃣ STRICT: Look for exact SCORE:X format (required format)
+          # Must be SCORE: followed immediately by a number (no spaces)
+          SCORE=$(grep -Po 'SCORE:[0-9]+(\.[0-9]+)?' claude_review.txt | grep -Po '[0-9]+(\.[0-9]+)?' | tail -1)
+
+          if [ -n "$SCORE" ]; then
+            echo "✅ Found SCORE:$SCORE in strict format"
           fi
 
-          # 4️⃣ If comment parsing failed, fallback to metadata.json
+          # 2️⃣ FALLBACK: Check metadata.json training_quality (primary source)
           if [ -z "$SCORE" ]; then
-            echo "⚠️ Could not find score in Claude comment. Falling back to metadata.json..."
+            echo "⚠️ SCORE:X format not found in comment. Checking metadata.json..."
             if [ -f "metadata.json" ]; then
               SCORE=$(jq -r '.training_quality // empty' metadata.json 2>/dev/null || echo "")
               if [ -n "$SCORE" ] && [[ "$SCORE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-                echo "✅ Found fallback metadata training_quality: $SCORE"
+                echo "✅ Found training_quality in metadata.json: $SCORE"
               else
-                echo "⚠️ metadata.json missing valid numeric score"
+                echo "❌ metadata.json missing valid numeric training_quality"
                 SCORE=""
               fi
             else
-              echo "⚠️ metadata.json not found"
+              echo "❌ metadata.json not found"
             fi
           fi
 
-          # 5️⃣ Validate range and clean
+          # 3️⃣ FAIL if no score found from either source
           if [ -z "$SCORE" ]; then
-            echo "⚠️ Could not find any quality score. Defaulting to 0."
-            SCORE=0
+            echo "::error::No valid SCORE:X found in review comment and metadata.json missing training_quality"
+            echo ""
+            echo "❌ ERROR: Could not find any quality score"
+            echo ""
+            echo "Claude MUST either:"
+            echo "  1. End the PR comment with SCORE:X (e.g., SCORE:8)"
+            echo "  2. Update metadata.json with training_quality field"
+            echo ""
+            echo "Please check the PR comments to verify Claude completed the review properly."
+            exit 1
           fi
 
           SCORE_INT=$(echo "$SCORE" | awk '{print int($1)}')
@@ -962,6 +1511,55 @@ jobs:
           echo "✅ Final Claude quality score: $SCORE"
           echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
 
+      - name: Verify Claude Ran Validation Script
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Verifying Claude executed mandatory validation checks in most recent review..."
+
+          # Use the cached Claude review comment from previous steps
+          COMMENT_FILE=""
+          if [ -f "claude_review.txt" ] && [ -s "claude_review.txt" ]; then
+            COMMENT_FILE="claude_review.txt"
+          elif [ -f "latest_claude_comment.txt" ] && [ -s "latest_claude_comment.txt" ]; then
+            COMMENT_FILE="latest_claude_comment.txt"
+          fi
+
+          if [ -z "$COMMENT_FILE" ]; then
+            echo "⚠️ No cached Claude comment found, fetching from API..."
+            gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              /repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+              --jq 'sort_by(.created_at) | reverse | .[0].body // empty' > latest_comment.txt
+            COMMENT_FILE="latest_comment.txt"
+          fi
+
+          # Check for evidence of validation script execution in the most recent Claude comment
+          VALIDATION_EVIDENCE=false
+
+          if grep -q "validate-metadata.sh" "$COMMENT_FILE" || \
+             grep -q "Metadata validation PASSED" "$COMMENT_FILE" || \
+             grep -q "Metadata validation FAILED" "$COMMENT_FILE" || \
+             grep -q "Validating metadata.json" "$COMMENT_FILE"; then
+            echo "✅ Evidence found that Claude ran metadata validation"
+            VALIDATION_EVIDENCE=true
+          fi
+
+          if [ "$VALIDATION_EVIDENCE" = false ]; then
+            echo "⚠️ WARNING: No clear evidence Claude ran metadata validation script"
+            echo "⚠️ Review comment may be incomplete or validation was skipped"
+            echo ""
+            echo "Expected to find one of:"
+            echo "  - 'validate-metadata.sh' command execution"
+            echo "  - 'Metadata validation PASSED' or 'FAILED'"
+            echo "  - 'Validating metadata.json' output"
+            echo ""
+            echo "This is a warning only - review will continue based on score."
+            echo "However, please verify the review is complete by checking PR comments."
+          else
+            echo "✅ Validation script execution confirmed"
+          fi
 
       - name: Enforce Quality Threshold
         id: quality_gate
@@ -1036,7 +1634,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -1080,12 +1678,73 @@ jobs:
           echo "---- full needs json ----"
           echo '${{ toJson(needs) }}'
 
+  claude-review-ideal-response:
+    runs-on: ubuntu-24.04
+    name: 'Claude Review: IDEAL_RESPONSE Code Validation'
+    needs: [detect-metadata, cleanup, claude-code-action]
+    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.claude-code-action.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if ideal response review file exists
+        id: check-ideal-response-file
+        run: |
+          if [ -f .claude/prompts/claude-ideal-response-review.md ]; then
+            echo "file_exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Ideal response review file found"
+          else
+            echo "file_exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Ideal response review file not found - skipping this check"
+            echo "This is expected for PRs created before this feature was merged to main"
+          fi
+
+      - name: Prepare Claude prompt for IDEAL_RESPONSE validation
+        if: steps.check-ideal-response-file.outputs.file_exists == 'true'
+        id: prepare-ideal-response-prompt
+        run: |
+          PROMPT=$(cat .claude/prompts/claude-ideal-response-review.md)
+          {
+            echo 'CLAUDE_IDEAL_RESPONSE_PROMPT<<PROMPT_EOF'
+            echo "$PROMPT"
+            echo 'PROMPT_EOF'
+          } >> $GITHUB_ENV
+
+      - name: Run Claude IDEAL_RESPONSE Code Validation
+        if: steps.check-ideal-response-file.outputs.file_exists == 'true'
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_tools: 'Bash,Read,Grep,Glob'
+          trigger_phrase: ''
+          custom_instructions: '${{ env.CLAUDE_IDEAL_RESPONSE_PROMPT }}'
+
+      - name: Verify Ideal Response Validation Result
+        run: |
+          echo "Verifying ideal response validation result..."
+          # Run the validation script directly to check if it passes
+          if bash .claude/scripts/validate-ideal-response.sh; then
+            echo "✅ Ideal response validation PASSED"
+            exit 0
+          else
+            echo "❌ Ideal response validation FAILED"
+            echo "::error::Ideal response validation failed. Check the Claude review comment for details."
+            exit 1
+          fi
+
   archive-folders:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, cleanup, claude-code-action]
+    needs: [detect-metadata, cleanup, claude-code-action, claude-review-ideal-response]
     environment: stage
-    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.claude-code-action.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.claude-code-action.result == 'success' && needs.claude-review-ideal-response.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
 
@@ -1382,7 +2041,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -1423,7 +2082,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
 
       - name: Run semantic-release
         run: npm run release

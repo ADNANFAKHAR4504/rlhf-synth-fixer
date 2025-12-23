@@ -1,0 +1,16 @@
+{
+  "name": "metadata-extractor",
+  "version": "1.0.0",
+  "description": "Lambda function for extracting image metadata",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.450.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": ["lambda", "image-processing", "metadata"],
+  "author": "TAP Team",
+  "license": "MIT"
+}

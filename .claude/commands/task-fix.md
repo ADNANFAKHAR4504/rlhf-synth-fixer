@@ -1,806 +1,489 @@
-# Task Fix - Synthetic PR Auto-Fixer
+---
+name: task-fix
+description: Fixes a specific PR until production ready. Accepts PR number or branch name as argument and orchestrates comprehensive fix workflow.
+color: purple
+model: sonnet
+---
 
-Automatically fixes failed PRs assigned to you by analyzing GitHub pipeline failures and applying targeted corrections.
+# Task Fix Command
 
-## Overview
+Orchestrates the complete PR fixing workflow using the iac-synth-trainer agent.
 
-This command launches the `iac-synth-trainer` agent to automatically fix your assigned PRs that have failed CI/CD checks. It creates a worktree for each PR, analyzes the specific GitHub pipeline failure, applies fixes, validates the solution, and only marks the PR as complete when ALL pipeline stages pass.
+## Purpose
 
-## Quick Start
+This command provides a simple interface to fix PRs until they are **100% PRODUCTION READY**. It accepts a PR number or branch name and coordinates the fixing process, iterating until ALL quality gates pass and ALL CI/CD jobs succeed.
+
+**Mission**: Fix PR until production ready - NO PARTIAL SUCCESS
+
+## Usage
 
 ```bash
-# 1. Generate your PR status file
-python .claude/scripts/fetch_all_prs.py --assignee mayanksethi-turing --output .claude/synth_pr_status.json
+# Fix PR by number
+/task-fix 1234
 
-# 2. Run the fixer
+# Fix PR by branch name
+/task-fix synth-abc123
+
+# Fix current branch
 /task-fix
 ```
 
-## Command Behavior
+## Arguments
 
-When you run `/task-fix`, the agent will:
-
-1. **Phase 0 - Pre-Execution Validation**: Review documentation, verify scripts, validate readiness
-2. **Phase 1 - PR Selection**: Check availability, atomically select next PR (prevents duplicates)
-3. **Phase 2.0 - Pre-Fix Analysis**: Document root cause, fix plan, and solution approach
-4. **Phase 2.2 - Worktree Setup**: Create isolated worktree, validate location
-5. **Phase 2.4 - Failure Analysis**: Analyze GitHub pipeline failures in detail
-6. **Phase 2.5 - Pre-Deployment Validation**: Run pre-validate-iac.sh before deployment (cost optimization)
-7. **Phase 2.5+ - Apply Fixes**: Fix issues stage by stage (Detect → Lint → Build → Deploy → Test)
-8. **Phase 2.6 - Local Validation**: Validate all fixes locally (lint, build, test, deploy)
-9. **Phase 2.6.5 - Quality Gates**: Verify all quality gates pass before marking fixed
-10. **Phase 2.7 - Commit & Push**: Commit fixes and push to PR branch
-11. **Phase 2.8 - Monitor Pipeline**: Wait for ALL GitHub pipeline stages to pass
-12. **Phase 2.11 - Update Status**: Mark as fixed/failed with detailed progress tracking
-13. **Phase 2.10 - Cleanup**: Remove worktrees after completion
-
-## Parallel Execution Support
-
-**NEW**: Multiple agents can now work on different PRs simultaneously!
-
-- ✅ **Thread-safe PR selection** using file locking
-- ✅ **No duplicate work** - each agent gets a unique PR
-- ✅ **Real-time visibility** - see what other agents are doing
-- ✅ **Automatic coordination** - agents skip PRs in progress
-
-### How to Run Multiple Agents
-
-```bash
-# Terminal 1 - Start first agent
-/task-fix
-
-# Terminal 2 - Start second agent (in parallel)
-/task-fix
-
-# Terminal 3 - Check status of both agents
-bash .claude/scripts/pr-status.sh active
-```
-
-Each agent will:
-1. Atomically select the next available PR
-2. Mark it as "in_progress" (other agents skip it)
-3. Fix it independently in isolated worktrees
-4. Update progress in real-time
-
-## Prerequisites
-
-Before running `/task-fix`:
-
-### 1. GitHub Authentication
-```bash
-gh auth status
-# If not authenticated:
-gh auth login
-```
-
-### 2. AWS Credentials (for deployment fixes)
-```bash
-aws sts get-caller-identity
-# Should show your AWS account
-```
-
-### 3. Clean Workspace
-```bash
-git status
-# Should show clean working tree
-# If not:
-git stash  # or commit changes
-```
-
-### 4. Generate Status File
-```bash
-# Create your personal PR status file
-python .claude/scripts/fetch_all_prs.py --assignee mayanksethi-turing --output .claude/synth_pr_status.json
-
-# Verify it was created
-cat .claude/synth_pr_status.json | jq '.summary'
-```
-
-## Options
-
-```bash
-/task-fix [options]
-```
-
-### Available Options
-
-- **No arguments**: Fix ALL your failed PRs sequentially
-- `--pr <number>`: Fix specific PR number only
-- `--type <failure_type>`: Fix only PRs with specific failure (Deploy, Lint, Unit Testing, Build, etc.)
-- `--limit <n>`: Process only first N failed PRs
-- `--dry-run`: Analyze PRs and show fix plan without making changes
-
-### Examples
-
-```bash
-# Fix all your failed PRs
-/task-fix
-
-# Fix specific PR
-/task-fix --pr 6323
-
-# Fix only deployment failures
-/task-fix --type Deploy
-
-# Fix first 3 failed PRs
-/task-fix --limit 3
-
-# See what would be fixed without making changes
-/task-fix --dry-run
-```
-
-## Visibility & Monitoring
-
-### Check Agent Activity
-
-```bash
-# Quick overview of all PRs
-bash .claude/scripts/pr-status.sh summary
-
-# See what agents are currently working on
-bash .claude/scripts/pr-status.sh active
-
-# View available PRs for fixing
-bash .claude/scripts/pr-status.sh available
-
-# Get detailed info about specific PR (including root cause & plan)
-bash .claude/scripts/pr-status.sh pr 6323
-
-# View statistics
-bash .claude/scripts/pr-status.sh stats
-```
-
-### Understanding PR Status
-
-PRs can have these **agent_status** values:
-
-- **pending**: Available for agents to work on
-- **in_progress**: Currently being fixed by an agent
-- **fixed**: Successfully fixed (all pipeline stages passed)
-- **failed**: Could not be fixed automatically
-- **skipped**: Intentionally skipped
-
-### What's Tracked
-
-For each PR being fixed, the system tracks:
-
-- **Root Cause Analysis**: Why the PR failed (specific issues)
-- **Fix Plan**: Step-by-step approach to fix it
-- **Solution Approach**: Why this is the best solution
-- **Progress Updates**: Current step in the fix process
-- **Agent Assignment**: Which agent is working on it
-- **Timestamps**: When started, when completed
-- **Iterations**: How many fix attempts were made
-
-### Example: Viewing Active Work
-
-```bash
-$ bash .claude/scripts/pr-status.sh active
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Active Agent Activity
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Active agents: 2
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PR #6323: Lint, Deploy
-
-🤖 Agent: agent-12345-hostname
-⏰ Started: 2024-01-01T10:00:00Z
-📊 Progress: Applying deploy fixes
-
-🔍 Root Cause:
-Missing environmentSuffix in S3 bucket name at line 45
-
-📋 Fix Plan:
-1. Add environmentSuffix to S3 bucket name
-2. Update RemovalPolicy to DESTROY
-3. Redeploy and validate
-
-💡 Solution Approach:
-Systematic resource name updates following lessons_learnt.md
-```
+- `PR_IDENTIFIER` (optional): Either a PR number (e.g., 1234) or branch name (e.g., synth-abc123)
+  - If not provided, uses current branch
+  - If number provided, fetches PR details from GitHub
+  - If branch name provided, checks out that branch
 
 ## Workflow
 
-The PR fixer agent follows a structured workflow with validation checkpoints and quality gates at each stage:
-
-### Phase 0: Pre-Execution Validation
-**Checkpoint PR-A**: Pre-Execution Validation
-- Review required documentation:
-  - `lessons_learnt.md` - Common failure patterns and fixes
-  - `pre-submission-checklist.md` - Quality requirements
-  - `cicd-file-restrictions.md` - File location rules
-  - `error-handling.md` - Error handling patterns (if available)
-- Verify required scripts exist and are functional:
-  - `.claude/scripts/pr-manager.sh` - PR locking and status management
-  - `.claude/scripts/pr-status.sh` - Visibility and monitoring
-  - `scripts/pre-validate-iac.sh` - Pre-deployment validation
-- Validate agent readiness
-- **Pass criteria**: All documentation reviewed, all scripts functional
-- **Fail action**: Report BLOCKED, install missing scripts, re-validate
-
-### Phase 1: PR Selection & Analysis
-- Check PR availability
-- Atomically select next PR (with locking)
-- Load PR details and failure information
-
-### Phase 2: PR Fixing Process
-
-#### 2.0 Pre-Fix Analysis
-**Checkpoint PR-C**: Failure Analysis Completeness
-**Checkpoint PR-D**: Fix Plan Validation
-**Quality Gate 1**: Pre-Fix Analysis Gate
-
-- Root cause analysis with evidence:
-  - Failure category (Critical/High/Medium/Low)
-  - Specific issues with file paths and line numbers
-  - Evidence from GitHub logs and code inspection
-  - WHY it happened (not just WHAT)
-- Fix plan development (step-by-step):
-  - Specific actions with file paths
-  - Validation method for each step
-  - Addresses all failed stages
-- Solution approach justification:
-  - Why this is the best approach
-  - Alternatives considered
-  - Risks and mitigations
-  - Success criteria
-- Document analysis in status file
-
-**Pass criteria**: All analysis documented, plan is actionable, saved to status file
-**Fail action**: Re-analyze, improve documentation, re-validate
-
-#### 2.2 Worktree Setup
-**Checkpoint PR-B**: PR Worktree Validation
-
-- Create isolated worktree at `worktree/pr-fix-<PR_NUMBER>`
-- Validate worktree location and branch match
-- Extract metadata and platform info
-- Verify ready for fixes
-
-**Pass criteria**: Worktree at correct location, branch matches, metadata available
-**Fail action**: Remove worktree, recreate, re-validate
-
-#### 2.4 Failure Analysis
-- Fetch GitHub pipeline logs
-- Identify specific failed stages
-- Extract error details and error messages
-- Reference lessons_learnt.md for common patterns
-
-#### 2.4.5 Pre-Fix Build Validation (Baseline)
-**Checkpoint PR-D2**: Pre-Fix Build Validation
-
-- Establish baseline before fixes:
-  - Lint baseline (errors/warnings count)
-  - Build baseline (errors count)
-  - Synth baseline (errors count, if applicable)
-- Document baseline for comparison
-- Purpose: Measure improvement after fixes
-
-**Note**: This is informational only - does not block fixes
-
-#### 2.5 Pre-Deployment Validation
-**Checkpoint PR-E**: Pre-Deployment Validation
-**Quality Gate 2**: Pre-Deployment Gate
-
-- Run `scripts/pre-validate-iac.sh`
-- Fix common errors automatically:
-  - Add environmentSuffix to resource names
-  - Change RemovalPolicy.RETAIN to RemovalPolicy.DESTROY
-  - Disable DeletionProtection
-  - Remove hardcoded environment values
-- Re-validate after fixes
-- **Cost optimization**: Saves 2-3 deployment attempts (~15% token reduction)
-
-**Pass criteria**: Pre-validation passes OR common errors fixed
-**Fail action**: Fix issues, re-run validation, continue after pass
-
-#### 2.5+ Apply Fixes
-- Fix each failed stage in order:
-  1. Detect Project Files (if metadata.json missing)
-  2. Lint (auto-fix, then manual if needed)
-  3. Build (fix compilation errors)
-  4. Synth (fix template generation, if applicable)
-  5. Deploy (with environmentSuffix, no Retain policies)
-  6. Unit Testing (achieve 100% coverage)
-  7. Integration Testing (use real AWS outputs)
-- Validate fixes locally after each stage
-- Reference lessons_learnt.md for common fixes
-
-#### 2.6 Local Validation
-**Checkpoint PR-F**: Post-Fix Validation
-
-- Run all validations:
-  - Lint: Zero errors
-  - Build: Successful compilation
-  - Synth: Successful template generation (if applicable)
-  - Unit tests: All passing with 100% coverage
-  - Integration tests: All passing (if deployed)
-- Verify 100% test coverage (statements, functions, lines)
-- Ensure all checks pass
-
-**Pass criteria**: All validations passed, 100% coverage achieved
-**Fail action**: Report BLOCKED, fix failures, re-run validations
-
-#### 2.6.5 Quality Gates
-**Quality Gates 1-5**: All quality gates validation
-
-Run all quality gates systematically:
-1. **Pre-Fix Analysis Gate**: Analysis complete and documented
-2. **Pre-Deployment Gate**: Pre-validation passed, common errors fixed
-3. **File Location Compliance Gate**: All files in allowed directories
-4. **Pre-Submission Check Gate**: Pre-submission check passed (if available)
-5. **Post-Fix Local Validation Gate**: All local validations passed
-
-**Pass criteria**: ALL 5 gates passed
-**Fail action**: Report BLOCKED, list failed gates, fix issues, re-validate
-
-**Critical**: Cannot proceed to commit if ANY gate fails
-
-#### 2.7 Commit & Push
-- Commit fixes with descriptive conventional commit message
-- Include fix details, validation results, iteration count
-- Push to PR branch
-- Update status: Changes pushed
-
-#### 2.8 Monitor Pipeline
-**Checkpoint PR-G**: GitHub Pipeline Validation
-
-- Wait for GitHub Actions to start and complete
-- Monitor all pipeline stages:
-  - Detect Project Files
-  - Lint
-  - Build
-  - Deploy
-  - Unit Testing
-  - Integration Testing
-  - Claude Review (if applicable)
-- Verify ALL stages pass (green checkmarks)
-- Iterate if needed (max 5 iterations)
-
-**Pass criteria**: All GitHub pipeline stages passed
-**Fail action**: If iteration < 5, analyze new failures and iterate; if iteration >= 5, mark as needs-manual-review
-
-#### 2.10 Cleanup
-- Return to main repository
-- Remove worktree: `git worktree remove worktree/pr-fix-<PR_NUMBER> --force`
-- Verify cleanup successful
-
-#### 2.11 Update Status
-- Mark PR as fixed (if all stages passed) or failed (if max iterations reached)
-- Update status file with:
-  - Final status
-  - Iterations count
-  - Fix details
-  - Timestamp
-- Add GitHub comment with results
-- Add labels (auto-fixed or needs-manual-review)
-
-### Phase 3: Final Summary
-- Report summary of all PRs processed
-- Statistics and failure patterns
-- Recommendations
-
-## Failure Type Handling
-
-### Deploy Failures
-- Check AWS credentials and permissions
-- Validate resource naming conventions
-- Fix environmentSuffix issues
-- Resolve resource conflicts
-- Fix template syntax errors
-- Address quota/limit issues
-
-### Unit Testing Failures
-- Fix test assertions
-- Update mocks and fixtures
-- Achieve 100% code coverage
-- Fix import/module issues
-- Address async/timing issues
-
-### Lint Failures
-- Run platform-specific linters
-- Fix formatting issues
-- Resolve type errors
-- Fix import ordering
-- Address unused variables/imports
-
-### Build Failures
-- Fix compilation errors
-- Resolve dependency issues
-- Fix type mismatches
-- Address module resolution
-
-### Detect Project Files Failures
-- Ensure metadata.json exists
-- Validate platform detection
-- Fix missing configuration files
-
-## Validation Checkpoints
-
-The agent uses structured validation checkpoints throughout the process to ensure systematic validation at each stage. These are documented in detail in `.claude/docs/references/pr-fix-checkpoints.md`.
-
-### Critical Checkpoints
-
-- **Checkpoint PR-A**: Pre-Execution Validation (Phase 0)
-  - Documentation reviewed (lessons_learnt.md, pre-submission-checklist.md, cicd-file-restrictions.md)
-  - Required scripts verified (pr-manager.sh, pr-status.sh, pre-validate-iac.sh)
-  - Agent readiness confirmed
-
-- **Checkpoint PR-B**: PR Worktree Validation (Phase 2.2)
-  - Worktree location verified (worktree/pr-fix-<PR_NUMBER>)
-  - Branch matches PR branch
-  - Metadata available
-
-- **Checkpoint PR-C**: Failure Analysis Completeness (Phase 2.0)
-  - Root cause documented with evidence
-  - Fix plan created with actionable steps
-  - Solution approach justified
-  - Analysis saved to status file
-
-- **Checkpoint PR-D**: Fix Plan Validation (Phase 2.0)
-  - Plan has specific file paths and line numbers
-  - Plan includes validation steps
-  - Plan addresses all failed stages
-  - Plan is executable
-
-- **Checkpoint PR-D2**: Pre-Fix Build Validation (Phase 2.4.5)
-  - Baseline lint status assessed
-  - Baseline build status assessed
-  - Baseline synth status assessed (if applicable)
-  - Baseline documented for comparison
-
-- **Checkpoint PR-E**: Pre-Deployment Validation (Phase 2.5)
-  - Pre-validate-iac.sh executed
-  - Common errors fixed (environmentSuffix, Retain policies, DeletionProtection)
-  - Ready for deployment attempts
-  - **Cost Impact**: Saves 2-3 deployment attempts (~15% token reduction)
-
-- **Checkpoint PR-F**: Post-Fix Validation (Phase 2.6)
-  - All local validations passed (lint, build, synth, test, deploy)
-  - Test coverage: 100% (statements, functions, lines)
-  - Ready for quality gates
-
-- **Checkpoint PR-G**: GitHub Pipeline Validation (Phase 2.8)
-  - All GitHub pipeline stages passed (Detect, Lint, Build, Deploy, Unit Testing, Integration Testing)
-  - PR marked as fixed or failed appropriately
-  - Status file updated
-
-### Checkpoint Details
-
-For detailed validation steps, pass criteria, and failure actions for each checkpoint, see:
-- **`.claude/docs/references/pr-fix-checkpoints.md`** - Complete PR fix checkpoint documentation
-
-Each checkpoint must pass before proceeding to the next phase.
-
-## Quality Gates
-
-Before marking a PR as fixed, ALL quality gates must pass. These gates ensure fixes meet production standards and will pass GitHub pipeline.
-
-### Gate 1: Pre-Fix Analysis Gate
-**When**: After Phase 2.0 (Root Cause Analysis)
-**Requirements**:
-- ✅ Root cause documented with evidence
-  - Failure category (Critical/High/Medium/Low)
-  - Specific issues with file paths and line numbers
-  - Impact assessment
-  - WHY it happened (not just WHAT)
-- ✅ Fix plan created with actionable steps
-  - Step-by-step actions
-  - Validation method for each step
-  - Addresses all failed stages
-- ✅ Solution approach justified
-  - Why this is the best approach
-  - Alternatives considered
-  - Success criteria defined
-- ✅ Analysis saved to status file
-
-**If gate fails**: Report BLOCKED, complete missing analysis, re-validate
-
-### Gate 2: Pre-Deployment Gate
-**When**: Phase 2.5 (Before any deployment attempt)
-**Requirements**:
-- ✅ Pre-deployment validation executed (scripts/pre-validate-iac.sh)
-- ✅ Common errors fixed:
-  - Resource naming includes environmentSuffix
-  - No hardcoded environment values (prod-, dev-, stage-)
-  - No Retain policies (changed to DESTROY)
-  - No DeletionProtection enabled
-  - No expensive configurations flagged
-- ✅ Valid cross-resource references
-
-**If gate fails**: Fix common issues, re-run pre-validation, proceed only after pass
-
-**Impact**: Saves 2-3 deployment attempts per PR (~15% cost reduction)
-
-### Gate 3: File Location Compliance Gate
-**When**: Phase 2.6.5 (Before commit)
-**Requirements**:
-- ✅ All files in allowed directories:
-  - Infrastructure code: `lib/`
-  - Tests: `test/` or `tests/`
-  - Entry points: `bin/`
-  - Documentation: `lib/` (NOT root)
-- ✅ No files in forbidden locations:
-  - NOT in `.github/`, `scripts/`, `docs/`, `.claude/`
-  - NOT at root (except allowed: metadata.json, cdk.json, package.json, etc.)
-- ✅ Documentation files in lib/:
-  - `lib/PROMPT.md` (NOT `/PROMPT.md`)
-  - `lib/README.md` (NOT `/README.md`)
-  - Lambda functions in `lib/lambda/` (NOT `/lambda/`)
-
-**If gate fails**: 
-- Report BLOCKED with specific violations
-- Move files to correct locations
-- Re-validate
-- **Impact**: -3 training quality points per violation
-
-**Reference**: `.claude/docs/references/cicd-file-restrictions.md`
-
-### Gate 4: Pre-Submission Check Gate (Optional)
-**When**: Phase 2.6.5 (Before commit)
-**Requirements**:
-- ✅ Pre-submission check script exists and passes
-- ✅ All checks from pre-submission-checklist.md validated
-
-**If gate fails**: Fix issues identified by check, re-run, re-validate
-
-**If script not found**: Log warning, skip gate (not blocking)
-
-**Reference**: `.claude/docs/references/pre-submission-checklist.md`
-
-### Gate 5: Post-Fix Local Validation Gate
-**When**: Phase 2.6 (After all fixes applied)
-**Requirements**:
-- ✅ Lint: Zero errors
-- ✅ Build: Successful compilation
-- ✅ Synth: Successful template generation (if applicable)
-- ✅ Unit tests: All passing with **100% coverage**
-  - Statement coverage: 100%
-  - Function coverage: 100%
-  - Line coverage: 100%
-  - Branch coverage: ≥95%
-- ✅ Integration tests: All passing (if deployment succeeded)
-  - Use real AWS outputs (cfn-outputs/flat-outputs.json)
-  - No mocking libraries
-  - No hardcoded values
-
-**If gate fails**: Report BLOCKED, fix issues, re-run validations, re-validate
-
-**Critical**: 100% test coverage is MANDATORY, not optional
-
-### Quality Gates Summary
-
-If ANY gate fails, the agent will:
-1. Report BLOCKED status with specific failures
-2. List what needs to be fixed
-3. Stop execution until fixes applied
-4. Re-validate after fixes
-5. Only proceed when ALL gates pass
-
-### Quality Gate Validation Script
-
-The agent runs all quality gates systematically in Phase 2.6.5 before committing changes. See `.claude/agents/iac-synth-trainer.md` Phase 2.6.5 for the complete validation script.
-
-### Cost Optimization Impact
-
-**Pre-Deployment Gate (Gate 2)**:
-- Prevents unnecessary AWS deployment attempts
-- Catches common errors before deployment
-- Saves 2-3 deployment attempts per PR
-- Reduces token usage by ~15%
-- Saves 10-15 minutes per PR
-
-### References
-
-- **Quality Gate Details**: `.claude/agents/iac-synth-trainer.md` Phase 2.6.5
-- **Checkpoint Details**: `.claude/docs/references/pr-fix-checkpoints.md`
-- **File Restrictions**: `.claude/docs/references/cicd-file-restrictions.md`
-- **Pre-Submission Checklist**: `.claude/docs/references/pre-submission-checklist.md`
-
-## Safety & Constraints
-
-1. **No Force Push**: Always create new commits, never rewrite history
-2. **Preserve Authorship**: Maintain original commit authors
-3. **Branch Protection**: Never modify main/master directly
-4. **Resource Limits**: 
-   - Max 5 deployment attempts per PR
-   - Max 5 fix iterations per PR
-   - Max 3 retries for critical blockers
-5. **Commit Convention**: Follow conventional commits format (lowercase subject)
-6. **File Restrictions**: Only modify files in allowed directories (lib/, test/, bin/)
-7. **Pre-Deployment Validation**: Mandatory before deployment attempts (saves costs)
-8. **Quality Gates**: All gates must pass before marking PR as fixed
-9. **Test Coverage**: 100% coverage required (statements, functions, lines)
-10. **Error Handling**: Standard error response format, blocking vs non-blocking classification
-
-## Integration with Existing Workflow
-
-This command integrates with your existing IaC workflow:
-
-- Uses same validation scripts as `/task-coordinator`
-- Follows same quality gates (lint, build, test, deploy)
-- Respects same file restrictions
-- Uses same reporting format
-- Updates same tracking files
+### Step 1: Parse Arguments and Validate
+
+```bash
+# Extract PR identifier from command arguments
+PR_IDENTIFIER="${1:-}"
+
+if [ -z "$PR_IDENTIFIER" ]; then
+  # No argument provided, use current branch
+  BRANCH_NAME=$(git branch --show-current)
+
+  if [[ "$BRANCH_NAME" == "main" ]] || [[ "$BRANCH_NAME" == "master" ]]; then
+    echo "ERROR: Cannot fix main/master branch"
+    echo "Usage: /task-fix <pr-number|branch-name>"
+    exit 1
+  fi
+
+  echo "Using current branch: ${BRANCH_NAME}"
+
+  # Try to find PR number for this branch
+  PR_NUMBER=$(gh pr list --head "${BRANCH_NAME}" --json number -q '.[0].number')
+
+  if [ -z "$PR_NUMBER" ]; then
+    echo "WARNING: No PR found for branch ${BRANCH_NAME}"
+    echo "Will work on branch directly without PR context"
+  else
+    echo "Found PR #${PR_NUMBER} for branch ${BRANCH_NAME}"
+  fi
+
+elif [[ "$PR_IDENTIFIER" =~ ^[0-9]+$ ]]; then
+  # Argument is a PR number
+  PR_NUMBER="$PR_IDENTIFIER"
+  echo "Fetching PR #${PR_NUMBER} details..."
+
+  # Get branch name for this PR
+  BRANCH_NAME=$(gh pr view "${PR_NUMBER}" --json headRefName -q '.headRefName')
+
+  if [ -z "$BRANCH_NAME" ]; then
+    echo "ERROR: Could not find PR #${PR_NUMBER}"
+    exit 1
+  fi
+
+  echo "PR #${PR_NUMBER} is on branch: ${BRANCH_NAME}"
+
+else
+  # Argument is a branch name
+  BRANCH_NAME="$PR_IDENTIFIER"
+  echo "Using branch: ${BRANCH_NAME}"
+
+  # Try to find PR number for this branch
+  PR_NUMBER=$(gh pr list --head "${BRANCH_NAME}" --json number -q '.[0].number')
+
+  if [ -z "$PR_NUMBER" ]; then
+    echo "WARNING: No PR found for branch ${BRANCH_NAME}"
+    echo "Will work on branch directly without PR context"
+  else
+    echo "Found PR #${PR_NUMBER} for branch ${BRANCH_NAME}"
+  fi
+fi
+
+# Extract task_id from branch name (format: synth-{task_id})
+if [[ "$BRANCH_NAME" =~ ^synth-(.+)$ ]]; then
+  TASK_ID="${BASH_REMATCH[1]}"
+  echo "Task ID: ${TASK_ID}"
+else
+  echo "ERROR: Branch name must follow format 'synth-{task_id}'"
+  echo "Found: ${BRANCH_NAME}"
+  exit 1
+fi
+```
+
+### Step 2: Validate Prerequisites
+
+```bash
+# Check GitHub CLI is authenticated
+if ! gh auth status &>/dev/null; then
+  echo "ERROR: GitHub CLI not authenticated"
+  echo "Run: gh auth login"
+  exit 1
+fi
+
+# Check we're in the correct repository
+REPO_ROOT=$(git rev-parse --show-toplevel)
+if [ ! -f "${REPO_ROOT}/.claude/agents/iac-synth-trainer.md" ]; then
+  echo "ERROR: Not in iac-test-automations repository"
+  exit 1
+fi
+
+echo "✅ Prerequisites validated"
+```
+
+### Step 3: Prepare Context for Agent
+
+```bash
+# Gather current PR status if available
+if [ -n "$PR_NUMBER" ]; then
+  echo "Gathering PR context..."
+
+  PR_TITLE=$(gh pr view "${PR_NUMBER}" --json title -q '.title')
+  PR_STATE=$(gh pr view "${PR_NUMBER}" --json state -q '.state')
+  PR_URL=$(gh pr view "${PR_NUMBER}" --json url -q '.url')
+
+  # Get PR checks status
+  CHECKS_STATUS=$(gh pr checks "${PR_NUMBER}" --json state,conclusion 2>/dev/null || echo "No checks")
+
+  echo "PR #${PR_NUMBER}: ${PR_TITLE}"
+  echo "State: ${PR_STATE}"
+  echo "URL: ${PR_URL}"
+  echo "Checks: ${CHECKS_STATUS}"
+fi
+
+# Check if PR has failing checks
+if [ -n "$PR_NUMBER" ]; then
+  FAILING_CHECKS=$(gh pr checks "${PR_NUMBER}" --json name,state,conclusion \
+    --jq '.[] | select(.conclusion == "failure" or .state == "failure") | .name' 2>/dev/null || echo "")
+
+  if [ -n "$FAILING_CHECKS" ]; then
+    echo "⚠️ Failing checks detected:"
+    echo "$FAILING_CHECKS"
+  fi
+fi
+```
+
+### Step 4: Invoke iac-synth-trainer Agent
+
+Now invoke the `iac-synth-trainer` agent with full context:
+
+**Agent Context**:
+```markdown
+You are fixing PR #${PR_NUMBER:-"(working on branch directly)"} on branch ${BRANCH_NAME}.
+
+Task ID: ${TASK_ID}
+
+${PR_TITLE:+PR Title: ${PR_TITLE}}
+${PR_URL:+PR URL: ${PR_URL}}
+
+${FAILING_CHECKS:+
+**Failing Checks**:
+${FAILING_CHECKS}
+}
+
+**CRITICAL INSTRUCTIONS**:
+
+1. **Add yourself as assignee**: Add your GitHub user as assignee to PR #${PR_NUMBER}
+   - Command: \`gh pr edit ${PR_NUMBER} --add-assignee \$(gh api user --jq '.login')\`
+
+2. **Create isolated worktree and sync with main**: MUST work in isolated worktree at \`worktree/synth-${TASK_ID}\`
+   - This enables parallel execution of multiple PR fixes
+   - Do NOT work directly on the branch
+   - Worktree path: \`$(git rev-parse --show-toplevel)/worktree/synth-${TASK_ID}\`
+   - **Automatically sync branch with main** (fetch, rebase if behind)
+   - **Automatically resolve merge conflicts** (accept main's version for scripts/configs)
+   - If unresolvable conflicts: Exit with instructions for manual resolution
+
+3. **Fetch and analyze CI/CD job status**:
+   - Create complete checklist of all CI/CD pipeline jobs
+   - Identify which jobs passed, failed, or are pending
+   - For each failed job, fetch logs and identify failure reasons
+   - Use this to prioritize fixes
+
+4. **Apply fixes based on CI/CD failures**:
+   - Fix issues in priority order based on CI/CD job failures
+   - Re-run local validations to verify fixes
+   - Push changes and monitor CI/CD re-runs
+   - Iterate until all jobs pass
+
+**Your Mission**:
+1. Add assignee to PR #${PR_NUMBER}
+2. Create isolated worktree at \`worktree/synth-${TASK_ID}\`
+3. **CRITICAL: Sync branch with latest main** (rebase if behind)
+4. Fetch CI/CD pipeline status and create job checklist
+5. Analyze failed jobs and identify failure reasons
+6. Apply fixes systematically based on CI/CD failures
+7. Iterate until all CI/CD jobs pass
+8. Update the PR with fixes and summary
+9. Report completion status
+
+**Expected Outcome**:
+- ✅ Assignee added to PR
+- ✅ Working in isolated worktree (enables parallel execution)
+- ✅ **Branch synced with latest main** (no merge conflicts)
+- ✅ Complete CI/CD job checklist created
+- ✅ All CI/CD jobs passing
+- ✅ All 12 quality gates passing
+- ✅ 100% test coverage achieved
+- ✅ Training quality >= 8
+- ✅ PR ready for merge
+
+**Constraints**:
+- Maximum 10 fix iterations (will iterate until production ready)
+- Maximum 5 deployment attempts per iteration
+- MUST work in isolated worktree (never directly on branch)
+- Must follow all production requirements
+- MUST continue until ALL CI/CD jobs pass OR escalate
+
+**Critical Success Criteria**:
+You MUST iterate until BOTH conditions are true:
+1. ✅ Local validation: pre-submission-check.sh exits with code 0
+2. ✅ CI/CD validation: ready_for_merge = true (all jobs passing)
+
+If after 10 iterations ANY condition is false:
+- Post escalation comment to PR
+- Document remaining issues
+- Exit with code 2 (BLOCKED - manual intervention)
+
+**Exit Codes** (agent will use):
+- 0 = SUCCESS (production ready)
+- 1 = ERROR (unrecoverable error, can retry)
+- 2 = BLOCKED (manual intervention required)
+
+**NO PARTIAL SUCCESS** - Either production ready or escalate
+
+Begin the fix workflow now.
+```
+
+### Step 5: Monitor Agent Progress
+
+The agent will report status at each phase. Monitor for exit codes:
+- Exit code `0` = SUCCESS (production ready)
+- Exit code `1` = ERROR (unrecoverable, can retry)
+- Exit code `2` = BLOCKED (manual intervention)
+
+### Step 6: Post-Completion Actions and Verification
+
+After agent completes:
+
+1. **If SUCCESS (100% Production Ready)**:
+   ```bash
+   echo "✅ PR #${PR_NUMBER} is 100% PRODUCTION READY"
+   echo ""
+
+   # Verify final status
+   echo "🔍 Verifying production readiness..."
+
+   # Check local validations
+   cd worktree/synth-${TASK_ID}
+   bash .claude/scripts/pre-submission-check.sh
+   LOCAL_STATUS=$?
+
+   # Check CI/CD status
+   bash .claude/scripts/cicd-job-checker.sh ${PR_NUMBER}
+   CICD_READY=$(jq -r '.ready_for_merge' cicd_summary.json)
+
+   # Final verification
+   if [ $LOCAL_STATUS -eq 0 ] && [ "$CICD_READY" == "true" ]; then
+     echo ""
+     echo "✅ VERIFICATION PASSED"
+     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+     echo "✅ Local Validations: PASSED"
+     echo "✅ CI/CD Pipeline: ALL JOBS PASSING"
+     echo "✅ Test Coverage: 100%"
+     echo "✅ Training Quality: >= 8"
+     echo "✅ Ready for Merge: TRUE"
+     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+     echo ""
+     echo "PR URL: ${PR_URL}"
+     echo ""
+     echo "🎯 Next Steps:"
+     echo "1. Review PR comments for all fixes applied"
+     echo "2. Request reviews: gh pr ready ${PR_NUMBER}"
+     echo "3. Merge when approved: gh pr merge ${PR_NUMBER}"
+   else
+     echo ""
+     echo "⚠️ VERIFICATION FAILED"
+     echo "Agent reported SUCCESS but verification shows issues"
+     echo "Local Status: ${LOCAL_STATUS}"
+     echo "CI/CD Ready: ${CICD_READY}"
+     echo ""
+     echo "This should not happen - please review agent logs"
+     exit 1
+   fi
+   ```
+
+2. **If BLOCKED (Manual Intervention Required)**:
+   ```bash
+   echo "⚠️ PR #${PR_NUMBER} BLOCKED - Manual Intervention Required"
+   echo ""
+   echo "Agent completed maximum iterations (10) but PR is not production ready"
+   echo ""
+   echo "📋 Status:"
+
+   # Show what's passing and what's failing
+   cd worktree/synth-${TASK_ID}
+   bash .claude/scripts/pre-submission-check.sh 2>&1 | grep -E "✅|❌"
+
+   echo ""
+   echo "🔍 Review Required:"
+   echo "1. Check PR comments for escalation details"
+   echo "2. Review remaining issues documented in PR"
+   echo "3. Review validation logs"
+   echo "4. Manual fixes may be required"
+   echo ""
+   echo "PR URL: ${PR_URL}"
+   echo ""
+   echo "🚨 Remaining issues require human review and intervention"
+   ```
+
+3. **If ERROR (Unrecoverable)**:
+   ```bash
+   echo "❌ PR #${PR_NUMBER} FIX FAILED - Unrecoverable Error"
+   echo ""
+   echo "Agent encountered critical errors preventing completion"
+   echo ""
+   echo "Review agent report above for details"
+   echo "Common causes:"
+   echo "  - Git/GitHub authentication issues"
+   echo "  - Worktree creation failures"
+   echo "  - Permission issues"
+   echo "  - Repository access problems"
+   echo ""
+   echo "PR URL: ${PR_URL}"
+   echo ""
+   echo "🔧 Try to resolve the error and run /task-fix ${PR_NUMBER} again"
+   ```
 
 ## Error Handling
 
-The agent uses standardized error handling patterns:
-
-### Error Categories
-
-**Blocking Errors** (Stop Execution):
-- Missing required files or scripts
-- GitHub authentication failure
-- Pre-deployment validation failures (critical)
-- Quality gate failures
-- File location violations
-- Test coverage below 100%
-
-**Non-Blocking Errors** (Log and Continue):
-- AWS credentials not configured (skip deployment fixes)
-- Pre-validation warnings (non-critical)
-- Minor code style issues
-
-### Error Response Format
-
-When errors occur:
-1. Report status: `❌ BLOCKED: {specific_error}` or `⚠️ WARNING: {non_blocking_issue}`
-2. List issues: Specific problems with details
-3. Explain context: Why this blocks progress
-4. Provide fix: Reference to resolution steps
-5. Stop execution: Do NOT proceed past blocking errors
-
-### Recovery Actions
-
-- **Validation Errors**: Fix missing/invalid items, re-validate
-- **Deployment Errors**: Retry with fixes (max 5 attempts)
-- **Test Errors**: Add tests until 100% coverage achieved
-- **Pipeline Errors**: Analyze failures, apply fixes, iterate
-
-### If PR Cannot Be Fixed
-
-After max iterations or critical blockers:
-- Document failure reason in PR comment
-- Add "needs-manual-review" label
-- Update status file with failure details
-- Continue to next PR
-
-## Post-Fix Actions
-
-After successful fix:
-- Push commits to PR branch
-- Add comment with fix summary
-- Request re-review if needed
-- Trigger CI/CD re-run
-
-## Reporting
-
-Final report includes:
-- Total PRs analyzed
-- Successfully fixed (with PR numbers)
-- Failed to fix (with reasons)
-- Skipped (with reasons)
-- Time taken per PR
-- Common failure patterns identified
-- Recommendations for preventing future failures
-
-## PR Management Scripts
-
-### pr-manager.sh - PR Locking & Selection
-
-Thread-safe PR management with file locking:
-
-```bash
-# Atomically select next PR (used by agent internally)
-bash .claude/scripts/pr-manager.sh select-and-update mayanksethi-turing
-
-# Manually update PR status
-bash .claude/scripts/pr-manager.sh update-status 6323 in_progress "Fixing lint issues"
-
-# Document analysis (used by agent)
-bash .claude/scripts/pr-manager.sh update-analysis 6323 \
-  "Root cause..." "Fix plan..." "Solution approach..."
-
-# Check status distribution
-bash .claude/scripts/pr-manager.sh status
+### Invalid PR Number
+```
+ERROR: Could not find PR #<number>
+Please verify PR exists: gh pr list
 ```
 
-### pr-status.sh - Visibility & Monitoring
-
-View agent activity and PR details:
-
-```bash
-# All commands
-bash .claude/scripts/pr-status.sh summary      # Overview
-bash .claude/scripts/pr-status.sh active       # Active agents
-bash .claude/scripts/pr-status.sh available    # Available PRs
-bash .claude/scripts/pr-status.sh pr 6323      # Detailed PR info
-bash .claude/scripts/pr-status.sh fixed        # Successfully fixed
-bash .claude/scripts/pr-status.sh failed-fix   # Could not fix
-bash .claude/scripts/pr-status.sh stats        # Statistics
+### Invalid Branch Name
+```
+ERROR: Branch name must follow format 'synth-{task_id}'
+Found: <branch-name>
 ```
 
-## Troubleshooting Parallel Execution
-
-### Problem: Agent says "no PRs available" but I see failed PRs
-
-**Cause**: Other agents may have already claimed those PRs
-
-**Solution**: Check active agents
-```bash
-bash .claude/scripts/pr-status.sh active
+### Not Authenticated
+```
+ERROR: GitHub CLI not authenticated
+Run: gh auth login
 ```
 
-### Problem: Agent is stuck or crashed, PR still marked "in_progress"
-
-**Cause**: Agent didn't clean up properly
-
-**Solution**: Manually reset PR status
-```bash
-# Reset to pending
-bash .claude/scripts/pr-manager.sh update-status 6323 pending "Reset after agent crash"
+### PR Already Merged
+```
+ERROR: PR #<number> is already merged
+Cannot apply fixes to merged PR
 ```
 
-### Problem: Lock timeout after 120 seconds
-
-**Cause**: Another agent holds the lock (still selecting/updating)
-
-**Solution**: Wait and retry, or check for stale locks
-```bash
-# Check if lock file exists
-ls -la .claude/synth_pr_status.json.lock
-
-# If stale (>5 minutes old), the script will auto-remove it
-# Or manually remove: rm -rf .claude/synth_pr_status.json.lock
+### Maximum Iterations Reached
+```
+WARNING: Agent reached maximum iterations (10)
+Some issues may remain unresolved
+Review agent report for details
+Manual intervention may be required
 ```
 
-### Problem: Want to see root cause/plan for a specific PR
+## Integration with CI/CD
 
-**Solution**: Use detailed PR view
+This command respects all CI/CD requirements:
+- File location restrictions (`.claude/docs/references/cicd-file-restrictions.md`)
+- Commit message format (conventional commits with lowercase)
+- Quality gates (build, test, deployment, coverage)
+- Training quality threshold (>= 8)
+
+## Common Use Cases
+
+### 1. Fix Failing CI/CD Checks
 ```bash
-bash .claude/scripts/pr-status.sh pr 6323
+/task-fix 1234
 ```
+Agent will identify failing checks and apply fixes.
 
-This shows:
-- Root cause analysis
-- Fix plan
-- Solution approach
-- Current progress
-- Agent assignment
+### 2. Improve Test Coverage
+```bash
+/task-fix synth-abc123
+```
+Agent will add tests to reach 100% coverage.
+
+### 3. Fix Deployment Issues
+```bash
+/task-fix 1234
+```
+Agent will analyze deployment failures and apply fixes.
+
+### 4. Improve Training Quality Score
+```bash
+/task-fix 1234
+```
+Agent will review code and improve quality to reach >= 8.
+
+### 5. Fix File Location Violations
+```bash
+/task-fix synth-abc123
+```
+Agent will move files to correct directories.
 
 ## Best Practices
 
-### For Parallel Execution
+1. **Run on Draft PRs First**: Test fixes on draft PRs before final PRs
+2. **Review Changes**: Always review agent's changes before merging
+3. **Check PR Comments**: Agent adds detailed fix summary as PR comment
+4. **Monitor Iterations**: If agent reaches max iterations, manual review needed
+5. **Escalate Blockers**: If agent reports BLOCKED, address the issue promptly
 
-1. **Check before starting**: Run `pr-status.sh summary` to see available PRs
-2. **Monitor progress**: Use `pr-status.sh active` to see what's happening
-3. **Don't force**: If no PRs available, other agents are working on them
-4. **Review analysis**: Check `pr-status.sh pr <number>` to understand fixes
+## Limitations
 
-### For Single Agent
+- Cannot fix PRs on main/master branch
+- Cannot fix merged PRs
+- Maximum 10 fix iterations per run (configurable in `.claude/config/synth-trainer.yaml`)
+- Maximum 5 deployment attempts per iteration
+- Requires GitHub CLI authentication
+- Requires repository write permissions
+- Run `/synth-trainer-health` to verify prerequisites before use
 
-1. **Generate fresh status**: Run `fetch_all_prs.py` before starting
-2. **Review analysis**: The agent documents root cause before fixing
-3. **Check progress**: Status updates show which stage the agent is on
-4. **Trust the process**: Agent validates everything locally before pushing
+## Troubleshooting
 
-## Related Commands and Documentation
+### Agent Stuck in Loop
+```bash
+# Check agent status
+# If looping, review validation failures
+# May need manual intervention for architectural issues
+```
 
-### Commands
-- `/task-coordinator`: Create new IaC tasks
-- `bash .claude/scripts/fetch_all_prs.py`: Generate/update PR status file
-- `bash .claude/scripts/pr-status.sh`: Monitor agent activity
-- `bash .claude/scripts/pr-manager.sh`: Manage PR status (advanced)
+### Deployment Keeps Failing
+```bash
+# Check AWS credentials
+# Review .claude/lessons_learnt.md for known issues
+# May need quota increase or permission changes
+```
 
-### Documentation References
-- **Agent Documentation**: `.claude/agents/iac-synth-trainer.md` - Complete agent behavior
-- **Validation Checkpoints**: `.claude/docs/references/pr-fix-checkpoints.md` - PR-specific checkpoints
-- **Standard Checkpoints**: `.claude/docs/references/validation-checkpoints.md` - Standard validation checkpoints
-- **Quality Requirements**: `.claude/docs/references/pre-submission-checklist.md` - Quality gates and requirements
-- **File Restrictions**: `.claude/docs/references/cicd-file-restrictions.md` - File location rules
-- **Error Handling**: `.claude/docs/references/error-handling.md` - Error patterns and recovery (if available)
-- **Known Issues**: `.claude/lessons_learnt.md` - Common failure patterns and fixes (if available)
+### Test Coverage Not Reaching 100%
+```bash
+# Agent will add tests automatically
+# If still failing, check for untestable code (platform limitations)
+# May need code refactoring
+```
+
+## Related Documentation
+
+- `.claude/agents/iac-synth-trainer.md` - Agent detailed workflow
+- `.claude/docs/references/validation-checkpoints.md` - All validation checks
+- `.claude/docs/references/pre-submission-checklist.md` - Requirements before PR merge
+- `.claude/docs/policies/iteration-policy.md` - Fix iteration rules
+- `.claude/lessons_learnt.md` - Common issues and solutions
+
+## Success Metrics
+
+A successful fix workflow results in:
+- ✅ All CI/CD checks passing
+- ✅ 100% test coverage
+- ✅ Training quality >= 8
+- ✅ All files in correct locations
+- ✅ Documentation complete
+- ✅ PR ready for merge
+
+---
+
+**Note**: This command is designed for automated PR fixing. Always review changes before merging to production.

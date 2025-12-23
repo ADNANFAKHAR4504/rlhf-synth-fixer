@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Optimized ECS Fargate deployment with cost-effective resource allocation
+main: lib/index.ts

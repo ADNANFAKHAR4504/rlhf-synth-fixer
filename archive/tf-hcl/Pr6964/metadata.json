@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912532",
+  "team": "synth",
+  "startedAt": "2025-11-20T11:36:18+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "networking",
+    "vpc",
+    "security",
+    "compliance",
+    "high-availability"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "SecurityGroups",
+    "NetworkACL",
+    "NATGateway",
+    "InternetGateway",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

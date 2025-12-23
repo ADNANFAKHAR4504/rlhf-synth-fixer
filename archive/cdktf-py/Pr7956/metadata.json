@@ -1,0 +1,49 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "20430997",
+  "team": "synth",
+  "startedAt": "2025-12-05T04:55:00+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "KMS",
+    "S3",
+    "CloudTrail",
+    "CloudWatch",
+    "Security Hub",
+    "AWS Config",
+    "WAF",
+    "Systems Manager",
+    "Secrets Manager",
+    "RDS",
+    "SNS",
+    "SQS",
+    "Lambda",
+    "EventBridge",
+    "API Gateway",
+    "ECS",
+    "ECR",
+    "ELB",
+    "Auto Scaling",
+    "STS",
+    "DynamoDB",
+    "Athena"
+  ],
+  "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

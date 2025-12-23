@@ -12,7 +12,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CSV_FILE="${CSV_FILE:-$REPO_ROOT/.claude/tasks.csv}"
 BACKUP_FILE="${BACKUP_FILE:-$REPO_ROOT/.claude/tasks.csv.backup}"
 LOCK_FILE="${LOCK_FILE:-$REPO_ROOT/.claude/tasks.csv.lock}"
-LOCK_TIMEOUT="${LOCK_TIMEOUT:-120}"  # Maximum seconds to wait for lock
+LOCK_TIMEOUT="${LOCK_TIMEOUT:-300}"  # Maximum seconds to wait for lock
 
 # Colors
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -20,12 +20,13 @@ log_info() { echo -e "${GREEN}✅ $1${NC}" >&2; }
 log_error() { echo -e "${RED}❌ $1${NC}" >&2; }
 log_warn() { echo -e "${YELLOW}⚠️  $1${NC}" >&2; }
 
-# Acquire exclusive lock with timeout
+# Acquire exclusive lock with timeout (optimized polling)
 # Uses mkdir for atomicity (portable across all Unix systems including macOS)
 # Returns: 0 on success, 1 on timeout
 acquire_lock() {
     local elapsed=0
-    local wait_interval=0.1
+    local wait_interval=0.01  # Start with 10ms for faster initial attempts
+    local max_interval=0.1    # Cap at 100ms
     
     log_info "Attempting to acquire lock (PID: $$)..."
     
@@ -33,6 +34,9 @@ acquire_lock() {
     while ! mkdir "$LOCK_FILE" 2>/dev/null; do
         sleep "$wait_interval"
         elapsed=$(awk "BEGIN {print $elapsed + $wait_interval}")
+        
+        # Exponential backoff (cap at max_interval)
+        wait_interval=$(awk "BEGIN {print ($wait_interval * 1.5 < $max_interval ? $wait_interval * 1.5 : $max_interval)}")
         
         if (( $(awk "BEGIN {print ($elapsed >= $LOCK_TIMEOUT)}") )); then
             # Check if lock is stale (older than 5 minutes)
@@ -49,8 +53,8 @@ acquire_lock() {
             return 1
         fi
         
-        # Log every 5 seconds
-        if (( $(awk "BEGIN {print (int($elapsed) % 5 == 0 && $elapsed > 0)}") )); then
+        # Log every 2 seconds (more frequent feedback)
+        if (( $(awk "BEGIN {print (int($elapsed) % 2 == 0 && $elapsed > 0)}") )); then
             log_warn "Still waiting for lock... (${elapsed}s elapsed)"
         fi
     done
@@ -121,8 +125,50 @@ parse_csv() {
     ' "$CSV_FILE"
 }
 
-# Backup
-backup() { cp -f "$CSV_FILE" "$BACKUP_FILE" && log_info "Backup created"; }
+# Backup with validation and rotation (keeps last 3 backups)
+backup() {
+    # Rotate existing backups (keep last 3)
+    if [ -f "${BACKUP_FILE}.2" ]; then
+        mv -f "${BACKUP_FILE}.2" "${BACKUP_FILE}.3" 2>/dev/null || true
+    fi
+    if [ -f "${BACKUP_FILE}.1" ]; then
+        mv -f "${BACKUP_FILE}.1" "${BACKUP_FILE}.2" 2>/dev/null || true
+    fi
+    if [ -f "$BACKUP_FILE" ]; then
+        mv -f "$BACKUP_FILE" "${BACKUP_FILE}.1" 2>/dev/null || true
+    fi
+
+    # Create new backup atomically using temp file
+    local temp_backup
+    temp_backup=$(mktemp)
+
+    cp -f "$CSV_FILE" "$temp_backup" || {
+        log_error "Backup creation failed"
+        rm -f "$temp_backup"
+        return 1
+    }
+
+    # Validate backup integrity (row count check)
+    local csv_rows backup_rows
+    csv_rows=$(wc -l < "$CSV_FILE" | tr -d ' ')
+    backup_rows=$(wc -l < "$temp_backup" | tr -d ' ')
+
+    if [ "$csv_rows" -ne "$backup_rows" ]; then
+        log_error "Backup validation failed: CSV=$csv_rows rows, backup=$backup_rows rows"
+        rm -f "$temp_backup"
+        return 1
+    fi
+
+    # Move validated backup into place (atomic)
+    mv "$temp_backup" "$BACKUP_FILE" || {
+        log_error "Failed to move backup into place"
+        rm -f "$temp_backup"
+        return 1
+    }
+
+    log_info "Backup created and validated ($backup_rows rows)"
+    return 0
+}
 
 # Validate row count
 validate() {
@@ -135,34 +181,81 @@ validate() {
     }
 }
 
-# Select next pending task
+# Select next pending task (optimized - single pass with early exit)
 select_task() {
     [ ! -f "$CSV_FILE" ] && { log_error "CSV not found"; exit 1; }
     
-    # Get first pending task with hard/medium difficulty
-    # Returns: task_id, status, platform, language, difficulty, subtask (tab-separated)
+    # Single-pass AWK script: parse CSV and select first matching task
+    # Exits immediately after finding first match (much faster for large CSVs)
+    # This combines parse_csv and selection into one pass, eliminating pipe overhead
     local result
-    result=$(parse_csv | awk -F'\t' '{
-        task_id=$1; status=$2; platform=$3; language=$4; difficulty=$5; problem=$6
+    result=$(awk '
+    function parse_csv_line(line,    fields, n, i, current, in_quote, c) {
+        n = 0
+        current = ""
+        in_quote = 0
 
+        for (i = 1; i <= length(line); i++) {
+            c = substr(line, i, 1)
+            
+            if (c == "\"") {
+                in_quote = !in_quote
+            } else if (c == "," && !in_quote) {
+                fields[++n] = current
+                current = ""
+            } else {
+                current = current c
+            }
+        }
+        fields[++n] = current
+        return n
+    }
+    
+    NR == 1 {
+        # Skip header
+        next
+    }
+    
+    {
+        # Parse CSV line
+        num_fields = parse_csv_line($0, fields)
+        if (num_fields < 5) next
+        
+        # Extract fields (task_id, status, platform, language, difficulty, subtask)
+        task_id = fields[1]
+        status = fields[2]
+        platform = fields[3]
+        language = fields[4]
+        difficulty = fields[5]
+        problem = (num_fields >= 8 ? fields[8] : "")
+        
         # Trim whitespace
         gsub(/^[ \t]+|[ \t]+$/, "", status)
         gsub(/^[ \t]+|[ \t]+$/, "", difficulty)
         gsub(/^[ \t]+|[ \t]+$/, "", platform)
         gsub(/^[ \t]+|[ \t]+$/, "", language)
-
-        # Select first pending task with hard/medium difficulty
+        
+        # Select first pending task with hard/medium/expert difficulty
         if ((status == "" || tolower(status) == "pending") &&
             (tolower(difficulty) == "hard" || tolower(difficulty) == "medium" || tolower(difficulty) == "expert")) {
-            # Output as JSON
+            # Output as JSON and set found flag
             printf "{\"task_id\":\"%s\",\"status\":\"%s\",\"platform\":\"%s\",\"difficulty\":\"%s\",\"problem\":\"%s\",\"language\":\"%s\"}\n",
                    task_id, (status == "" ? "pending" : status), platform, difficulty, substr(problem, 1, 100), language
-            exit
+            found = 1
+            exit 0
         }
-    }')
+    }
+    END {
+        # No match found (only error if we processed rows and found nothing)
+        if (NR > 1 && !found) {
+            print "{\"error\":\"No pending tasks found with hard/medium/expert difficulty\"}" > "/dev/stderr"
+            exit 1
+        }
+    }
+    ' "$CSV_FILE")
     
-    if [ -z "$result" ]; then
-        echo '{"error":"No pending tasks found with hard/medium difficulty"}' >&2
+    if [ $? -ne 0 ] || [ -z "$result" ]; then
+        echo '{"error":"No pending tasks found with hard/medium/expert difficulty"}' >&2
         exit 1
     fi
     
@@ -285,48 +378,88 @@ get_task() {
     grep "^$task_id," "$CSV_FILE" | head -1
 }
 
-# Atomic select and update with file locking
+# Atomic select and update with file locking and race condition protection
 select_and_update() {
     local task_json
     local task_id
     local exit_code=0
-    
+
     # Acquire exclusive lock
     if ! acquire_lock; then
         log_error "Could not acquire lock for select_and_update"
         exit 1
     fi
-    
+
     # Ensure lock is released on exit
     trap "release_lock" EXIT INT TERM
-    
+
+    # Defensive backup before any operation
+    backup || {
+        log_error "Pre-selection backup failed"
+        release_lock
+        exit 1
+    }
+
     # Critical section - select and update atomically
     task_json=$(select_task) || exit_code=$?
-    
+
     if [ $exit_code -ne 0 ]; then
         release_lock
         exit $exit_code
     fi
-    
+
     task_id=$(echo "$task_json" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
-    
+
+    # RACE PROTECTION #1: Check if worktree already exists (catches parallel creation race)
+    if [ -d "$REPO_ROOT/worktree/synth-$task_id" ]; then
+        log_error "🚨 RACE DETECTED: Worktree already exists for task $task_id"
+        log_warn "Another agent likely started this task. Releasing lock and exiting."
+        release_lock
+        exit 1
+    fi
+
+    # RACE PROTECTION #2: Pre-update verification (check CSV status under lock)
+    local current_status
+    current_status=$(awk -F',' -v tid="$task_id" 'NR>1 && $1==tid {print $2; exit}' "$CSV_FILE")
+    if [ "$current_status" = "in_progress" ] || [ "$current_status" = "done" ]; then
+        log_error "🚨 RACE DETECTED: Task $task_id already has status '$current_status' in CSV"
+        log_warn "Another agent updated CSV first. Releasing lock and exiting."
+        release_lock
+        exit 1
+    fi
+
     # Set flag to indicate lock is already held (avoid nested locking)
     export LOCK_HELD=1
-    
+
     # Update status while holding lock
     update_status "$task_id" "in_progress" || exit_code=$?
-    
+
     # Clear flag
     unset LOCK_HELD
-    
+
+    if [ $exit_code -ne 0 ]; then
+        release_lock
+        exit $exit_code
+    fi
+
+    # RACE PROTECTION #3: Post-update verification (ensure write succeeded under lock)
+    local verify_status
+    verify_status=$(awk -F',' -v tid="$task_id" 'NR>1 && $1==tid {print $2; exit}' "$CSV_FILE")
+    if [ "$verify_status" != "in_progress" ]; then
+        log_error "🚨 CRITICAL: Post-update verification failed!"
+        log_error "Expected status 'in_progress', found '$verify_status'"
+        log_warn "CSV update may have failed. Releasing lock and exiting."
+        release_lock
+        exit 1
+    fi
+
+    log_info "✅ Verified under lock: Task $task_id status = 'in_progress'"
+    log_info "🔒 Task $task_id is now exclusively locked for this agent (PID: $$)"
+
     # Release lock
     release_lock
     trap - EXIT INT TERM
-    
-    if [ $exit_code -ne 0 ]; then
-        exit $exit_code
-    fi
-    
+
     # Return with updated status
     echo "$task_json" | sed 's/"status":"[^"]*"/"status":"in_progress"/'
 }

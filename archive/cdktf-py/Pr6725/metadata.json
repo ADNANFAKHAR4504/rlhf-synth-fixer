@@ -1,0 +1,34 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-17T23:02:00+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "0qy11t",
+  "aws_services": [
+    "Lambda",
+    "Step Functions",
+    "DynamoDB",
+    "SNS",
+    "SQS",
+    "VPC",
+    "Security Groups",
+    "IAM",
+    "CloudWatch",
+    "VPC Endpoints",
+    "S3"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

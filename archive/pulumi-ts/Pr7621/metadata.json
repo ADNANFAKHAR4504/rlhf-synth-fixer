@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-01T23:44:51.539496",
+  "po_id": "s1e5p7m1",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon EventBridge",
+    "AWS IAM",
+    "Amazon CloudWatch Logs",
+    "Amazon SNS",
+    "Amazon S3",
+    "Amazon CloudWatch",
+    "Amazon EC2"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -108,7 +108,7 @@ resource "aws_s3_bucket" "data_bucket" {
 **MANDATORY before any deployment attempt:**
 
 ```bash
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 ```
 
 **This checks for:**
@@ -681,7 +681,7 @@ Before marking a task as complete:
 
 **Pre-validate before deployment:**
 ```bash
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 ```
 
 **Check platform and language:**

@@ -1,0 +1,1252 @@
+```yml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Multi-tier web application infrastructure with high availability - Production Grade'
+
+# ==========================================
+# Parameters for Dynamic Configuration
+# ==========================================
+Parameters:
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+    Default: webapp
+    AllowedPattern: '^[a-z][a-z0-9-]{0,19}$'
+    ConstraintDescription: Must begin with a lowercase letter, contain only lowercase alphanumeric characters and hyphens, max 20 characters
+    
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: Latest Amazon Linux 2 AMI ID (region-agnostic)
+    
+  InstanceType:
+    Description: EC2 instance type for web servers
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t3.micro
+      - t3.small
+    ConstraintDescription: Must be a valid EC2 instance type
+    
+  EnableDetailedMonitoring:
+    Description: Enable detailed monitoring for EC2 instances
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  KeyPairName:
+    Description: EC2 KeyPair for SSH access (optional - leave blank for no SSH access)
+    Type: String
+    Default: ''
+
+# ==========================================
+# Mappings for Regional Configuration
+# ==========================================
+Mappings:
+  SubnetConfig:
+    VPC:
+      CIDR: '10.0.0.0/16'
+    PublicSubnet1:
+      CIDR: '10.0.1.0/24'
+    PublicSubnet2:
+      CIDR: '10.0.2.0/24'
+    PrivateSubnet1:
+      CIDR: '10.0.10.0/24'
+    PrivateSubnet2:
+      CIDR: '10.0.20.0/24'
+
+  RegionAzConfig:
+    sa-east-1:
+      PrimaryAZ: sa-east-1a
+      SecondaryAZ: sa-east-1c
+    us-east-1:
+      PrimaryAZ: us-east-1a
+      SecondaryAZ: us-east-1b
+    us-west-2:
+      PrimaryAZ: us-west-2a
+      SecondaryAZ: us-west-2b
+    eu-west-1:
+      PrimaryAZ: eu-west-1a
+      SecondaryAZ: eu-west-1b
+
+# ==========================================
+# Conditions for Optional Features
+# ==========================================
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  EnableMonitoring: !Equals [!Ref EnableDetailedMonitoring, 'true']
+
+Resources:
+  # ==========================================
+  # Network Infrastructure
+  # ==========================================
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [SubnetConfig, VPC, CIDR]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-VPC
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-IGW
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # ==========================================
+  # Public Subnets
+  # ==========================================
+  
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !FindInMap [RegionAzConfig, !Ref 'AWS::Region', PrimaryAZ]
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet1, CIDR]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-Public-Subnet-AZ1
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Type
+          Value: Public
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !FindInMap [RegionAzConfig, !Ref 'AWS::Region', SecondaryAZ]
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet2, CIDR]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-Public-Subnet-AZ2
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Type
+          Value: Public
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ==========================================
+  # Private Subnets
+  # ==========================================
+  
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !FindInMap [RegionAzConfig, !Ref 'AWS::Region', PrimaryAZ]
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet1, CIDR]
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-Private-Subnet-AZ1
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Type
+          Value: Private
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !FindInMap [RegionAzConfig, !Ref 'AWS::Region', SecondaryAZ]
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet2, CIDR]
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-Private-Subnet-AZ2
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Type
+          Value: Private
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ==========================================
+  # Route Tables
+  # ==========================================
+  
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-Public-Routes
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # Private route tables (simplified - no NAT required per requirements)
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-Private-Routes-AZ1
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-Private-Routes-AZ2
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  # ==========================================
+  # Security Groups
+  # ==========================================
+  
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${EnvironmentName}-LoadBalancer-SG
+      GroupDescription: Security group for Application Load Balancer - allows HTTP from internet
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTP from anywhere
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-LoadBalancer-SG
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${EnvironmentName}-WebServer-SG
+      GroupDescription: Security group for web server instances - allows HTTP from ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          Description: Allow HTTP from Load Balancer
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTP from anywhere (for direct Elastic IP access)
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-WebServer-SG
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ==========================================
+  # IAM Role for EC2 Instances
+  # ==========================================
+  
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EnvironmentName}-EC2-S3-Role-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                  - s3:GetBucketVersioning
+                  - s3:GetObjectVersion
+                  - s3:DeleteObjectVersion
+                  - s3:GetBucketLocation
+                  - s3:ListBucketVersions
+                Resource:
+                  - !Sub 'arn:aws:s3:::${S3Bucket}'
+                  - !Sub 'arn:aws:s3:::${S3Bucket}/*'
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeTags
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-EC2-Role
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub ${EnvironmentName}-EC2-Profile-${AWS::Region}
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # ==========================================
+  # S3 Bucket with Versioning
+  # ==========================================
+  
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${EnvironmentName}-storage-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 90
+          - Id: TransitionOldVersions
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-S3-Bucket
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ==========================================
+  # Individual EC2 Instances with Elastic IPs
+  # ==========================================
+  
+  # EC2 Instance in Public Subnet 1
+  WebServerInstance1:
+    Type: AWS::EC2::Instance
+    DependsOn: 
+      - InternetGatewayAttachment
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+      Monitoring: !If [EnableMonitoring, true, false]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          # Update system
+          yum update -y
+          
+          # Install required packages
+          yum install -y httpd aws-cfn-bootstrap
+          
+          # Configure and start Apache
+          systemctl start httpd
+          systemctl enable httpd
+          
+          # Create web content with instance information
+          INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+          AVAILABILITY_ZONE=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+          INSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)
+          LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+          
+          cat << 'EOF' > /var/www/html/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>${EnvironmentName} - Web Application</title>
+              <style>
+                  body {
+                      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                      margin: 0;
+                      padding: 0;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      display: flex;
+                      justify-content: center;
+                      align-items: center;
+                  }
+                  .container {
+                      background: white;
+                      padding: 40px;
+                      border-radius: 15px;
+                      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                      max-width: 800px;
+                      width: 90%;
+                  }
+                  h1 {
+                      color: #333;
+                      border-bottom: 3px solid #667eea;
+                      padding-bottom: 15px;
+                      margin-bottom: 30px;
+                  }
+                  .info-grid {
+                      display: grid;
+                      grid-template-columns: 1fr 1fr;
+                      gap: 20px;
+                      margin: 30px 0;
+                  }
+                  .info-box {
+                      padding: 15px;
+                      background: #f8f9fa;
+                      border-left: 4px solid #667eea;
+                      border-radius: 5px;
+                  }
+                  .info-label {
+                      font-weight: bold;
+                      color: #555;
+                      margin-bottom: 5px;
+                  }
+                  .info-value {
+                      color: #333;
+                      font-size: 14px;
+                      word-break: break-all;
+                  }
+                  .status {
+                      display: inline-block;
+                      padding: 5px 15px;
+                      background: #28a745;
+                      color: white;
+                      border-radius: 20px;
+                      font-size: 12px;
+                      margin-top: 20px;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🚀 ${EnvironmentName} Web Application Infrastructure</h1>
+                  <p>Welcome to the production-grade multi-tier web application!</p>
+                  
+                  <div class="info-grid">
+                      <div class="info-box">
+                          <div class="info-label">Instance ID</div>
+                          <div class="info-value">EOF
+          echo -n "$INSTANCE_ID" >> /var/www/html/index.html
+          cat << 'EOF' >> /var/www/html/index.html
+          </div>
+                      </div>
+                      <div class="info-box">
+                          <div class="info-label">Availability Zone</div>
+                          <div class="info-value">EOF
+          echo -n "$AVAILABILITY_ZONE" >> /var/www/html/index.html
+          cat << 'EOF' >> /var/www/html/index.html
+          </div>
+                      </div>
+                      <div class="info-box">
+                          <div class="info-label">Instance Type</div>
+                          <div class="info-value">EOF
+          echo -n "$INSTANCE_TYPE" >> /var/www/html/index.html
+          cat << 'EOF' >> /var/www/html/index.html
+          </div>
+                      </div>
+                      <div class="info-box">
+                          <div class="info-label">Local IP Address</div>
+                          <div class="info-value">EOF
+          echo -n "$LOCAL_IP" >> /var/www/html/index.html
+          cat << 'EOF' >> /var/www/html/index.html
+          </div>
+                      </div>
+                      <div class="info-box">
+                          <div class="info-label">S3 Bucket</div>
+                          <div class="info-value">${S3Bucket}</div>
+                      </div>
+                      <div class="info-box">
+                          <div class="info-label">Region</div>
+                          <div class="info-value">${AWS::Region}</div>
+                      </div>
+                  </div>
+                  
+                  <div class="status">✓ Instance Healthy</div>
+                  
+                  <p style="margin-top: 30px; color: #666; font-size: 14px;">
+                      This instance has read/write access to the S3 bucket and is part of the high-availability infrastructure.
+                  </p>
+              </div>
+          </body>
+          </html>
+          EOF
+          
+          # Configure AWS CLI
+          aws configure set region ${AWS::Region}
+          
+          # Test S3 access and create instance marker
+          echo "Instance $INSTANCE_ID initialized at $(date)" > /tmp/instance-init.txt
+          aws s3 cp /tmp/instance-init.txt s3://${S3Bucket}/instances/$INSTANCE_ID/init.txt
+          
+          # Signal successful completion
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerInstance1 --region ${AWS::Region}
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-WebServer-1
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Subnet
+          Value: PublicSubnet1
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT10M
+
+  # Elastic IP for Instance 1
+  ElasticIP1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-EIP-1
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # Associate Elastic IP with Instance 1
+  EIPAssociation1:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref WebServerInstance1
+      EIP: !Ref ElasticIP1
+
+  # EC2 Instance in Public Subnet 2
+  WebServerInstance2:
+    Type: AWS::EC2::Instance
+    DependsOn: 
+      - InternetGatewayAttachment
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SubnetId: !Ref PublicSubnet2
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+      Monitoring: !If [EnableMonitoring, true, false]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          # Update system
+          yum update -y
+          
+          # Install required packages
+          yum install -y httpd aws-cfn-bootstrap
+          
+          # Configure and start Apache
+          systemctl start httpd
+          systemctl enable httpd
+          
+          # Create web content with instance information
+          INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+          AVAILABILITY_ZONE=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+          INSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)
+          LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+          
+          cat << 'EOF' > /var/www/html/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>${EnvironmentName} - Web Application</title>
+              <style>
+                  body {
+                      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                      margin: 0;
+                      padding: 0;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      display: flex;
+                      justify-content: center;
+                      align-items: center;
+                  }
+                  .container {
+                      background: white;
+                      padding: 40px;
+                      border-radius: 15px;
+                      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                      max-width: 800px;
+                      width: 90%;
+                  }
+                  h1 {
+                      color: #333;
+                      border-bottom: 3px solid #667eea;
+                      padding-bottom: 15px;
+                      margin-bottom: 30px;
+                  }
+                  .info-grid {
+                      display: grid;
+                      grid-template-columns: 1fr 1fr;
+                      gap: 20px;
+                      margin: 30px 0;
+                  }
+                  .info-box {
+                      padding: 15px;
+                      background: #f8f9fa;
+                      border-left: 4px solid #667eea;
+                      border-radius: 5px;
+                  }
+                  .info-label {
+                      font-weight: bold;
+                      color: #555;
+                      margin-bottom: 5px;
+                  }
+                  .info-value {
+                      color: #333;
+                      font-size: 14px;
+                      word-break: break-all;
+                  }
+                  .status {
+                      display: inline-block;
+                      padding: 5px 15px;
+                      background: #28a745;
+                      color: white;
+                      border-radius: 20px;
+                      font-size: 12px;
+                      margin-top: 20px;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🚀 ${EnvironmentName} Web Application Infrastructure</h1>
+                  <p>Welcome to the production-grade multi-tier web application!</p>
+                  
+                  <div class="info-grid">
+                      <div class="info-box">
+                          <div class="info-label">Instance ID</div>
+                          <div class="info-value">EOF
+          echo -n "$INSTANCE_ID" >> /var/www/html/index.html
+          cat << 'EOF' >> /var/www/html/index.html
+          </div>
+                      </div>
+                      <div class="info-box">
+                          <div class="info-label">Availability Zone</div>
+                          <div class="info-value">EOF
+          echo -n "$AVAILABILITY_ZONE" >> /var/www/html/index.html
+          cat << 'EOF' >> /var/www/html/index.html
+          </div>
+                      </div>
+                      <div class="info-box">
+                          <div class="info-label">Instance Type</div>
+                          <div class="info-value">EOF
+          echo -n "$INSTANCE_TYPE" >> /var/www/html/index.html
+          cat << 'EOF' >> /var/www/html/index.html
+          </div>
+                      </div>
+                      <div class="info-box">
+                          <div class="info-label">Local IP Address</div>
+                          <div class="info-value">EOF
+          echo -n "$LOCAL_IP" >> /var/www/html/index.html
+          cat << 'EOF' >> /var/www/html/index.html
+          </div>
+                      </div>
+                      <div class="info-box">
+                          <div class="info-label">S3 Bucket</div>
+                          <div class="info-value">${S3Bucket}</div>
+                      </div>
+                      <div class="info-box">
+                          <div class="info-label">Region</div>
+                          <div class="info-value">${AWS::Region}</div>
+                      </div>
+                  </div>
+                  
+                  <div class="status">✓ Instance Healthy</div>
+                  
+                  <p style="margin-top: 30px; color: #666; font-size: 14px;">
+                      This instance has read/write access to the S3 bucket and is part of the high-availability infrastructure.
+                  </p>
+              </div>
+          </body>
+          </html>
+          EOF
+          
+          # Configure AWS CLI
+          aws configure set region ${AWS::Region}
+          
+          # Test S3 access and create instance marker
+          echo "Instance $INSTANCE_ID initialized at $(date)" > /tmp/instance-init.txt
+          aws s3 cp /tmp/instance-init.txt s3://${S3Bucket}/instances/$INSTANCE_ID/init.txt
+          
+          # Signal successful completion
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerInstance2 --region ${AWS::Region}
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-WebServer-2
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Subnet
+          Value: PublicSubnet2
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT10M
+
+  # Elastic IP for Instance 2
+  ElasticIP2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-EIP-2
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # Associate Elastic IP with Instance 2
+  EIPAssociation2:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref WebServerInstance2
+      EIP: !Ref ElasticIP2
+
+  # ==========================================
+  # Application Load Balancer
+  # ==========================================
+  
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${EnvironmentName}-ALB
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ALB
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${EnvironmentName}-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      Targets:
+        - Id: !Ref WebServerInstance1
+          Port: 80
+        - Id: !Ref WebServerInstance2
+          Port: 80
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: 200-399
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '60'
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: '86400'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-TG
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # ==========================================
+  # Launch Template for Auto Scaling
+  # ==========================================
+  
+  WebServerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${EnvironmentName}-LaunchTemplate
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+        Monitoring:
+          Enabled: !If [EnableMonitoring, true, false]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            # Update system
+            yum update -y
+            
+            # Install required packages
+            yum install -y httpd aws-cfn-bootstrap
+            
+            # Configure and start Apache
+            systemctl start httpd
+            systemctl enable httpd
+            
+            # Create web content with instance information
+            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+            AVAILABILITY_ZONE=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+            INSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)
+            LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+            
+            cat << 'EOF' > /var/www/html/index.html
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>${EnvironmentName} - Auto Scaled Instance</title>
+                <style>
+                    body {
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        margin: 0;
+                        padding: 0;
+                        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                        min-height: 100vh;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                    }
+                    .container {
+                        background: white;
+                        padding: 40px;
+                        border-radius: 15px;
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                        max-width: 800px;
+                        width: 90%;
+                    }
+                    h1 {
+                        color: #333;
+                        border-bottom: 3px solid #f5576c;
+                        padding-bottom: 15px;
+                        margin-bottom: 30px;
+                    }
+                    .badge {
+                        display: inline-block;
+                        padding: 5px 15px;
+                        background: #f5576c;
+                        color: white;
+                        border-radius: 20px;
+                        font-size: 12px;
+                        margin-left: 10px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🔄 Auto Scaled Instance <span class="badge">ASG</span></h1>
+                    <p>This instance was automatically provisioned by the Auto Scaling Group.</p>
+                    
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                        <p><strong>Instance ID:</strong> EOF
+            echo -n "$INSTANCE_ID" >> /var/www/html/index.html
+            cat << 'EOF' >> /var/www/html/index.html
+            </p>
+                        <p><strong>Availability Zone:</strong> EOF
+            echo -n "$AVAILABILITY_ZONE" >> /var/www/html/index.html
+            cat << 'EOF' >> /var/www/html/index.html
+            </p>
+                        <p><strong>Instance Type:</strong> EOF
+            echo -n "$INSTANCE_TYPE" >> /var/www/html/index.html
+            cat << 'EOF' >> /var/www/html/index.html
+            </p>
+                        <p><strong>S3 Bucket:</strong> ${S3Bucket}</p>
+                        <p><strong>Region:</strong> ${AWS::Region}</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            EOF
+            
+            # Configure AWS CLI
+            aws configure set region ${AWS::Region}
+            
+            # Test S3 access
+            echo "ASG Instance $INSTANCE_ID initialized at $(date)" > /tmp/asg-init.txt
+            aws s3 cp /tmp/asg-init.txt s3://${S3Bucket}/asg-instances/$INSTANCE_ID/init.txt
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub ${EnvironmentName}-ASG-WebServer
+              - Key: iac-rlhf-amazon
+                Value: 'true'
+              - Key: Environment
+                Value: !Ref EnvironmentName
+              - Key: ManagedBy
+                Value: AutoScalingGroup
+          - ResourceType: volume
+            Tags:
+              - Key: Name
+                Value: !Sub ${EnvironmentName}-ASG-Volume
+              - Key: iac-rlhf-amazon
+                Value: 'true'
+
+  # ==========================================
+  # Auto Scaling Group (maintains one instance per public subnet)
+  # ==========================================
+  
+  WebServerAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - WebServerInstance1
+      - WebServerInstance2
+    Properties:
+      AutoScalingGroupName: !Sub ${EnvironmentName}-ASG
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WebServerLaunchTemplate
+        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+      MinSize: 2  # Ensures at least one instance per public subnet
+      MaxSize: 6
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Cooldown: 300
+      TerminationPolicies:
+        - OldestInstance
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ASG-Instance
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentName
+          PropagateAtLaunch: true
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          PropagateAtLaunch: true
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 1
+        MaxBatchSize: 1
+        PauseTime: PT5M
+        WaitOnResourceSignals: false
+        SuspendProcesses:
+          - HealthCheck
+          - ReplaceUnhealthy
+          - AZRebalance
+          - AlarmNotification
+          - ScheduledActions
+
+  # ==========================================
+  # Auto Scaling Policies
+  # ==========================================
+  
+  ScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub ${EnvironmentName}-ScaleUp
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: 1
+
+  ScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub ${EnvironmentName}-ScaleDown
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: -1
+
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${EnvironmentName}-HighCPU
+      AlarmDescription: Scale up when average CPU exceeds 70%
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerAutoScalingGroup
+      AlarmActions:
+        - !Ref ScaleUpPolicy
+      TreatMissingData: notBreaching
+
+  LowCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${EnvironmentName}-LowCPU
+      AlarmDescription: Scale down when average CPU is below 30%
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 30
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerAutoScalingGroup
+      AlarmActions:
+        - !Ref ScaleDownPolicy
+      TreatMissingData: notBreaching
+
+# ==========================================
+# Stack Outputs
+# ==========================================
+Outputs:
+  LoadBalancerDNS:
+    Description: DNS name of the Application Load Balancer
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub ${EnvironmentName}-ALB-DNS
+
+  LoadBalancerURL:
+    Description: Full URL of the Application Load Balancer
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
+    Export:
+      Name: !Sub ${EnvironmentName}-ALB-URL
+
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${EnvironmentName}-VPC-ID
+
+  VPCCidr:
+    Description: VPC CIDR Block
+    Value: !GetAtt VPC.CidrBlock
+    Export:
+      Name: !Sub ${EnvironmentName}-VPC-CIDR
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub ${EnvironmentName}-PublicSubnet1-ID
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub ${EnvironmentName}-PublicSubnet2-ID
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub ${EnvironmentName}-PrivateSubnet1-ID
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub ${EnvironmentName}-PrivateSubnet2-ID
+
+  WebServerInstance1Id:
+    Description: Instance ID of WebServer 1
+    Value: !Ref WebServerInstance1
+    Export:
+      Name: !Sub ${EnvironmentName}-Instance1-ID
+
+  WebServerInstance2Id:
+    Description: Instance ID of WebServer 2
+    Value: !Ref WebServerInstance2
+    Export:
+      Name: !Sub ${EnvironmentName}-Instance2-ID
+
+  ElasticIP1Address:
+    Description: Elastic IP address for WebServer 1
+    Value: !Ref ElasticIP1
+    Export:
+      Name: !Sub ${EnvironmentName}-EIP1
+
+  ElasticIP2Address:
+    Description: Elastic IP address for WebServer 2
+    Value: !Ref ElasticIP2
+    Export:
+      Name: !Sub ${EnvironmentName}-EIP2
+
+  WebServerInstance1URL:
+    Description: Direct URL to WebServer 1 via Elastic IP
+    Value: !Sub 'http://${ElasticIP1}'
+    Export:
+      Name: !Sub ${EnvironmentName}-Instance1-URL
+
+  WebServerInstance2URL:
+    Description: Direct URL to WebServer 2 via Elastic IP
+    Value: !Sub 'http://${ElasticIP2}'
+    Export:
+      Name: !Sub ${EnvironmentName}-Instance2-URL
+
+  S3BucketName:
+    Description: Name of the S3 bucket
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub ${EnvironmentName}-S3-Bucket
+
+  S3BucketArn:
+    Description: ARN of the S3 bucket
+    Value: !GetAtt S3Bucket.Arn
+    Export:
+      Name: !Sub ${EnvironmentName}-S3-Bucket-ARN
+
+  WebServerSecurityGroupId:
+    Description: Security Group ID for Web Servers
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-WebServer-SG-ID
+
+  LoadBalancerSecurityGroupId:
+    Description: Security Group ID for Load Balancer
+    Value: !Ref LoadBalancerSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-LB-SG-ID
+
+  EC2RoleArn:
+    Description: ARN of the IAM role for EC2 instances
+    Value: !GetAtt EC2InstanceRole.Arn
+    Export:
+      Name: !Sub ${EnvironmentName}-EC2-Role-ARN
+
+  AutoScalingGroupName:
+    Description: Name of the Auto Scaling Group
+    Value: !Ref WebServerAutoScalingGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-ASG-Name
+
+  LaunchTemplateId:
+    Description: ID of the Launch Template
+    Value: !Ref WebServerLaunchTemplate
+    Export:
+      Name: !Sub ${EnvironmentName}-LaunchTemplate-ID
+
+  TargetGroupArn:
+    Description: ARN of the ALB Target Group
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-TG-ARN
+
+```

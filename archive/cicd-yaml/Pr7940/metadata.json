@@ -1,0 +1,33 @@
+{
+  "platform": "cicd",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "a2e1h2o9",
+  "team": "synth",
+  "startedAt": "2025-12-05T04:50:32+05:30",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "VPC",
+    "Kinesis",
+    "ECS",
+    "RDS Aurora",
+    "ElastiCache",
+    "EFS",
+    "API Gateway",
+    "Secrets Manager",
+    "KMS",
+    "CloudWatch",
+    "X-Ray"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

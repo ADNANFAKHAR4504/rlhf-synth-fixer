@@ -1,0 +1,11 @@
+{
+  "language": "python",
+  "app": "pipenv run python tap.py",
+  "projectId": "e2u0x0-cicd-pipeline",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 6.0"
+  ],
+  "terraformModules": [],
+  "context": {}
+}

@@ -1,0 +1,572 @@
+# LocalStack Migration Configuration
+# Central configuration for localstack-migrate command and related agents
+# Version: 1.0.0
+
+# ═══════════════════════════════════════════════════════════════
+# ITERATION SETTINGS
+# Optimized for faster fixing with local pre-validation
+# ═══════════════════════════════════════════════════════════════
+iteration:
+  max_fix_iterations: 10 # Maximum fix iterations (increased to ensure production ready)
+  max_cicd_iterations: 10 # Maximum CI/CD monitoring iterations after PR push
+  max_deployment_attempts: 3 # Maximum deployment attempts per iteration
+  use_batch_fix: true # Enable batch fix approach (apply ALL fixes before re-deploy)
+  continue_until_production_ready: true # MUST iterate until all CI/CD jobs pass
+  run_local_prevalidation: true # NEW: Run local validation before pushing to CI/CD
+  prevalidation_script: '.claude/scripts/localstack-prevalidate.sh' # Path to pre-validation script
+
+# ═══════════════════════════════════════════════════════════════
+# TIMEOUT SETTINGS (in seconds)
+# Optimized for faster execution - LocalStack deployments should be quick
+# ═══════════════════════════════════════════════════════════════
+timeouts:
+  localstack_health_check: 5 # Timeout for LocalStack health check
+  deployment_timeout: 180 # Reduced from 300 → 180 (3 min - LocalStack is fast)
+  test_timeout: 60 # Reduced from 120 → 60 (1 min - tests should be quick)
+  bootstrap_timeout: 60 # Reduced from 120 → 60 (1 min - bootstrap is fast)
+  npm_install_timeout: 120 # Reduced from 180 → 120 (2 min with cache)
+  pip_install_timeout: 60 # Reduced from 120 → 60 (1 min with cache)
+  synth_timeout: 60 # NEW: CDK/Terraform synthesis timeout
+  lint_timeout: 30 # NEW: Linting timeout
+  compile_timeout: 60 # NEW: TypeScript/Python compilation timeout
+  cicd_poll_interval: 20 # NEW: Reduced from 30 → 20 (faster status checks)
+
+# ═══════════════════════════════════════════════════════════════
+# LOCALSTACK SETTINGS
+# ═══════════════════════════════════════════════════════════════
+localstack:
+  endpoint: 'http://localhost:4566'
+  region: 'us-east-1'
+  account_id: '000000000000'
+  access_key: 'test'
+  secret_key: 'test'
+  reset_state_before_deploy: false # Set to false for parallel execution
+  unique_stack_names: true # Use tap-stack-{PR_ID} for parallel safety
+
+# ═══════════════════════════════════════════════════════════════
+# BATCH FIX STRATEGY SETTINGS
+# Aggressive preventive fixes to minimize CI/CD iterations
+# ═══════════════════════════════════════════════════════════════
+batch_fix:
+  enabled: true # Enable batch fix approach
+  apply_preventive_fixes: true # Apply fixes even without specific errors
+  single_comprehensive_push: true # NEW: Apply ALL fixes in single commit before push
+
+  # Fix priority order (applied in this sequence)
+  # IMPORTANT: metadata_fix MUST be first - CI/CD validates metadata.json before anything else
+  fix_priority:
+    - metadata_fix # 🔴 CRITICAL - MUST BE FIRST - Schema compliance for CI/CD
+    - typescript_fix # 🔴 CRITICAL - Run tsc and fix type errors
+    - lint_fix # 🔴 CRITICAL - Run lint:fix before push
+    - endpoint_config # 🔴 Critical - LocalStack endpoint detection
+    - s3_path_style # 🔴 Critical - S3 path-style access
+    - removal_policy # 🟡 High - RemovalPolicy.DESTROY
+    - test_config # 🟡 High - Test endpoint configuration
+    - jest_config # 🟡 High - Jest configuration (test vs tests folder)
+    - iam_simplify # 🟡 Medium - IAM policy simplification
+    - resource_naming # 🟡 Medium - Resource naming simplification
+    - unsupported_service # 🟡 Medium - Unsupported service conditionals
+    - default_parameters # 🟢 Low - Default parameter values
+
+  # Preventive fixes (apply even if no error detected)
+  # EXPANDED: Apply more fixes upfront to reduce iterations
+  preventive_fixes:
+    - metadata_fix # ALWAYS - Required for CI/CD to pass
+    - typescript_fix # ALWAYS - Compile check before push
+    - lint_fix # ALWAYS - Auto-fix lint issues
+    - endpoint_config # Almost always needed
+    - s3_path_style # If using S3/buckets
+    - removal_policy # Always for LocalStack
+    - test_config # If test/ directory exists
+    - jest_config # If jest.config.js exists
+
+  # Conditional fixes (only apply if specific error detected)
+  conditional_fixes:
+    iam_simplify:
+      error_patterns:
+        - 'policy'
+        - 'iam'
+        - 'principal'
+        - 'malformed'
+    resource_naming:
+      error_patterns:
+        - 'name'
+        - 'invalid.*bucket'
+        - 'too long'
+        - 'character'
+    unsupported_service:
+      error_patterns:
+        - 'not supported'
+        - 'unsupported'
+        - 'not available'
+        - 'appsync'
+        - 'amplify'
+        - 'sagemaker'
+    default_parameters:
+      error_patterns:
+        - 'parameter'
+        - 'missing.*required'
+        - 'undefined'
+
+# ═══════════════════════════════════════════════════════════════
+# SERVICE COMPATIBILITY (LocalStack Community Edition)
+# ═══════════════════════════════════════════════════════════════
+service_compatibility:
+  # High compatibility - full support in Community
+  high:
+    - s3
+    - dynamodb
+    - sqs
+    - sns
+    - iam
+    - kms
+    - cloudwatch
+    - logs
+    - secretsmanager
+    - ssm
+    - eventbridge
+    - events
+
+  # Medium compatibility - mostly supported
+  medium:
+    - lambda
+    - apigateway
+    - stepfunctions
+    - kinesis
+    - cloudformation
+
+  # Low compatibility - limited or Pro-only
+  low:
+    - ecs
+    - rds
+    - ec2
+    - elasticache
+    - elasticsearch
+
+  # Not supported in Community (Pro only)
+  pro_only:
+    - eks
+    - appsync
+    - amplify
+    - sagemaker
+    - cognito-idp # Limited in Community
+
+# ═══════════════════════════════════════════════════════════════
+# SMART SELECTION SCORING
+# ═══════════════════════════════════════════════════════════════
+smart_selection:
+  enabled: true
+  base_score: 100
+
+  # Score adjustments based on services used
+  service_penalties:
+    low_compatibility: -25 # Penalty for each low-compat service
+    medium_compatibility: -10 # Penalty for each medium-compat service
+    pro_only: -50 # Penalty for pro-only services (likely to fail)
+
+  # Score bonuses based on platform
+  platform_bonuses:
+    cfn: 10 # CloudFormation is most compatible
+    cdk: 5 # CDK has good compatibility
+    tf: 0 # Terraform is neutral
+    pulumi: -5 # Pulumi has some quirks
+
+  # Score bonuses based on complexity
+  complexity_bonuses:
+    easy: 10
+    medium: 0
+    hard: -10
+    expert: -20
+
+# ═══════════════════════════════════════════════════════════════
+# PARALLEL EXECUTION SETTINGS
+# ═══════════════════════════════════════════════════════════════
+parallel:
+  enabled: true
+  max_concurrent_agents: 10 # Maximum parallel agents
+  use_git_worktrees: true # Use git worktrees for isolation
+  use_file_locking: true # Lock migration log for concurrent writes
+  lock_timeout_seconds: 30 # Timeout for acquiring file lock
+  lock_retry_attempts: 10 # Number of retry attempts for lock
+  stale_lock_timeout: 60 # Consider lock stale after this many seconds
+
+# ═══════════════════════════════════════════════════════════════
+# WORKING DIRECTORY SETTINGS
+# ═══════════════════════════════════════════════════════════════
+worktree:
+  base_path: 'worktree'
+  localstack_pattern: 'localstack-{pr_id}' # Working directory for deployment
+  git_pattern: 'git-{pr_id}' # Git worktree for branch operations
+  github_pattern: 'github-{pr_id}' # Temp directory for GitHub fetches
+  auto_cleanup: true # Clean up after completion
+  prune_orphaned: true # Prune orphaned git worktrees
+
+# ═══════════════════════════════════════════════════════════════
+# PR CREATION SETTINGS
+# ═══════════════════════════════════════════════════════════════
+pr_creation:
+  branch_pattern: 'ls-synth-{pr_id}' # Branch naming pattern
+  pr_id_prefix: 'ls-' # Prefix for new PR IDs (ls-Pr1234)
+  title_pattern: '[LocalStack] {ls_pr_id} - {platform}/{language}'
+  force_push: true # Force push to handle existing branches
+  auto_create_pr: true # Automatically create GitHub PR
+
+# ═══════════════════════════════════════════════════════════════
+# MIGRATION LOG SETTINGS
+# ═══════════════════════════════════════════════════════════════
+migration_log:
+  path: '.claude/reports/localstack-migrations.json'
+  lock_file: '.claude/reports/.migration-log.lock'
+  track_iterations: true
+  track_fixes_applied: true
+  include_timestamps: true
+
+# ═══════════════════════════════════════════════════════════════
+# LOGGING CONFIGURATION
+# ═══════════════════════════════════════════════════════════════
+logging:
+  level: INFO # DEBUG, INFO, WARN, ERROR
+  verbose_deployment: false # Show full deployment output
+  verbose_test_output: false # Show full test output
+  log_to_file: false # Log to file (in addition to console)
+  log_directory: '/tmp/localstack-migrate-logs'
+
+# ═══════════════════════════════════════════════════════════════
+# EXIT CODES
+# ═══════════════════════════════════════════════════════════════
+exit_codes:
+  success: 0 # Migration successful, PR created
+  fix_failed: 1 # Unable to fix within max iterations
+  unsupported_services: 2 # Uses Pro-only services
+  localstack_not_running: 3 # LocalStack is not available
+  github_error: 4 # GitHub CLI error
+  git_error: 5 # Git operation failed
+
+# ═══════════════════════════════════════════════════════════════
+# PLATFORM-SPECIFIC SETTINGS
+# ═══════════════════════════════════════════════════════════════
+platforms:
+  cdk:
+    bootstrap_required: true
+    bootstrap_command: 'cdklocal bootstrap aws://{account_id}/{region}'
+    deploy_command: 'cdklocal deploy --all --require-approval never'
+    destroy_command: 'cdklocal destroy --all --force'
+    output_directory: 'cdk.out'
+
+  cfn:
+    bootstrap_required: false
+    deploy_command: 'awslocal cloudformation create-stack --stack-name {stack_name} --template-body file://lib/TapStack.yml --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM'
+    wait_command: 'awslocal cloudformation wait stack-create-complete --stack-name {stack_name}'
+    destroy_command: 'awslocal cloudformation delete-stack --stack-name {stack_name}'
+
+  tf:
+    bootstrap_required: false
+    init_command: 'tflocal init'
+    deploy_command: 'tflocal apply -auto-approve'
+    destroy_command: 'tflocal destroy -auto-approve'
+
+  pulumi:
+    bootstrap_required: true
+    backend: 'file://~/.pulumi-localstack'
+    deploy_command: 'pulumi up --yes --stack {stack_name}'
+    destroy_command: 'pulumi destroy --yes --stack {stack_name}'
+
+# ═══════════════════════════════════════════════════════════════
+# GITHUB SETTINGS
+# These settings are used by the modular scripts in .claude/scripts/:
+#   - localstack-common.sh (loads GITHUB_REPO from here)
+#   - localstack-fetch-github.sh (fetches PRs from this repo)
+#   - localstack-create-pr.sh (creates PRs in this repo)
+# ═══════════════════════════════════════════════════════════════
+github:
+  repo: 'TuringGpt/iac-test-automations' # Central config - used by all scripts
+  fetch_method: 'api' # api, clone, or checkout
+  api_timeout: 30 # GitHub API timeout
+  clone_depth: 1 # Shallow clone depth
+
+# ═══════════════════════════════════════════════════════════════
+# METADATA SCHEMA COMPLIANCE
+# The schema at config/schemas/metadata.schema.json has
+# additionalProperties: false, so we MUST sanitize metadata.json
+# ═══════════════════════════════════════════════════════════════
+metadata:
+  schema_path: 'config/schemas/metadata.schema.json'
+  sanitize_on_migrate: true # Remove fields not in schema
+  validate_before_commit: true # Validate against schema before creating PR
+
+  # Fields that MUST be removed (not allowed by schema)
+  fields_to_remove:
+    - task_id # Use po_id instead
+    - training_quality
+    - coverage
+    - author
+    - dockerS3Location
+    - pr_id
+    - original_pr_id
+    - localstack_migration
+
+  # Valid subtask values (from schema enum)
+  valid_subtasks:
+    - 'Provisioning of Infrastructure Environments'
+    - 'Application Deployment'
+    - 'CI/CD Pipeline Integration'
+    - 'Failure Recovery and High Availability'
+    - 'Security, Compliance, and Governance'
+    - 'IaC Program Optimization'
+    - 'Infrastructure QA and Management'
+
+  # Subtask mapping (old invalid values to valid values)
+  subtask_mapping:
+    'Security and Compliance Implementation': 'Security, Compliance, and Governance'
+    'Security Configuration': 'Security, Compliance, and Governance'
+    'Database Management': 'Provisioning of Infrastructure Environments'
+    'Network Configuration': 'Provisioning of Infrastructure Environments'
+    'Monitoring Setup': 'Infrastructure QA and Management'
+    'Performance Optimization': 'IaC Program Optimization'
+    'Access Control': 'Security, Compliance, and Governance'
+
+  # Valid subject_labels (from schema enum)
+  valid_subject_labels:
+    - 'Environment Migration'
+    - 'Cloud Environment Setup'
+    - 'Multi-Environment Consistency'
+    - 'Web Application Deployment'
+    - 'Serverless Infrastructure (Functions as Code)'
+    - 'CI/CD Pipeline'
+    - 'Failure Recovery Automation'
+    - 'Security Configuration as Code'
+    - 'IaC Diagnosis/Edits'
+    - 'IaC Optimization'
+    - 'Infrastructure Analysis/Monitoring'
+    - 'General Infrastructure Tooling QA'
+
+  # Subject label mapping (old invalid values to valid values)
+  subject_label_mapping:
+    'Security Configuration': 'Security Configuration as Code'
+    'Database Management': 'General Infrastructure Tooling QA'
+    'Network Configuration': 'Cloud Environment Setup'
+    'Access Control': 'Security Configuration as Code'
+    'Monitoring Setup': 'Infrastructure Analysis/Monitoring'
+    'Performance Optimization': 'IaC Optimization'
+
+  # Default values if mapping fails
+  default_subtask: 'Infrastructure QA and Management'
+  default_subject_label: 'General Infrastructure Tooling QA'
+
+# ═══════════════════════════════════════════════════════════════
+# TRAINING QUALITY SETTINGS
+# Configuration for achieving training quality scores of 9+
+# See: .claude/docs/guides/localstack-training-quality-guide.md
+# ═══════════════════════════════════════════════════════════════
+training_quality:
+  # Minimum required score for PR approval
+  min_score: 8
+  target_score: 9 # Aim for this score when applying fixes
+
+  # Enable training quality enhancement during fixes
+  enhance_training_quality: true
+
+  # Category A fixes - LocalStack compatible (HIGH priority for score boost)
+  # Each provides +1 to MODEL_FAILURES adjustment (max +2)
+  category_a_fixes:
+    kms_encryption:
+      enabled: true
+      description: 'Add KMS encryption to data stores'
+      applicable_services:
+        - s3
+        - dynamodb
+        - sqs
+        - sns
+        - secretsmanager
+        - ssm
+      patterns_to_check:
+        - 'encryption.*KMS'
+        - 'encryptionKey'
+        - 'kms.Key'
+      fix_if_missing: true
+
+    iam_least_privilege:
+      enabled: true
+      description: 'Replace overly permissive IAM with least-privilege'
+      applicable_services:
+        - iam
+        - lambda
+        - s3
+        - dynamodb
+      patterns_indicating_issue:
+        - 'actions.*\*'
+        - 'resources.*\*'
+        - 'Effect.*Allow.*Action.*\*'
+      fix_if_detected: true
+
+    cloudwatch_monitoring:
+      enabled: true
+      description: 'Add CloudWatch alarms and monitoring'
+      applicable_services:
+        - cloudwatch
+        - logs
+        - lambda
+        - dynamodb
+        - sqs
+      patterns_to_check:
+        - 'Alarm'
+        - 'metricErrors'
+        - 'Dashboard'
+      fix_if_missing: true
+
+    error_handling_dlq:
+      enabled: true
+      description: 'Add dead-letter queues for error handling'
+      applicable_services:
+        - sqs
+        - lambda
+        - sns
+        - eventbridge
+      patterns_to_check:
+        - 'deadLetterQueue'
+        - 'DeadLetterQueue'
+        - 'dlq'
+        - 'retryAttempts'
+      fix_if_missing: true
+
+    secretsmanager_integration:
+      enabled: true
+      description: 'Replace hardcoded credentials with SecretsManager'
+      applicable_services:
+        - secretsmanager
+        - lambda
+      patterns_indicating_issue:
+        - 'password.*=.*["\x27]'
+        - 'secret.*=.*["\x27]'
+        - 'apiKey.*=.*["\x27]'
+      fix_if_detected: true
+
+  # Complexity factors - each provides +1 (max +2 total)
+  complexity_factors:
+    multiple_services:
+      min_count: 3 # Need 3+ services for +1 bonus
+      high_value_services: # Count these for the factor
+        - s3
+        - dynamodb
+        - lambda
+        - sqs
+        - sns
+        - apigateway
+        - eventbridge
+        - stepfunctions
+
+    security_practices:
+      required_count: 2 # Need 2+ of these for +1 bonus
+      practices:
+        - kms_encryption
+        - iam_least_privilege
+        - encryption_at_rest
+        - encryption_in_transit
+        - resource_policies
+
+    event_driven:
+      required_patterns: # Need any of these for +1 bonus
+        - eventbridge_rules
+        - sqs_triggers
+        - sns_subscriptions
+        - lambda_event_sources
+
+    serverless_architecture:
+      required_services: # Need Lambda + at least one of these
+        primary: lambda
+        secondary:
+          - apigateway
+          - stepfunctions
+          - eventbridge
+
+  # Services to prioritize for training quality
+  # These are HIGH compatibility and support Category A fixes
+  priority_services:
+    tier_1: # Best for training quality (HIGH compatibility + Category A opportunities)
+      - s3 # KMS, policies, lifecycle
+      - dynamodb # KMS, IAM, streams
+      - lambda # IAM, DLQ, monitoring
+      - kms # Core security service
+      - iam # Policies, roles
+
+    tier_2: # Good for training quality (HIGH compatibility)
+      - sqs # Encryption, DLQ
+      - sns # Encryption, policies
+      - cloudwatch # Monitoring, alarms
+      - eventbridge # Event patterns
+      - secretsmanager # Credential management
+
+    tier_3: # Usable (MEDIUM compatibility)
+      - apigateway # API patterns
+      - stepfunctions # Workflows
+
+  # Patterns to detect and suggest fixes
+  enhancement_patterns:
+    # Pattern: Unencrypted S3 bucket
+    s3_unencrypted:
+      detect: 'new.*Bucket\s*\([^)]*\)\s*(?!.*encryption)'
+      suggest: 'Add encryption: s3.BucketEncryption.KMS with custom KMS key'
+      category: 'A'
+      boost: 1
+
+    # Pattern: Unencrypted DynamoDB
+    dynamodb_unencrypted:
+      detect: 'new.*Table\s*\([^)]*\)\s*(?!.*encryption)'
+      suggest: 'Add encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED'
+      category: 'A'
+      boost: 1
+
+    # Pattern: Lambda without DLQ
+    lambda_no_dlq:
+      detect: 'new.*Function\s*\([^)]*\)\s*(?!.*deadLetterQueue)'
+      suggest: 'Add deadLetterQueue with SQS DLQ'
+      category: 'A'
+      boost: 1
+
+    # Pattern: Overly permissive IAM
+    iam_star_permissions:
+      detect: 'actions.*\[.*\*.*\]|resources.*\[.*\*.*\]'
+      suggest: 'Replace with specific actions and resource ARNs'
+      category: 'A'
+      boost: 1
+
+    # Pattern: Missing CloudWatch alarms
+    no_cloudwatch_alarms:
+      detect: '(?!.*new.*Alarm)'
+      suggest: 'Add CloudWatch alarms for key metrics (errors, throttles)'
+      category: 'A'
+      boost: 1
+
+    # Pattern: Hardcoded credentials
+    hardcoded_credentials:
+      detect: '(password|secret|apiKey|token)\s*[:=]\s*["\x27][^"\x27]+'
+      suggest: 'Use SecretsManager for credential storage'
+      category: 'A'
+      boost: 1
+
+  # Assessment output format
+  assessment_template: |
+    ## Training Quality Assessment (LocalStack)
+
+    **Target Score**: {target}/10
+    **Current Score**: {score}/10
+
+    ### Scoring Breakdown
+    - Base Score: 8
+    - MODEL_FAILURES Adjustment: {model_failures_adj} ({category_a_count} Category A fixes)
+    - Complexity Adjustment: {complexity_adj} ({complexity_factors})
+
+    ### Category A Fixes Applied
+    {category_a_fixes_list}
+
+    ### Complexity Factors Present
+    - Multiple Services (3+): {multiple_services}
+    - Security Practices: {security_practices}
+    - Event-Driven: {event_driven}
+    - Serverless: {serverless}
+
+    ### LocalStack Compatibility
+    - Services Used: {services_list}
+    - Compatibility Level: {compatibility_level}
+
+    ### Status: {status}

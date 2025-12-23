@@ -1,0 +1,40 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-04T06:39:40+05:30",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "po_id": "p3h5g8z5",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "Elastic IP",
+    "Application Load Balancer",
+    "Target Group",
+    "ECS Cluster",
+    "ECS Task Definition",
+    "ECS Service",
+    "CloudWatch Log Group",
+    "CloudWatch Metric Alarm",
+    "CloudWatch Dashboard",
+    "IAM Role",
+    "IAM Role Policy Attachment"
+  ],
+  "region": "us-east-1",
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

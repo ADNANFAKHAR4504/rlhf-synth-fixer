@@ -1,0 +1,33 @@
+{
+  "task_id": "101912540",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Environment Migration"
+  ],
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-20T12:32:32.952913+00:00",
+  "po_id": "101912540",
+  "aws_services": [
+    "Lambda",
+    "RDS",
+    "VPC",
+    "IAM",
+    "CloudWatch",
+    "S3",
+    "DynamoDB",
+    "Security Groups"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

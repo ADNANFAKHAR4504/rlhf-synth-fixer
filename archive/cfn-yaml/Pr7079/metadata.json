@@ -1,0 +1,53 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350214",
+  "team": "4",
+  "startedAt": "2025-11-21T16:09:26.485Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "EC2",
+    "Launch Template",
+    "Security Groups",
+    "Application Load Balancer (ALB)",
+    "RDS (Multi-AZ)",
+    "Secrets Manager",
+    "KMS CMK",
+    "CloudWatch Logs",
+    "CloudWatch Agent",
+    "CloudTrail",
+    "S3",
+    "S3 Bucket Policies",
+    "AWS WAFv2",
+    "DynamoDB",
+    "Lambda",
+    "Lambda VPC Access",
+    "AWS Config",
+    "Config Recorder",
+    "Delivery Channel",
+    "SNS",
+    "SSM Parameter Store",
+    "EC2 Instance Profile",
+    "IAM Roles",
+    "Elastic IPs",
+    "Log Groups",
+    "Log Streams"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

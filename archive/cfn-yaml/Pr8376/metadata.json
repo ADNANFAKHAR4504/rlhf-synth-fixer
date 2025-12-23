@@ -1,0 +1,42 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349087",
+  "team": "3",
+  "startedAt": "2025-12-18T13:33:06.145Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "ArtifactsBucket",
+    "ArtifactsBucketPolicy",
+    "StackEventsTopic",
+    "StackEventsSubscriptionEmail",
+    "LambdaExecutionRole",
+    "AppDLQ",
+    "AppHandlerLambda",
+    "AppHandlerLogGroup",
+    "AppHandlerVersion",
+    "AppLiveAlias",
+    "PreTrafficHookLambda",
+    "PreTrafficLogGroup",
+    "PostTrafficHookLambda",
+    "PostTrafficLogGroup",
+    "AppErrorAlarm",
+    "AppThrottleAlarm",
+    "CodeDeployServiceRole",
+    "CodeDeployLambdaApplication",
+    "CodeDeployLambdaDeploymentGroup"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,16 @@
+name: lambda-etl-optimization
+runtime: nodejs
+description: Pulumi program for optimizing Lambda-based ETL infrastructure
+config:
+  aws:region:
+    value: us-east-1
+  environment:
+    value: dev
+  team:
+    value: data-engineering
+  costCenter:
+    value: analytics
+  ingestionBucket:
+    value: etl-ingestion-bucket
+  outputBucket:
+    value: etl-output-bucket

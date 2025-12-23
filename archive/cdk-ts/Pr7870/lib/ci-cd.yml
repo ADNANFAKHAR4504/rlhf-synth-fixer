@@ -1,0 +1,439 @@
+---
+
+name: ECS Fargate CI/CD Pipeline
+
+description: |
+  Comprehensive CI/CD pipeline for deploying containerized API services
+  to ECS Fargate with automated testing gates, approval workflows,
+  blue-green deployments, and auto-rollback capabilities.
+  
+platform: AWS
+iac_tool: CDK
+language: TypeScript
+
+pipeline:
+  name: ecs-fargate-cicd-pipeline
+  trigger_on: push
+  branches:
+    - main
+  stages:
+    - name: Source
+      type: source
+      provider: GitHub
+      configuration:
+        connection_type: CodeStar
+        repository: github-repo
+        branch: main
+        auto_trigger: true
+
+    - name: Build
+      type: build
+      provider: CodeBuild
+      needs:
+        - Source
+      configuration:
+        compute_type: BUILD_GENERAL1_MEDIUM
+        environment: Docker
+        cache_enabled: true
+        cache_type: S3
+        privileged_mode: true
+        buildspec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo Logging in to Amazon ECR
+                - |
+                  aws ecr get-login-password \
+                    --region $AWS_DEFAULT_REGION | \
+                  docker login --username AWS \
+                    --password-stdin $ECR_REPOSITORY_URI
+            build:
+              commands:
+                - echo Building Docker image
+                - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
+                - |
+                  docker tag $IMAGE_REPO_NAME:$IMAGE_TAG \
+                    $ECR_REPOSITORY_URI:$IMAGE_TAG
+            post_build:
+              commands:
+                - echo Pushing Docker image to ECR
+                - docker push $ECR_REPOSITORY_URI:$IMAGE_TAG
+                - echo Image pushed successfully
+                - echo Scanning image with Trivy for vulnerabilities
+                - trivy image --severity HIGH,CRITICAL $ECR_REPOSITORY_URI:$IMAGE_TAG
+                - echo Starting ECR image scan
+                - |
+                  aws ecr start-image-scan \
+                    --repository-name $IMAGE_REPO_NAME \
+                    --image-id imageTag=$IMAGE_TAG
+                - echo Writing image definitions for ECS deployment
+                - |
+                  printf '[{"name":"api-container-'$ENVIRONMENT_SUFFIX'","imageUri":"%s"}]' \
+                    $ECR_REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+          artifacts:
+            files:
+              - imagedefinitions.json
+              - '**/*'
+
+    - name: Test
+      type: build
+      provider: CodeBuild
+      needs:
+        - Build
+      configuration:
+        compute_type: BUILD_GENERAL1_SMALL
+        environment: Docker
+        cache_enabled: true
+        cache_type: Local
+        buildspec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 18
+            pre_build:
+              commands:
+                - echo Installing test dependencies
+                - npm ci
+            build:
+              commands:
+                - echo Running unit tests
+                - npm test
+                - echo Running integration tests
+                - npm run test:integration
+                - echo Running CDK synth validation
+                - npx cdk synth --quiet
+          reports:
+            test-results:
+              files:
+                - 'test-results/**/*.xml'
+              file-format: 'JUNITXML'
+            coverage-results:
+              files:
+                - 'coverage/clover.xml'
+              file-format: 'CLOVERXML'
+
+    - name: Manual-Approval
+      type: approval
+      provider: Manual
+      needs:
+        - Test
+      environment: production
+      configuration:
+        notification_arn: ${SNS_TOPIC_ARN}
+        custom_data: "Review and approve deployment to production ECS cluster"
+        timeout_minutes: 1440
+
+    - name: Deploy
+      type: deploy
+      provider: ECS
+      needs:
+        - Manual-Approval
+      environment: production
+      configuration:
+        cluster_name: ecs-cluster-${ENVIRONMENT_SUFFIX}
+        service_name: api-service-${ENVIRONMENT_SUFFIX}
+        deployment_type: rolling_update
+        deployment_configuration:
+          minimum_healthy_percent: 50
+          maximum_percent: 200
+        image_uri: ${ECR_REPOSITORY_URI}:${IMAGE_TAG}
+        circuit_breaker:
+          enabled: true
+          rollback: true
+
+resources:
+  vpc:
+    - name: api-vpc
+      max_azs: 2
+      nat_gateways: 1
+      subnet_configuration:
+        - name: Public
+          subnet_type: PUBLIC
+          cidr_mask: 24
+        - name: Private
+          subnet_type: PRIVATE_WITH_EGRESS
+          cidr_mask: 24
+
+  ecr:
+    - name: api-container-images
+      image_scanning: true
+      encryption: AWS_MANAGED
+      lifecycle_policy:
+        max_images: 10
+
+  ecs:
+    cluster:
+      - name: ecs-cluster
+        container_insights: true
+        capacity_providers:
+          - FARGATE_SPOT
+          - FARGATE
+        default_capacity_provider_strategy:
+          - capacity_provider: FARGATE_SPOT
+            weight: 1
+            base: 0
+
+    task_definition:
+      - name: api-task
+        cpu: 512
+        memory: 1024
+        execution_role: ecs-task-execution-role
+        task_role: ecs-task-role
+        containers:
+          - name: api-container
+            port: 8080
+            logging: awslogs
+            environment:
+              - NODE_ENV: ${ENVIRONMENT_SUFFIX}
+              - PORT: "8080"
+
+    service:
+      - name: api-service
+        desired_count: 1
+        launch_type: FARGATE
+        deployment_circuit_breaker:
+          enable: true
+          rollback: true
+        health_check_grace_period: 60
+        capacity_provider_strategies:
+          - capacity_provider: FARGATE_SPOT
+            weight: 1
+
+  alb:
+    - name: api-alb
+      internet_facing: true
+      listeners:
+        - port: 80
+          protocol: HTTP
+      target_groups:
+        - name: api-targets
+          port: 8080
+          protocol: HTTP
+          target_type: IP
+          health_check:
+            path: /health
+            interval: 30
+            timeout: 5
+            healthy_threshold: 2
+            unhealthy_threshold: 3
+
+  autoscaling:
+    - name: api-service-scaling
+      min_capacity: 1
+      max_capacity: 5
+      target_tracking:
+        - metric: ECSServiceAverageCPUUtilization
+          target_value: 70
+          scale_in_cooldown: 60
+          scale_out_cooldown: 60
+
+  service_discovery:
+    - name: service-discovery
+      namespace_type: PRIVATE_DNS
+      dns_record_type: A
+      dns_ttl: 60
+
+  s3:
+    - name: pipeline-artifacts
+      versioning: true
+      encryption: AWS_MANAGED
+      lifecycle_rules:
+        - expiration_days: 30
+          prefix: artifacts/
+    - name: docker-build-cache
+      versioning: false
+      encryption: AWS_MANAGED
+
+  cloudwatch:
+    log_groups:
+      - name: /ecs/api
+        retention_days: 7
+
+    alarms:
+      - name: pipeline-execution-failures
+        metric: ExecutionFailures
+        namespace: AWS/CodePipeline
+        threshold: 1
+        evaluation_periods: 1
+        comparison_operator: GreaterThanOrEqualToThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
+      - name: ecs-cpu-high
+        metric: CPUUtilization
+        namespace: AWS/ECS
+        threshold: 85
+        evaluation_periods: 2
+        period: 300
+        statistic: Average
+        comparison_operator: GreaterThanOrEqualToThreshold
+        dimensions:
+          ClusterName: ecs-cluster-${ENVIRONMENT_SUFFIX}
+          ServiceName: api-service-${ENVIRONMENT_SUFFIX}
+        actions:
+          - ${SNS_TOPIC_ARN}
+      - name: ecs-memory-high
+        metric: MemoryUtilization
+        namespace: AWS/ECS
+        threshold: 85
+        evaluation_periods: 2
+        period: 300
+        statistic: Average
+        comparison_operator: GreaterThanOrEqualToThreshold
+        dimensions:
+          ClusterName: ecs-cluster-${ENVIRONMENT_SUFFIX}
+          ServiceName: api-service-${ENVIRONMENT_SUFFIX}
+        actions:
+          - ${SNS_TOPIC_ARN}
+      - name: alb-5xx-errors
+        metric: HTTPCode_ELB_5XX_Count
+        namespace: AWS/ApplicationELB
+        threshold: 10
+        evaluation_periods: 1
+        period: 300
+        statistic: Sum
+        comparison_operator: GreaterThanOrEqualToThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
+
+  sns:
+    - name: deployment-notifications
+      display_name: ECS Deployment Notifications
+      subscriptions:
+        - protocol: email
+          endpoint: operations@example.com
+
+  eventbridge:
+    - name: pipeline-trigger
+      event_pattern:
+        source:
+          - aws.codecommit
+        detail-type:
+          - CodeCommit Repository State Change
+        detail:
+          event:
+            - referenceCreated
+            - referenceUpdated
+          referenceType:
+            - branch
+          referenceName:
+            - main
+      targets:
+        - arn: ${PIPELINE_ARN}
+          role_arn: ${EVENTBRIDGE_ROLE_ARN}
+
+  iam:
+    roles:
+      - name: ecs-task-execution-role
+        service: ecs-tasks.amazonaws.com
+        managed_policies:
+          - AmazonECSTaskExecutionRolePolicy
+        inline_policies:
+          - name: ECRAccess
+            actions:
+              - ecr:GetAuthorizationToken
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+
+      - name: ecs-task-role
+        service: ecs-tasks.amazonaws.com
+        description: Application-level permissions for ECS tasks
+        inline_policies:
+          - name: ApplicationAccess
+            actions:
+              - cloudwatch:PutMetricData
+              - xray:PutTraceSegments
+              - xray:PutTelemetryRecords
+
+      - name: codepipeline-service-role
+        service: codepipeline.amazonaws.com
+        managed_policies:
+          - AWSCodePipelineFullAccess
+        inline_policies:
+          - name: CodePipelineAccess
+            actions:
+              - s3:GetObject
+              - s3:PutObject
+              - codebuild:StartBuild
+              - codebuild:BatchGetBuilds
+              - ecs:UpdateService
+              - ecs:DescribeServices
+              - ecs:DescribeTaskDefinition
+              - ecs:RegisterTaskDefinition
+              - iam:PassRole
+
+      - name: codebuild-service-role
+        service: codebuild.amazonaws.com
+        managed_policies:
+          - AmazonEC2ContainerRegistryPowerUser
+        inline_policies:
+          - name: CodeBuildAccess
+            actions:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - s3:GetObject
+              - s3:PutObject
+              - ecr:GetAuthorizationToken
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:PutImage
+              - ecr:InitiateLayerUpload
+              - ecr:UploadLayerPart
+              - ecr:CompleteLayerUpload
+
+deployment:
+  region: us-east-1
+  environment_suffix: ${ENVIRONMENT_SUFFIX}
+  naming_convention: "{resource-type}-{purpose}-{environmentSuffix}"
+
+monitoring:
+  cloudwatch_logs: true
+  cloudwatch_alarms: true
+  container_insights: true
+  sns_notifications: true
+
+security:
+  encryption_at_rest: true
+  encryption_in_transit: true
+  least_privilege_iam: true
+  ecr_image_scanning: true
+  vpc_private_subnets: true
+
+cost_optimization:
+  build_compute_type: BUILD_GENERAL1_MEDIUM
+  test_compute_type: BUILD_GENERAL1_SMALL
+  fargate_spot_enabled: true
+  s3_lifecycle_policies: true
+  ecr_lifecycle_policies: true
+  log_retention_days: 7
+  nat_gateways: 1
+
+outputs:
+  - name: pipeline_arn
+    description: CodePipeline ARN
+  - name: pipeline_url
+    description: CodePipeline Console URL
+  - name: ecr_repository_uri
+    description: ECR Repository URI for CI/CD integration
+  - name: ecs_cluster_name
+    description: ECS Cluster Name
+  - name: ecs_service_name
+    description: ECS Service Name
+  - name: alb_dns_name
+    description: Application Load Balancer DNS Name
+  - name: service_discovery_domain
+    description: Cloud Map Service Discovery Domain
+  - name: sns_topic_arn
+    description: SNS Topic ARN for notifications
+
+validation:
+  destroyable: true
+  environment_suffix_required: true
+  test_coverage_required: 100
+  integration_tests_required: true
+  documentation_required: true

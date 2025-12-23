@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Optimized Lambda-based image processing infrastructure
+main: bin/tap.ts

@@ -11,7 +11,7 @@ The `.claude/tasks.csv` file is a critical data file that contains all task info
 Before ANY modification to `.claude/tasks.csv`:
 ```python
 import shutil
-shutil.copy2('.claude/tasks.csv', '.claude/.claude/tasks.csv.backup')
+shutil.copy2('.claude/tasks.csv', '.claude/tasks.csv.backup')
 ```
 
 ### Rule 2: ALWAYS Read ALL Rows
@@ -52,14 +52,14 @@ Before and after writing:
 # Before write
 if len(rows) != original_count or not fieldnames:
     print("ERROR: Validation failed")
-    shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
+    shutil.copy2('.claude/tasks.csv.backup', '.claude/tasks.csv')
     sys.exit(1)
 
 # After write
 verify_count = sum(1 for _ in csv.DictReader(open('.claude/tasks.csv', 'r')))
 if verify_count != original_count:
     print("ERROR: Write failed")
-    shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
+    shutil.copy2('.claude/tasks.csv.backup', '.claude/tasks.csv')
     sys.exit(1)
 ```
 
@@ -70,8 +70,8 @@ try:
     # ... CSV operations ...
 except Exception as e:
     print(f"ERROR: {e}")
-    if os.path.exists('.claude/.claude/tasks.csv.backup'):
-        shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
+    if os.path.exists('.claude/tasks.csv.backup'):
+        shutil.copy2('.claude/tasks.csv.backup', '.claude/tasks.csv')
     sys.exit(1)
 ```
 
@@ -91,8 +91,8 @@ new_status = "new_status_value"
 
 try:
     # STEP 1: BACKUP
-    shutil.copy2('.claude/tasks.csv', '.claude/.claude/tasks.csv.backup')
-    
+    shutil.copy2('.claude/tasks.csv', '.claude/tasks.csv.backup')
+
     # STEP 2: READ ALL ROWS
     rows = []
     original_count = 0
@@ -105,46 +105,46 @@ try:
             if row['task_id'] == task_id:
                 row['status'] = new_status
             rows.append(row)  # CRITICAL: append ALL rows
-    
+
     # STEP 3: VALIDATE BEFORE WRITE
     if len(rows) != original_count:
         print(f"❌ ERROR: Row count mismatch. Original: {original_count}, Current: {len(rows)}")
         print("Restoring from backup...")
-        shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
+        shutil.copy2('.claude/tasks.csv.backup', '.claude/tasks.csv')
         sys.exit(1)
-    
+
     if not fieldnames or len(fieldnames) == 0:
         print("❌ ERROR: No fieldnames found in CSV")
         print("Restoring from backup...")
-        shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
+        shutil.copy2('.claude/tasks.csv.backup', '.claude/tasks.csv')
         sys.exit(1)
-    
+
     # STEP 4: WRITE ALL ROWS
     with open('.claude/tasks.csv', 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)  # Write ALL rows
-    
+
     # STEP 5: VERIFY WRITE
     verify_count = 0
     with open('.claude/tasks.csv', 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
             verify_count += 1
-    
+
     if verify_count != original_count:
         print(f"❌ ERROR: Write verification failed. Expected {original_count} rows, found {verify_count}")
         print("Restoring from backup...")
-        shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
+        shutil.copy2('.claude/tasks.csv.backup', '.claude/tasks.csv')
         sys.exit(1)
-    
+
     print(f"✅ Successfully updated ({verify_count} total rows preserved)")
-    
+
 except Exception as e:
     print(f"❌ ERROR: {e}")
     print("Restoring from backup...")
-    if os.path.exists('.claude/.claude/tasks.csv.backup'):
-        shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
+    if os.path.exists('.claude/tasks.csv.backup'):
+        shutil.copy2('.claude/tasks.csv.backup', '.claude/tasks.csv')
     sys.exit(1)
 ```
 
@@ -169,7 +169,7 @@ python3 .claude/scripts/validate-tasks-csv.py --restore
 
 1. **Check for automatic backup** (created by safe update operations):
    ```bash
-   ls -la .claude/.claude/tasks.csv.backup
+   ls -la .claude/tasks.csv.backup
    ```
 
 2. **Validate the backup**:
@@ -184,7 +184,7 @@ python3 .claude/scripts/validate-tasks-csv.py --restore
    
    Or manually:
    ```bash
-   cp .claude/.claude/tasks.csv.backup .claude/tasks.csv
+   cp .claude/tasks.csv.backup .claude/tasks.csv
    ```
 
 4. **If no backup exists, use git**:
@@ -283,7 +283,7 @@ Before deploying any CSV modification code:
 
 Before ANY CSV modification:
 
-- [ ] Created backup with `shutil.copy2('.claude/tasks.csv', '.claude/.claude/tasks.csv.backup')`
+- [ ] Created backup with `shutil.copy2('.claude/tasks.csv', '.claude/tasks.csv.backup')`
 - [ ] Reading ALL rows into memory with `rows.append(row)`
 - [ ] Validating row count matches before write
 - [ ] Validating fieldnames exist and are non-empty
@@ -293,9 +293,87 @@ Before ANY CSV modification:
 - [ ] Wrapped in try/except with backup restore on error
 - [ ] Printing clear success/error messages with row counts
 
+## Bash Implementation (Production)
+
+The production system uses **Bash** for all CSV operations (not Python). See `.claude/scripts/task-manager.sh` for the implementation.
+
+### Backup with Validation and Rotation
+
+```bash
+# Automatic backup before every CSV write
+backup() {
+    # Rotate existing backups (keeps last 3)
+    [ -f "${BACKUP_FILE}.2" ] && mv -f "${BACKUP_FILE}.2" "${BACKUP_FILE}.3"
+    [ -f "${BACKUP_FILE}.1" ] && mv -f "${BACKUP_FILE}.1" "${BACKUP_FILE}.2"
+    [ -f "$BACKUP_FILE" ] && mv -f "$BACKUP_FILE" "${BACKUP_FILE}.1"
+
+    # Create backup atomically
+    temp_backup=$(mktemp)
+    cp -f "$CSV_FILE" "$temp_backup" || return 1
+
+    # Validate backup (row count check)
+    csv_rows=$(wc -l < "$CSV_FILE" | tr -d ' ')
+    backup_rows=$(wc -l < "$temp_backup" | tr -d ' ')
+
+    if [ "$csv_rows" -ne "$backup_rows" ]; then
+        rm -f "$temp_backup"
+        return 1
+    fi
+
+    # Atomic move into place
+    mv "$temp_backup" "$BACKUP_FILE"
+}
+```
+
+### Auto-Restore on Validation Failure
+
+```bash
+# Automatic restore if validation fails
+validate() {
+    local expected=$1 actual
+    actual=$(tail -n +2 "$CSV_FILE" | wc -l | tr -d ' ')
+
+    [ "$actual" = "$expected" ] || {
+        # Auto-restore from backup
+        cp "$BACKUP_FILE" "$CSV_FILE"
+        return 1
+    }
+}
+```
+
+### Usage
+
+All CSV operations automatically trigger backup:
+```bash
+# These commands automatically create backups
+./.claude/scripts/task-manager.sh update task_id new_status
+./.claude/scripts/task-manager.sh mark-done task_id pr_number
+./.claude/scripts/task-manager.sh mark-error task_id error_message
+```
+
+### Backup Files
+
+The system maintains **4 backup generations**:
+- `.claude/tasks.csv.backup` - Most recent backup
+- `.claude/tasks.csv.backup.1` - 1 operation ago
+- `.claude/tasks.csv.backup.2` - 2 operations ago
+- `.claude/tasks.csv.backup.3` - 3 operations ago
+
+### Testing
+
+Test the backup system:
+```bash
+# Comprehensive backup test suite
+bash .claude/scripts/test-backup-recovery.sh
+
+# Tests: backup creation, rotation, validation, manual restore,
+#        auto-restore, parallel operations, older backup recovery
+```
+
 ## References
 
-- **Safe CSV Update Pattern**: See `lessons_learnt.md` → "CSV File Corruption Prevention"
+- **Production Implementation**: `.claude/scripts/task-manager.sh` (Bash)
+- **Python Examples**: Above (for reference only, not used in production)
 - **Agent Instructions**: See `iac-task-selector.md` and `task-coordinator.md`
-- **Validation Tool**: `.claude/scripts/validate-tasks-csv.py`
+- **Backup Tests**: `.claude/scripts/test-backup-recovery.sh`
 

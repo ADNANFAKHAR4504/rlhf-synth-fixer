@@ -4,6 +4,8 @@ This is a condensed checklist for quick validation of IaC synthetic tasks before
 
 ## Pre-Generation Checklist (Generator Agent)
 
+### Standard Requirements (All Tasks)
+
 - [ ] Read `metadata.json` and confirm platform + language
 - [ ] PROMPT.md explicitly states platform and language in opening
 - [ ] All task requirements extracted and included
@@ -12,10 +14,39 @@ This is a condensed checklist for quick validation of IaC synthetic tasks before
 - [ ] Cost optimization patterns included (serverless preferred)
 - [ ] Region requirements specified
 
+### Special Subtask Requirements
+
+**Check subtask category**:
+```bash
+SUBTASK=$(jq -r '.subtask' metadata.json)
+SUBJECT_LABELS=$(jq -r '.subject_labels[]? // empty' metadata.json)
+```
+
+#### If CI/CD Pipeline Integration (`subtask: "CI/CD Pipeline Integration"`)
+- [ ] `lib/ci-cd.yml` exists (GitHub Actions workflow reference)
+- [ ] PROMPT.md includes CI/CD workflow requirements
+- [ ] Infrastructure supports multi-environment deployment
+- [ ] Environment parameters documented
+
+#### If IaC Optimization (`subject_labels` contains "IaC Optimization")
+- [ ] `lib/optimize.py` exists (optimization script)
+- [ ] PROMPT.md explains baseline + optimization approach
+- [ ] Stack files contain baseline (non-optimized) values
+- [ ] Optimization script uses boto3 and environmentSuffix
+
+#### If Infrastructure Analysis (`subtask: "Infrastructure QA and Management"`)
+- [ ] `lib/analyse.py` OR `lib/analyse.sh` exists
+- [ ] `metadata.json` has `platform: "analysis"`
+- [ ] `metadata.json` has `language: "py"` or `"sh"`
+- [ ] PROMPT.md focuses on analysis, NOT deployment
+- [ ] NO infrastructure stack files expected
+
+**Reference**: `.claude/docs/references/special-subtask-requirements.md`
+
 ## Pre-Deployment Checklist (QA Agent)
 
 ### Code Quality Gate
-- [ ] `bash scripts/pre-validate-iac.sh` PASSED
+- [ ] `bash .claude/scripts/pre-validate-iac.sh` PASSED
 - [ ] Platform/language matches metadata.json (CRITICAL)
 - [ ] Lint passed with zero errors
 - [ ] Build passed with zero errors
@@ -58,7 +89,7 @@ This is a condensed checklist for quick validation of IaC synthetic tasks before
 cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 
 # Pre-validate
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 
 # Run full pipeline (NOTE: destroy.sh is NOT run - cleanup after PR review)
 bash scripts/build.sh && \

@@ -1,0 +1,25 @@
+name: TapStack
+runtime: nodejs
+description: Optimized Lambda-based image processing system with environment-specific configurations
+main: lib/index.ts
+config:
+  imageQuality:
+    type: string
+    default: "80"
+    description: Image quality setting for processing
+  maxFileSize:
+    type: string
+    default: "10485760"
+    description: Maximum file size in bytes (default 10MB)
+  lambdaMemory:
+    type: integer
+    default: 512
+    description: Lambda memory in MB (512 for dev, 1024 for prod)
+  logRetention:
+    type: integer
+    default: 7
+    description: CloudWatch log retention in days (7 for dev, 30 for prod)
+  reservedConcurrency:
+    type: integer
+    default: 5
+    description: Lambda reserved concurrent executions (5 for dev, 10 for prod)

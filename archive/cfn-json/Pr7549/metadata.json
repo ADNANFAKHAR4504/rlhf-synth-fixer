@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912905",
+  "team": "synth",
+  "startedAt": "2025-12-01T00:31:31.847452",
+  "subtask": "CloudFormation Template Optimization",
+  "subject_labels": [
+    "infrastructure-as-code",
+    "transaction-processing",
+    "dynamodb-streams",
+    "serverless-architecture",
+    "data-persistence",
+    "audit-logging",
+    "container-registry"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "S3",
+    "ECR",
+    "Lambda",
+    "CloudFormation"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

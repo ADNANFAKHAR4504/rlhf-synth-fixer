@@ -82,15 +82,33 @@ IF ANY MISSING:
 - Would require 5-8 hours to fix properly
 - Exceeds scope of QA validation (becomes reimplementation)
 
-**Prevention**:
+**Prevention** (UPDATED):
 1. **Task Selection**: Prefer medium/hard complexity over expert for multi-region
 2. **Code Validation Gate**: Add between Phase 2 (generation) and Phase 3 (QA):
    ```bash
    # Verify code compiles/synthesizes
    # Check for empty arrays in critical resources
    # Validate basic AWS resource structure
-   # If fails: Skip QA, mark ERROR immediately
+   # If fails: Attempt automatic fixes using fix-code-health-issues.sh
+   # If fixes fail: Skip QA, mark ERROR
    ```
+
+**Fix Attempt Logic**:
+1. **Empty arrays detected**:
+   - Identify resources with empty arrays
+   - Attempt to populate arrays from context using fix-code-health-issues.sh
+   - If context insufficient: Mark ERROR
+   
+2. **Wrong service architecture**:
+   - Detect architecture mismatch
+   - Attempt to regenerate with correct architecture
+   - If regeneration fails: Mark ERROR
+   
+3. **API syntax errors**:
+   - Parse syntax errors
+   - Attempt automatic syntax fixes using fix-build-errors.sh
+   - If unfixable: Mark ERROR
+
 3. **Model Selection**: Use `sonnet` (not `haiku`) for expert multi-region tasks
 4. **Template Validation**: Ensure generated code matches platform conventions
 
@@ -101,6 +119,72 @@ IF ANY MISSING:
 - Specific architectures (not DR/failover patterns)
 
 **Applies to**: Task selection strategy, code generation validation
+
+---
+
+### 0.3. Pulumi Aurora Global Database Timing Issue (EXPERT PATTERN)
+
+**Task**: q7v8c4 - Active-Passive DR with Aurora Global Database (Pulumi Python)
+
+**Training Quality**: 9/10 (High value despite deployment blocker)
+
+**Symptom**: Secondary Aurora cluster fails to attach to global cluster with error:
+```
+InvalidDBClusterStateFault: Source cluster is in a state which is not valid for physical replication
+```
+
+**Root Cause**: Aurora Global Database replication requires primary cluster to reach "available" state (20-30 minutes) before secondary can attach. Pulumi `depends_on` ensures resource creation order but NOT AWS service-level state readiness.
+
+**Deployment Status**: 42/88 resources created successfully before blocker:
+- ✅ VPCs, subnets, security groups (both regions)
+- ✅ Aurora Global Cluster
+- ✅ Primary Aurora Cluster (us-east-1)
+- ✅ S3 buckets with cross-region replication
+- ✅ DynamoDB Global Table
+- ❌ Secondary Aurora Cluster (us-east-2) - timing issue
+- ❌ Downstream: Lambda, API Gateway, Route 53, monitoring (blocked)
+
+**High-Value Training Data**:
+1. **S3 Replication API Fix** (Critical):
+   - Generated: `BucketReplicationConfiguration` (CloudFormation name)
+   - Correct: `BucketReplicationConfig` (Pulumi Python name)
+   - Demonstrates platform-specific API naming conventions
+
+2. **Invalid Parameter Handling**:
+   - Generated: `replica_kms_key_id=""` (empty string)
+   - Correct: Omit parameter entirely
+   - AWS APIs reject empty strings for optional parameters
+
+**Test Coverage Challenge**: 66% achieved (target: 100%)
+- Pulumi ComponentResource mocking is complex
+- Requires deep understanding of Pulumi's resource model
+- Unit tests pass (15/46) but integration tests blocked without deployment outputs
+
+**Resolution Options**:
+1. **Add explicit wait logic** in Pulumi code:
+   ```python
+   # Wait for primary cluster to be available
+   primary_cluster_status = aws.rds.get_cluster_output(
+       cluster_identifier=primary_cluster.id
+   )
+   # Then create secondary with depends_on
+   ```
+2. **Separate Pulumi stacks**: Deploy primary and secondary in sequence
+3. **Accept timing limitation**: Document as known expert-level pattern
+
+**Recommendations**:
+- Pulumi Aurora Global Database tasks should include explicit state checking
+- Test coverage requirements may need adjustment for Pulumi ComponentResource patterns
+- Consider 90% coverage threshold for complex Pulumi architectures
+- Document this as acceptable expert-level complexity in training data
+
+**Impact**: Task marked ERROR due to mandatory 100% coverage requirement, but provides excellent training value for:
+- Platform-specific API naming (CloudFormation vs Pulumi)
+- AWS parameter validation patterns
+- Multi-region timing challenges
+- Aurora Global Database architecture
+
+**Applies to**: Pulumi Aurora Global Database tasks, multi-region DR architectures, test coverage policy
 
 ---
 
@@ -181,36 +265,52 @@ if verify_count != original_count:
 
 ### 0. Task Description Validation (CRITICAL - NEW)
 
-**Symptom**: Task h1w06e requested "migrate infrastructure from us-east-1 to us-east-1" (same region)
+**Symptom**: Tasks h1w06e and r4u9b9 both requested "migrate infrastructure from us-east-1 to us-east-1" (same region)
 
 **Root Cause**: Task description contains logically impossible requirements
 
 **Impact**:
 - Multi-region migration cannot occur within same region
-- VPC peering fails between same-region VPCs with overlapping CIDRs
-- Cross-region replication becomes meaningless
+- VPC peering fails between same-region VPCs with overlapping CIDRs (cannot peer VPC with itself)
+- Cross-region replication for S3, RDS, DynamoDB becomes meaningless
 - Wastes development time on undeployable architecture
+- Deployment will fail during VPC peering and cross-region replication setup
+
+**Real Example (Task r4u9b9)**:
+- Task description: "migrate from us-east-1 to us-east-1"
+- Generated 1,562 lines of CDKTF Python code
+- Implemented 60+ AWS resources across 41+ services
+- All code structurally correct, but fundamentally undeployable
+- VPC peering connection attempting to connect region to itself → WILL FAIL
+- S3 cross-region replication from us-east-1 to us-east-1 → MEANINGLESS
+- RDS snapshot copy from us-east-1 to us-east-1 → NO EFFECT
 
 **Prevention**:
-- **VALIDATE task description for logical consistency BEFORE code generation**
+- **VALIDATE task description for logical consistency in Phase 1.5 BEFORE code generation**
 - Multi-region tasks MUST specify different source and target regions
 - Check for contradictory requirements (e.g., "import existing VPC" + "create from scratch")
 - Flag tasks with placeholder dependencies (Lambda code, ACM certificates)
+- STOP execution immediately if same-region multi-region task detected
 
-**Quick Validation Checklist**:
+**Quick Validation Checklist** (Phase 1.5):
 ```bash
 # For multi-region tasks, verify:
-grep -i "region" lib/PROMPT.md | grep -E "(us-east-1|us-west-2|eu-west-1)"
+grep -i "region" lib/PROMPT.md | grep -E "(us-east-1|us-west-2|eu-west-1)" | sort | uniq
 # Should show DIFFERENT regions for source and target
+# If see same region twice for multi-region task → BLOCK immediately
 
 # For "import existing" tasks, verify:
 grep -i "import\|existing\|data source" lib/PROMPT.md
 # If found, ensure task is designed for existing infra or make it optional
 ```
 
-**Resolution**: Mark task as "error" and document issue for task quality improvement
+**Resolution**:
+- Mark task as "error" immediately in Phase 3 validation
+- Document issue for task quality improvement
+- Do NOT attempt deployment (will waste time and AWS resources)
+- Example error message: "Invalid multi-region configuration: source and target regions are both us-east-1. VPC peering requires different regions."
 
-**Applies to**: ALL tasks, validated in Phase 1.5
+**Applies to**: ALL tasks, validated in Phase 1.5 and Phase 3
 
 ---
 
@@ -432,7 +532,7 @@ const key = event.Records[0].s3.object.key;
 - ALL resource names must include `environmentSuffix` or `environment_suffix`
 - Pattern: `resourceName-${environmentSuffix}` or `resourceName-${props.environmentSuffix}`
 
-**Check with**: `bash scripts/pre-validate-iac.sh`
+**Check with**: `bash .claude/scripts/pre-validate-iac.sh`
 
 ---
 
@@ -748,7 +848,7 @@ Add entries when you discover:
 
 **Pre-validate before deployment**:
 ```bash
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 ```
 
 **Check resource naming**:
@@ -810,4 +910,3 @@ grep -rni "RETAIN\|DeletionPolicy.*Retain\|deletion_protection.*true" lib/
 
 *Last Updated: 2025-01-XX*
 *This document is maintained by the task-coordinator and updated after each task completion.*
-

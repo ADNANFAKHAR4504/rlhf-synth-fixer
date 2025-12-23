@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "startedAt": "2025-11-24T06:20:50+00:00",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Disaster Recovery",
+    "High Availability",
+    "Multi-Region Setup"
+  ],
+  "po_id": "101912621",
+  "aws_services": [
+    "RDS Aurora",
+    "ECS",
+    "Route53",
+    "VPC",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "Application Load Balancer"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

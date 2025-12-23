@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "IAC-CLO_YML_MED_LAMBDA_DYNAMO_4n5o6p_7k8l9m1nMN",
+  "team": "5",
+  "provider": "localstack",
+  "startedAt": "2025-10-06T09:54:03.629Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "IAM",
+    "CloudWatch Logs",
+    "SSM Parameter Store"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,28 @@
+2025-12-04 06:30:25,500 - INFO - Found credentials in environment variables.
+2025-12-04 06:30:25,605 - INFO - Initialized analyzer for environment: pr7803
+2025-12-04 06:30:25,605 - INFO - ============================================================
+2025-12-04 06:30:25,605 - INFO - AWS Infrastructure Compliance Analyzer
+2025-12-04 06:30:25,605 - INFO - Environment: pr7803
+2025-12-04 06:30:25,605 - INFO - Timestamp: 2025-12-04T06:30:25.491347+00:00
+2025-12-04 06:30:25,605 - INFO - ============================================================
+2025-12-04 06:30:25,605 - INFO - Analyzing Lambda function...
+2025-12-04 06:30:25,615 - ERROR - ✗ Lambda function not found: compliance-scanner-pr7803
+2025-12-04 06:30:25,615 - INFO - Analyzing S3 bucket...
+2025-12-04 06:30:25,623 - ERROR - Error analyzing S3 bucket: An error occurred (404) when calling the HeadBucket operation: Not Found
+2025-12-04 06:30:25,623 - INFO - Analyzing SNS topic...
+2025-12-04 06:30:25,629 - ERROR - ✗ SNS topic not found: compliance-alerts-pr7803
+2025-12-04 06:30:25,629 - INFO - Analyzing IAM role...
+2025-12-04 06:30:25,636 - ERROR - ✗ IAM role not found: compliance-scanner-role-pr7803
+2025-12-04 06:30:25,636 - INFO - Analyzing KMS key...
+2025-12-04 06:30:25,643 - ERROR - ✗ KMS key not found: alias/compliance-sns-pr7803
+2025-12-04 06:30:25,643 - INFO - 
+============================================================
+2025-12-04 06:30:25,643 - INFO - ANALYSIS SUMMARY
+2025-12-04 06:30:25,643 - INFO - ============================================================
+2025-12-04 06:30:25,643 - INFO - Components deployed: 0/5
+2025-12-04 06:30:25,643 - INFO - Infrastructure health: 0.0%
+2025-12-04 06:30:25,643 - INFO - Lambda execution: FAILED
+2025-12-04 06:30:25,643 - INFO - ============================================================
+2025-12-04 06:30:25,643 - INFO - 
+✓ Analysis report saved to: analysis-report.json
+2025-12-04 06:30:25,643 - ERROR - ✗ Infrastructure analysis FAILED - Critical components missing

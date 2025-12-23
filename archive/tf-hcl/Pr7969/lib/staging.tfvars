@@ -1,0 +1,15 @@
+env                     = "staging"
+aws_region              = "us-east-1"
+diagnostics_shard_count = 5
+hos_shard_count         = 3
+gps_shard_count         = 4
+processor_memory        = 1024
+anomaly_memory          = 1536
+predictive_memory       = 2560
+node_type               = "cache.r6g.large"
+num_cache_clusters      = 2
+instance_class          = "db.r6g.large"
+min_capacity            = 0.5
+max_capacity            = 2
+retention_hours         = 72
+log_retention_days      = 14

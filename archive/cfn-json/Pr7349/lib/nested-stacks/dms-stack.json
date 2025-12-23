@@ -1,0 +1,324 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS DMS replication infrastructure for blue-green database synchronization",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming"
+    },
+    "PrivateSubnet1": {
+      "Type": "String",
+      "Description": "Private Subnet 1"
+    },
+    "PrivateSubnet2": {
+      "Type": "String",
+      "Description": "Private Subnet 2"
+    },
+    "DMSSecurityGroup": {
+      "Type": "String",
+      "Description": "DMS Security Group"
+    },
+    "BlueDBEndpointAddress": {
+      "Type": "String",
+      "Description": "Blue database endpoint"
+    },
+    "GreenDBEndpointAddress": {
+      "Type": "String",
+      "Description": "Green database endpoint"
+    },
+    "BlueDBSecretArn": {
+      "Type": "String",
+      "Description": "Blue database secret ARN"
+    },
+    "GreenDBSecretArn": {
+      "Type": "String",
+      "Description": "Green database secret ARN"
+    },
+    "Project": {
+      "Type": "String",
+      "Description": "Project name for tagging"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Description": "Cost center for tagging"
+    }
+  },
+  "Resources": {
+    "DMSSubnetGroup": {
+      "Type": "AWS::DMS::ReplicationSubnetGroup",
+      "Properties": {
+        "ReplicationSubnetGroupDescription": {
+          "Fn::Sub": "DMS subnet group-${EnvironmentSuffix}"
+        },
+        "ReplicationSubnetGroupIdentifier": {
+          "Fn::Sub": "dms-subnet-group-${EnvironmentSuffix}"
+        },
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "dms-subnet-group-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "DMSReplicationInstance": {
+      "Type": "AWS::DMS::ReplicationInstance",
+      "Properties": {
+        "ReplicationInstanceIdentifier": {
+          "Fn::Sub": "dms-replication-${EnvironmentSuffix}"
+        },
+        "ReplicationInstanceClass": "dms.t3.medium",
+        "AllocatedStorage": 50,
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DMSSecurityGroup"
+          }
+        ],
+        "ReplicationSubnetGroupIdentifier": {
+          "Ref": "DMSSubnetGroup"
+        },
+        "PubliclyAccessible": false,
+        "MultiAZ": false,
+        "EngineVersion": "3.5.2",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "dms-replication-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "BlueDBEndpoint": {
+      "Type": "AWS::DMS::Endpoint",
+      "Properties": {
+        "EndpointIdentifier": {
+          "Fn::Sub": "blue-db-endpoint-${EnvironmentSuffix}"
+        },
+        "EndpointType": "source",
+        "EngineName": "aurora",
+        "ServerName": {
+          "Ref": "BlueDBEndpointAddress"
+        },
+        "Port": 3306,
+        "DatabaseName": "paymentdb",
+        "Username": {
+          "Fn::Sub": "{{resolve:secretsmanager:${BlueDBSecretArn}:SecretString:username}}"
+        },
+        "Password": {
+          "Fn::Sub": "{{resolve:secretsmanager:${BlueDBSecretArn}:SecretString:password}}"
+        },
+        "SslMode": "require",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-db-endpoint-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "blue"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "GreenDBEndpoint": {
+      "Type": "AWS::DMS::Endpoint",
+      "Properties": {
+        "EndpointIdentifier": {
+          "Fn::Sub": "green-db-endpoint-${EnvironmentSuffix}"
+        },
+        "EndpointType": "target",
+        "EngineName": "aurora",
+        "ServerName": {
+          "Ref": "GreenDBEndpointAddress"
+        },
+        "Port": 3306,
+        "DatabaseName": "paymentdb",
+        "Username": {
+          "Fn::Sub": "{{resolve:secretsmanager:${GreenDBSecretArn}:SecretString:username}}"
+        },
+        "Password": {
+          "Fn::Sub": "{{resolve:secretsmanager:${GreenDBSecretArn}:SecretString:password}}"
+        },
+        "SslMode": "require",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-db-endpoint-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "green"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "ReplicationTask": {
+      "Type": "AWS::DMS::ReplicationTask",
+      "Properties": {
+        "ReplicationTaskIdentifier": {
+          "Fn::Sub": "blue-green-replication-${EnvironmentSuffix}"
+        },
+        "SourceEndpointArn": {
+          "Ref": "BlueDBEndpoint"
+        },
+        "TargetEndpointArn": {
+          "Ref": "GreenDBEndpoint"
+        },
+        "ReplicationInstanceArn": {
+          "Ref": "DMSReplicationInstance"
+        },
+        "MigrationType": "full-load-and-cdc",
+        "TableMappings": "{\"rules\":[{\"rule-type\":\"selection\",\"rule-id\":\"1\",\"rule-name\":\"1\",\"object-locator\":{\"schema-name\":\"paymentdb\",\"table-name\":\"%\"},\"rule-action\":\"include\"}]}",
+        "ReplicationTaskSettings": "{\"TargetMetadata\":{\"SupportLobs\":true,\"FullLobMode\":false,\"LobChunkSize\":64,\"LimitedSizeLobMode\":true,\"LobMaxSize\":32},\"FullLoadSettings\":{\"TargetTablePrepMode\":\"DROP_AND_CREATE\",\"CreatePkAfterFullLoad\":false,\"StopTaskCachedChangesApplied\":false,\"StopTaskCachedChangesNotApplied\":false,\"MaxFullLoadSubTasks\":8,\"TransactionConsistencyTimeout\":600,\"CommitRate\":10000},\"Logging\":{\"EnableLogging\":true,\"LogComponents\":[{\"Id\":\"SOURCE_UNLOAD\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"TARGET_LOAD\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"SOURCE_CAPTURE\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"TARGET_APPLY\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"}]},\"ControlTablesSettings\":{\"ControlSchema\":\"\",\"HistoryTimeslotInMinutes\":5,\"HistoryTableEnabled\":true,\"SuspendedTablesTableEnabled\":true,\"StatusTableEnabled\":true},\"StreamBufferSettings\":{\"StreamBufferCount\":3,\"StreamBufferSizeInMB\":8,\"CtrlStreamBufferSizeInMB\":5},\"ChangeProcessingDdlHandlingPolicy\":{\"HandleSourceTableDropped\":true,\"HandleSourceTableTruncated\":true,\"HandleSourceTableAltered\":true},\"ErrorBehavior\":{\"DataErrorPolicy\":\"LOG_ERROR\",\"EventErrorPolicy\":\"IGNORE\",\"DataTruncationErrorPolicy\":\"LOG_ERROR\",\"DataErrorEscalationPolicy\":\"SUSPEND_TABLE\",\"DataErrorEscalationCount\":50,\"TableErrorPolicy\":\"SUSPEND_TABLE\",\"TableErrorEscalationPolicy\":\"STOP_TASK\",\"TableErrorEscalationCount\":50,\"RecoverableErrorCount\":-1,\"RecoverableErrorInterval\":5,\"RecoverableErrorThrottling\":true,\"RecoverableErrorThrottlingMax\":1800,\"ApplyErrorDeletePolicy\":\"IGNORE_RECORD\",\"ApplyErrorInsertPolicy\":\"LOG_ERROR\",\"ApplyErrorUpdatePolicy\":\"LOG_ERROR\",\"ApplyErrorEscalationPolicy\":\"LOG_ERROR\",\"ApplyErrorEscalationCount\":0,\"FullLoadIgnoreConflicts\":true},\"ChangeProcessingTuning\":{\"BatchApplyPreserveTransaction\":true,\"BatchApplyTimeoutMin\":1,\"BatchApplyTimeoutMax\":30,\"BatchApplyMemoryLimit\":500,\"BatchSplitSize\":0,\"MinTransactionSize\":1000,\"CommitTimeout\":1,\"MemoryLimitTotal\":1024,\"MemoryKeepTime\":60,\"StatementCacheSize\":50}}",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-green-replication-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ReplicationInstanceArn": {
+      "Description": "DMS Replication Instance ARN",
+      "Value": {
+        "Ref": "DMSReplicationInstance"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ReplicationInstanceArn"
+        }
+      }
+    },
+    "ReplicationTaskArn": {
+      "Description": "DMS Replication Task ARN",
+      "Value": {
+        "Ref": "ReplicationTask"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ReplicationTaskArn"
+        }
+      }
+    },
+    "BlueDBEndpointArn": {
+      "Description": "Blue database endpoint ARN",
+      "Value": {
+        "Ref": "BlueDBEndpoint"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueDBEndpointArn"
+        }
+      }
+    },
+    "GreenDBEndpointArn": {
+      "Description": "Green database endpoint ARN",
+      "Value": {
+        "Ref": "GreenDBEndpoint"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenDBEndpointArn"
+        }
+      }
+    }
+  }
+}

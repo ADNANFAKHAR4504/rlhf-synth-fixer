@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348982",
+  "team": "5",
+  "startedAt": "2025-11-13T13:27:44.797Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Amazon Elastic Kubernetes Service (EKS)",
+    "AWS Identity and Access Management (IAM)",
+    "AWS Systems Manager Parameter Store",
+    "Amazon Elastic Compute Cloud (EC2)",
+    "AWS Auto Scaling",
+    "Amazon Virtual Private Cloud (VPC)",
+    "AWS NAT Gateway",
+    "Elastic Load Balancing (Application Load Balancer)",
+    "Amazon Elastic Container Registry (ECR)",
+    "Amazon CloudWatch Logs",
+    "AWS Key Management Service (KMS)",
+    "AWS Secrets Manager",
+    "Amazon Simple Notification Service (SNS)"
+  ],
+  "training_quality": 9,
+  "background": "Provisioned a production EKS 1.29 environment with private networking, IRSA, autoscaler support, and compliance tagging for a fintech payments workload.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

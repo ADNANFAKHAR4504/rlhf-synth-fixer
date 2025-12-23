@@ -32,7 +32,11 @@ These issues drop score below 8 immediately:
 | Wrong AWS account | Set to 3 | Deployed to wrong account |
 | Missing ≥50% required services | Set to 4 | Task needs 4 services, only 2 implemented |
 
-**If any blocker present**: Score is set to blocker value, skip to Step 5.
+**If any blocker present**: 
+- Score is set to blocker value (3, 4, or 5)
+- Skip MODEL_FAILURES and Complexity adjustments
+- Proceed directly to Step 5 (Final Score calculation)
+- Apply cap (0-10) and rounding
 
 ### Step 3: Adjust for MODEL_FAILURES Quality
 
@@ -78,39 +82,127 @@ Review MODEL_FAILURES.md and categorize the fixes made:
 - Changed hardcoded "us-east-1" to variable
 - Added missing stack output for S3 bucket name
 
-**Adjustment**: If ≥4 Category C fixes (only) → -1 point; if ≥6 → -2 points
+**When to Apply Category C Penalty**:
+- Apply **ONLY** if ALL fixes are Category C (no Category A/B fixes present)
+- If Category A/B fixes exist, ignore Category C penalties (Category A dominates)
+
+**Penalty Rules**:
+- If ≥6 Category C fixes (only) → -2 points
+- If 4-5 Category C fixes (only) → -1 point
+- If <4 Category C fixes (only) → See Category D below
 
 #### Category D: Minimal Changes (-2 to -4)
 - **Almost no fixes needed** (MODEL_RESPONSE was 95%+ correct)
 - **Trivial changes only** (whitespace, comments, formatting)
-- **Single-digit bug count** (<5 total fixes)
+- **Total fixes < 5 AND all fixes are Category C**
 
 **Examples**:
 - 3 minor linting fixes, 1 missing output
 - Changed 2 hardcoded values to variables
 - Added 1 missing import statement
 
-**Adjustment**: -2 to -4 points (model already too competent for this task)
+**When to Apply Category D Penalty**:
+- Total fixes < 5 AND all fixes are Category C (trivial)
+- No Category A/B fixes exist
+- MODEL_RESPONSE was 95%+ correct
+
+**Penalty Selection**:
+- 1-2 trivial fixes → -4 points
+- 3-4 trivial fixes → -3 points
+- 5+ trivial fixes → Use Category C penalty instead (shouldn't happen - would be Category C)
+
+**Decision Tree**:
+```
+All fixes are Category C?
+  YES → Count total fixes
+    ├─ <4 fixes → Category D penalty (-2 to -4)
+    ├─ 4-5 fixes → Category C penalty (-1)
+    └─ ≥6 fixes → Category C penalty (-2)
+  NO → Category A/B exist → Ignore Category C penalties
+```
+
+### Mixed Category Handling
+
+**Rule**: Category A bonuses override Category C penalties
+
+**Decision Logic**:
+1. **If Category A fixes exist**:
+   - Apply Category A bonus (+1 or +2)
+   - Category B fixes: Ignore (already ±0)
+   - Category C fixes: Ignore penalties (Category A dominates)
+   - Category D: Does not apply (Category A exists)
+
+2. **If only Category B fixes**:
+   - Apply ±0 (no change)
+   - Category C/D penalties: Do not apply
+
+3. **If only Category C fixes**:
+   - Apply Category C penalty rules (see above)
+   - Category D: Check if <5 fixes total
+
+4. **If only Category D (minimal fixes)**:
+   - Apply Category D penalty (-2 to -4)
+
+**Examples**:
+
+**Example A: Mixed A + C**
+- 2 Category A fixes, 4 Category C fixes
+- Calculation: Base 8 + Category A (+2) + Complexity
+- Result: Category C penalties ignored
+
+**Example B: Only C**
+- 5 Category C fixes, no A/B
+- Calculation: Base 8 + Category C (-1) + Complexity
+- Result: Category C penalty applies
 
 ### Step 4: Adjust for Task Complexity
 
 Evaluate IDEAL_RESPONSE.md complexity:
 
-| Complexity Factor | Adjustment |
-|-------------------|------------|
-| Single AWS service, basic config | -1 |
-| Multiple services (3+) with integrations | +1 |
-| Security best practices (KMS, IAM policies, encryption) | +1 |
-| High availability (multi-AZ, auto-scaling, failover) | +1 |
-| Advanced patterns (event-driven, serverless, microservices) | +1 |
+| Complexity Factor | Adjustment | Priority |
+|-------------------|------------|----------|
+| Multiple services (3+) with integrations | +1 | 1 (highest) |
+| Security best practices (KMS, IAM policies, encryption) | +1 | 2 |
+| High availability (multi-AZ, auto-scaling, failover) | +1 | 3 |
+| Advanced patterns (event-driven, serverless, microservices) | +1 | 4 |
+| Single AWS service, basic config | -1 | (applies if only 1 service) |
+
+**Priority Rules**:
+- Apply factors in priority order (1 → 2 → 3 → 4)
+- Stop when reaching +2 bonus cap
+- If all positive factors apply, take first 2 = +2 total
+- Single service penalty (-1) applies independently (can result in net +1 if other factors exist)
 
 **Maximum complexity bonus**: +2 points (prevents score inflation)
+
+**Examples**:
+
+**Example A: All factors apply**
+- Multiple services (+1), Security (+1), HA (+1), Advanced patterns (+1)
+- Apply priority: Multiple services (+1), Security (+1) = +2 total
+- Result: +2 (HA and Advanced patterns ignored due to cap)
+
+**Example B: Single service with security**
+- Single service (-1), Security (+1)
+- Net: -1 + 1 = 0
+- Result: ±0 (neutral)
+
+**Example C: 2 services (not 3+)**
+- 2 services → 0 (not "multiple services" which requires 3+)
+- Security (+1)
+- Result: +1
 
 ### Step 5: Calculate Final Score
 
 ```
 Final Score = Base (8) + MODEL_FAILURES Adjustment + Complexity Adjustment
 ```
+
+**Calculation Order**:
+1. Calculate: Base + MODEL_FAILURES + Complexity
+2. Apply cap: min(max(calculated, 0), 10)
+3. Round to nearest integer (0.5 rounds up)
+4. **NO manual adjustments** - use formula only
 
 **Constraints**:
 - Minimum: 0
@@ -167,13 +259,14 @@ Final Score = Base (8) + MODEL_FAILURES Adjustment + Complexity Adjustment
 - Task: "Deploy web application with database"
 - MODEL_RESPONSE: EC2 + RDS, basic setup, works correctly
 - Fixes: Added CloudWatch, multi-AZ, KMS encryption, IAM policies
-- Result: Score = 8/10 (Base 8 + Category A fixes +2 + Single service -1 = 9, capped complexity bonus)
 
 **Score Calculation**:
 - Base: 8
-- MODEL_FAILURES: Category A fixes (+2)
-- Complexity: Basic before, advanced after (+1)
-- Final: 8 + 2 + 1 = 11 → capped at 10
+- MODEL_FAILURES: 2 Category A fixes (CloudWatch + KMS) → +2
+- Complexity: Multiple services (EC2, RDS, CloudWatch = 3+) → +1 (priority 1), Security practices (KMS, IAM) → +1 (priority 2)
+  - Total complexity factors: +2 (capped)
+- Final: 8 + 2 + 2 = 12 → capped at 10
+- Result: Score = 10/10
 
 **Action**: Approve PR (score ≥ 8)
 
@@ -202,17 +295,20 @@ Base Score: 8
 Review MODEL_FAILURES.md
   ↓
 Category A (significant)? → +1 to +2
+  └─ If Category A exists → Ignore Category C penalties
 Category B (moderate)? → ±0
-Category C (minor, 4+ fixes)? → -1 to -2
-Category D (minimal, <5 fixes)? → -2 to -4
+Category C (minor, only if no A/B)? → -1 to -2
+  └─ <4 fixes → Category D instead
+Category D (minimal, <4 fixes, all C)? → -2 to -4
   ↓
 Review IDEAL_RESPONSE.md complexity
   ↓
-Single service, basic? → -1
-Multiple services (3+)? → +1
-Security best practices? → +1
-High availability? → +1
-Advanced patterns? → +1
+Apply in priority order (stop at +2):
+1. Multiple services (3+)? → +1
+2. Security best practices? → +1
+3. High availability? → +1
+4. Advanced patterns? → +1
+5. Single service (only 1)? → -1 (independent)
 (max complexity bonus: +2)
   ↓
 Calculate: Base + MODEL_FAILURES + Complexity (capped 0-10)
@@ -243,10 +339,10 @@ Score < 8? → BLOCK PR → Provide improvement recommendations
 
 **Calculation**:
 - Base: 8
-- MODEL_FAILURES: 2 Category A fixes (+2)
-- Complexity: Multiple services (+1), security (+1), max bonus (+2) = +2
+- MODEL_FAILURES: 2 Category A fixes (+2), 1 Category C fix (ignored due to Category A)
+- Complexity: Multiple services (+1, priority 1), security (+1, priority 2) = +2 (capped)
 - Final: 8 + 2 + 2 = 12 → capped at 10
-- **Adjusted Final: 9** (apply slight discount for single Category C fix)
+- Result: Score = 10/10
 
 **Result**: ✅ APPROVE (score ≥ 8)
 
@@ -267,9 +363,10 @@ Score < 8? → BLOCK PR → Provide improvement recommendations
 
 **Calculation**:
 - Base: 8
-- MODEL_FAILURES: 2 Category B fixes (±0), 2 Category C fixes (not enough for penalty) = ±0
-- Complexity: Basic setup (neutral) = ±0
+- MODEL_FAILURES: 2 Category B fixes (±0), 2 Category C fixes (not enough for penalty, <4 fixes) = ±0
+- Complexity: 2 services (EC2, ALB) → 0 (neutral, not single service and not 3+), no other factors = ±0
 - Final: 8 + 0 + 0 = 8
+- Result: Score = 8/10
 
 **Result**: ✅ APPROVE (score = 8)
 
@@ -289,10 +386,10 @@ Score < 8? → BLOCK PR → Provide improvement recommendations
 
 **Calculation**:
 - Base: 8
-- MODEL_FAILURES: 3 Category C fixes only, but minimal count = -3 (Category D penalty)
-- Complexity: Basic setup = -1
-- Final: 8 - 3 - 1 = 4
-- **Adjusted to 5** (recognize it's working code)
+- MODEL_FAILURES: 3 Category C fixes only, <4 fixes total → Category D penalty (-3)
+- Complexity: 2 services (S3, CloudFront) → 0 (neutral, not single service and not 3+)
+- Final: 8 - 3 + 0 = 5
+- Result: Score = 5/10
 
 **Result**: ❌ BLOCK (score < 8) - "Model already competent, insufficient training value"
 
@@ -309,6 +406,82 @@ Score < 8? → BLOCK PR → Provide improvement recommendations
 - Skip other adjustments
 
 **Result**: ❌ BLOCK (critical failure) - "Regenerate with correct platform"
+
+### Example 5: Mixed Category A + C (Score: 10)
+
+**Task**: Deploy serverless data processing pipeline
+
+**MODEL_RESPONSE issues**:
+- Missing KMS encryption (Category A)
+- No CloudWatch alarms (Category A)
+- 5 linting errors (Category C)
+- Missing stack output (Category C)
+
+**IDEAL_RESPONSE**:
+- 4 AWS services (Lambda, S3, DynamoDB, EventBridge)
+- KMS encryption enabled
+- CloudWatch alarms configured
+- Clean code (linting fixed)
+
+**Calculation**:
+- Base: 8
+- MODEL_FAILURES: 2 Category A fixes (+2), 6 Category C fixes (ignored due to Category A)
+- Complexity: Multiple services (+1, priority 1), Security (+1, priority 2) = +2
+- Final: 8 + 2 + 2 = 12 → capped at 10
+- Result: Score = 10/10
+
+**Key Learning**: Category A bonuses override Category C penalties
+
+**Result**: ✅ APPROVE (score ≥ 8)
+
+### Example 6: Only Category C Fixes (Score: 7)
+
+**Task**: Deploy S3 bucket with lifecycle policies
+
+**MODEL_RESPONSE issues**:
+- 4 linting errors (Category C)
+- 1 typo in resource name (Category C)
+- Missing stack output (Category C)
+
+**IDEAL_RESPONSE**:
+- 1 AWS service (S3)
+- Standard configuration
+
+**Calculation**:
+- Base: 8
+- MODEL_FAILURES: 6 Category C fixes (only) → -2 points
+- Complexity: Single service (-1)
+- Final: 8 - 2 - 1 = 5
+- Result: Score = 5/10
+
+**Action**: ❌ BLOCK (score < 8) - "Only minor fixes, insufficient training value"
+
+### Example 7: Complexity Prioritization (Score: 10)
+
+**Task**: Deploy multi-region application
+
+**MODEL_RESPONSE issues**:
+- Missing multi-AZ configuration (Category A)
+- No encryption at rest (Category A)
+
+**IDEAL_RESPONSE**:
+- 5 AWS services (EC2, RDS, ALB, S3, CloudFront)
+- Multi-AZ deployment
+- KMS encryption
+- Event-driven architecture
+- Auto-scaling
+
+**Calculation**:
+- Base: 8
+- MODEL_FAILURES: 2 Category A fixes (+2)
+- Complexity: Multiple services (+1, priority 1), Security (+1, priority 2) = +2
+  - HA (+1) and Advanced patterns (+1) ignored due to cap
+- Final: 8 + 2 + 2 = 12 → capped at 10
+- Result: Score = 10/10
+
+**Key Learning**: Complexity factors applied in priority order, capped at +2
+
+**Result**: ✅ APPROVE (score ≥ 8)
 
 ---
 
@@ -407,7 +580,16 @@ A: 5 (wrong region blocker). Region is a requirement, not optional.
 
 ## Changelog
 
-**v2.0** (Current): Simplified scoring system
+**v2.1** (Current): Clarified ambiguous rules
+- Clarified Category C vs Category D transition rules with decision tree
+- Added mixed category handling rules (Category A overrides Category C)
+- Removed manual adjustments (formula-only scoring)
+- Fixed Case 3 calculation error
+- Added complexity bonus prioritization rules
+- Clarified calculation order and rounding rules
+- Fixed all examples to use formula-only calculations
+
+**v2.0**: Simplified scoring system
 - Removed conflicting "target 9" vs "minimum 8" guidance
 - Clarified "Model Already Too Good" edge case
 - Reduced penalty calculations from 8 factors to 4 critical blockers + 2 adjustment categories

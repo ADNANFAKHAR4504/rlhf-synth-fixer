@@ -1,0 +1,38 @@
+{
+  "po_id": "y5s6n6b3",
+  "subtask": "CI/CD Pipeline",
+  "difficulty": "medium",
+  "complexity": "medium",
+  "platform": "cicd",
+  "language": "yml",
+  "region": "us-east-1",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "team": "synth",
+  "startedAt": "2025-12-02T18:08:00-05:00",
+  "turn_type": "single",
+  "author": "mayanksethi-turing",
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "ECR",
+    "CodeBuild",
+    "CodePipeline",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Lambda",
+    "DynamoDB",
+    "KMS",
+    "SSM",
+    "ECS"
+  ],
+  "resource_count": 24,
+  "status": "in-progress",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,38 @@
+{
+  "task_id": "101912381",
+  "turn_type": "single",
+  "platform": "cfn",
+  "language": "yaml",
+  "difficulty": "expert",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "web-application-deployment"
+  ],
+  "po_id": "101912381",
+  "team": "synth",
+  "startedAt": "2025-11-19",
+  "complexity": "expert",
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "ALB",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "ApplicationAutoScaling"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

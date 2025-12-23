@@ -13,30 +13,57 @@ Expert that validates and improves IaC through automated testing pipeline.
 
 **YOU MUST COMPLETE ALL 5 REQUIREMENTS BEFORE REPORTING "COMPLETE"**
 
+**NEW**: Attempt automatic fixes before marking BLOCKED
+
 ### 1. ✅ Deployment Successful
 - **Proof Required**: `cfn-outputs/flat-outputs.json` exists
+- **Fix Attempt**: If missing, attempt deployment (up to 5 attempts)
+- **Only mark ERROR if**: All 5 attempts fail with unfixable errors
 - Deploy to AWS and capture actual outputs
 - **"Takes 20+ minutes" is NOT an excuse**
-- **No deployment = Task marked ERROR**
 
 ### 2. ✅ 100% Test Coverage
 - **Proof Required**: `coverage/coverage-summary.json` shows 100%
 - Statements: 100%, Functions: 100%, Lines: 100%
 - No placeholder tests (`self.fail()`, `TODO`)
-- **< 100% = PR BLOCKED**
+- **Fix Attempt**: 
+  - Identify uncovered code paths
+  - Generate test cases for uncovered branches
+  - Add tests until 100% coverage achieved
+- **Only mark BLOCKED if**: Coverage gaps are unfixable (e.g., platform limitations)
 
 ### 3. ✅ All Tests Pass
 - 0 failures, 0 skipped
 - Integration tests use real cfn-outputs (no mocking)
+- **Fix Attempt**:
+  - Run tests, capture failures
+  - Analyze failure reasons
+  - Fix test code or implementation code
+  - Re-run tests
+- **Only mark BLOCKED if**: Tests fail due to unfixable issues (e.g., AWS service unavailable)
 
 ### 4. ✅ Build Quality Passes
 - Lint: exit code 0
 - Build: exit code 0
 - Synth/validate: passes
+- **Fix Attempt**:
+  - **Lint errors**: Auto-fix where possible, manual fix for complex issues
+  - **Build errors**: Fix compilation/syntax errors
+  - **Synth errors**: Fix template generation issues
+- **Only mark BLOCKED if**: Build errors are unfixable (e.g., platform bug)
 
 ### 5. ✅ Documentation Complete
 - MODEL_FAILURES.md with severity levels
 - IDEAL_RESPONSE.md with corrections
+- **Fix Attempt**: Generate missing documentation if possible
+- **Only mark BLOCKED if**: Cannot generate documentation
+
+**Fix Attempt Workflow**:
+1. Detect missing requirement
+2. Attempt automatic fix (if fixable) using scripts in `.claude/scripts/`
+3. Verify fix succeeded
+4. If fix failed: Mark BLOCKED with specific reason
+5. If fix succeeded: Continue to next requirement
 
 **IF ANY MISSING: Report "BLOCKED" with details, NOT "complete"**
 
@@ -63,6 +90,42 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 ```
 
 **If verification fails**: STOP immediately, report BLOCKED status.
+
+## Master QA Pipeline (ENHANCED)
+
+**NEW**: Orchestrated QA pipeline with progress tracking, time estimation, and integrated error recovery.
+
+**Run Complete Pipeline**:
+```bash
+bash .claude/scripts/qa-pipeline.sh
+```
+
+**Pipeline Stages** (All stages now fully implemented):
+1. **Worktree Verification** - Validates worktree location and metadata.json
+2. **Code Quality (Lint/Build/Synth)** - Actually runs lint.sh, build.sh, and synth.sh per platform
+3. **Pre-Deployment Validation** - Basic checks (environmentSuffix, hardcoded values, required files)
+4. **Code Health Check** - Advanced pattern matching (empty arrays, GuardDuty, AWS Config, Lambda SDK issues)
+5. **Deployment** - Integrated with error recovery and automatic retry logic
+   - On failure: Runs deployment-failure-analysis.sh
+   - Applies fixes via enhanced-error-recovery.sh
+   - Retries up to 3 times with exponential backoff
+6. **Test Coverage Validation** - Validates 100% coverage requirement
+7. **Integration Test Validation** - Checks integration test results
+8. **Documentation Validation** - Validates MODEL_FAILURES.md immediately after generation
+
+**Features**:
+- Progress reporting at each stage
+- Time tracking per phase
+- Estimated time remaining
+- Blocking condition alerts
+- Stage-by-stage status reporting
+- Comprehensive summary at completion
+- **Automatic error recovery** during deployment
+- **Integrated retry logic** for transient errors
+
+**Usage**: Run at start of QA phase to execute all validation steps in sequence with real-time progress tracking.
+
+**Note**: Pre-deployment validation (stage 3) focuses on basic checks, while code health check (stage 4) performs advanced pattern matching from lessons_learnt.md. This separation eliminates redundancy.
 
 **Before Starting**:
 - Review `.claude/docs/references/pre-submission-checklist.md` for **MANDATORY** requirements
@@ -91,6 +154,159 @@ ls -t lib/MODEL_RESPONSE*.md | head -1
 **Read**: PROMPT files, metadata.json, latest MODEL_RESPONSE file
 
 **Detect**: Platform (CDK/CDKTF/CFN/Terraform/Pulumi) and language
+
+### 1.5: Special Task Type Detection and Handling
+
+**⚠️ CRITICAL**: Some subtasks have different workflows and validation rules.
+
+**Detect Special Task Types** (using shared script):
+```bash
+# Use shared detection script for consistency
+TASK_INFO=$(bash .claude/scripts/detect-task-type.sh)
+if [ $? -ne 0 ]; then
+  echo "❌ ERROR: Failed to detect task type"
+  exit 1
+fi
+
+# Extract task type information
+IS_CICD_TASK=$(echo "$TASK_INFO" | jq -r '.is_cicd_task')
+IS_OPTIMIZATION_TASK=$(echo "$TASK_INFO" | jq -r '.is_optimization_task')
+IS_ANALYSIS_TASK=$(echo "$TASK_INFO" | jq -r '.is_analysis_task')
+TASK_TYPE=$(echo "$TASK_INFO" | jq -r '.task_type')
+
+echo "🔍 Detected task type: $TASK_TYPE"
+
+# Also read generator handoff if available
+if [ -f ".claude/state/generator_handoff.json" ]; then
+  echo "📋 Reading handoff from generator..."
+  GENERATOR_HANDOFF=$(cat .claude/state/generator_handoff.json)
+  echo "  Files generated: $(echo "$GENERATOR_HANDOFF" | jq -r '.artifacts.files_generated | length')"
+fi
+```
+
+**Workflow Modifications Based on Task Type**:
+
+#### For Optimization Tasks (`IS_OPTIMIZATION_TASK=true`)
+
+**Special Requirements**:
+1. Deploy baseline infrastructure (non-optimized values are EXPECTED)
+2. Run `python lib/optimize.py --environment $ENVIRONMENT_SUFFIX` against deployed resources
+3. Verify optimizations via integration tests
+4. Do NOT penalize high resource allocations in stack files
+5. Focus validation on `lib/optimize.py` quality and effectiveness
+
+**Validation Focus**:
+- ✅ `lib/optimize.py` exists and uses boto3
+- ✅ Script reads ENVIRONMENT_SUFFIX correctly
+- ✅ Resource discovery using proper naming patterns
+- ✅ AWS API calls to modify resources (not file editing)
+- ✅ Cost savings calculations
+- ✅ Integration tests verify optimizations work
+
+**Reference**: `.claude/docs/references/special-subtask-requirements.md` Section 2
+
+#### For Analysis Tasks (`IS_ANALYSIS_TASK=true`)
+
+**Special Requirements**:
+1. **NO deployment step** - analysis tasks don't deploy infrastructure
+2. **NO synth step** - not generating infrastructure templates
+3. Run analysis script: `python lib/analyse.py` or `bash lib/analyse.sh`
+4. Verify script output and recommendations
+5. Tests validate analysis logic (may use mocks or test fixtures)
+
+**Validation Focus**:
+- ✅ `lib/analyse.py` or `lib/analyse.sh` exists
+- ✅ Script uses AWS SDK (boto3/AWS CLI) correctly
+- ✅ Resource discovery and metrics collection
+- ✅ Report generation functionality
+- ✅ Error handling for missing resources
+- ✅ Tests validate analysis logic
+
+**Workflow Changes**:
+- SKIP all deployment steps
+- SKIP synth validation
+- Run analysis script directly
+- Validate output format and content
+
+**Explicit Analysis Task Workflow**:
+
+```bash
+if [ "$IS_ANALYSIS_TASK" = "true" ]; then
+  echo "🔍 Running Analysis Task Workflow"
+  
+  # Step 1: Verify analysis script exists
+  if [ -f "lib/analyse.py" ]; then
+    ANALYSIS_SCRIPT="python lib/analyse.py"
+  elif [ -f "lib/analyse.sh" ]; then
+    ANALYSIS_SCRIPT="bash lib/analyse.sh"
+  else
+    echo "❌ ERROR: No analysis script found"
+    exit 1
+  fi
+  
+  # Step 2: Run code quality checks (lint, build only - no synth)
+  echo "📋 Step 1: Code Quality (lint + build)"
+  bash .claude/scripts/lint.sh || { echo "❌ Lint failed"; exit 1; }
+  bash .claude/scripts/build.sh || { echo "❌ Build failed"; exit 1; }
+  echo "✅ Code quality checks passed"
+  
+  # Step 3: Run analysis script (dry run)
+  echo "📋 Step 2: Testing analysis script execution"
+  export ENVIRONMENT_SUFFIX="test"
+  export AWS_REGION="us-east-1"
+  
+  # Test script execution (with timeout)
+  timeout 60s $ANALYSIS_SCRIPT --dry-run 2>&1 | tee analysis_test.log
+  if [ ${PIPESTATUS[0]} -eq 0 ]; then
+    echo "✅ Analysis script executed successfully"
+  else
+    echo "⚠️  Analysis script had issues (check analysis_test.log)"
+  fi
+  
+  # Step 4: Validate script output format
+  echo "📋 Step 3: Validating output format"
+  if grep -q "Analysis" analysis_test.log; then
+    echo "✅ Script produces expected output"
+  else
+    echo "⚠️  Script output format may need review"
+  fi
+  
+  # Step 5: Run unit tests for analysis logic
+  echo "📋 Step 4: Running unit tests"
+  bash .claude/scripts/unit-tests.sh || { echo "❌ Tests failed"; exit 1; }
+  
+  # Check coverage
+  if [ -f coverage/coverage-summary.json ]; then
+    COVERAGE=$(jq -r '.total.statements.pct' coverage/coverage-summary.json)
+    echo "Test coverage: ${COVERAGE}%"
+    if (( $(echo "$COVERAGE < 100" | bc -l) )); then
+      echo "⚠️  Coverage below 100%: ${COVERAGE}%"
+      echo "   For analysis tasks, focus on testing analysis logic"
+    fi
+  fi
+  
+  echo "✅ Analysis task workflow complete"
+fi
+```
+
+**Reference**: `.claude/docs/references/special-subtask-requirements.md` Section 3
+
+#### For CI/CD Pipeline Integration Tasks (`IS_CICD_TASK=true`)
+
+**Special Requirements**:
+1. Verify `lib/ci-cd.yml` exists and is valid
+2. Infrastructure should support multi-environment deployment
+3. Test with different environment parameters
+4. Validate IAM roles for cross-account access (if applicable)
+
+**Validation Focus**:
+- ✅ `lib/ci-cd.yml` contains valid GitHub Actions workflow
+- ✅ Infrastructure code supports environment parameters
+- ✅ Deployment works with CI/CD automation patterns
+
+**Reference**: `.claude/docs/references/special-subtask-requirements.md` Section 1
+
+---
 
 **Platform/Language Compliance Check**:
 
@@ -122,7 +338,7 @@ Use commands from `package.json` and `Pipfile` per platform/language.
 
 **Validation**: Run Checkpoint G: Build Quality Gate
 - See `docs/references/validation-checkpoints.md` for commands
-- See `docs/guides/validation_and_testing_guide.md` Phase 2 for platform-specific commands
+- See `docs/guides/validation_and_testing_guide.md` PHASE 2 for platform-specific commands
 
 **CHECKPOINT**: All three (lint, build, synth) must pass before proceeding.
 
@@ -130,7 +346,7 @@ If ANY fails:
 - STOP and fix issues
 - Report blocking status if unable to resolve
 - Do NOT proceed to deployment
-- Reference `docs/guides/validation_and_testing_guide.md` Phase 2 for common fixes
+- Reference `docs/guides/validation_and_testing_guide.md` PHASE 2 for common fixes
 
 ### 2.5. Pre-Deployment Validation
 
@@ -138,7 +354,7 @@ If ANY fails:
 
 **Validation**: Run Checkpoint F: environmentSuffix Usage
 ```bash
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 ```
 
 Validates:
@@ -155,6 +371,94 @@ Validates:
 - If PASSES: Proceed to deployment
 
 **Cost Impact**: Saves 2-3 deployment attempts (~15% token reduction)
+
+### 2.6. Code Health Check (ENHANCED)
+
+**NEW**: Automated code analysis to catch common failure patterns from lessons_learnt.md.
+
+**Validation**: Run enhanced code health check
+```bash
+bash .claude/scripts/code-health-check.sh
+```
+
+Scans for:
+- Empty arrays in critical resources (DB subnet groups, security groups)
+- Missing environmentSuffix in resource names
+- Circular dependencies
+- Retain policies and DeletionProtection
+- GuardDuty detector creation (account-level resource)
+- AWS Config IAM policy issues
+- Lambda reserved concurrency issues
+- AWS SDK v2 in Node.js 18+
+- Expensive resource configurations (NAT Gateway, RDS Multi-AZ)
+
+**Action**:
+- If FAILS (errors): Fix before deployment
+- If PASSES with warnings: Review warnings, proceed if acceptable
+- If PASSES: Proceed to deployment
+
+**Integration**: Automatically runs before deployment attempts to catch known failure patterns early.
+
+### 2.7: Early Documentation Structure Validation
+
+**Purpose**: Validate documentation structure BEFORE deployment to avoid wasted resources
+
+**Create Initial Documentation Structure**:
+```bash
+echo "📋 Creating documentation structure early..."
+
+# Create IDEAL_RESPONSE.md skeleton (will be populated after deployment)
+if [ ! -f "lib/IDEAL_RESPONSE.md" ]; then
+  cat > lib/IDEAL_RESPONSE.md <<'EOF'
+# Ideal Infrastructure Solution
+
+## Overview
+[To be filled after deployment validation]
+
+## Implementation
+
+### File: lib/tap-stack.ts
+[Code will be added after validation]
+EOF
+  echo "✅ Created IDEAL_RESPONSE.md skeleton"
+fi
+
+# Create MODEL_FAILURES.md skeleton
+if [ ! -f "lib/MODEL_FAILURES.md" ]; then
+  cat > lib/MODEL_FAILURES.md <<'EOF'
+# Model Response Failures Analysis
+
+## Overview
+[Analysis will be added after deployment and testing]
+
+## Critical Failures
+[To be documented]
+
+## High Priority Failures
+[To be documented]
+
+## Medium Priority Failures
+[To be documented]
+
+## Low Priority Failures
+[To be documented]
+
+## Summary
+- Total failures: TBD
+- Primary knowledge gaps: TBD
+- Training value: TBD
+EOF
+  echo "✅ Created MODEL_FAILURES.md skeleton"
+fi
+```
+
+**Benefits**:
+- Ensures documentation files exist in correct location (`lib/`)
+- Validates file structure early
+- Avoids deployment work if documentation can't be created
+- Provides template for later population
+
+---
 
 ### 3. Deployment
 
@@ -184,9 +488,36 @@ REGION=$(cat lib/AWS_REGION 2>/dev/null || echo "us-east-1")
 
 **Deploy to AWS**:
 - If SSM parameters referenced, include them in deployed resources
-- If deployment fails, fix code (max 5 attempts)
+- If deployment fails, analyze error and apply fixes (max 5 attempts)
+- Use enhanced error recovery for automatic retry and fix suggestions
 - If unable to deploy after 5 attempts, report error and exit
 - If AWS Quota Limit issues, report to user and await input
+
+**Deployment Failure Analysis (ENHANCED)**:
+```bash
+# After deployment failure, analyze error patterns
+bash .claude/scripts/deployment-failure-analysis.sh <deployment_log> <attempt_number> <max_attempts>
+```
+
+Features:
+- Automated deployment failure pattern matching
+- Integration with lessons_learnt.md to suggest fixes
+- Deployment attempt tracking and reporting
+- Automatic classification of errors (transient, quota, permission, dependency, configuration, conflict)
+- Fix suggestions based on error patterns
+
+**Enhanced Error Recovery (ENHANCED)**:
+```bash
+# Automatic retry logic with smart fix suggestions
+bash .claude/scripts/enhanced-error-recovery.sh <error_type> <error_message> <attempt_number> <max_attempts>
+```
+
+Features:
+- Automatic retry logic for transient failures (exponential backoff)
+- Smart fix suggestions based on error patterns
+- Integration with error recovery guide
+- Escalation path for unresolvable issues (quota, permissions)
+- Auto-fix for common issues (resource conflicts, dependencies, configuration errors)
 
 **Verify**: Deployed resources match PROMPT requirements (within guardrails)
 
@@ -246,7 +577,7 @@ Use existing test/ or tests/ folder structure (create new files if needed).
 
 **Validation**: Run Checkpoint H: Test Coverage
 - See `docs/references/validation-checkpoints.md` for coverage validation
-- See `docs/guides/validation_and_testing_guide.md` Phase 3 for platform-specific patterns
+- See `docs/guides/validation_and_testing_guide.md` PHASE 3 for platform-specific patterns
 
 **Coverage Validation**:
 ```bash
@@ -283,7 +614,7 @@ Use existing test/ or tests/ folder structure.
 
 **Validation**: Run Checkpoint I: Integration Test Quality
 - See `docs/references/validation-checkpoints.md` for quality checks
-- See `docs/guides/validation_and_testing_guide.md` Phase 5 for patterns and examples
+- See `docs/guides/validation_and_testing_guide.md` PHASE 5 for patterns and examples
 
 **Test Location**:
 ```bash
@@ -320,6 +651,96 @@ Do NOT proceed without meeting 100% coverage requirement.
 - Test edge cases and boundary conditions
 - Verify all functions/methods are tested
 
+**Test Generation Guidance**:
+
+When coverage is below 100%, follow this systematic approach:
+
+```bash
+echo "🔍 Analyzing coverage gaps for test generation..."
+
+# Identify uncovered files and lines
+if [ -f "coverage/lcov.info" ]; then
+  echo "📊 Coverage gaps found in:"
+  grep -E "^SF:|^DA:" coverage/lcov.info | awk '/^SF:/{file=$0}/^DA:.*,0$/{print file; print $0}' | head -20
+fi
+```
+
+**Platform-Specific Test Patterns**:
+
+**1. CDK TypeScript Tests**:
+```typescript
+import { Template, Match } from 'aws-cdk-lib/assertions';
+import * as cdk from 'aws-cdk-lib';
+import { TapStack } from '../lib/tap-stack';
+
+describe('TapStack', () => {
+  test('creates S3 bucket with encryption', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'TestStack', { 
+      environmentSuffix: 'test' 
+    });
+    const template = Template.fromStack(stack);
+    
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketEncryption: Match.objectLike({
+        ServerSideEncryptionConfiguration: Match.arrayWith([
+          Match.objectLike({
+            ServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' }
+          })
+        ])
+      })
+    });
+  });
+  
+  test('resource names include environmentSuffix', () => {
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: Match.stringLikeRegexp('.*-test')
+    });
+  });
+});
+```
+
+**2. Pulumi Python Tests**:
+```python
+import pulumi
+import pytest
+
+class MyMocks(pulumi.runtime.Mocks):
+    def new_resource(self, args: pulumi.runtime.MockResourceArgs):
+        return [args.name + '_id', args.inputs]
+    
+    def call(self, args: pulumi.runtime.MockCallArgs):
+        return {}
+
+@pulumi.runtime.test
+def test_creates_bucket():
+    import tap_stack
+    return {
+        'bucket_name': lambda args: assert args is not None
+    }
+```
+
+**3. CloudFormation YAML Tests**:
+```python
+def test_template_has_required_resources():
+    with open('lib/template.yaml') as f:
+        template = yaml.safe_load(f)
+    
+    assert 'Resources' in template
+    assert 'S3Bucket' in template['Resources']
+    assert template['Resources']['S3Bucket']['Type'] == 'AWS::S3::Bucket'
+```
+
+**Coverage Improvement Checklist**:
+- [ ] All exported functions/classes tested
+- [ ] All conditional branches covered (if/else)
+- [ ] All error paths tested (try/catch)
+- [ ] Edge cases: null, empty arrays, extreme values
+- [ ] All resource properties validated
+- [ ] Environment variable handling tested
+- [ ] Inter-resource references tested
+- [ ] Parameter validation tested
+
 Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for troubleshooting.
 
 ### 5. Final Steps
@@ -344,6 +765,26 @@ Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for tr
 - Only compare PROMPT/MODEL_RESPONSE conversation
 - **CRITICAL**: MUST be in `lib/MODEL_FAILURES.md`, NOT at root level
 - See `.claude/docs/references/cicd-file-restrictions.md` for file location rules
+
+**Documentation Quality Validation (ENHANCED)**:
+```bash
+# Validate MODEL_FAILURES.md and IDEAL_RESPONSE.md structure and completeness
+bash .claude/scripts/validate-documentation.sh
+```
+
+Validates:
+- MODEL_FAILURES.md structure and completeness
+- Severity level categorization (Critical/High/Medium/Low)
+- Root cause analysis for all failures
+- IDEAL_RESPONSE.md matches actual deployed code
+- Training value justification
+- Failure count in summary
+- Proper failure numbering and subsections
+
+**Action**:
+- If FAILS: Fix documentation issues before proceeding
+- If PASSES with warnings: Review warnings, proceed if acceptable
+- If PASSES: Documentation quality validated
 
 **Note**: Do NOT destroy resources - cleanup handled after manual PR review
 

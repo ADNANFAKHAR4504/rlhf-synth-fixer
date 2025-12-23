@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291957",
+  "team": "synth-2",
+  "startedAt": "2025-08-16T08:18:11.527Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "provider": "localstack",
+  "aws_services": [
+    "CloudFormation",
+    "S3",
+    "EC2",
+    "IAM",
+    "VPC",
+    "CloudWatch"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajc-turing",
+  "dockerS3Location": ""
+}

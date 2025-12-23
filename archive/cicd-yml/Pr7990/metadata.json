@@ -1,0 +1,38 @@
+{
+  "po_id": "q3j5k0n5",
+  "status": "in_progress",
+  "platform": "cicd",
+  "language": "yml",
+  "complexity": "hard",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "training_quality": 10,
+  "background": "A software development team needs to implement a multi-stage CI/CD pipeline for deploying Pulumi-based AWS infrastructure. The solution uses a dual-orchestration architecture: GitHub Actions for local development CI/CD workflows and AWS CodePipeline for production deployments. This hybrid approach supports automated testing, security scanning, and staged deployments with proper environment separation.",
+  "environment": "AWS CI/CD infrastructure deployed in us-east-1 region. The solution consists of GitHub Actions workflow for development/testing CI/CD (runs Pulumi deployments) and Pulumi Python program provisioning AWS CodePipeline infrastructure for production. Requires Pulumi CLI 3.x with Python 3.9+, boto3 installed. GitHub Actions uses OIDC-based AWS authentication via role assumption. AWS CodePipeline uses GitHub as source provider with OAuth token from Secrets Manager.",
+  "mandatory_constraints": [
+    "GitHub Actions workflow must trigger only on commits to 'main' and 'release/*' branches",
+    "All IAM roles must follow principle of least privilege with explicit resource ARNs",
+    "Both GitHub Actions workflow and AWS CodePipeline must have exactly 5 stages: Source, Build, Test, SecurityScan, and Deploy",
+    "Use Pulumi ComponentResource pattern to organize related AWS resources with parent-child relationships"
+  ],
+  "optional_constraints": [
+    "All artifacts must be encrypted using a customer-managed KMS key with automatic rotation",
+    "CodeBuild projects must use compute type BUILD_GENERAL1_SMALL for cost optimization",
+    "Pipeline notifications must be sent to SNS topic only for failed executions",
+    "GitHub Actions must use OIDC-based AWS authentication via role assumption",
+    "Security scan stage in GitHub Actions should use Bandit for Python code analysis and Safety for dependency vulnerabilities",
+    "ECR repository should have scan-on-push enabled for container vulnerability detection",
+    "S3 bucket must block all public access"
+  ],
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-05T18:23:31.3NZ",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

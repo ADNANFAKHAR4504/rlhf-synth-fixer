@@ -1,0 +1,15 @@
+name: TapStack
+runtime: python
+description: ECS Fargate migration for payment processing system
+main: lib/__main__.py
+
+config:
+  aws:region:
+    description: AWS region for deployment
+    value: us-east-2
+  TapStack:environmentSuffix:
+    description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    default: dev
+  TapStack:legacyStackName:
+    description: Name of the legacy infrastructure stack to import from
+    default: legacy-infrastructure

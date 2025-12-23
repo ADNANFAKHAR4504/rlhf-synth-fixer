@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-01T05:42:06+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "101912932",
+  "aws_services": [
+    "EC2",
+    "ECS",
+    "RDS",
+    "S3",
+    "ElasticLoadBalancingV2",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "ApplicationAutoScaling"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

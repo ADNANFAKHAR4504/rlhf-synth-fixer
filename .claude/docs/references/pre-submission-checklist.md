@@ -138,7 +138,7 @@ go fmt ./...        # Go
 
 ```bash
 # MANDATORY: Run before ANY deployment
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 ```
 
 **Pre-validation checks:**

@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "c5a9b2f0",
+  "team": "synth",
+  "startedAt": "2025-11-27T21:59:45-08:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "Step Functions",
+    "EventBridge",
+    "SQS",
+    "SSM Parameter Store",
+    "ECR",
+    "CloudWatch",
+    "IAM",
+    "VPC",
+    "EC2"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

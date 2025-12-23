@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "d0l3x7",
+  "team": "synth",
+  "startedAt": "2025-11-20T16:35:07+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "RDS",
+    "EC2",
+    "AutoScaling",
+    "ElasticLoadBalancingV2",
+    "Route53",
+    "S3",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "SNS"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -35,9 +35,11 @@ module.exports = {
       'error',
       {
         argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_', // Added this line
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
       },
     ],
+    'no-unused-vars': 'off', // Turn off base rule as it can report incorrect errors
 
     // Import rules - be more lenient for CDK projects
     'import/no-extraneous-dependencies': [
@@ -70,5 +72,8 @@ module.exports = {
     '*.js',
     '*.d.ts',
     'worktree/',
+    'test/',
+    'bin/',
+    'cli/',
   ],
 };

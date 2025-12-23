@@ -104,12 +104,15 @@ bin/tfplan
 build
 .claude/tasks.csv
 .claude/tasks.csv.backup
+.claude/tasks.csv.backup.*
 .claude/*.csv.backup
+.claude/*.csv.backup.*
 .claude/tasks.csv.lock/
 .claude/open_pr_status.json
 .claude/synth_pr_status.json
 .claude/synth_pr_status.json.backup
 .claude/synth_pr_status.json.lock/
+.claude/reports/
 .sherlock/data
 .sherlock/reports
 
@@ -151,3 +154,6 @@ lib/.terraform/
 
 # Synth Files
 tasks.csv
+ci_checks.json
+# Root reports folder (use .claude/reports/ instead)
+reports/

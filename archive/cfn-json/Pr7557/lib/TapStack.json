@@ -1,0 +1,1343 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Cross-Region Trading Analytics Migration - Main Stack (us-east-1 and eu-central-1)",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource names to enable parallel deployments",
+      "AllowedPattern": "[a-z0-9-]+",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "SourceVpcCidr": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "Description": "CIDR block for source VPC in us-east-1"
+    },
+    "DatabaseMasterUsername": {
+      "Type": "String",
+      "Default": "dbadmin",
+      "Description": "Master username for Aurora database"
+    },
+    "DatabaseName": {
+      "Type": "String",
+      "Default": "tradingdb",
+      "Description": "Database name for Aurora cluster"
+    }
+  },
+  "Resources": {
+    "SourceVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "SourceVpcCidr"
+        },
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-source-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": "us-east-1"
+          }
+        ]
+      }
+    },
+    "SourcePublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SourceVPC"
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "SourceVpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-source-public-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SourcePublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SourceVPC"
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "SourceVpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-source-public-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SourcePrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SourceVPC"
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "SourceVpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-source-private-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SourcePrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SourceVPC"
+        },
+        "CidrBlock": {
+          "Fn::Select": [
+            3,
+            {
+              "Fn::Cidr": [
+                {
+                  "Ref": "SourceVpcCidr"
+                },
+                6,
+                8
+              ]
+            }
+          ]
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-source-private-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SourceInternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-source-igw-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SourceIGWAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SourceVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "SourceInternetGateway"
+        }
+      }
+    },
+    "SourcePublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SourceVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-source-public-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SourcePublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "SourceIGWAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "SourcePublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "SourceInternetGateway"
+        }
+      }
+    },
+    "SourcePublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "SourcePublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "SourcePublicRouteTable"
+        }
+      }
+    },
+    "SourcePublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "SourcePublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "SourcePublicRouteTable"
+        }
+      }
+    },
+    "HistoricalDataBucketTarget": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "trading-analytics-historical-target-${EnvironmentSuffix}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-historical-target-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Replication destination for historical trading data"
+          }
+        ]
+      }
+    },
+    "HistoricalDataBucketSource": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "trading-analytics-historical-source-${EnvironmentSuffix}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "ReplicationConfiguration": {
+          "Role": {
+            "Fn::GetAtt": [
+              "S3ReplicationRole",
+              "Arn"
+            ]
+          },
+          "Rules": [
+            {
+              "Id": "ReplicateToTarget",
+              "Status": "Enabled",
+              "Priority": 1,
+              "Filter": {},
+              "Destination": {
+                "Bucket": {
+                  "Fn::GetAtt": [
+                    "HistoricalDataBucketTarget",
+                    "Arn"
+                  ]
+                },
+                "ReplicationTime": {
+                  "Status": "Enabled",
+                  "Time": {
+                    "Minutes": 15
+                  }
+                },
+                "Metrics": {
+                  "Status": "Enabled",
+                  "EventThreshold": {
+                    "Minutes": 15
+                  }
+                }
+              },
+              "DeleteMarkerReplication": {
+                "Status": "Enabled"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-historical-source-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "S3ReplicationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "trading-analytics-s3-replication-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "S3ReplicationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetReplicationConfiguration",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::trading-analytics-historical-source-${EnvironmentSuffix}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObjectVersionForReplication",
+                    "s3:GetObjectVersionAcl",
+                    "s3:GetObjectVersionTagging"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::trading-analytics-historical-source-${EnvironmentSuffix}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ReplicateObject",
+                    "s3:ReplicateDelete",
+                    "s3:ReplicateTags"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::trading-analytics-historical-target-${EnvironmentSuffix}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "DashboardStateTable": {
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "trading-analytics-dashboard-state-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "userId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "sessionId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "userId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "sessionId",
+            "KeyType": "RANGE"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "Replicas": [
+          {
+            "Region": "us-east-1",
+            "GlobalSecondaryIndexes": [],
+            "PointInTimeRecoverySpecification": {
+              "PointInTimeRecoveryEnabled": true
+            },
+            "TableClass": "STANDARD"
+          },
+          {
+            "Region": "eu-central-1",
+            "GlobalSecondaryIndexes": [],
+            "PointInTimeRecoverySpecification": {
+              "PointInTimeRecoveryEnabled": true
+            },
+            "TableClass": "STANDARD"
+          }
+        ],
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        }
+      }
+    },
+    "MarketDataStreamSource": {
+      "Type": "AWS::Kinesis::Stream",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-market-data-source-${EnvironmentSuffix}"
+        },
+        "ShardCount": 2,
+        "StreamEncryption": {
+          "EncryptionType": "KMS",
+          "KeyId": "alias/aws/kinesis"
+        },
+        "StreamModeDetails": {
+          "StreamMode": "PROVISIONED"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-market-data-source-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseMasterSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-db-master-${EnvironmentSuffix}"
+        },
+        "Description": "Master credentials for Aurora Global Database",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DatabaseMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        }
+      }
+    },
+    "DatabaseSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "trading-analytics-db-subnet-group-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for Aurora Global Database",
+        "SubnetIds": [
+          {
+            "Ref": "SourcePrivateSubnet1"
+          },
+          {
+            "Ref": "SourcePrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-db-subnet-group-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "trading-analytics-db-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for Aurora database",
+        "VpcId": {
+          "Ref": "SourceVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "CidrIp": {
+              "Ref": "SourceVpcCidr"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-db-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraGlobalCluster": {
+      "Type": "AWS::RDS::GlobalCluster",
+      "Properties": {
+        "GlobalClusterIdentifier": {
+          "Fn::Sub": "trading-analytics-global-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-postgresql",
+        "EngineVersion": "14.6",
+        "DeletionProtection": false,
+        "StorageEncrypted": true
+      }
+    },
+    "AuroraPrimaryCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DependsOn": "AuroraGlobalCluster",
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Fn::Sub": "trading-analytics-primary-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-postgresql",
+        "EngineVersion": "14.6",
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DatabaseMasterSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DatabaseMasterSecret}:SecretString:password}}"
+        },
+        "DatabaseName": {
+          "Ref": "DatabaseName"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DatabaseSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "GlobalClusterIdentifier": {
+          "Fn::Sub": "trading-analytics-global-${EnvironmentSuffix}"
+        },
+        "StorageEncrypted": true,
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "EnableCloudwatchLogsExports": [
+          "postgresql"
+        ],
+        "DeletionProtection": false
+      }
+    },
+    "AuroraPrimaryInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "trading-analytics-primary-instance-1-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "AuroraPrimaryCluster"
+        },
+        "Engine": "aurora-postgresql",
+        "DBInstanceClass": "db.r6g.large",
+        "PubliclyAccessible": false,
+        "EnablePerformanceInsights": true,
+        "PerformanceInsightsRetentionPeriod": 7
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "trading-analytics-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "TradingAnalyticsLambdaPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "DashboardStateTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kinesis:GetRecords",
+                    "kinesis:GetShardIterator",
+                    "kinesis:DescribeStream",
+                    "kinesis:ListStreams",
+                    "kinesis:PutRecord",
+                    "kinesis:PutRecords"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "MarketDataStreamSource",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${HistoricalDataBucketSource.Arn}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "DataTransformFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "trading-analytics-transform-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 60,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "DASHBOARD_TABLE": {
+              "Ref": "DashboardStateTable"
+            },
+            "KINESIS_STREAM": {
+              "Ref": "MarketDataStreamSource"
+            },
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "exports.handler = async (event) => {\n  const records = event.Records || [];\n  console.log(`Processing ${records.length} records`);\n  \n  for (const record of records) {\n    const payload = Buffer.from(record.kinesis.data, 'base64').toString('utf-8');\n    const data = JSON.parse(payload);\n    console.log('Transformed data:', data);\n  }\n  \n  return {\n    statusCode: 200,\n    body: JSON.stringify({ processed: records.length })\n  };\n};"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-transform-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DashboardApiFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "trading-analytics-dashboard-api-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "DASHBOARD_TABLE": {
+              "Ref": "DashboardStateTable"
+            },
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const { DynamoDBClient, GetItemCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');\nconst client = new DynamoDBClient({});\n\nexports.handler = async (event) => {\n  const tableName = process.env.DASHBOARD_TABLE;\n  const method = event.httpMethod || 'GET';\n  \n  if (method === 'GET') {\n    const params = {\n      TableName: tableName,\n      Key: {\n        userId: { S: event.pathParameters?.userId || 'default' },\n        sessionId: { S: event.pathParameters?.sessionId || 'default' }\n      }\n    };\n    \n    const result = await client.send(new GetItemCommand(params));\n    return {\n      statusCode: 200,\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify(result.Item || {})\n    };\n  }\n  \n  return {\n    statusCode: 405,\n    body: JSON.stringify({ error: 'Method not allowed' })\n  };\n};"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-dashboard-api-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "EventSourceMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "MarketDataStreamSource",
+            "Arn"
+          ]
+        },
+        "FunctionName": {
+          "Ref": "DataTransformFunction"
+        },
+        "StartingPosition": "LATEST",
+        "BatchSize": 100,
+        "MaximumBatchingWindowInSeconds": 5,
+        "ParallelizationFactor": 1
+      }
+    },
+    "DashboardApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-dashboard-api-${EnvironmentSuffix}"
+        },
+        "Description": "API for trading analytics dashboard",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    },
+    "DashboardResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "DashboardApi"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "DashboardApi",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "dashboard"
+      }
+    },
+    "UserResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "DashboardApi"
+        },
+        "ParentId": {
+          "Ref": "DashboardResource"
+        },
+        "PathPart": "{userId}"
+      }
+    },
+    "SessionResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "DashboardApi"
+        },
+        "ParentId": {
+          "Ref": "UserResource"
+        },
+        "PathPart": "{sessionId}"
+      }
+    },
+    "DashboardMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "DashboardApi"
+        },
+        "ResourceId": {
+          "Ref": "SessionResource"
+        },
+        "HttpMethod": "GET",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DashboardApiFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "ApiGatewayInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "DashboardApiFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DashboardApi}/*"
+        }
+      }
+    },
+    "ApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": [
+        "DashboardMethod"
+      ],
+      "Properties": {
+        "RestApiId": {
+          "Ref": "DashboardApi"
+        },
+        "Description": {
+          "Fn::Sub": "API deployment for ${EnvironmentSuffix}"
+        }
+      }
+    },
+    "ApiStage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "StageName": "prod",
+        "RestApiId": {
+          "Ref": "DashboardApi"
+        },
+        "DeploymentId": {
+          "Ref": "ApiDeployment"
+        },
+        "TracingEnabled": true,
+        "MethodSettings": [
+          {
+            "ResourcePath": "/*",
+            "HttpMethod": "*",
+            "LoggingLevel": "INFO",
+            "DataTraceEnabled": false,
+            "MetricsEnabled": true
+          }
+        ]
+      }
+    },
+    "DataPipelineStateMachine": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": {
+          "Fn::Sub": "trading-analytics-pipeline-${EnvironmentSuffix}"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "StepFunctionsRole",
+            "Arn"
+          ]
+        },
+        "DefinitionString": {
+          "Fn::Sub": "{\n  \"Comment\": \"Trading Analytics Data Pipeline\",\n  \"StartAt\": \"ExtractData\",\n  \"States\": {\n    \"ExtractData\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"${DataTransformFunction}\",\n        \"Payload\": {\n          \"action\": \"extract\"\n        }\n      },\n      \"Next\": \"TransformData\"\n    },\n    \"TransformData\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"${DataTransformFunction}\",\n        \"Payload\": {\n          \"action\": \"transform\"\n        }\n      },\n      \"Next\": \"LoadData\"\n    },\n    \"LoadData\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"${DataTransformFunction}\",\n        \"Payload\": {\n          \"action\": \"load\"\n        }\n      },\n      \"End\": true\n    }\n  }\n}"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-pipeline-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "StepFunctionsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "trading-analytics-stepfunctions-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "states.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "InvokeLambda",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "DataTransformFunction",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "MigrationStatusTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "trading-analytics-migration-status-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Trading Analytics Migration Status Notifications",
+        "KmsMasterKeyId": "alias/aws/sns",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-analytics-migration-status-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "ReplicationLagAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "trading-analytics-replication-lag-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when S3 replication lag exceeds 5 minutes",
+        "MetricName": "ReplicationLatency",
+        "Namespace": "AWS/S3",
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 300000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "SourceBucket",
+            "Value": {
+              "Ref": "HistoricalDataBucketSource"
+            }
+          },
+          {
+            "Name": "DestinationBucket",
+            "Value": {
+              "Ref": "HistoricalDataBucketTarget"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "MigrationStatusTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DatabaseCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "trading-analytics-db-cpu-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when database CPU exceeds 80%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": {
+              "Ref": "AuroraPrimaryCluster"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "MigrationStatusTopic"
+          }
+        ]
+      }
+    },
+    "ApiErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "trading-analytics-api-errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when API error rate exceeds threshold",
+        "MetricName": "5XXError",
+        "Namespace": "AWS/ApiGateway",
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ApiName",
+            "Value": {
+              "Ref": "DashboardApi"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "MigrationStatusTopic"
+          }
+        ]
+      }
+    },
+    "MigrationLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/trading-analytics/migration/${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 14
+      }
+    },
+    "ApiLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/apigateway/trading-analytics/${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 14
+      }
+    },
+    "HealthCheckAlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "trading-analytics-healthcheck-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Health Check Status for Route 53"
+      }
+    },
+    "MigrationEventBus": {
+      "Type": "AWS::Events::EventBus",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-migration-events-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "ReplicationEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-replication-events-${EnvironmentSuffix}"
+        },
+        "Description": "Capture S3 replication events",
+        "EventBusName": {
+          "Ref": "MigrationEventBus"
+        },
+        "EventPattern": {
+          "source": [
+            "aws.s3"
+          ],
+          "detail-type": [
+            "Object Replication Failed"
+          ],
+          "detail": {
+            "bucket": [
+              {
+                "Ref": "HistoricalDataBucketSource"
+              }
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "MigrationStatusTopic"
+            },
+            "Id": "ReplicationFailureTarget"
+          }
+        ]
+      }
+    },
+    "EventBridgeToSnsPermission": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "Topics": [
+          {
+            "Ref": "MigrationStatusTopic"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sns:Publish",
+              "Resource": {
+                "Ref": "MigrationStatusTopic"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "SourceVPCId": {
+      "Description": "Source VPC ID in us-east-1",
+      "Value": {
+        "Ref": "SourceVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-source-vpc-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "HistoricalDataBucketSourceName": {
+      "Description": "Source S3 bucket for historical data",
+      "Value": {
+        "Ref": "HistoricalDataBucketSource"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-historical-source-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "HistoricalDataBucketTargetName": {
+      "Description": "Target S3 bucket for historical data replication",
+      "Value": {
+        "Ref": "HistoricalDataBucketTarget"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-historical-target-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "DashboardTableName": {
+      "Description": "DynamoDB Global Table name",
+      "Value": {
+        "Ref": "DashboardStateTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-dashboard-table-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "KinesisStreamName": {
+      "Description": "Kinesis stream name for market data",
+      "Value": {
+        "Ref": "MarketDataStreamSource"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-kinesis-stream-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "DatabaseClusterEndpoint": {
+      "Description": "Aurora primary cluster endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraPrimaryCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-db-endpoint-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "ApiEndpoint": {
+      "Description": "API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${DashboardApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-api-endpoint-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "MigrationStatusTopicArn": {
+      "Description": "SNS topic for migration status",
+      "Value": {
+        "Ref": "MigrationStatusTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-migration-topic-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "StateMachineArn": {
+      "Description": "Step Functions state machine ARN",
+      "Value": {
+        "Ref": "DataPipelineStateMachine"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "trading-analytics-state-machine-${EnvironmentSuffix}"
+        }
+      }
+    }
+  }
+}

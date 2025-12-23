@@ -1,3 +1,4 @@
+
 {
   "compilerOptions": {
     "target": "ES2022",
@@ -19,7 +20,7 @@
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
     "typeRoots": ["./node_modules/@types"],
-    "types": ["node"],
+    "types": ["node", "jest"],
     "isolatedModules": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
@@ -30,11 +31,12 @@
     "cdk.out",
     "templates",
     "archive",
+    "archive-localstack",
     "subcategory-references",
     "worktree",
     "test",
     "tests",
+    "cli",
     "**/*.d.ts"
-  ],
-  "include": ["index.ts", "lib/**/*.ts", "bin/**/*.ts", "cli/**/*.ts"]
+  ]
 }

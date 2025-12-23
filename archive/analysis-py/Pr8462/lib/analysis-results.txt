@@ -1,0 +1,317 @@
+INFO:botocore.credentials:Found credentials in environment variables.
+INFO:botocore.configprovider:Found endpoint for dynamodb via: environment_global.
+INFO:__main__:Creating sample DynamoDB tables for analysis...
+INFO:__main__:Table ProvisionedWasteTable already exists
+INFO:__main__:Table NoAutoscalingTable already exists
+INFO:__main__:Table OnDemandMisuseTable already exists
+INFO:__main__:Table GSIOverprojectionTable already exists
+INFO:__main__:Table ExcessiveGSIsTable already exists
+INFO:__main__:Table CriticalNoPITRTable already exists
+INFO:__main__:Table SensitiveDataTable already exists
+INFO:__main__:Table session-data-table already exists
+INFO:__main__:Table StaleStreamsTable already exists
+INFO:__main__:Table global-user-data already exists
+INFO:botocore.configprovider:Found endpoint for dynamodb via: environment_global.
+INFO:botocore.configprovider:Found endpoint for cloudwatch via: environment_global.
+INFO:botocore.configprovider:Found endpoint for application-autoscaling via: environment_global.
+INFO:botocore.configprovider:Found endpoint for lambda via: environment_global.
+INFO:botocore.configprovider:Found endpoint for kinesis via: environment_global.
+INFO:__main__:Starting DynamoDB deep analysis...
+INFO:__main__:Mock environment detected, including table ProvisionedWasteTable in analysis
+INFO:__main__:Mock environment detected, including table NoAutoscalingTable in analysis
+INFO:__main__:Mock environment detected, including table OnDemandMisuseTable in analysis
+INFO:__main__:Mock environment detected, including table GSIOverprojectionTable in analysis
+INFO:__main__:Mock environment detected, including table ExcessiveGSIsTable in analysis
+INFO:__main__:Mock environment detected, including table CriticalNoPITRTable in analysis
+INFO:__main__:Mock environment detected, including table SensitiveDataTable in analysis
+INFO:__main__:Mock environment detected, including table session-data-table in analysis
+INFO:__main__:Mock environment detected, including table StaleStreamsTable in analysis
+INFO:__main__:Mock environment detected, including table global-user-data in analysis
+INFO:__main__:Analyzing 10 tables...
+INFO:__main__:Analyzing table: ProvisionedWasteTable
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:210: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  end_time = datetime.utcnow()
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:354: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  end_time = datetime.utcnow()
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:474: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  end_time = datetime.utcnow()
+INFO:__main__:Analyzing table: NoAutoscalingTable
+INFO:__main__:Analyzing table: OnDemandMisuseTable
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:305: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  end_time = datetime.utcnow()
+INFO:__main__:Analyzing table: GSIOverprojectionTable
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:429: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  end_time = datetime.utcnow()
+INFO:__main__:Analyzing table: ExcessiveGSIsTable
+INFO:__main__:Analyzing table: CriticalNoPITRTable
+INFO:__main__:Analyzing table: SensitiveDataTable
+INFO:__main__:Analyzing table: session-data-table
+INFO:__main__:Analyzing table: StaleStreamsTable
+INFO:__main__:Analyzing table: global-user-data
+
+====================================================================================================
+DYNAMODB OPTIMIZATION ANALYSIS REPORT
+====================================================================================================
+
+====================================================================================================
+CRITICAL SEVERITY ISSUES (2 found)
+====================================================================================================
++---------------------+----------------------+------------------------------------------+-----------------------------------------------------+-------------------+
+| Table Name          | Issue Type           | Description                              | Recommendation                                      | Monthly Savings   |
++=====================+======================+==========================================+=====================================================+===================+
+| CriticalNoPITRTable | MISSING_PITR         | Critical table missing Point-in-Time     | Enable PITR immediately for data protection         | N/A               |
+|                     |                      | Recovery                                 |                                                     |                   |
++---------------------+----------------------+------------------------------------------+-----------------------------------------------------+-------------------+
+| SensitiveDataTable  | MISSING_CMK_ENCRYPTI | Sensitive data table not using Customer- | Enable encryption with Customer-Managed KMS key for | N/A               |
+|                     | ON                   | Managed KMS encryption                   | complian...                                         |                   |
++---------------------+----------------------+------------------------------------------+-----------------------------------------------------+-------------------+
+
+====================================================================================================
+HIGH SEVERITY ISSUES (17 found)
+====================================================================================================
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| Table Name           | Issue Type           | Description                              | Recommendation                                               | Monthly Savings   |
++======================+======================+==========================================+==============================================================+===================+
+| ProvisionedWasteTabl | PROVISIONED_WASTE    | Table using only 0.0% RCU and 0.0% WCU   | Reduce RCU to 0 and WCU to 0                                 | $56.94            |
+| e                    |                      |                                          |                                                              |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| ProvisionedWasteTabl | MISSING_AUTOSCALING  | Missing auto-scaling for Read, Write     | Enable auto-scaling to prevent throttling and optimize costs | N/A               |
+| e                    |                      | capacity                                 |                                                              |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| ProvisionedWasteTabl | MISSING_MONITORING   | Missing CloudWatch alarms for:           | Set up alarms for throttling, system errors, and latency     | N/A               |
+| e                    |                      | Throttling, System Errors                | spi...                                                       |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| NoAutoscalingTable   | PROVISIONED_WASTE    | Table using only 0.0% RCU and 0.0% WCU   | Reduce RCU to 0 and WCU to 0                                 | $2.85             |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| NoAutoscalingTable   | MISSING_AUTOSCALING  | Missing auto-scaling for Read, Write     | Enable auto-scaling to prevent throttling and optimize costs | N/A               |
+|                      |                      | capacity                                 |                                                              |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| NoAutoscalingTable   | MISSING_MONITORING   | Missing CloudWatch alarms for:           | Set up alarms for throttling, system errors, and latency     | N/A               |
+|                      |                      | Throttling, System Errors                | spi...                                                       |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| OnDemandMisuseTable  | MISSING_MONITORING   | Missing CloudWatch alarms for:           | Set up alarms for throttling, system errors, and latency     | N/A               |
+|                      |                      | Throttling, System Errors                | spi...                                                       |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| GSIOverprojectionTab | MISSING_MONITORING   | Missing CloudWatch alarms for:           | Set up alarms for throttling, system errors, and latency     | N/A               |
+| le                   |                      | Throttling, System Errors                | spi...                                                       |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| ExcessiveGSIsTable   | EXCESSIVE_GSIS       | Table has 15 GSIs                        | Consider consolidating GSIs or using composite sort keys.    | N/A               |
+|                      |                      |                                          | Ea...                                                        |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| ExcessiveGSIsTable   | MISSING_MONITORING   | Missing CloudWatch alarms for:           | Set up alarms for throttling, system errors, and latency     | N/A               |
+|                      |                      | Throttling, System Errors                | spi...                                                       |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| CriticalNoPITRTable  | MISSING_MONITORING   | Missing CloudWatch alarms for:           | Set up alarms for throttling, system errors, and latency     | N/A               |
+|                      |                      | Throttling, System Errors                | spi...                                                       |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| SensitiveDataTable   | MISSING_MONITORING   | Missing CloudWatch alarms for:           | Set up alarms for throttling, system errors, and latency     | N/A               |
+|                      |                      | Throttling, System Errors                | spi...                                                       |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| session-data-table   | MISSING_TTL          | Temporary data table without TTL         | Enable TTL to automatically delete expired items and reduce  | N/A               |
+|                      |                      | configuration                            | ...                                                          |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| session-data-table   | MISSING_MONITORING   | Missing CloudWatch alarms for:           | Set up alarms for throttling, system errors, and latency     | N/A               |
+|                      |                      | Throttling, System Errors                | spi...                                                       |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| StaleStreamsTable    | MISSING_MONITORING   | Missing CloudWatch alarms for:           | Set up alarms for throttling, system errors, and latency     | N/A               |
+|                      |                      | Throttling, System Errors                | spi...                                                       |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| global-user-data     | MISSING_MONITORING   | Missing CloudWatch alarms for:           | Set up alarms for throttling, system errors, and latency     | N/A               |
+|                      |                      | Throttling, System Errors                | spi...                                                       |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+| global-user-data     | MISSING_GLOBAL_TABLE | Critical table for global operations not | Convert to Global Table for multi-region replication and     | N/A               |
+|                      |                      | configured as Global Table               | fai...                                                       |                   |
++----------------------+----------------------+------------------------------------------+--------------------------------------------------------------+-------------------+
+
+====================================================================================================
+MEDIUM SEVERITY ISSUES (2 found)
+====================================================================================================
++----------------------+--------------------+----------------------------------------+--------------------------------------------------------+-------------------+
+| Table Name           | Issue Type         | Description                            | Recommendation                                         | Monthly Savings   |
++======================+====================+========================================+========================================================+===================+
+| GSIOverprojectionTab | GSI_OVERPROJECTION | GSI "GSI-ALL-Projection" projects ALL  | Consider projecting only required attributes to reduce | N/A               |
+| le                   |                    | attributes                             | stora...                                               |                   |
++----------------------+--------------------+----------------------------------------+--------------------------------------------------------+-------------------+
+| StaleStreamsTable    | STALE_STREAMS      | DynamoDB Streams enabled but no active | Disable streams if not needed, or implement stream     | N/A               |
+|                      |                    | consumers detected                     | processin...                                           |                   |
++----------------------+--------------------+----------------------------------------+--------------------------------------------------------+-------------------+
+
+====================================================================================================
+DETAILED RECOMMENDATIONS BY TABLE
+====================================================================================================
+
+Table: CriticalNoPITRTable
+----------------------------------------------------------------------------------------------------
+  1. [CRITICAL] MISSING_PITR
+     Description: Critical table missing Point-in-Time Recovery
+     Recommendation: Enable PITR immediately for data protection
+
+  2. [HIGH] MISSING_MONITORING
+     Description: Missing CloudWatch alarms for: Throttling, System Errors
+     Recommendation: Set up alarms for throttling, system errors, and latency spikes
+
+
+Table: ExcessiveGSIsTable
+----------------------------------------------------------------------------------------------------
+  1. [HIGH] EXCESSIVE_GSIS
+     Description: Table has 15 GSIs
+     Recommendation: Consider consolidating GSIs or using composite sort keys. Each GSI multiplies write costs
+
+  2. [HIGH] MISSING_MONITORING
+     Description: Missing CloudWatch alarms for: Throttling, System Errors
+     Recommendation: Set up alarms for throttling, system errors, and latency spikes
+
+
+Table: GSIOverprojectionTable
+----------------------------------------------------------------------------------------------------
+  1. [MEDIUM] GSI_OVERPROJECTION
+     Description: GSI "GSI-ALL-Projection" projects ALL attributes
+     Recommendation: Consider projecting only required attributes to reduce storage and write costs
+
+  2. [HIGH] MISSING_MONITORING
+     Description: Missing CloudWatch alarms for: Throttling, System Errors
+     Recommendation: Set up alarms for throttling, system errors, and latency spikes
+
+
+Table: NoAutoscalingTable
+----------------------------------------------------------------------------------------------------
+  1. [HIGH] PROVISIONED_WASTE
+     Description: Table using only 0.0% RCU and 0.0% WCU
+     Recommendation: Reduce RCU to 0 and WCU to 0
+     Estimated Savings: $2.85/month ($34.16/year)
+
+  2. [HIGH] MISSING_AUTOSCALING
+     Description: Missing auto-scaling for Read, Write capacity
+     Recommendation: Enable auto-scaling to prevent throttling and optimize costs
+
+  3. [HIGH] MISSING_MONITORING
+     Description: Missing CloudWatch alarms for: Throttling, System Errors
+     Recommendation: Set up alarms for throttling, system errors, and latency spikes
+
+
+Table: OnDemandMisuseTable
+----------------------------------------------------------------------------------------------------
+  1. [HIGH] MISSING_MONITORING
+     Description: Missing CloudWatch alarms for: Throttling, System Errors
+     Recommendation: Set up alarms for throttling, system errors, and latency spikes
+
+
+Table: ProvisionedWasteTable
+----------------------------------------------------------------------------------------------------
+  1. [HIGH] PROVISIONED_WASTE
+     Description: Table using only 0.0% RCU and 0.0% WCU
+     Recommendation: Reduce RCU to 0 and WCU to 0
+     Estimated Savings: $56.94/month ($683.28/year)
+
+  2. [HIGH] MISSING_AUTOSCALING
+     Description: Missing auto-scaling for Read, Write capacity
+     Recommendation: Enable auto-scaling to prevent throttling and optimize costs
+
+  3. [HIGH] MISSING_MONITORING
+     Description: Missing CloudWatch alarms for: Throttling, System Errors
+     Recommendation: Set up alarms for throttling, system errors, and latency spikes
+
+
+Table: SensitiveDataTable
+----------------------------------------------------------------------------------------------------
+  1. [CRITICAL] MISSING_CMK_ENCRYPTION
+     Description: Sensitive data table not using Customer-Managed KMS encryption
+     Recommendation: Enable encryption with Customer-Managed KMS key for compliance
+
+  2. [HIGH] MISSING_MONITORING
+     Description: Missing CloudWatch alarms for: Throttling, System Errors
+     Recommendation: Set up alarms for throttling, system errors, and latency spikes
+
+
+Table: StaleStreamsTable
+----------------------------------------------------------------------------------------------------
+  1. [MEDIUM] STALE_STREAMS
+     Description: DynamoDB Streams enabled but no active consumers detected
+     Recommendation: Disable streams if not needed, or implement stream processing
+
+  2. [HIGH] MISSING_MONITORING
+     Description: Missing CloudWatch alarms for: Throttling, System Errors
+     Recommendation: Set up alarms for throttling, system errors, and latency spikes
+
+
+Table: global-user-data
+----------------------------------------------------------------------------------------------------
+  1. [HIGH] MISSING_MONITORING
+     Description: Missing CloudWatch alarms for: Throttling, System Errors
+     Recommendation: Set up alarms for throttling, system errors, and latency spikes
+
+  2. [HIGH] MISSING_GLOBAL_TABLE
+     Description: Critical table for global operations not configured as Global Table
+     Recommendation: Convert to Global Table for multi-region replication and failover
+
+
+Table: session-data-table
+----------------------------------------------------------------------------------------------------
+  1. [HIGH] MISSING_TTL
+     Description: Temporary data table without TTL configuration
+     Recommendation: Enable TTL to automatically delete expired items and reduce storage costs
+
+  2. [HIGH] MISSING_MONITORING
+     Description: Missing CloudWatch alarms for: Throttling, System Errors
+     Recommendation: Set up alarms for throttling, system errors, and latency spikes
+
+
+====================================================================================================
+EXECUTIVE SUMMARY
+====================================================================================================
++---------------------------+---------+
+| Metric                    | Value   |
++===========================+=========+
+| Total Tables Analyzed     | 10      |
++---------------------------+---------+
+| Total Issues Found        | 21      |
++---------------------------+---------+
+| Critical Issues           | 2       |
++---------------------------+---------+
+| High Priority Issues      | 17      |
++---------------------------+---------+
+| Medium Priority Issues    | 2       |
++---------------------------+---------+
+| Low Priority Issues       | 0       |
++---------------------------+---------+
+| Potential Monthly Savings | $59.79  |
++---------------------------+---------+
+| Potential Annual Savings  | $717.44 |
++---------------------------+---------+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:781: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'analysis_date': datetime.utcnow().isoformat(),
+INFO:__main__:JSON report saved to dynamodb_optimization.json
+INFO:__main__:No access pattern data to save
+INFO:__main__:Analysis complete!
+
+
+====================================================================================================
+ISSUE TYPE BREAKDOWN
+====================================================================================================
++------------------------+---------+
+| Issue Type             |   Count |
++========================+=========+
+| MISSING_MONITORING     |      10 |
++------------------------+---------+
+| PROVISIONED_WASTE      |       2 |
++------------------------+---------+
+| MISSING_AUTOSCALING    |       2 |
++------------------------+---------+
+| GSI_OVERPROJECTION     |       1 |
++------------------------+---------+
+| EXCESSIVE_GSIS         |       1 |
++------------------------+---------+
+| MISSING_PITR           |       1 |
++------------------------+---------+
+| MISSING_CMK_ENCRYPTION |       1 |
++------------------------+---------+
+| MISSING_TTL            |       1 |
++------------------------+---------+
+| STALE_STREAMS          |       1 |
++------------------------+---------+
+| MISSING_GLOBAL_TABLE   |       1 |
++------------------------+---------+
+
+====================================================================================================
+END OF REPORT
+====================================================================================================
+

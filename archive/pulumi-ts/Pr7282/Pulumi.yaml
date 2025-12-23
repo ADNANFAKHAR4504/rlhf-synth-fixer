@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Zero-trust security architecture for financial data processing
+main: bin/tap.ts

@@ -1,0 +1,7 @@
+name: tap-infrastructure
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: CI/CD Pipeline Infrastructure using Pulumi with TypeScript
+main: index.ts

@@ -575,7 +575,7 @@ validate_best_practices() {
   echo "📋 Step 9: Validating CI/CD Best Practices..."
 
   # Check for stages/job dependencies
-  if grep -qE "(needs:|depends_on:|requires:)" "$CICD_FILE"; then
+  if grep -qE "(needs:|depends_on:|requires:|dependsOn:)" "$CICD_FILE"; then
     echo "✅ Job dependencies configured"
   else
     WARNINGS+=("No job dependencies found - ensure proper pipeline execution order")

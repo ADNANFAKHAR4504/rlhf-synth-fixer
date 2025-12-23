@@ -1,0 +1,11 @@
+{
+  "name": "compliance-remediation",
+  "version": "1.0.0",
+  "description": "Automated remediation for non-compliant resources",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-ec2": "^3.0.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-rds": "^3.0.0"
+  }
+}

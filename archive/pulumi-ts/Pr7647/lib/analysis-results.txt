@@ -1,0 +1,93 @@
+============================================================
+COMPLIANCE MONITORING INFRASTRUCTURE ANALYSIS
+============================================================
+
+=== Analyzing Lambda Function ===
+✅ PASS: Lambda Function Exists
+   Found Lambda function: compliance-analyzer-test
+✅ PASS: Lambda Runtime
+   Runtime: nodejs18.x
+✅ PASS: Lambda Handler
+   Handler: index.handler
+✅ PASS: Lambda Timeout
+   Timeout: 300s (expected: 300s)
+✅ PASS: Lambda Memory
+   Memory: 512MB (expected: 512MB)
+✅ PASS: Lambda Env Var: DYNAMO_TABLE_NAME
+   DYNAMO_TABLE_NAME: Present
+✅ PASS: Lambda Env Var: SNS_TOPIC_ARN
+   SNS_TOPIC_ARN: Present
+✅ PASS: Lambda Env Var: COMPLIANCE_NAMESPACE
+   COMPLIANCE_NAMESPACE: Present
+
+=== Analyzing SNS Topic ===
+✅ PASS: SNS Topic Exists
+   Found SNS topic: arn:aws:sns:us-east-1:123456789012:compliance-notifications-test
+✅ PASS: SNS Email Subscription
+   Email subscriptions: 1
+✅ PASS: SNS Subscription Endpoint
+   Endpoint: compliance@company.com
+
+=== Analyzing DynamoDB Table ===
+✅ PASS: DynamoDB Table Exists
+   Found DynamoDB table: compliance-history-test
+✅ PASS: DynamoDB Hash Key
+   Hash Key: checkId (expected: checkId)
+✅ PASS: DynamoDB Range Key
+   Range Key: timestamp (expected: timestamp)
+✅ PASS: DynamoDB Billing Mode
+   Billing Mode: PAY_PER_REQUEST (expected: PAY_PER_REQUEST)
+✅ PASS: DynamoDB TTL Enabled
+   TTL Status: ENABLED
+✅ PASS: DynamoDB TTL Attribute
+   TTL Attribute: expirationTime (expected: expirationTime)
+
+=== Analyzing EventBridge Rule ===
+✅ PASS: EventBridge Rule Exists
+   Found EventBridge rule: compliance-schedule-test
+✅ PASS: EventBridge Schedule
+   Schedule: rate(15 minutes) (expected: rate(15 minutes))
+✅ PASS: EventBridge Lambda Target
+   Lambda targets: 1
+
+=== Analyzing CloudWatch Alarm ===
+✅ PASS: CloudWatch Alarm Exists
+   Found CloudWatch alarm: compliance-failure-alarm-test
+✅ PASS: Alarm Metric Name
+   Metric: ComplianceFailureRate (expected: ComplianceFailureRate)
+✅ PASS: Alarm Namespace
+   Namespace: ComplianceMonitoring (expected: ComplianceMonitoring)
+✅ PASS: Alarm Threshold
+   Threshold: 20.0% (expected: 20%)
+✅ PASS: Alarm Period
+   Period: 900s (expected: 900s / 15 minutes)
+✅ PASS: Alarm SNS Actions
+   Alarm actions configured: 1
+
+=== Analyzing CloudWatch Logs ===
+✅ PASS: CloudWatch Log Group Exists
+   Found log group: /aws/lambda/compliance-analyzer-test
+✅ PASS: Log Retention Period
+   Retention: 7 days (expected: 7 days)
+
+=== Analyzing IAM Roles ===
+✅ PASS: Lambda IAM Role Exists
+   Found IAM role: compliance-lambda-role-test
+❌ FAIL: Lambda Basic Execution Policy
+   Lambda execution policies attached: 0
+❌ FAIL: Lambda Custom IAM Policy
+   Inline policies: 0
+
+=== Analyzing Resource Tags ===
+   ℹ️  Tag validation requires actual deployment
+✅ PASS: Resource Tagging
+   Tags defined in infrastructure code (Environment=compliance-monitoring, CostCenter=security)
+
+============================================================
+ANALYSIS SUMMARY
+============================================================
+✅ Checks Passed: 30
+❌ Checks Failed: 2
+📊 Total Checks: 32
+✨ Success Rate: 93.8%
+============================================================

@@ -1,0 +1,35 @@
+# Example Terraform Variables File
+# Copy this to terraform.tfvars and customize
+
+environment_suffix = "test123"
+environment        = "production"
+
+# Regions
+primary_region   = "us-east-1"
+secondary_region = "us-west-2"
+
+# Database Configuration (credentials should be set via TF_VAR_db_username and TF_VAR_db_password environment variables)
+# db_username = "admin"
+# db_password = "ChangeMe123!"  # Use secure password - NEVER commit real credentials
+db_instance_class  = "db.r5.large"
+
+# Compute Configuration
+instance_type = "t3.micro"
+
+# DNS Configuration
+domain_name        = "example.com"
+health_check_path  = "/health"
+
+# Backup Configuration
+backup_retention_days = 7
+
+# Network Configuration
+vpc_cidr_primary   = "10.0.0.0/16"
+vpc_cidr_secondary = "10.1.0.0/16"
+
+# Tags
+common_tags = {
+  Project   = "MultiRegionDR"
+  ManagedBy = "Terraform"
+  Owner     = "DevOps Team"
+}

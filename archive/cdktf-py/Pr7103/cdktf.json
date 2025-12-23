@@ -1,0 +1,14 @@
+{
+  "language": "python",
+  "app": "pipenv run python tap.py",
+  "projectId": "observability-platform",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}

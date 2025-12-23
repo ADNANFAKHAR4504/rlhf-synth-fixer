@@ -5,7 +5,7 @@ Standardized validation checkpoints used across all phases. Reference by name to
 ## Checkpoint A: Metadata Completeness
 
 **When**: Before any code generation or processing
-**Who**: task-coordinator (Phase 1.5), iac-infra-generator (Phase 0)
+**Who**: task-coordinator (PHASE 1.2), iac-infra-generator (PHASE 0)
 
 **Validation**:
 ```bash
@@ -22,7 +22,7 @@ jq -e '.platform, .language, .complexity, .turn_type, .po_id, .team, .subtask, .
 ## Checkpoint B: Platform-Language Compatibility
 
 **When**: After metadata validation, before code generation
-**Who**: task-coordinator (Phase 1.5), iac-infra-generator (Phase 0)
+**Who**: task-coordinator (PHASE 1.2), iac-infra-generator (PHASE 0)
 
 **Validation**:
 ```bash
@@ -43,7 +43,7 @@ bash ./.claude/scripts/validate-platform-lang.sh "$PLATFORM" "$LANGUAGE"
 ## Checkpoint C: Template Structure
 
 **When**: After worktree setup, before code generation
-**Who**: task-coordinator (Phase 1.5)
+**Who**: task-coordinator (PHASE 1.2)
 
 **Validation**:
 ```bash
@@ -61,7 +61,7 @@ test -d lib/ && test -d test/
 ## Checkpoint D: PROMPT.md Style Validation
 
 **When**: After PROMPT.md generation, before MODEL_RESPONSE
-**Who**: iac-infra-generator (Phase 2.5)
+**Who**: iac-infra-generator (PHASE 2.5)
 
 **Validation**:
 ```bash
@@ -84,7 +84,7 @@ grep -E '\*\*.*\swith\s.*\*\*' lib/PROMPT.md
 ## Checkpoint E: Platform Code Compliance
 
 **When**: After IDEAL_RESPONSE generation, before reporting ready
-**Who**: iac-code-reviewer (Phase 1.5), iac-infra-qa-trainer (Section 1)
+**Who**: iac-code-reviewer (PHASE 1.1), iac-infra-qa-trainer (Section 1)
 
 **Validation**:
 ```bash
@@ -135,7 +135,7 @@ When `metadata.json` has `"subtask": "IaC Optimization"`:
 **Validation**:
 ```bash
 # Run pre-validation script
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 
 # Check resource naming includes environmentSuffix
 # Must have ≥80% of resources with suffix
@@ -162,7 +162,7 @@ npm run synth     # if applicable (CDK, Pulumi, CDKTF)
 
 **Pass criteria**: All three commands exit with code 0
 **Fail action**: Fix all errors before proceeding, do NOT attempt deployment
-**Reference**: validation_and_testing_guide.md Phase 2
+**Reference**: validation_and_testing_guide.md PHASE 2
 
 ---
 
@@ -181,15 +181,24 @@ STMT_COV=$(jq -r '.total.statements.pct' coverage/coverage-summary.json)
 FUNC_COV=$(jq -r '.total.functions.pct' coverage/coverage-summary.json)
 LINE_COV=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
 
-# Check threshold - MUST be 100%
-test "$STMT_COV" -eq 100
-test "$FUNC_COV" -eq 100
-test "$LINE_COV" -eq 100
+# Check threshold - MUST be 100% (use bc for float comparison)
+# Handles "100", "100.0", "100.00" correctly
+if command -v bc &> /dev/null; then
+    # Use bc for accurate float comparison
+    [ "$(echo "$STMT_COV >= 100" | bc -l)" -eq 1 ] || { echo "Statement coverage < 100%: $STMT_COV"; exit 1; }
+    [ "$(echo "$FUNC_COV >= 100" | bc -l)" -eq 1 ] || { echo "Function coverage < 100%: $FUNC_COV"; exit 1; }
+    [ "$(echo "$LINE_COV >= 100" | bc -l)" -eq 1 ] || { echo "Line coverage < 100%: $LINE_COV"; exit 1; }
+else
+    # Fallback to integer comparison (works for "100" but not "100.0")
+    test "${STMT_COV%.*}" -ge 100 || { echo "Statement coverage < 100%: $STMT_COV"; exit 1; }
+    test "${FUNC_COV%.*}" -ge 100 || { echo "Function coverage < 100%: $FUNC_COV"; exit 1; }
+    test "${LINE_COV%.*}" -ge 100 || { echo "Line coverage < 100%: $LINE_COV"; exit 1; }
+fi
 ```
 
 **Pass criteria**: 100% statement, function, and line coverage - all tests pass
 **Fail action**: Add tests until coverage reaches 100%
-**Reference**: validation_and_testing_guide.md Phase 3, pre-submission-checklist.md Section 5
+**Reference**: validation_and_testing_guide.md PHASE 3, pre-submission-checklist.md Section 5
 
 ---
 
@@ -213,14 +222,14 @@ npm run test:integration
 
 **Pass criteria**: Tests use cfn-outputs, no mocking, all tests pass
 **Fail action**: Rewrite tests to use live outputs
-**Reference**: validation_and_testing_guide.md Phase 5
+**Reference**: validation_and_testing_guide.md PHASE 5
 
 ---
 
 ## Checkpoint J: Training Quality Threshold
 
 **When**: Before PR creation
-**Who**: iac-code-reviewer (Phase 4), task-coordinator (Phase 5)
+**Who**: iac-code-reviewer (PHASE 4), task-coordinator (PHASE 5)
 
 **Validation**:
 ```bash
@@ -239,8 +248,8 @@ test "$TRAINING_QUALITY" -ge 8
 
 ## Checkpoint K: File Location Compliance
 
-**When**: Before PR creation (after code-reviewer, before task-coordinator Phase 5)
-**Who**: iac-code-reviewer (Phase 1.5 Step 9), task-coordinator (Phase 5)
+**When**: Before PR creation (after code-reviewer, before task-coordinator PHASE 5)
+**Who**: iac-code-reviewer (PHASE 1.1 Step 9), task-coordinator (PHASE 5)
 
 **Validation**:
 ```bash
@@ -295,7 +304,7 @@ git diff --name-only origin/main...HEAD
 ## Checkpoint L: PR Prerequisites
 
 **When**: Before PR creation
-**Who**: task-coordinator (Phase 5)
+**Who**: task-coordinator (PHASE 5)
 
 **Validation**:
 ```bash

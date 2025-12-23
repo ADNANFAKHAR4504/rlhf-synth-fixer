@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "t2b3p1c4",
+  "team": "synth",
+  "startedAt": "2025-11-25T00:40:55+05:30",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Diagnosis/Edits"
+  ],
+  "aws_services": [
+    "RDS",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "VPC",
+    "CloudFormation",
+    "ECR",
+    "SSM",
+    "CloudWatch",
+    "SNS",
+    "Route53",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

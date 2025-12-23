@@ -1,0 +1,8 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Optimized CodeCommit repository management with parallel operations and monitoring
+main: lib/index.ts
+config:
+  aws:region:
+    value: us-east-1

@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-20T20:34:15+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "y6k4t1",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "Lambda",
+    "Aurora",
+    "RDS",
+    "KMS",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "ACM",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

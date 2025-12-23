@@ -1,0 +1,42 @@
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:421: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'timestamp': datetime.utcnow().isoformat(),
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:65: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  timestamp = datetime.utcnow().isoformat()
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:119: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  timestamp = datetime.utcnow().isoformat()
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:188: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  timestamp = datetime.utcnow().isoformat()
+Running full compliance check...
+{
+  "timestamp": "2025-12-05T18:15:32.181102",
+  "ec2": {
+    "timestamp": "2025-12-05T18:15:32.298522",
+    "resource_type": "EC2",
+    "total_instances": 0,
+    "compliant": 0,
+    "non_compliant": 0,
+    "details": []
+  },
+  "s3": {
+    "timestamp": "2025-12-05T18:15:33.286962",
+    "resource_type": "S3",
+    "total_buckets": 0,
+    "compliant": 0,
+    "non_compliant": 0,
+    "details": []
+  },
+  "rds": {
+    "timestamp": "2025-12-05T18:15:33.310324",
+    "resource_type": "RDS",
+    "total_instances": 0,
+    "compliant": 0,
+    "non_compliant": 0,
+    "details": []
+  },
+  "summary": {
+    "total_resources": 0,
+    "compliant": 0,
+    "non_compliant": 0,
+    "compliance_score": 100.0
+  }
+}

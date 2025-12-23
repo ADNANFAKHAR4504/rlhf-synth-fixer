@@ -1,0 +1,29 @@
+{
+  "task_id": "u6j2o0o7",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth",
+  "po_id": "u6j2o0o7",
+  "turn_type": "single",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "startedAt": "2025-11-27T00:00:00Z",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "EKS",
+    "IAM",
+    "OIDC",
+    "KMS"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
