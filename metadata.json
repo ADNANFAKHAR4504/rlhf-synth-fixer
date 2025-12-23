@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-ls-291429",
+  "team": "synth-2",
+  "startedAt": "2025-08-11T13:18:32.694Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "KMS",
+    "SSM"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "ls-291429",
+    "pr": "Pr874"
+  }
+}
