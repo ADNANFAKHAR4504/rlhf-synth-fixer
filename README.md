@@ -1,198 +1,269 @@
-# Synth Agent v5.0
+# 🤖 SYNTH-AGENT
 
-Enhanced Continuous Self-Fixing Agent for IAC Test Automations.
+Automated PR Fixer for IAC Test Automations using Claude Code.
 
-## 🚀 Features
+## Prerequisites
 
-| Feature | Description |
-|---------|-------------|
-| **Batch Error Classification** | 15+ error types automatically detected |
-| **Protected Paths** | Never modifies `scripts/`, `.github/`, `.claude/` |
-| **AI-Powered Fixes** | Claude API for intelligent code fixes |
-| **Multi-PR Support** | Process multiple PRs in sequence |
-| **JSON Status Tracking** | Real-time progress in `logs/status.json` |
-| **Auto Cleanup** | Worktrees cleaned on exit |
-
-## 📦 Installation
+### 1. Install Claude Code CLI
 
 ```bash
-# Clone to Desktop
-git clone <this-repo> ~/Desktop/synth-agent
+# Install Claude Code CLI
+npm install -g @anthropic-ai/claude-code
 
-# Configure
-cp config.env.example config.env
-nano config.env  # Add your ANTHROPIC_API_KEY
+# Verify installation
+claude --version
 ```
 
-## ⚙️ Configuration
-
-Edit `config.env`:
+### 2. Install GitHub CLI
 
 ```bash
-# Required
-ANTHROPIC_API_KEY="sk-ant-..."
+# Ubuntu/Debian
+sudo apt install gh
 
-# Optional
+# macOS
+brew install gh
+
+# Verify installation
+gh --version
+```
+
+### 3. Configure Both CLIs
+
+```bash
+# Login to GitHub CLI
+gh auth login
+
+# Set Anthropic API Key (for Claude)
+export ANTHROPIC_API_KEY="sk-ant-your-key-here"
+```
+
+### 4. Configure config.env
+
+Edit the `config.env` file in the synth-agent folder:
+
+```bash
+# File: /home/adnan/Desktop/synth-agent/config.env
+
+# ═══════════════════════════════════════════════════════════════
+# AI API Keys
+# ═══════════════════════════════════════════════════════════════
+
+# Anthropic API Key (required for Claude)
+# Get it from: https://console.anthropic.com/
+# Format: sk-ant-api03-...
+ANTHROPIC_API_KEY="sk-ant-api03-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+# ═══════════════════════════════════════════════════════════════
+# Repository Settings
+# ═══════════════════════════════════════════════════════════════
+
+# Path to iac-test-automations repository
 REPO_PATH="/home/adnan/turing/iac-test-automations"
-WORKTREE_BASE="${REPO_PATH}/worktree"
-GITHUB_REPO="TuringGpt/iac-test-automations"
+
+# Worktree base directory (used for PR worktrees)
+WORKTREE_BASE="/home/adnan/turing/iac-test-automations/worktree"
+
+# Agent name
+AGENT_NAME="synth-agent"
+
+# CI/CD polling interval (seconds)
 POLL_INTERVAL=30
-MAX_ATTEMPTS=15
 ```
 
-## 🎯 Usage
+**Important:** Replace `XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` with your actual Anthropic API key.
 
-### Single PR
+## Usage
+
+### Step 1: Navigate to synth-agent folder
+
 ```bash
-./synth-agent.sh 8543
+cd ~/Desktop/synth-agent
 ```
 
-### Multiple PRs
+### Step 2: Run Claude Code with permissions
+
 ```bash
-./synth-agent.sh 8543 8544 8545
+claude --dangerously-skip-permissions
 ```
 
-### From File
-```bash
-# prs.txt: one PR per line
-./synth-agent.sh --from-file prs.txt
+### Step 3: Use the synth-fixer command
+
+Once Claude Code is running, use the `/synth-fixer` command:
+
+```
+/synth-fixer 8543
 ```
 
-### Check Status
-```bash
-./synth-agent.sh --status
+Where `8543` is your PR number.
+
+### Examples
+
+```
+# Fix single PR
+/synth-fixer 8543
+
+# The agent will:
+# 1. Setup worktree for PR branch
+# 2. Pull latest main and rebase
+# 3. Check for protected files and restore them
+# 4. Monitor CI/CD status
+# 5. Detect and fix errors automatically
+# 6. Ask for confirmation before committing
+# 7. Push and wait for CI/CD to pass
 ```
 
-### Re-process Failed
-```bash
-./synth-agent.sh --failed-only
+## What the Agent Does
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  🤖 SYNTH-AGENT [PR #8543] is monitoring...                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+[SYNTH-AGENT] [PR #8543] Checking CI/CD status...
+[SYNTH-AGENT] [PR #8543] Found errors: Unit Testing failed
+[SYNTH-AGENT] [PR #8543] Applying fixes...
+[SYNTH-AGENT] [PR #8543] ✓ Fixed: metadata.json
+[SYNTH-AGENT] [PR #8543] ✓ Fixed: lib/tap-stack.ts
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  🤔 CONFIRM COMMIT & PUSH                                                    ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  [y/yes]  - Commit and push these changes                                    ║
+║  [n/no]   - Cancel and discard changes                                       ║
+║  [d/diff] - Show full diff                                                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
-### Options
-```bash
-./synth-agent.sh --help
+## CI/CD Jobs Monitored
 
-Options:
-  --status, -s          Show status of running fixes
-  --failed-only         Re-process only failed PRs
-  --from-file, -f FILE  Read PR numbers from file
-  --max-attempts, -m N  Maximum fix attempts (default: 15)
-  --poll, -p N          Poll interval in seconds (default: 30)
+| ✅ Must Pass | ❌ Ignored |
+|--------------|-----------|
+| Detect Project Files | Upload Task to S3 |
+| Validate Commit Message | Semantic Release |
+| Validate Jest Config | Debug Claude outputs |
+| Claude Review: Prompt Quality | Analysis |
+| Build, Synth, Lint | Infracost |
+| Unit Testing | IaC Optimization |
+| Integration Tests | |
+| Claude Review | |
+| Claude Review: IDEAL_RESPONSE | |
+| Archive | |
+
+## Protected Files (Never Modified)
+
+```
+scripts/            # CI/CD scripts
+.github/            # Workflows
+.claude/            # Agent config
+config/             # Schemas
+package.json        # NO PERMISSION
+package-lock.json   # NO PERMISSION
+tsconfig.json       # NO PERMISSION
+requirements.txt    # NO PERMISSION
+pyproject.toml      # NO PERMISSION
 ```
 
-## 🔒 Protected Paths
+## Metadata Rules
 
-These paths are NEVER modified:
-- `scripts/`
-- `.github/`
-- `.claude/`
-- `config/`
-- `node_modules/`
-- `dist/`
-- `jest.config.js` (requires 80%+ coverage)
+The agent automatically ensures `metadata.json` has correct values:
 
-## 🔍 Error Classification
+```json
+{
+  "team": "synth",           // ALWAYS "synth"
+  "provider": "localstack",  // ALWAYS "localstack"
+  "wave": "P0"               // NEW! Required - P0 or P1
+}
+```
 
-The agent automatically detects and fixes:
+## Error Types Fixed
 
-| Error Type | Pattern | Fix Applied |
-|------------|---------|-------------|
-| Metadata | `schema invalid` | Sanitize metadata.json |
-| TypeScript | `cannot find module` | Import fixes |
-| ENVIRONMENT_SUFFIX | `environmentSuffix` | Add env var fallback |
-| LocalStack Endpoint | `connection refused` | Add endpoint config |
-| S3 Path-Style | `InvalidBucketName` | Enable path-style |
-| IAM Policy | `MalformedPolicyDocument` | Simplify policy |
-| Removal Policy | `cannot delete` | Set DESTROY |
-| Test Failures | `jest failed` | AI-powered fix |
-| Lint Errors | `eslint error` | Auto-fix |
-| Deploy Errors | `CREATE_FAILED` | AI-powered fix |
+| Error | Fix Applied |
+|-------|-------------|
+| Metadata validation | Fix metadata.json |
+| Prompt Quality FAILED | Remove emojis, dashes, brackets from PROMPT.md |
+| TypeScript errors | Fix code in lib/ |
+| Lint errors | Fix formatting |
+| Test failures | Fix tests in test/ |
+| Coverage low | Add more tests (not modify jest.config.js) |
+| IDEAL_RESPONSE mismatch | Regenerate from lib/ code |
+| Deploy errors | Fix LocalStack config |
+| Missing files | Restore from archive |
 
-## 📁 File Structure
+## Success Conditions
+
+| Status | Result |
+|--------|--------|
+| Archive: pending/waiting | ✅ PR READY - all passed |
+| All jobs: success | ✅ PR READY |
+| Any job: failure | ❌ Needs fix |
+
+## File Structure
 
 ```
 synth-agent/
-├── synth-agent.sh      # Main agent script
-├── config.env          # Configuration
-├── CLAUDE.md           # Project context for Claude Code
-├── README.md           # This file
+├── README.md                    # This file
+├── CLAUDE.md                    # Project context
+├── config.env                   # Configuration
 ├── logs/
-│   └── status.json     # Status tracking
+│   └── status.json              # Status tracking
 └── .claude/
     ├── agents/
-    │   └── synth-fixer.md    # Main agent
+    │   └── synth-fixer.md       # Agent definition
     └── commands/
-        └── synth-fixer.md    # /synth-fixer command
+        └── synth-fixer.md       # /synth-fixer command
 ```
 
-## 🔄 How It Works
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    SYNTH AGENT WORKFLOW                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  1. SETUP                                                    │
-│     └→ Create isolated worktree for PR branch               │
-│                                                              │
-│  2. MONITOR                                                  │
-│     └→ Poll GitHub CI/CD status every 30s                   │
-│                                                              │
-│  3. ON FAILURE                                               │
-│     ├→ Fetch error logs                                     │
-│     ├→ Classify errors (15+ types)                          │
-│     ├→ Apply batch fixes                                    │
-│     ├→ Run AI fix (Claude)                                  │
-│     └→ Commit & push                                        │
-│                                                              │
-│  4. REPEAT until all stages pass (max 15 attempts)          │
-│                                                              │
-│  5. CLEANUP                                                  │
-│     └→ Remove worktree                                      │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## 📊 Status Tracking
-
-Check status anytime:
-```bash
-./synth-agent.sh --status
-```
-
-Output:
-```
-═══════════════════════════════════════════════════════════════
-📊 SYNTH AGENT STATUS
-═══════════════════════════════════════════════════════════════
-
-  Pending:     0  ⏳
-  Running:     1  🔄
-  Completed:   2  ✅
-  Failed:      0  ❌
-
-Currently Running:
-  🔄 PR #8543 (attempt 3)
-```
-
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### "GitHub CLI not authenticated"
 ```bash
 gh auth login
 ```
 
-### "No changes to commit"
-The agent couldn't apply any fixes. Check:
-1. Error logs are accessible
-2. Files are in allowed paths
-3. AI API key is valid
+### "ANTHROPIC_API_KEY not set"
+```bash
+# Option 1: Load from config.env
+source ~/Desktop/synth-agent/config.env
+
+# Option 2: Export directly
+export ANTHROPIC_API_KEY="sk-ant-your-key-here"
+```
+
+### "Permission denied"
+Run Claude with skip permissions flag:
+```bash
+claude --dangerously-skip-permissions
+```
 
 ### "Maximum attempts reached"
-PR has issues that need manual fixing. Check:
-1. CI/CD logs on GitHub
-2. Local `logs/status.json` for details
+PR needs manual fixing. Check CI/CD logs on GitHub.
 
-## 📄 License
+## Quick Start Summary
+
+```bash
+# 1. Make sure prerequisites are installed and configured
+gh auth status           # Should show logged in
+
+# 2. Edit config.env with your API key and paths
+nano ~/Desktop/synth-agent/config.env
+
+# 3. Load the configuration
+source ~/Desktop/synth-agent/config.env
+echo $ANTHROPIC_API_KEY  # Should show your key
+
+# 4. Go to synth-agent folder
+cd ~/Desktop/synth-agent
+
+# 5. Run Claude Code
+claude --dangerously-skip-permissions
+
+# 6. In Claude Code, run:
+/synth-fixer <pr-number>
+
+# Example:
+/synth-fixer 8543
+```
+
+## License
 
 MIT

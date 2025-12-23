@@ -5,9 +5,9 @@ description: 🤖 SYNTH-AGENT - Fix PR until CI passes
 
 # PR Fixer
 
-Ye command PR ko fix karti hai - CI/CD pass hone tak.
+This command fixes PRs until CI/CD passes.
 
-## Kaise Use Karein
+## How to Use
 
 ```
 /synth-fixer 8543
@@ -160,12 +160,13 @@ Pulumi.yaml   ← Pulumi settings
 
 ## Metadata Rules
 
-**CRITICAL**: `metadata.json` mein ye values MANDATORY hain:
+**CRITICAL**: These values are MANDATORY in `metadata.json`:
 
 ```json
 {
-  "team": "synth",          // ⚠️ SIRF "synth" - koi aur nahi!
-  "provider": "localstack"  // HAMESHA "localstack"
+  "team": "synth",          // ⚠️ ONLY "synth" - nothing else!
+  "provider": "localstack", // ALWAYS "localstack"
+  "wave": "P0"              // ⚠️ NEW! Required - P0 or P1
 }
 ```
 
@@ -176,9 +177,15 @@ Pulumi.yaml   ← Pulumi settings
 | | `"synth-1"`, `"synth-2"`, `"synth-3"` |
 | | Any number or synth-X format |
 
+**Wave Rule (NEW!):**
+| ✅ Valid | ❌ Invalid (add "P0" default) |
+|----------|------------------------------|
+| `"P0"` | Missing field |
+| `"P1"` | Any other value |
+
 ## Process
 
-**1. Setup karo**
+**1. Setup**
 ```bash
 PR="$1"
 REPO="/home/adnan/turing/iac-test-automations"
@@ -197,14 +204,14 @@ git pull origin main
 echo "[SYNTH-AGENT] [PR #$PR] ✓ Main branch updated"
 ```
 
-**3. Branch info lo**
+**3. Get branch info**
 ```bash
 cd "$REPO"
 BRANCH=$(gh pr view "$PR" --repo TuringGpt/iac-test-automations --json headRefName -q '.headRefName')
 echo "[SYNTH-AGENT] [PR #$PR] Branch: $BRANCH"
 ```
 
-**4. Worktree banao**
+**4. Create worktree**
 ```bash
 [ -d "$WORK" ] && git worktree remove "$WORK" --force
 git fetch origin "$BRANCH"
@@ -212,7 +219,7 @@ git worktree add "$WORK" "origin/$BRANCH"
 cd "$WORK"
 ```
 
-**5. Rebase on main (zaroori hai)**
+**5. Rebase on main (required)**
 ```bash
 echo "[SYNTH-AGENT] [PR #$PR] 🔄 Rebasing on main..."
 git fetch origin main
@@ -255,15 +262,15 @@ if [[ ${#RESTORE[@]} -gt 0 ]]; then
 fi
 ```
 
-**5. CI status dekho**
+**5. Check CI status**
 ```bash
 RUN=$(gh run list --branch "$BRANCH" --limit 1 --json databaseId -q '.[0].databaseId')
 
 # Jobs to MONITOR (must pass)
-MONITORED="Detect Project Files|Validate Commit Message|Build|Synth|Lint|Deploy|Unit Testing|Integration Tests|Claude Review|Cleanup.*Destroy|Archive"
+MONITORED="Detect Project Files|Validate Commit Message|Validate Jest Config|Claude Review: Prompt Quality|Build|Synth|Lint|Deploy|Unit Testing|Integration Tests|Claude Review|Claude Review: IDEAL_RESPONSE|Cleanup.*Destroy|Archive"
 
 # Jobs to IGNORE (optional/skipped)
-IGNORED="Upload Task to S3|Cleanup.*PR Closed|Semantic Release|Validate Jest Config|CICD Pipeline|Infracost|IaC Optimization|Analysis|Debug Claude|submit-pypi"
+IGNORED="Upload Task to S3|Cleanup.*PR Closed|Semantic Release|CICD Pipeline|Infracost|IaC Optimization|Analysis|Debug Claude|submit-pypi"
 
 # Get jobs and filter
 JOBS=$(gh run view "$RUN" --json jobs -q '.jobs[]')
@@ -276,24 +283,54 @@ ERRORS=$(gh run view "$RUN" --log-failed 2>&1 | head -200)
 |------------------------|------------------|
 | Detect Project Files | Upload Task to S3 |
 | Validate Commit Message | Cleanup (PR Closed) |
-| Build | Semantic Release |
-| Synth | Validate Jest Config |
-| Lint | CICD Pipeline Optimization |
-| Deploy | Infracost |
-| Unit Testing | IaC Optimization |
-| Integration Tests (Live) | Analysis |
-| **Claude Review** | Debug Claude outputs |
-| Cleanup (Destroy Resources) | submit-pypi |
+| Validate Jest Config | Semantic Release |
+| **Claude Review: Prompt Quality** (NEW!) | CICD Pipeline Optimization |
+| Build | Infracost |
+| Synth | IaC Optimization |
+| Lint | Analysis |
+| Deploy | Debug Claude outputs |
+| Unit Testing | submit-pypi |
+| Integration Tests (Live) | |
+| **Claude Review** | |
+| Cleanup (Destroy Resources) | |
+| **Claude Review: IDEAL_RESPONSE** (NEW!) | |
 | Archive Folders and Reset Repo | |
 
-**6. Fix karo**
+**6. Apply fixes**
 
-Error dekh ke fix lagao:
-- metadata galat → metadata.json theek karo
-- build fail → lib/ mein code fix karo
-- lint error → formatting fix karo
-- test fail → test/ mein fix karo
-- **coverage kam** → tests ADD karo (jest.config.js mat chhuo!)
+Based on error, apply appropriate fix:
+- metadata invalid → fix metadata.json
+- **Prompt Quality FAILED** → fix lib/PROMPT.md (see below)
+- build fail → fix code in lib/
+- lint error → fix formatting
+- test fail → fix in test/
+- **coverage low** → ADD tests (don't touch jest.config.js!)
+- **IDEAL_RESPONSE mismatch** → regenerate lib/IDEAL_RESPONSE.md
+
+**Prompt Quality Fix (Claude Review: Prompt Quality job fail):**
+```
+❌ NOT ALLOWED in PROMPT.md:
+   - Emojis (🚀, ✅, ❌, etc.)
+   - En dashes (–) → use regular hyphen (-)
+   - Em dashes (—) → use regular hyphen (-)
+   - Square brackets [optional] patterns
+   - Formal abbreviations (e.g., i.e., etc.)
+   - Excessive brackets (max 1 allowed)
+
+✅ Fix:
+   sed -i 's/–/-/g; s/—/-/g' lib/PROMPT.md
+   sed -i 's/e\.g\./for example/gi' lib/PROMPT.md
+   sed -i 's/i\.e\./that is/gi' lib/PROMPT.md
+   # Remove emojis manually
+```
+
+**IDEAL_RESPONSE Fix (Claude Review: IDEAL_RESPONSE job fail):**
+```
+All lib/ code should be in IDEAL_RESPONSE.md:
+   - Each file with proper markdown code block
+   - Include test/ code as well
+   - Character-for-character match required!
+```
 
 **Coverage Fix Rule:**
 ```
@@ -341,7 +378,7 @@ Files changed: 5
 Your choice [y/n/d/s/a]: _
 ```
 
-**8. Commit karo (user ke haan kehne par)**
+**8. Commit (after user confirmation)**
 ```bash
 git add -A
 git commit -m "fix: update files"  # auto-generated based on changes
@@ -390,7 +427,7 @@ git add -A && git diff --cached --quiet || {
 | Config | .eslintrc.js, .prettierrc, pytest.ini |
 | Dirs | scripts/, .github/, config/, .claude/ |
 
-**9. CI monitor karo**
+**9. Monitor CI**
 ```bash
 sleep 30
 while true; do
@@ -402,54 +439,56 @@ done
 
 **10. Archive Pending = PR OKAY**
 
-Jab Archive job pending/waiting ho, PR pass hai:
+When Archive job is pending/waiting, PR has passed:
 ```bash
 ARCHIVE=$(gh run view "$RUN" --json jobs | jq -r '.jobs[] | select(.name | test("Archive"; "i")) | .status')
 if [[ "$ARCHIVE" == "pending" ]] || [[ "$ARCHIVE" == "waiting" ]]; then
-  echo "✅ Archive pending - PR ready hai!"
-  # Fixing ki zarurat nahi
+  echo "✅ Archive pending - PR is ready!"
+  # No fixing needed
 fi
 ```
 
-**11. Repeat karo**
+**11. Repeat**
 
-Agar abhi bhi fail ho raha hai, step 5-9 dobara karo (max 3 baar).
+If still failing, repeat steps 5-9 (max 3 times).
 
 ## Success Conditions
 
 | Status | Result |
 |--------|--------|
-| Archive: pending/waiting | ✅ PR OKAY - sab pass |
+| Archive: pending/waiting | ✅ PR OKAY - all passed |
 | All jobs: success | ✅ PR OKAY |
 | Archive: success | ✅ PR OKAY |
-| Any failure | ❌ Fix karna hai |
+| Any failure | ❌ Needs fix |
 
 ## Error Types
 
-| Error | Kya Karna Hai |
-|-------|---------------|
-| metadata validation | metadata.json fix karo |
-| typescript error | code fix karo |
-| lint error | formatting fix karo |
-| unit test failed | test/ mein unit test fix karo |
-| integration test failed | integration test fix karo |
-| deploy error | localstack config fix karo |
-| **lib/ missing** | archive se restore karo |
-| **test/ or tests/ missing** | archive se restore karo |
-| **source files missing** | archive se poid match kar ke restore |
+| Error | What to Do |
+|-------|------------|
+| metadata validation | fix metadata.json |
+| **Prompt Quality FAILED** | remove emojis, dashes, brackets from PROMPT.md |
+| typescript error | fix code |
+| lint error | fix formatting |
+| unit test failed | fix unit test in test/ |
+| integration test failed | fix integration test |
+| deploy error | fix localstack config |
+| **IDEAL_RESPONSE mismatch** | add lib/ code to IDEAL_RESPONSE.md |
+| **lib/ missing** | restore from archive |
+| **test/ or tests/ missing** | restore from archive |
+| **source files missing** | restore by matching poid in archive |
 
 ## Restore Missing Files from Archive
 
-Agar lib/, test/, ya koi file missing ho:
+If lib/, test/, or any file is missing:
 
 ```bash
-# 1. poid check karo metadata se
+# 1. Check poid from metadata
 POID=$(jq -r '.poid' metadata.json)
 
-# 2. Archive mein dhundo
+# 2. Find in archive
 ARCHIVE_FOLDER=$(find /path/to/archive -name "metadata.json" -exec grep -l "$POID" {} \; | head -1 | xargs dirname)
 
-# 3. Missing files copy karo
+# 3. Copy missing files
 [ ! -d "lib" ] && cp -r "$ARCHIVE_FOLDER/lib" .
 [ ! -d "test" ] && [ ! -d "tests" ] && cp -r "$ARCHIVE_FOLDER/test" .
 [ ! -f "package.json" ] && cp "$ARCHIVE_FOLDER/package.json" .
@@ -457,16 +496,16 @@ ARCHIVE_FOLDER=$(find /path/to/archive -name "metadata.json" -exec grep -l "$POI
 
 ## Pull and Revert (Unwanted Changes)
 
-Jab PR pass ho jaye lekin unwanted changes aa gayi hon:
+When PR passes but has unwanted changes:
 
-**1. Pull karo aur check karo**
+**1. Pull and check**
 ```bash
 cd "$WORK"
 BEFORE=$(git rev-parse HEAD)
 git pull origin "$BRANCH"
 AFTER=$(git rev-parse HEAD)
 
-# Kya changes aayi?
+# Were there changes?
 if [[ "$BEFORE" != "$AFTER" ]]; then
   echo "New changes detected:"
   git diff --name-only "$BEFORE" "$AFTER"
@@ -474,7 +513,7 @@ if [[ "$BEFORE" != "$AFTER" ]]; then
 fi
 ```
 
-**2. Specific files revert karo**
+**2. Revert specific files**
 ```bash
 LAST_GOOD=$(cat .last_good_head)
 git checkout "$LAST_GOOD" -- path/to/file.ts
@@ -483,7 +522,7 @@ git commit -m "revert: undo unwanted changes"
 git push origin "$BRANCH"
 ```
 
-**3. Full revert karo**
+**3. Full revert**
 ```bash
 LAST_GOOD=$(cat .last_good_head)
 git reset --hard "$LAST_GOOD"
@@ -492,7 +531,7 @@ git push --force origin "$BRANCH"
 
 ## Training Quality Update (10/10)
 
-Jab deploy pass ho aur integration test shuru ho:
+When deploy passes and integration test starts:
 
 ```bash
 # Check status

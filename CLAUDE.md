@@ -47,3 +47,25 @@ Message should describe what changed, not who did it.
 | `/synth-fixer --status 8543` | Check status |
 
 Details in `.claude/agents/synth-fixer.md`
+
+## NEW REQUIRED FIELD: wave
+
+**CRITICAL**: The `wave` field is now REQUIRED in metadata.json
+
+### Valid Values:
+- `P0` - Priority 0 (High priority tasks)
+- `P1` - Priority 1 (Normal priority tasks)
+
+### Fix Pattern:
+```bash
+# Add wave field if missing (default to P1)
+jq '. + {wave: "P1"}' metadata.json > tmp.json && mv tmp.json metadata.json
+```
+
+### Schema Requirement:
+```json
+"wave": {
+  "type": "string",
+  "enum": ["P0", "P1"]
+}
+```

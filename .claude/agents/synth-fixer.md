@@ -757,7 +757,8 @@ When fixing `metadata.json`, these fields are MANDATORY:
 {
   "team": "synth",           // ⚠️ ALWAYS "synth" - no other value!
   "provider": "localstack",  // ALWAYS "localstack"
-  "subtask": "<string>"      // Must be string, not array
+  "subtask": "<string>",     // Must be string, not array
+  "wave": "P0"               // ⚠️ NEW! Required field - P0 or P1
 }
 ```
 
@@ -1319,6 +1320,12 @@ MONITORED_JOBS=(
   "detect-project-files"
   "Validate Commit Message"
   "validate-commit-message"
+  "Validate Jest Config"
+  "validate-jest-config"
+  
+  # Prompt Quality Review - NEW! Must pass before build!
+  "Claude Review: Prompt Quality"
+  "claude-review-prompt-quality"
   
   # Build & Lint
   "Build"
@@ -1343,6 +1350,11 @@ MONITORED_JOBS=(
   "Claude Review"
   "claude-review"
   "claude_review"
+  "claude-code-action"
+  
+  # IDEAL_RESPONSE Validation - NEW! Must pass after cleanup!
+  "Claude Review: IDEAL_RESPONSE Code Validation"
+  "claude-review-ideal-response"
   
   # Cleanup & Archive
   "Cleanup (Destroy Resources)"
@@ -1357,14 +1369,15 @@ MONITORED_JOBS=(
 # Jobs to IGNORE - these are optional/skipped
 # ══════════════════════════════════════════════════════════════════
 IGNORED_JOBS=(
+  # Post-merge jobs (not our responsibility)
   "Upload Task to S3"
   "upload-task-s3"
   "Cleanup (PR Closed)"
   "cleanup-pr-closed"
   "Semantic Release"
   "semantic-release"
-  "Validate Jest Config"
-  "validate-jest-config"
+  
+  # Special subject label jobs (skip if not applicable)
   "CICD Pipeline Optimization"
   "cicd-pipeline-optimization"
   "Infracost (Terraform Cost Estim"
@@ -1373,8 +1386,11 @@ IGNORED_JOBS=(
   "iac-optimization"
   "Analysis"
   "analysis"
+  
+  # Debug/notification jobs
   "Debug Claude outputs"
   "debug-claude"
+  "debug-claude-outputs"
   "submit-pypi"
   "Submit PyPI"
   "pypi"
@@ -1518,6 +1534,12 @@ fi
 if echo "$UNIQUE_ERRORS" | grep -qiE "subtask.*invalid|invalid.*subtask|enum.*subtask"; then
   echo "    Invalid subtask value detected"
   add_fix "metadata_subtask_fix"
+fi
+
+# Check for missing wave field (NEW REQUIRED FIELD!)
+if echo "$UNIQUE_ERRORS" | grep -qiE "wave.*required|missing.*wave|wave.*must|wave.*invalid"; then
+  echo "    Missing or invalid 'wave' field"
+  add_fix "metadata_fix"  # metadata_fix handles wave
 fi
 
 if echo "$UNIQUE_ERRORS" | grep -qiE "subject_labels.*invalid|invalid.*subject_labels"; then
@@ -1739,7 +1761,21 @@ if echo "$UNIQUE_ERRORS" | grep -qiE "jest\.config|roots.*test|test folder"; the
   add_fix "jest_config"
 fi
 
-# 14. COMMIT MESSAGE ERRORS
+# 17. PROMPT QUALITY ERRORS (NEW!)
+# Claude Review: Prompt Quality job failed
+if echo "$UNIQUE_ERRORS" | grep -qiE "Prompt.*quality.*FAILED|LLM-generated.*content|En dashes|Em dashes|Square brackets|Formal abbreviations|emojis.*detected|connectivity.*insufficient"; then
+  echo "    Prompt quality validation failed"
+  add_fix "prompt_quality_fix"
+fi
+
+# 18. IDEAL_RESPONSE.md VALIDATION ERRORS (NEW!)
+# Claude Review: IDEAL_RESPONSE Code Validation failed
+if echo "$UNIQUE_ERRORS" | grep -qiE "IDEAL_RESPONSE.*FAILED|IDEAL_RESPONSE.*missing|code.*mismatch|character-for-character|not.*included"; then
+  echo "    IDEAL_RESPONSE.md validation failed"
+  add_fix "ideal_response_fix"
+fi
+
+# 19. COMMIT MESSAGE ERRORS
 if echo "$UNIQUE_ERRORS" | grep -qiE "commitlint|commit.*message|conventional commit"; then
   echo "   Commit message format issues"
   add_fix "commit_message"
@@ -2001,8 +2037,8 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
                 echo "    Fixed subtask array → string"
               fi
             fi
-            # Ensure provider is set
-            jq '.provider = "localstack" | .team = "synth"' metadata.json > metadata.json.tmp
+            # Ensure provider, team, and wave are set
+            jq '.provider = "localstack" | .team = "synth" | .wave = (.wave // "P0")' metadata.json > metadata.json.tmp
             mv metadata.json.tmp metadata.json
             APPLIED_FIXES+=("$fix")
           fi
@@ -2017,6 +2053,8 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
             # Set required fields
             .provider = "localstack" |
             .team = "synth" |
+            # Ensure wave field exists (NEW! required field)
+            .wave = (.wave // "P0") |
             # Remove disallowed fields
             del(.task_id, .training_quality, .coverage, .author, .dockerS3Location, .pr_id, .original_pr_id, .localstack_migration)
           ' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
@@ -2476,6 +2514,161 @@ const endpoint = process.env.AWS_ENDPOINT_URL || "http://localhost:4566";\
       fi
 
       APPLIED_FIXES+=("documentation_fix")
+      ;;
+
+    #
+    # PROMPT QUALITY FIX (NEW!)
+    # For Claude Review: Prompt Quality job failures
+    #
+    prompt_quality_fix)
+      echo " Fixing PROMPT.md quality issues..."
+      
+      PROMPT_FILE="lib/PROMPT.md"
+      if [[ -f "$PROMPT_FILE" ]]; then
+        # 1. Remove emojis
+        perl -i -pe 's/[\x{1F300}-\x{1F9FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]|[\x{1F600}-\x{1F64F}]|[\x{1F680}-\x{1F6FF}]//g' "$PROMPT_FILE"
+        echo "    Removed emojis"
+        
+        # 2. Replace en dashes (–) with regular hyphens (-)
+        sed -i 's/–/-/g' "$PROMPT_FILE"
+        echo "    Replaced en dashes"
+        
+        # 3. Replace em dashes (—) with regular hyphens (-)
+        sed -i 's/—/-/g' "$PROMPT_FILE"
+        echo "    Replaced em dashes"
+        
+        # 4. Remove square brackets [ ] (but preserve markdown links)
+        # Be careful not to break [text](url) links
+        sed -i 's/\[optional[^]]*\]//gi' "$PROMPT_FILE"  # Remove [optional:...] patterns
+        sed -i 's/\[note[^]]*\]//gi' "$PROMPT_FILE"      # Remove [note:...] patterns
+        echo "    Removed square bracket patterns"
+        
+        # 5. Replace formal abbreviations
+        sed -i 's/e\.g\./for example/gi' "$PROMPT_FILE"
+        sed -i 's/i\.e\./that is/gi' "$PROMPT_FILE"
+        sed -i 's/etc\./and so on/gi' "$PROMPT_FILE"
+        sed -i 's/cf\./compare/gi' "$PROMPT_FILE"
+        sed -i 's/viz\./namely/gi' "$PROMPT_FILE"
+        echo "    Replaced formal abbreviations"
+        
+        echo "    ✓ PROMPT.md quality fixed"
+        APPLIED_FIXES+=("prompt_quality_fix")
+      else
+        echo "    ⚠️ lib/PROMPT.md not found"
+      fi
+      ;;
+
+    #
+    # IDEAL_RESPONSE.md VALIDATION FIX (NEW!)
+    # For Claude Review: IDEAL_RESPONSE Code Validation failures
+    #
+    ideal_response_fix)
+      echo " Regenerating IDEAL_RESPONSE.md from lib/ code..."
+      
+      IDEAL_RESPONSE="lib/IDEAL_RESPONSE.md"
+      
+      # Detect language from metadata
+      LANG=$(jq -r '.language // "ts"' metadata.json 2>/dev/null)
+      PLATFORM=$(jq -r '.platform // "cdk"' metadata.json 2>/dev/null)
+      
+      # Map language to markdown code block type
+      case "$LANG" in
+        ts) MD_LANG="typescript" ;;
+        js) MD_LANG="javascript" ;;
+        py) MD_LANG="python" ;;
+        go) MD_LANG="go" ;;
+        java) MD_LANG="java" ;;
+        hcl) MD_LANG="hcl" ;;
+        yml|yaml) MD_LANG="yaml" ;;
+        json) MD_LANG="json" ;;
+        *) MD_LANG="$LANG" ;;
+      esac
+      
+      echo "    Language: $LANG -> $MD_LANG"
+      
+      # Start fresh IDEAL_RESPONSE.md
+      echo "# IDEAL_RESPONSE" > "$IDEAL_RESPONSE"
+      echo "" >> "$IDEAL_RESPONSE"
+      echo "This document contains the complete implementation code." >> "$IDEAL_RESPONSE"
+      echo "" >> "$IDEAL_RESPONSE"
+      
+      # Add all infrastructure files from lib/
+      echo "## Infrastructure Code" >> "$IDEAL_RESPONSE"
+      echo "" >> "$IDEAL_RESPONSE"
+      
+      for file in lib/*; do
+        # Skip markdown/config files
+        case "$(basename "$file")" in
+          PROMPT.md|MODEL_RESPONSE.md|IDEAL_RESPONSE.md|MODEL_FAILURES.md|*.json|*.md)
+            continue
+            ;;
+        esac
+        
+        if [[ -f "$file" ]]; then
+          FILENAME=$(basename "$file")
+          EXT="${FILENAME##*.}"
+          
+          # Determine code block language
+          case "$EXT" in
+            ts) CODE_LANG="typescript" ;;
+            js) CODE_LANG="javascript" ;;
+            py) CODE_LANG="python" ;;
+            go) CODE_LANG="go" ;;
+            java) CODE_LANG="java" ;;
+            tf) CODE_LANG="hcl" ;;
+            yml|yaml) CODE_LANG="yaml" ;;
+            json) CODE_LANG="json" ;;
+            *) CODE_LANG="$EXT" ;;
+          esac
+          
+          echo "### $FILENAME" >> "$IDEAL_RESPONSE"
+          echo "" >> "$IDEAL_RESPONSE"
+          echo '```'"$CODE_LANG" >> "$IDEAL_RESPONSE"
+          cat "$file" >> "$IDEAL_RESPONSE"
+          echo "" >> "$IDEAL_RESPONSE"
+          echo '```' >> "$IDEAL_RESPONSE"
+          echo "" >> "$IDEAL_RESPONSE"
+          
+          echo "    Added: $FILENAME"
+        fi
+      done
+      
+      # Add test files
+      echo "## Unit Tests" >> "$IDEAL_RESPONSE"
+      echo "" >> "$IDEAL_RESPONSE"
+      
+      for test_dir in test tests; do
+        if [[ -d "$test_dir" ]]; then
+          for file in "$test_dir"/*; do
+            if [[ -f "$file" ]]; then
+              FILENAME=$(basename "$file")
+              EXT="${FILENAME##*.}"
+              
+              case "$EXT" in
+                ts) CODE_LANG="typescript" ;;
+                js) CODE_LANG="javascript" ;;
+                py) CODE_LANG="python" ;;
+                go) CODE_LANG="go" ;;
+                java) CODE_LANG="java" ;;
+                *) CODE_LANG="$EXT" ;;
+              esac
+              
+              echo "### $FILENAME" >> "$IDEAL_RESPONSE"
+              echo "" >> "$IDEAL_RESPONSE"
+              echo '```'"$CODE_LANG" >> "$IDEAL_RESPONSE"
+              cat "$file" >> "$IDEAL_RESPONSE"
+              echo "" >> "$IDEAL_RESPONSE"
+              echo '```' >> "$IDEAL_RESPONSE"
+              echo "" >> "$IDEAL_RESPONSE"
+              
+              echo "    Added test: $FILENAME"
+            fi
+          done
+        fi
+      done
+      
+      echo "    ✓ IDEAL_RESPONSE.md regenerated"
+      APPLIED_FIXES+=("ideal_response_fix")
       ;;
 
     *)
@@ -3128,12 +3321,13 @@ The schema has `additionalProperties: false`, meaning ONLY these fields are allo
 - `complexity` - enum: medium, hard, expert
 - `turn_type` - enum: single, multi
 - `po_id` - string (min 1 char)
-- `team` - enum: 2, 3, 4, 5, 6, synth, synth-1, synth, stf
+- `team` - enum: 2, 3, 4, 5, 6, synth, synth-1, synth-2, stf
 - `startedAt` - ISO 8601 datetime
 - `subtask` - **SINGLE STRING enum** (see below) - NOT an array!
 - `provider` - enum: aws, localstack
 - `subject_labels` - array of enums (see below)
 - `aws_services` - array of strings
+- `wave` - **NEW!** enum: P0, P1 (required field)
 
 ### CRITICAL: `subtask` vs `subject_labels` Type Enforcement
 
@@ -3234,14 +3428,17 @@ The following jobs can fail and this agent handles them:
 | `Detect Project Files`     | Invalid metadata.json   | `metadata_fix`                     |
 | `Validate Commit Message`  | Non-conventional commit | `commit_message`                   |
 | `Validate Jest Config`     | Wrong test folder       | `jest_config`                      |
+| **Claude Review: Prompt Quality** | Emojis, en/em dashes, brackets | `prompt_quality_fix` |
 | `Build`                    | TypeScript errors       | `typescript_fix`                   |
 | `Synth`                    | CDK synthesis errors    | `endpoint_config`                  |
 | `Lint`                     | ESLint/formatting       | `lint_fix`                         |
 | `Unit Testing`             | Test failures           | `test_fix`                         |
 | `Integration Testing`      | Integration failures    | `integration_test_fix`             |
 | `Deploy`                   | Connection issues       | `endpoint_config`, `s3_path_style` |
-| `Archive`                  | Archive pending         | No fix needed - PR ready!          |
 | `Claude Review`            | Quality issues          | Manual review required             |
+| `Cleanup`                  | Cleanup failures        | Usually auto-retry                 |
+| **Claude Review: IDEAL_RESPONSE** | Code mismatch | `ideal_response_fix`      |
+| `Archive`                  | Archive pending         | No fix needed - PR ready!          |
 | **Missing lib/**           | Directory not found     | `restore_from_archive`             |
 | **Missing test/tests/**    | Directory not found     | `restore_from_archive`             |
 | **Missing source files**   | Stack file not found    | `restore_from_archive`             |
@@ -3332,6 +3529,8 @@ const vpc = new ec2.Vpc(this, "VPC", {
 | `schema.*invalid` | `metadata_fix` |
 | `subtask.*invalid` | `metadata_subtask_fix` |
 | `subject_labels.*invalid` | `metadata_labels_fix` |
+| `wave.*required` | `metadata_fix` |
+| `wave.*invalid` | `metadata_fix` |
 | **Build** | |
 | `typescript.*error` | `typescript_fix` |
 | `cannot find module` | `import_fix` |
@@ -3371,6 +3570,20 @@ const vpc = new ec2.Vpc(this, "VPC", {
 | `directory.*missing` | `restore_from_archive` |
 | `tap-stack.*not found` | `restore_from_archive` |
 | `entry.*point.*missing` | `restore_from_archive` |
+| **Prompt Quality (NEW!)** | |
+| `Prompt.*quality.*FAILED` | `prompt_quality_fix` |
+| `LLM-generated.*content` | `prompt_quality_fix` |
+| `En dashes` | `prompt_quality_fix` |
+| `Em dashes` | `prompt_quality_fix` |
+| `Square brackets` | `prompt_quality_fix` |
+| `Formal abbreviations` | `prompt_quality_fix` |
+| `emojis.*detected` | `prompt_quality_fix` |
+| `connectivity.*insufficient` | `prompt_quality_fix` |
+| **IDEAL_RESPONSE Validation (NEW!)** | |
+| `IDEAL_RESPONSE.*FAILED` | `ideal_response_fix` |
+| `IDEAL_RESPONSE.*missing` | `ideal_response_fix` |
+| `code.*mismatch` | `ideal_response_fix` |
+| `character-for-character` | `ideal_response_fix` |
 | **Other** | |
 | `PROMPT.md.*not found` | `synth_docs_fix` |
 | `files outside allowed` | `file_location_fix` |
