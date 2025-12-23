@@ -27,7 +27,7 @@ resource "aws_dms_replication_instance" "main" {
   multi_az                    = var.enable_multi_az_dms
   publicly_accessible         = false
   replication_subnet_group_id = aws_dms_replication_subnet_group.main[0].id
-  vpc_security_group_ids      = [aws_security_group.dms.id]
+  vpc_security_group_ids      = [aws_security_group.dms[0].id]
 
   kms_key_arn = aws_kms_key.main.arn
 
