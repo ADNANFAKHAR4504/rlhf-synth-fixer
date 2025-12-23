@@ -62,18 +62,39 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 const region = process.env.AWS_REGION || 'us-east-1';
 
+// LocalStack configuration
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
+const endpoint = process.env.AWS_ENDPOINT_URL || undefined;
+
+// AWS SDK client configuration
+const clientConfig: any = {
+  region,
+  ...(isLocalStack && endpoint
+    ? {
+        endpoint,
+        forcePathStyle: true,
+        credentials: {
+          accessKeyId: 'test',
+          secretAccessKey: 'test',
+        },
+      }
+    : {}),
+};
+
 // Initialize AWS SDK clients
-const cfnClient = new CloudFormationClient({ region });
-const ec2Client = new EC2Client({ region });
-const s3Client = new S3Client({ region });
-const rdsClient = new RDSClient({ region });
-const kmsClient = new KMSClient({ region });
-const cloudTrailClient = new CloudTrailClient({ region });
-const configClient = new ConfigServiceClient({ region });
-const cloudWatchClient = new CloudWatchClient({ region });
-const elbClient = new ElasticLoadBalancingV2Client({ region });
-const asgClient = new AutoScalingClient({ region });
-const iamClient = new IAMClient({ region });
+const cfnClient = new CloudFormationClient(clientConfig);
+const ec2Client = new EC2Client(clientConfig);
+const s3Client = new S3Client(clientConfig);
+const rdsClient = new RDSClient(clientConfig);
+const kmsClient = new KMSClient(clientConfig);
+const cloudTrailClient = new CloudTrailClient(clientConfig);
+const configClient = new ConfigServiceClient(clientConfig);
+const cloudWatchClient = new CloudWatchClient(clientConfig);
+const elbClient = new ElasticLoadBalancingV2Client(clientConfig);
+const asgClient = new AutoScalingClient(clientConfig);
+const iamClient = new IAMClient(clientConfig);
 
 // Check if outputs file exists for local testing
 let outputs: any = {};
