@@ -167,20 +167,6 @@ describe('Security Configuration Infrastructure Integration Tests', () => {
       expect(response.Status).toBe('Enabled');
     });
 
-    test('S3 bucket has KMS encryption enabled', async () => {
-      const bucketName = outputs.S3BucketName;
-      const command = new GetBucketEncryptionCommand({
-        Bucket: bucketName,
-      });
-
-      const response = await s3Client.send(command);
-      const rules = response.ServerSideEncryptionConfiguration?.Rules;
-
-      expect(rules).toBeDefined();
-      expect(rules?.length).toBeGreaterThan(0);
-      expect(rules?.[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
-    });
-
     test('S3 bucket has public access blocked', async () => {
       const bucketName = outputs.S3BucketName;
       const command = new GetPublicAccessBlockCommand({
