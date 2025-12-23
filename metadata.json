@@ -5,11 +5,21 @@
   "turn_type": "single",
   "po_id": "291564",
   "team": "5",
-   "subtask": "Provisioning of Infrastructure Environments",
+  "startedAt": "2025-08-14T10:17:20.356Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "Cloud Environment Setup"
   ],
   "provider": "localstack",
-  "aws_services": [],
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon EC2",
+    "AWS IAM",
+    "Amazon CloudWatch"
+  ],
   "wave": "P1"
 }
