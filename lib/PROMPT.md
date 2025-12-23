@@ -7,15 +7,15 @@ Multi-AZ Deployment:
 Deploy compute and database resources across at least two AWS Availability Zones to ensure redundancy and high availability.
 
 Auto Scaling:
-Implement Auto Scaling Groups (ASGs) behind a load balancer to handle traffic surges automatically without manual intervention.
+Implement Auto Scaling Groups behind a load balancer to handle traffic surges automatically without manual intervention.
 
-Static Elastic IP (EIP) for Load Balancer:
+Static Elastic IP for Load Balancer:
 Allocate and use a static Elastic IP address with the primary load balancer to ensure a consistent public-facing endpoint, even when reassociating resources.
 
 RDS Multi-AZ Failover:
 Deploy Amazon RDS with automatic failover capability, using Multi-AZ deployment mode to ensure synchronous replication and failover support.
 
-Monitoring and Alerting (CloudWatch):
+Monitoring and Alerting with CloudWatch:
 
 Enable Amazon CloudWatch for monitoring application and instance health.
 
