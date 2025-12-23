@@ -1,14 +1,14 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Dual-mode deployment (AWS + LocalStack). AWS mode: Aurora MySQL cluster across 3 AZs with failover, reader autoscaling, alarms, and optional DAS. LocalStack mode: Single MySQL DBInstance (Aurora/DAS/autoscaling/alarms disabled automatically).\n",
+    "Description": "TapStack.yml - Dual-mode deployment (AWS + LocalStack). AWS mode: Aurora MySQL cluster across 3 AZs with failover, reader autoscaling, alarms, and optional DAS. LocalStack mode: Single MySQL DBInstance (Aurora/DAS/autoscaling/alarms disabled automatically).\n",
     "Metadata": {
         "TemplateAuthor": "TapStack",
-        "Version": "v3.2",
+        "Version": "v3.2.1",
         "Notes": [
             "Pure YAML (no anchors/aliases; no flow-style maps/sequences)",
             "VPC, subnets, SGs created in-stack (no external params)",
             {
-                "Best-practice": "secrets come from Secrets Manager via dynamic references (no secret params)"
+                "Best-practice": "passwords generated in Secrets Manager and consumed via dynamic references"
             }
         ]
     },
@@ -20,14 +20,14 @@
                 "aws",
                 "localstack"
             ],
-            "Description": "Set to 'aws' for real AWS. Set to 'localstack' to disable AWS-only features and use a single MySQL DBInstance.\n"
+            "Description": "Set to aws for real AWS. Set to localstack for LocalStack-safe mode."
         },
         "EnvironmentSuffix": {
             "Type": "String",
             "Default": "prod-us",
             "Description": "Suffix added to all resource names to avoid collisions.",
             "AllowedPattern": "^[a-z0-9-]{3,20}$",
-            "ConstraintDescription": "Must be 3–20 characters of lowercase letters, digits, and dashes."
+            "ConstraintDescription": "Must be 3-20 characters of lowercase letters, digits, and dashes."
         },
         "DatabaseName": {
             "Type": "String",
@@ -51,7 +51,7 @@
             "Type": "String",
             "Default": "",
             "AllowedPattern": "^[0-9A-Za-z._-]*$",
-            "Description": "(Optional) Aurora MySQL 8.0 engine version (aurora-mysql 3.x) for AWS mode. Leave blank to use default.\n"
+            "Description": "Optional Aurora MySQL 8 engine version (Aurora MySQL 3.x). Blank uses default."
         },
         "LocalMySqlEngineVersion": {
             "Type": "String",
@@ -87,7 +87,7 @@
                 "false"
             ],
             "Default": "true",
-            "Description": "Enable Performance Insights on instances (AWS mode only)."
+            "Description": "Enable Performance Insights (AWS mode only)."
         },
         "PerformanceInsightsRetention": {
             "Type": "Number",
@@ -103,7 +103,7 @@
             "Default": 35,
             "MinValue": 1,
             "MaxValue": 35,
-            "Description": "Automated backup retention in days (AWS mode only)."
+            "Description": "Backup retention in days (AWS mode only)."
         },
         "PreferredBackupWindowUTC": {
             "Type": "String",
@@ -115,30 +115,6 @@
             "Type": "String",
             "Default": "",
             "Description": "Optional KMS Key ARN for Aurora storage encryption (AWS mode only)."
-        },
-        "SNSNotificationEmail": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Optional email to subscribe for alarms/notifications (AWS mode only)."
-        },
-        "ActivityStreamEnabled": {
-            "Type": "String",
-            "AllowedValues": [
-                "true",
-                "false"
-            ],
-            "Default": "true",
-            "Description": "Enable Database Activity Streams (AWS mode only; auto-disabled in LocalStack mode)."
-        },
-        "ActivityStreamMode": {
-            "Type": "String",
-            "AllowedValues": [
-                "sync",
-                "async",
-                "auto"
-            ],
-            "Default": "auto",
-            "Description": "DAS mode. 'auto' tries sync then falls back to async if region doesn’t support sync (AWS mode only)."
         }
     },
     "Conditions": {
@@ -177,25 +153,6 @@
                 }
             ]
         },
-        "CreateEmailSubscription": {
-            "Fn::And": [
-                {
-                    "Condition": "IsAws"
-                },
-                {
-                    "Fn::Not": [
-                        {
-                            "Fn::Equals": [
-                                {
-                                    "Ref": "SNSNotificationEmail"
-                                },
-                                ""
-                            ]
-                        }
-                    ]
-                }
-            ]
-        },
         "EnablePI": {
             "Fn::And": [
                 {
@@ -226,21 +183,6 @@
                                 ""
                             ]
                         }
-                    ]
-                }
-            ]
-        },
-        "EnableActivityStreams": {
-            "Fn::And": [
-                {
-                    "Condition": "IsAws"
-                },
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "ActivityStreamEnabled"
-                        },
-                        "true"
                     ]
                 }
             ]
@@ -451,7 +393,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupDescription": {
-                    "Fn::Sub": "DB SG - restrict to app tier only - ${EnvironmentSuffix}"
+                    "Fn::Sub": "DB SG restrict to app tier only (${EnvironmentSuffix})"
                 },
                 "VpcId": {
                     "Ref": "Vpc"
@@ -480,7 +422,7 @@
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupDescription": {
-                    "Fn::Sub": "DB Subnet Group - ${EnvironmentSuffix}"
+                    "Fn::Sub": "DB Subnet Group (${EnvironmentSuffix})"
                 },
                 "DBSubnetGroupName": {
                     "Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"
@@ -511,7 +453,7 @@
             "Type": "AWS::RDS::DBClusterParameterGroup",
             "Properties": {
                 "Description": {
-                    "Fn::Sub": "Cluster parameter group with binary logging enabled - ${EnvironmentSuffix}"
+                    "Fn::Sub": "Cluster parameter group with binlog enabled (${EnvironmentSuffix})"
                 },
                 "Family": "aurora-mysql8.0",
                 "Parameters": {
@@ -568,14 +510,14 @@
                     "Fn::Sub": "aurora-master-secret-${EnvironmentSuffix}"
                 },
                 "Description": {
-                    "Fn::Sub": "Master password for Aurora cluster ${EnvironmentSuffix}"
+                    "Fn::Sub": "Master password for Aurora cluster (${EnvironmentSuffix})"
                 },
                 "GenerateSecretString": {
                     "SecretStringTemplate": {
                         "Fn::Sub": "{\"username\":\"${MasterUsername}\"}"
                     },
                     "GenerateStringKey": "password",
-                    "ExcludeCharacters": "\"@/\\\\",
+                    "ExcludeCharacters": "\"@/\\",
                     "PasswordLength": 32
                 },
                 "Tags": [
@@ -596,14 +538,14 @@
                     "Fn::Sub": "mysql-local-master-secret-${EnvironmentSuffix}"
                 },
                 "Description": {
-                    "Fn::Sub": "Master password for LocalStack MySQL instance ${EnvironmentSuffix}"
+                    "Fn::Sub": "Master password for LocalStack MySQL (${EnvironmentSuffix})"
                 },
                 "GenerateSecretString": {
                     "SecretStringTemplate": {
                         "Fn::Sub": "{\"username\":\"${MasterUsername}\"}"
                     },
                     "GenerateStringKey": "password",
-                    "ExcludeCharacters": "\"@/\\\\",
+                    "ExcludeCharacters": "\"@/\\",
                     "PasswordLength": 24
                 },
                 "Tags": [
@@ -936,19 +878,6 @@
                 ]
             }
         },
-        "FailoverSnsSubscription": {
-            "Condition": "CreateEmailSubscription",
-            "Type": "AWS::SNS::Subscription",
-            "Properties": {
-                "Protocol": "email",
-                "TopicArn": {
-                    "Ref": "FailoverSnsTopic"
-                },
-                "Endpoint": {
-                    "Ref": "SNSNotificationEmail"
-                }
-            }
-        },
         "ReplicaLagAlarm": {
             "Condition": "IsAws",
             "Type": "AWS::CloudWatch::Alarm",
@@ -994,7 +923,7 @@
                 "AlarmName": {
                     "Fn::Sub": "alarm-writer-cpu-${EnvironmentSuffix}"
                 },
-                "AlarmDescription": "Alarm when writer CPU exceeds 80%.",
+                "AlarmDescription": "Alarm when writer CPU exceeds 80 percent.",
                 "Namespace": "AWS/RDS",
                 "MetricName": "CPUUtilization",
                 "Dimensions": [
@@ -1023,208 +952,6 @@
                         "Ref": "FailoverSnsTopic"
                     }
                 ]
-            }
-        },
-        "DasKmsKey": {
-            "Condition": "EnableActivityStreams",
-            "Type": "AWS::KMS::Key",
-            "Properties": {
-                "Description": {
-                    "Fn::Sub": "KMS CMK for Aurora Database Activity Streams - ${EnvironmentSuffix}"
-                },
-                "EnableKeyRotation": true,
-                "KeyPolicy": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AllowAccountRoot",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
-                                }
-                            },
-                            "Action": "kms:*",
-                            "Resource": "*"
-                        },
-                        {
-                            "Sid": "AllowRDSServicePrincipalUse",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "rds.amazonaws.com"
-                            },
-                            "Action": [
-                                "kms:Encrypt",
-                                "kms:Decrypt",
-                                "kms:ReEncrypt*",
-                                "kms:GenerateDataKey*",
-                                "kms:DescribeKey",
-                                "kms:CreateGrant"
-                            ],
-                            "Resource": "*",
-                            "Condition": {
-                                "Bool": {
-                                    "kms:GrantIsForAWSResource": "true"
-                                },
-                                "StringEquals": {
-                                    "kms:ViaService": {
-                                        "Fn::Sub": "rds.${AWS::Region}.amazonaws.com"
-                                    }
-                                }
-                            }
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "das-kms-${EnvironmentSuffix}"
-                        }
-                    }
-                ]
-            }
-        },
-        "DasKmsAlias": {
-            "Condition": "EnableActivityStreams",
-            "Type": "AWS::KMS::Alias",
-            "Properties": {
-                "AliasName": {
-                    "Fn::Sub": "alias/das-${EnvironmentSuffix}"
-                },
-                "TargetKeyId": {
-                    "Ref": "DasKmsKey"
-                }
-            }
-        },
-        "ActivityStreamLambdaRole": {
-            "Condition": "EnableActivityStreams",
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "das-custom-role-${EnvironmentSuffix}"
-                },
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "lambda.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": {
-                            "Fn::Sub": "das-custom-inline-${EnvironmentSuffix}"
-                        },
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "rds:StartActivityStream",
-                                        "rds:StopActivityStream",
-                                        "rds:DescribeDBClusters"
-                                    ],
-                                    "Resource": "*"
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "kms:DescribeKey",
-                                        "kms:CreateGrant"
-                                    ],
-                                    "Resource": {
-                                        "Fn::GetAtt": [
-                                            "DasKmsKey",
-                                            "Arn"
-                                        ]
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogGroup",
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents"
-                                    ],
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "das-custom-role-${EnvironmentSuffix}"
-                        }
-                    }
-                ]
-            }
-        },
-        "ActivityStreamLambda": {
-            "Condition": "EnableActivityStreams",
-            "Type": "AWS::Lambda::Function",
-            "Properties": {
-                "FunctionName": {
-                    "Fn::Sub": "enable-das-${EnvironmentSuffix}"
-                },
-                "Role": {
-                    "Fn::GetAtt": [
-                        "ActivityStreamLambdaRole",
-                        "Arn"
-                    ]
-                },
-                "Runtime": "python3.12",
-                "Handler": "index.handler",
-                "Timeout": 600,
-                "MemorySize": 256,
-                "Code": {
-                    "ZipFile": "import boto3, json, logging, time, urllib.request, botocore\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef _respond(url, status, req, data, phys_id, reason=None):\n  short_reason = (reason[:512] + '…') if reason and len(reason) > 512 else (reason or \"See CloudWatch logs for details.\")\n  body = {\n    \"Status\": status,\n    \"Reason\": short_reason,\n    \"PhysicalResourceId\": phys_id or \"RDSActivityStreamCR\",\n    \"StackId\": req[\"StackId\"],\n    \"RequestId\": req[\"RequestId\"],\n    \"LogicalResourceId\": req[\"LogicalResourceId\"],\n    \"Data\": data\n  }\n  s = json.dumps(body)\n  rq = urllib.request.Request(url, data=s.encode(\"utf-8\"), method=\"PUT\",\n                              headers={\"content-type\": \"\", \"content-length\": str(len(s))})\n  with urllib.request.urlopen(rq) as resp:\n    logger.info(\"CFN callback status: %s\", resp.status)\n\ndef wait_cluster_ready(rds, cluster_id, timeout=900):\n  start = time.time()\n  while time.time() - start < timeout:\n    desc = rds.describe_db_clusters(DBClusterIdentifier=cluster_id)[\"DBClusters\"][0]\n    status = desc.get(\"Status\", \"\")\n    as_status = desc.get(\"ActivityStreamStatus\", \"stopped\")\n    logger.info(\"Cluster %s status=%s, activityStream=%s\", cluster_id, status, as_status)\n    if status == \"available\" and as_status not in (\"starting\", \"stopping\"):\n      return desc\n    time.sleep(10)\n  raise TimeoutError(f\"DB cluster {cluster_id} not ready in {timeout}s\")\n\ndef wait_kms_ready(kms, key_arn, timeout=300):\n  start = time.time()\n  last_err = None\n  while time.time() - start < timeout:\n    try:\n      meta = kms.describe_key(KeyId=key_arn)[\"KeyMetadata\"]\n      state = meta.get(\"KeyState\")\n      usage = meta.get(\"KeyUsage\")\n      logger.info(\"KMS %s state=%s usage=%s\", key_arn, state, usage)\n      if state == \"Enabled\" and usage == \"ENCRYPT_DECRYPT\" and meta.get(\"DeletionDate\") is None:\n        return True\n    except Exception as e:\n      last_err = e\n      logger.info(\"KMS not ready yet: %s\", e)\n    time.sleep(5)\n  raise TimeoutError(f\"KMS key not ready in {timeout}s: {last_err}\")\n\ndef start_with_required_kms(rds, cluster_arn, desired_mode, kms_key):\n  args = {\n    \"ResourceArn\": cluster_arn,\n    \"Mode\": desired_mode,\n    \"KmsKeyId\": kms_key,\n    \"ApplyImmediately\": True\n  }\n  rds.start_activity_stream(**args)\n\ndef handler(event, context):\n  logger.info(\"Event: %s\", json.dumps(event))\n  req_type = event[\"RequestType\"]\n  props = event[\"ResourceProperties\"]\n  cluster_arn = props[\"ClusterArn\"]\n  cluster_id = props.get(\"ClusterIdentifier\")\n  mode_param = str(props.get(\"Mode\", \"auto\")).lower()\n  kms_key = props.get(\"KmsKeyId\") or None\n\n  rds = boto3.client(\"rds\")\n  kms = boto3.client(\"kms\")\n  phys_id = f\"{cluster_arn}/activity-stream\"\n\n  try:\n    if req_type in (\"Create\", \"Update\"):\n      wait_kms_ready(kms, kms_key)\n      desc = wait_cluster_ready(rds, cluster_id) if cluster_id else {}\n      if desc.get(\"ActivityStreamStatus\") == \"started\":\n        _respond(event[\"ResponseURL\"], \"SUCCESS\", event,\n                {\"ActivityStream\": \"ALREADY_STARTED\",\n                 \"Mode\": desc.get(\"ActivityStreamMode\", \"\"),\n                 \"KinesisStreamName\": desc.get(\"ActivityStreamKinesisStreamName\", \"\")},\n                phys_id, reason=\"Already enabled\")\n        return\n\n      desired_mode = \"sync\" if mode_param in (\"sync\",\"auto\") else \"async\"\n\n      try:\n        start_with_required_kms(rds, cluster_arn, desired_mode, kms_key)\n      except botocore.exceptions.ClientError as e:\n        msg = str(e)\n        low = msg.lower()\n\n        # Safety: if some environment doesn't support the API, do not brick the stack.\n        if (\"not yet been emulated\" in low) or (\"not available in your current license plan\" in low):\n          _respond(event[\"ResponseURL\"], \"SUCCESS\", event,\n                  {\"ActivityStream\": \"SKIPPED_UNSUPPORTED\",\n                   \"Reason\": msg[:300]},\n                  phys_id, reason=\"Activity Streams not supported in this environment\")\n          return\n\n        if \"not supported in this region\" in low and desired_mode == \"sync\":\n          start_with_required_kms(rds, cluster_arn, \"async\", kms_key)\n          desired_mode = \"async\"\n        else:\n          raise\n\n      time.sleep(10)\n      desc2 = rds.describe_db_clusters(DBClusterIdentifier=cluster_id)[\"DBClusters\"][0] if cluster_id else {}\n      _respond(event[\"ResponseURL\"], \"SUCCESS\", event,\n              {\"ActivityStream\": \"STARTED\",\n               \"Mode\": desc2.get(\"ActivityStreamMode\", desired_mode),\n               \"KinesisStreamName\": desc2.get(\"ActivityStreamKinesisStreamName\", \"\")},\n              phys_id, reason=\"Enabled\")\n\n    elif req_type == \"Delete\":\n      try:\n        desc = wait_cluster_ready(rds, cluster_id, timeout=300) if cluster_id else {}\n        if desc.get(\"ActivityStreamStatus\") == \"started\":\n          rds.stop_activity_stream(ResourceArn=cluster_arn, ApplyImmediately=True)\n      except Exception as e:\n        logger.warning(\"StopActivityStream warning: %s\", e)\n      _respond(event[\"ResponseURL\"], \"SUCCESS\", event,\n              {\"ActivityStream\": \"STOPPED_OR_NOT_ENABLED\"}, phys_id, reason=\"Deleted\")\n\n  except Exception as e:\n    logger.exception(\"DAS operation failed\")\n    _respond(event[\"ResponseURL\"], \"FAILED\", event, {\"Error\": str(e)}, phys_id, reason=str(e))\n"
-                }
-            }
-        },
-        "ActivityStreamEnabler": {
-            "Condition": "EnableActivityStreams",
-            "Type": "Custom::RDSActivityStream",
-            "DependsOn": [
-                "DasKmsAlias",
-                "AuroraWriterInstance",
-                "AuroraReaderAInstance",
-                "AuroraReaderBInstance"
-            ],
-            "Properties": {
-                "ServiceToken": {
-                    "Fn::GetAtt": [
-                        "ActivityStreamLambda",
-                        "Arn"
-                    ]
-                },
-                "ClusterArn": {
-                    "Fn::Sub": "arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:cluster:aurora-cluster-${EnvironmentSuffix}"
-                },
-                "ClusterIdentifier": {
-                    "Ref": "AuroraDBCluster"
-                },
-                "Mode": {
-                    "Ref": "ActivityStreamMode"
-                },
-                "KmsKeyId": {
-                    "Fn::GetAtt": [
-                        "DasKmsKey",
-                        "Arn"
-                    ]
-                }
             }
         },
         "LocalMysqlInstance": {
@@ -1276,12 +1003,22 @@
     },
     "Outputs": {
         "ClusterEndpoint": {
-            "Condition": "IsAws",
-            "Description": "Writer endpoint of the Aurora cluster.",
+            "Description": "Writer endpoint (AWS) or MySQL endpoint (LocalStack).",
             "Value": {
-                "Fn::GetAtt": [
-                    "AuroraDBCluster",
-                    "Endpoint.Address"
+                "Fn::If": [
+                    "IsAws",
+                    {
+                        "Fn::GetAtt": [
+                            "AuroraDBCluster",
+                            "Endpoint.Address"
+                        ]
+                    },
+                    {
+                        "Fn::GetAtt": [
+                            "LocalMysqlInstance",
+                            "Endpoint.Address"
+                        ]
+                    }
                 ]
             },
             "Export": {
@@ -1291,59 +1028,27 @@
             }
         },
         "ReaderEndpoint": {
-            "Condition": "IsAws",
-            "Description": "Reader endpoint of the Aurora cluster.",
+            "Description": "Reader endpoint (AWS) or MySQL endpoint (LocalStack).",
             "Value": {
-                "Fn::GetAtt": [
-                    "AuroraDBCluster",
-                    "ReadEndpoint.Address"
+                "Fn::If": [
+                    "IsAws",
+                    {
+                        "Fn::GetAtt": [
+                            "AuroraDBCluster",
+                            "ReadEndpoint.Address"
+                        ]
+                    },
+                    {
+                        "Fn::GetAtt": [
+                            "LocalMysqlInstance",
+                            "Endpoint.Address"
+                        ]
+                    }
                 ]
             },
             "Export": {
                 "Name": {
                     "Fn::Sub": "reader-endpoint-${EnvironmentSuffix}"
-                }
-            }
-        },
-        "LocalDbEndpoint": {
-            "Condition": "IsLocalStack",
-            "Description": "Endpoint address of the LocalStack MySQL DB instance.",
-            "Value": {
-                "Fn::GetAtt": [
-                    "LocalMysqlInstance",
-                    "Endpoint.Address"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "localdb-endpoint-${EnvironmentSuffix}"
-                }
-            }
-        },
-        "LocalDbPort": {
-            "Condition": "IsLocalStack",
-            "Description": "Endpoint port of the LocalStack MySQL DB instance.",
-            "Value": {
-                "Fn::GetAtt": [
-                    "LocalMysqlInstance",
-                    "Endpoint.Port"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "localdb-port-${EnvironmentSuffix}"
-                }
-            }
-        },
-        "KinesisStreamArn": {
-            "Condition": "EnableActivityStreams",
-            "Description": "ARN of the Kinesis stream receiving Database Activity Streams.",
-            "Value": {
-                "Fn::Sub": "arn:${AWS::Partition}:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${ActivityStreamEnabler.KinesisStreamName}\n"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "kinesis-das-stream-arn-${EnvironmentSuffix}"
                 }
             }
         },
