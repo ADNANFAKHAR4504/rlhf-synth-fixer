@@ -116,12 +116,11 @@ module.exports = [
       'cdk.out/**',
       'coverage/**',
       'archive/**',
-      'archive-localstack/**', // Exclude archive-localstack from linting
+      'archive-localstack/**', // Exclude archive-localstack from linting 
       'subcategory-references/**', // Exclude reference files from linting
       'lambda/**', // Exclude lambda folder from linting
       'cli/**', // Exclude CLI tooling scripts from linting
       'bin/**', // Exclude bin folder from linting (excluded from tsconfig.json)
-      '.claude/**', // Exclude Claude agent configs and templates
       '**/*.js',
       '**/*.d.ts',
       '**/*.test.ts', // Exclude test files from linting
