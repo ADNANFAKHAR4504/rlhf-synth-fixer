@@ -342,7 +342,7 @@ describe('TapStack', () => {
     });
     template.hasOutput('ElasticIPAddress', {
       Export: { Name: `elastic-ip${nameSuffix}` },
-      Value: { Ref: 'ElasticIP' }
+      Value: { 'Fn::GetAtt': ['ElasticIP', 'PublicIp'] }
     });
     template.hasOutput('KMSKeyId', {
       Export: { Name: `kms-key-id${nameSuffix}` },
