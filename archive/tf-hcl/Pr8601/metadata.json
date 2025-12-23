@@ -11,6 +11,24 @@
     "Security Configuration as Code"
   ],
   "provider": "localstack",
-  "aws_services": [],
-  "wave": "P1"
+  "aws_services": [
+    "IAM",
+    "VPC",
+    "EC2",
+    "S3",
+    "SecretsManager",
+    "CloudTrail",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "Lambda"
+  ],
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
