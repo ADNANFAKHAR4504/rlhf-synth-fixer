@@ -1,0 +1,46 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291575",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T16:27:32.309Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Network Configuration",
+    "Database Management",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Security Configuration",
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::EIP",
+    "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    "AWS::ElasticLoadBalancingV2::TargetGroup",
+    "AWS::ElasticLoadBalancingV2::Listener",
+    "AWS::IAM::Role",
+    "AWS::IAM::InstanceProfile",
+    "AWS::EC2::SecurityGroup",
+    "AWS::EC2::LaunchTemplate",
+    "AWS::AutoScaling::AutoScalingGroup",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::SecretsManager::Secret",
+    "AWS::RDS::DBInstance",
+    "AWS::SNS::Topic",
+    "AWS::CloudWatch::Alarm"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr1911"
+  }
+}
