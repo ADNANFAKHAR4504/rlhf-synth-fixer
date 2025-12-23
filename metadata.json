@@ -19,5 +19,6 @@
     "AutoScaling",
     "RDS",
     "SSM"
-  ]
+  ],
+  "wave": "P0"
 }
