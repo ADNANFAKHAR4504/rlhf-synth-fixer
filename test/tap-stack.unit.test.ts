@@ -429,8 +429,9 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates log group for Lambda function', () => {
+    test('creates log group for Lambda function with retention', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: '/aws/lambda/secure-backend-test',
         RetentionInDays: 731, // TWO_YEARS
       });
     });

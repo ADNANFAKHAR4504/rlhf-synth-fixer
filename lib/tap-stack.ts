@@ -139,6 +139,17 @@ export class TapStack extends cdk.Stack {
       },
     });
 
+    // Create the Lambda log group explicitly before the function
+    const backendFunctionLogGroup = new logs.LogGroup(
+      this,
+      'BackendFunctionLogGroup',
+      {
+        logGroupName: `/aws/lambda/secure-backend-${environmentSuffix}`,
+        retention: logs.RetentionDays.TWO_YEARS,
+        removalPolicy: cdk.RemovalPolicy.DESTROY, // LocalStack: allow cleanup
+      }
+    );
+
     // Lambda function for backend processing
     const backendFunction = new lambda.Function(this, 'BackendFunction', {
       functionName: `secure-backend-${environmentSuffix}`,
@@ -227,13 +238,8 @@ export class TapStack extends cdk.Stack {
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
-    });
-
-    // CloudWatch Log Group for Lambda (with RemovalPolicy)
-    new logs.LogGroup(this, 'BackendFunctionLogGroup', {
-      logGroupName: `/aws/lambda/${backendFunction.functionName}`,
-      retention: logs.RetentionDays.TWO_YEARS,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // LocalStack: allow cleanup
+      // Use the explicitly created log group
+      logGroup: backendFunctionLogGroup,
     });
 
     // CloudWatch Log Group for API Gateway
