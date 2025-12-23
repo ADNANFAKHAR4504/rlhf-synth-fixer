@@ -334,7 +334,7 @@ Outputs:
 
 ## Key Features Implemented:
 
-### 🏗️ **Infrastructure Components**
+### **Infrastructure Components**
 
 - **S3 Bucket** with versioning enabled and lifecycle policy for cost optimization
 - **Lambda Function** with Python 3.12 runtime and proper error handling
@@ -342,7 +342,7 @@ Outputs:
 - **API Gateway** with POST endpoint at `/process-image`
 - **CloudWatch Logs** with configurable retention period
 
-### 🔒 **Security & IAM**
+### **Security & IAM**
 
 - **Least-privilege IAM role** with scoped permissions:
   - S3: GetObject only on the specific bucket
@@ -350,13 +350,13 @@ Outputs:
   - CloudWatch: Log creation only for the function's log group
 - **Proper resource-based permissions** for S3 and API Gateway to invoke Lambda
 
-### 💰 **Cost Optimization**
+### **Cost Optimization**
 
 - S3 lifecycle rule transitions non-current versions to IA after 90 days
 - DynamoDB uses pay-per-request billing
 - Configurable log retention to manage storage costs
 
-### 🏷️ **Tagging & Organization**
+### **Tagging & Organization**
 
 - All resources tagged with `Environment: Production` and `Project: ServerlessApp`
 - Consistent naming convention using stack name
