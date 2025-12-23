@@ -72,10 +72,22 @@ case "$PLATFORM" in
             VALID=true
         fi
         ;;
+    cicd)
+        VALID_LANGUAGES="yaml, yml"
+        if [[ "$LANGUAGE" =~ ^(yaml|yml)$ ]]; then
+            VALID=true
+        fi
+        ;;
+    analysis)
+        VALID_LANGUAGES="py"
+        if [[ "$LANGUAGE" = "py" ]]; then
+            VALID=true
+        fi
+        ;;
     *)
         print_error "Unknown platform: $PLATFORM"
         echo ""
-        echo "Valid platforms: cdk, cdktf, pulumi, tf, cfn"
+        echo "Valid platforms: cdk, cdktf, pulumi, tf, cfn, cicd, analysis"
         exit 1
         ;;
 esac

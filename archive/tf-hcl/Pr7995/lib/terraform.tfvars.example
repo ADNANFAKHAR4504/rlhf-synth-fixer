@@ -1,0 +1,40 @@
+# Example terraform.tfvars file for validation configuration
+environment_suffix = "dev"
+aws_region        = "us-east-1"
+
+# Approved AMI IDs for your organization
+approved_ami_ids = [
+  "ami-0c55b159cbfafe1f0", # Amazon Linux 2
+  "ami-0747bdcabd34c712a", # Ubuntu 20.04
+  "ami-0a5c3558529277641"  # Amazon Linux 2023
+]
+
+# Required tags for compliance
+required_tags = [
+  "Environment",
+  "Owner",
+  "CostCenter",
+  "DataClassification"
+]
+
+# S3 buckets to validate
+bucket_names_to_validate = [
+  "my-app-data-dev",
+  "my-app-logs-dev",
+  "my-app-backups-dev"
+]
+
+# Security groups to validate
+security_group_ids_to_validate = [
+  "sg-0123456789abcdef0",
+  "sg-0987654321fedcba0"
+]
+
+# EC2 instances to validate
+instance_ids_to_validate = [
+  "i-0123456789abcdef0",
+  "i-0987654321fedcba0"
+]
+
+# Enable validation checks
+validation_enabled = true

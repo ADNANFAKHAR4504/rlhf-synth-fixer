@@ -1,0 +1,35 @@
+{
+  "task_id": "e5y2e9p2",
+  "platform": "cicd",
+  "language": "yaml",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-05T18:32:00+05:30",
+  "po_id": "e5y2e9p2",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "CodeBuild",
+    "CodeCommit",
+    "CodePipeline",
+    "EC2",
+    "ECR",
+    "ECS",
+    "IAM",
+    "KMS",
+    "ELB",
+    "S3",
+    "SNS"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

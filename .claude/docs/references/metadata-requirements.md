@@ -7,11 +7,13 @@ The `metadata.json` file is **CRITICAL** for all synthetic task generation workf
 ## ⚠️ CRITICAL: No Hallucinations Allowed
 
 **Claude agents MUST NOT hallucinate or make assumptions about metadata fields.** All values must come from:
+
 1. The CSV task data (`.claude/tasks.csv`)
 2. The `create-task-files.sh` script output
 3. User-provided input during task creation
 
 **DO NOT**:
+
 - Invent field values
 - Guess at AWS services
 - Modify fields without explicit instruction
@@ -21,19 +23,20 @@ The `metadata.json` file is **CRITICAL** for all synthetic task generation workf
 
 ```typescript
 interface TaskMetadata {
-  platform: string;           // REQUIRED: IaC platform (cdk, cdktf, cfn, tf, pulumi)
-  language: string;           // REQUIRED: Programming language (ts, py, js, go, java, hcl, yaml, json)
-  complexity: string;         // REQUIRED: Task complexity (medium, hard, expert)
-  turn_type: string;          // REQUIRED: Turn type (single, multi)
-  po_id: string;              // REQUIRED: Task ID (e.g., "1maext", "synth-abc123")
-  team: string;               // REQUIRED: Team identifier (1-6, synth, synth-N, stf) - read from settings.local.json if present
-  startedAt: string;          // REQUIRED: ISO 8601 timestamp
-  subtask: string;            // REQUIRED: Main subtask category
-  subject_labels?: string[];  // OPTIONAL: Array of subject labels
-  aws_services?: string[];    // OPTIONAL: Array of AWS service names
-  region?: string;            // OPTIONAL: AWS region (defaults to us-east-1)
-  task_config?: {             // OPTIONAL: Platform-specific configuration
-    deploy_env: string;       // For Terraform: tfvars file name
+  platform: string; // REQUIRED: IaC platform (cdk, cdktf, cfn, tf, pulumi)
+  language: string; // REQUIRED: Programming language (ts, py, js, go, java, hcl, yaml, json)
+  complexity: string; // REQUIRED: Task complexity (medium, hard, expert)
+  turn_type: string; // REQUIRED: Turn type (single, multi)
+  po_id: string; // REQUIRED: Task ID (e.g., "1maext", "synth-abc123")
+  team: string; // REQUIRED: Team identifier (1-6, synth, synth-N, stf) - read from settings.local.json if present
+  startedAt: string; // REQUIRED: ISO 8601 timestamp
+  subtask: string; // REQUIRED: Main subtask category
+  subject_labels?: string[]; // OPTIONAL: Array of subject labels
+  aws_services?: string[]; // OPTIONAL: Array of AWS service names
+  region?: string; // OPTIONAL: AWS region (defaults to us-east-1)
+  task_config?: {
+    // OPTIONAL: Platform-specific configuration
+    deploy_env: string; // For Terraform: tfvars file name
   };
 }
 ```
@@ -43,37 +46,49 @@ interface TaskMetadata {
 ### platform (REQUIRED)
 
 **Type**: `string`
-**Allowed values**: `cdk`, `cdktf`, `cfn`, `tf`, `pulumi`
+**Allowed values**: `cdk`, `cdktf`, `cfn`, `tf`, `pulumi`, `cicd`, `analysis`
 
 **Validation**:
+
 ```bash
-VALID_PLATFORMS=("cdk" "cdktf" "cfn" "tf" "pulumi")
+VALID_PLATFORMS=("cdk" "cdktf" "cfn" "tf" "pulumi" "cicd" "analysis")
 if [[ ! " ${VALID_PLATFORMS[@]} " =~ " ${PLATFORM} " ]]; then
   echo "❌ ERROR: Invalid platform '$PLATFORM'"
   exit 1
 fi
 ```
 
+**Special Platforms**:
+
+- `analysis`: For "Infrastructure Analysis/Monitoring" and "General Infrastructure Tooling QA" tasks. Uses Python scripts with boto3.
+- `cicd`: For "CI/CD Pipeline" tasks. Uses GitHub Actions workflows.
+
 **Common Errors**:
+
 - ❌ Using full names: "CloudFormation", "Terraform", "Pulumi"
 - ❌ Using uppercase: "CDK", "CDKTF"
-- ✅ Correct: "cdk", "cdktf", "cfn", "tf", "pulumi"
+- ❌ Using wrong platform for special tasks (e.g., "cdk" for analysis tasks)
+- ✅ Correct: "cdk", "cdktf", "cfn", "tf", "pulumi", "cicd", "analysis"
 
 ### language (REQUIRED)
 
 **Type**: `string`
-**Allowed values**: `ts`, `py`, `js`, `go`, `java`, `hcl`, `yaml`, `json`
+**Allowed values**: `ts`, `py`, `js`, `go`, `java`, `hcl`, `yaml`, `json`, `yml`
 
 **Platform-Language Compatibility Matrix**:
+
 ```
-cdk:    ts, js, py, java, go
-cdktf:  ts, py, go, java
-pulumi: ts, js, py, go, java
-tf:     hcl
-cfn:    yaml, json
+cdk:      ts, js, py, java, go
+cdktf:    ts, py, go, java
+pulumi:   ts, js, py, go, java
+tf:       hcl
+cfn:      yaml, json
+cicd:     yaml, yml
+analysis: py
 ```
 
 **Validation**:
+
 ```bash
 case "$PLATFORM" in
   cdk)
@@ -91,14 +106,21 @@ case "$PLATFORM" in
   cfn)
     [[ "$LANGUAGE" =~ ^(yaml|json)$ ]] || exit 1
     ;;
+  cicd)
+    [[ "$LANGUAGE" =~ ^(yaml|yml)$ ]] || exit 1
+    ;;
+  analysis)
+    [[ "$LANGUAGE" == "py" ]] || exit 1
+    ;;
 esac
 ```
 
 **Common Errors**:
+
 - ❌ Using full names: "TypeScript", "Python", "JavaScript"
 - ❌ Using uppercase: "TS", "PY"
-- ❌ Invalid combinations: "cfn" with "ts", "tf" with "py"
-- ✅ Correct: "ts", "py", "js", "hcl", "yaml", "json"
+- ❌ Invalid combinations: "cfn" with "ts", "tf" with "py", "analysis" with "ts"
+- ✅ Correct: "ts", "py", "js", "hcl", "yaml", "json", "yml"
 
 ### complexity (REQUIRED)
 
@@ -106,6 +128,7 @@ esac
 **Allowed values**: `medium`, `hard`, `expert`
 
 **Validation**:
+
 ```bash
 [[ "$COMPLEXITY" =~ ^(medium|hard|expert)$ ]] || {
   echo "❌ ERROR: Invalid complexity '$COMPLEXITY'"
@@ -114,6 +137,7 @@ esac
 ```
 
 **Common Errors**:
+
 - ❌ Using "easy", "simple", "difficult"
 - ❌ Using uppercase: "Medium", "Hard", "Expert"
 - ✅ Correct: "medium", "hard", "expert"
@@ -124,6 +148,7 @@ esac
 **Allowed values**: Must match one of the valid subtasks from reference file
 
 **Valid Subtasks** (from `.claude/docs/references/iac-subtasks-subject-labels.json`):
+
 1. `Provisioning of Infrastructure Environments`
 2. `Application Deployment`
 3. `CI/CD Pipeline Integration`
@@ -133,6 +158,7 @@ esac
 7. `Infrastructure QA and Management`
 
 **Validation**:
+
 ```bash
 VALID_SUBTASKS=(
   "Provisioning of Infrastructure Environments"
@@ -159,6 +185,7 @@ fi
 ```
 
 **Common Errors**:
+
 - ❌ Using abbreviated names: "Cloud Setup", "Environment Migration"
 - ❌ Using old/incorrect values: "Cloud Environment Setup"
 - ✅ Correct: Full exact names from the list above
@@ -171,6 +198,7 @@ fi
 **CRITICAL**: Must be a JSON array, NOT a comma-separated string
 
 **Example**:
+
 ```json
 {
   "subject_labels": ["Cloud Environment Setup", "Environment Migration"]
@@ -182,6 +210,7 @@ fi
 See `.claude/docs/references/iac-subtasks-subject-labels.json` for the complete mapping.
 
 **Common Errors**:
+
 - ❌ String instead of array: `"subject_labels": "Cloud Environment Setup"`
 - ❌ Comma-separated string: `"subject_labels": "setup, migration"`
 - ❌ Invalid label for subtask: Using "Web Application Deployment" under "CI/CD Pipeline Integration"
@@ -195,24 +224,21 @@ See `.claude/docs/references/iac-subtasks-subject-labels.json` for the complete 
 **CRITICAL**: Must be a JSON array, NOT a comma-separated string
 
 **Example**:
+
 ```json
 {
-  "aws_services": [
-    "S3",
-    "Lambda",
-    "DynamoDB",
-    "API Gateway",
-    "CloudWatch"
-  ]
+  "aws_services": ["S3", "Lambda", "DynamoDB", "API Gateway", "CloudWatch"]
 }
 ```
 
 **Service Name Format**:
+
 - Use proper AWS service names (e.g., "Lambda", not "lambda")
 - Use common abbreviations (e.g., "S3", "EC2", "RDS")
 - Be specific when needed (e.g., "RDS PostgreSQL" vs just "RDS")
 
 **Common Errors**:
+
 - ❌ String instead of array: `"aws_services": "S3, Lambda, DynamoDB"`
 - ❌ Empty string: `"aws_services": ""`
 - ❌ Null value: `"aws_services": null`
@@ -227,6 +253,7 @@ See `.claude/docs/references/iac-subtasks-subject-labels.json` for the complete 
 **Format**: AWS region format (e.g., `us-east-1`, `eu-west-2`)
 
 **Validation**:
+
 ```bash
 [[ "$REGION" =~ ^(us|eu|ap|ca|sa|me|af)-[a-z]+-[0-9]+$ ]] || {
   echo "❌ ERROR: Invalid region format '$REGION'"
@@ -234,12 +261,33 @@ See `.claude/docs/references/iac-subtasks-subject-labels.json` for the complete 
 }
 ```
 
+## Subject Label → Platform Requirements
+
+**CRITICAL**: Some subject labels have STRICT platform/language requirements that must be enforced.
+
+| Subject Label                      | Required Platform | Allowed Languages |
+| ---------------------------------- | ----------------- | ----------------- |
+| Infrastructure Analysis/Monitoring | `analysis`        | `py` only         |
+| General Infrastructure Tooling QA  | `analysis`        | `py`, `sh`        |
+| CI/CD Pipeline                     | `cicd`            | `yaml`, `yml`     |
+
+**Reference**: See `.claude/docs/references/iac-subtasks-subject-labels.json` (single source of truth for subtasks, labels, and platform requirements).
+
+**Validation is enforced in**: `.claude/scripts/validate-metadata.sh`
+
+**Example Error**:
+
+```
+❌ Subject label 'Infrastructure Analysis/Monitoring' requires platform='analysis', but got 'cdk'
+⚠️  Analysis tasks use Python scripts with boto3, not IaC platforms
+```
+
 ## Validation Checklist
 
 Before proceeding with any synthetic task generation, validate:
 
 - [ ] **All required fields present**: platform, language, complexity, turn_type, po_id, team, startedAt, subtask
-- [ ] **Platform is valid**: One of cdk, cdktf, cfn, tf, pulumi (lowercase)
+- [ ] **Platform is valid**: One of cdk, cdktf, cfn, tf, pulumi, cicd, analysis (lowercase)
 - [ ] **Language is valid**: Matches platform compatibility matrix (lowercase)
 - [ ] **Complexity is valid**: One of medium, hard, expert (lowercase)
 - [ ] **Subtask is valid**: Exact match from reference file
@@ -247,6 +295,7 @@ Before proceeding with any synthetic task generation, validate:
 - [ ] **aws_services is array**: If present, must be JSON array, not string
 - [ ] **Region format is valid**: Matches AWS region pattern
 - [ ] **Platform-language combination is valid**: Check compatibility matrix
+- [ ] **Subject label platform requirements**: Analysis/CI/CD labels use correct platform
 
 ## Validation Script
 
@@ -305,24 +354,29 @@ echo "✅ Metadata validation passed"
 ### 1. Inventing AWS Services
 
 **❌ WRONG**:
+
 ```json
 {
   "aws_services": ["S3", "Lambda", "DynamoDB", "API Gateway"]
 }
 ```
-*When the task only mentions S3 and Lambda*
+
+_When the task only mentions S3 and Lambda_
 
 **✅ CORRECT**:
+
 ```json
 {
   "aws_services": ["S3", "Lambda"]
 }
 ```
-*Or omit the field if services aren't clearly specified*
+
+_Or omit the field if services aren't clearly specified_
 
 ### 2. Modifying Subtask Names
 
 **❌ WRONG**:
+
 ```json
 {
   "subtask": "Infrastructure Provisioning"
@@ -330,6 +384,7 @@ echo "✅ Metadata validation passed"
 ```
 
 **✅ CORRECT**:
+
 ```json
 {
   "subtask": "Provisioning of Infrastructure Environments"
@@ -339,6 +394,7 @@ echo "✅ Metadata validation passed"
 ### 3. Using Wrong Data Types
 
 **❌ WRONG**:
+
 ```json
 {
   "subject_labels": "Cloud Environment Setup",
@@ -347,6 +403,7 @@ echo "✅ Metadata validation passed"
 ```
 
 **✅ CORRECT**:
+
 ```json
 {
   "subject_labels": ["Cloud Environment Setup"],
@@ -357,6 +414,7 @@ echo "✅ Metadata validation passed"
 ### 4. Case Sensitivity Errors
 
 **❌ WRONG**:
+
 ```json
 {
   "platform": "CDK",
@@ -366,6 +424,7 @@ echo "✅ Metadata validation passed"
 ```
 
 **✅ CORRECT**:
+
 ```json
 {
   "platform": "cdk",

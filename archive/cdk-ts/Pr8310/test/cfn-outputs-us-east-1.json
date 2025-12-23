@@ -1,0 +1,30 @@
+[
+    {
+        "OutputKey": "ApiGatewayCloudWatchLogsRoleArn",
+        "OutputValue": "arn:aws:iam::000000000000:role/TapStackPr305-ApiGatewayCloudWatchLogs-f8c87a90"
+    },
+    {
+        "OutputKey": "OrderProcessingQueueUrl",
+        "OutputValue": "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/TapStackPr305-OrderProcessingQueueAB52-9aa8513f"
+    },
+    {
+        "OutputKey": "ProductApiEndpoint760E02C8",
+        "OutputValue": "https://dtpjel4hyo.execute-api.localhost.localstack.cloud:4566/dev/"
+    },
+    {
+        "OutputKey": "ProductApiUrl",
+        "OutputValue": "https://dtpjel4hyo.execute-api.localhost.localstack.cloud:4566/dev/"
+    },
+    {
+        "OutputKey": "ProductEventsTopicArn",
+        "OutputValue": "arn:aws:sns:us-east-1:000000000000:topic-b6ac82e9"
+    },
+    {
+        "OutputKey": "ProductLambdaFunctionName",
+        "OutputValue": "TapStackPr305-ProductLambda4F8330F3-1431a007"
+    },
+    {
+        "OutputKey": "ProductsTableName",
+        "OutputValue": "TapStackPr305-ProductsTable241ADBFF-bbff3c07"
+    }
+]

@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "q3m2a5b6",
+  "team": "synth",
+  "startedAt": "2025-12-04T10:32:37+05:30",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "AWS CodePipeline",
+    "AWS CodeBuild",
+    "Amazon S3",
+    "AWS Lambda",
+    "Amazon SNS",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "Amazon EventBridge"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

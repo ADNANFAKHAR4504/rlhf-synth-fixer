@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IAC Automation Metadata Schema",
+  "type": "object",
+  "required": [
+    "platform",
+    "language",
+    "complexity",
+    "turn_type",
+    "po_id",
+    "team",
+    "startedAt",
+    "subtask",
+    "provider",
+    "subject_labels",
+    "aws_services",
+    "wave"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "platform": {
+      "type": "string",
+      "enum": [
+        "cdk",
+        "cdktf",
+        "cfn",
+        "tf",
+        "pulumi",
+        "analysis",
+        "cicd"
+      ]
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "ts",
+        "js",
+        "py",
+        "java",
+        "go",
+        "hcl",
+        "yaml",
+        "json",
+        "sh",
+        "yml"
+      ]
+    },
+    "complexity": {
+      "type": "string",
+      "enum": [
+        "medium",
+        "hard",
+        "expert"
+      ]
+    },
+    "turn_type": {
+      "type": "string",
+      "enum": [
+        "single",
+        "multi"
+      ]
+    },
+    "po_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Task Identifier"
+    },
+    "team": {
+      "type": "string",
+      "enum": [
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "synth",
+        "synth-1",
+        "synth-2",
+        "stf"
+      ]
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of task creation"
+    },
+    "subtask": {
+      "type": "string",
+      "enum": [
+        "Provisioning of Infrastructure Environments",
+        "Application Deployment",
+        "CI/CD Pipeline Integration",
+        "Failure Recovery and High Availability",
+        "Security, Compliance, and Governance",
+        "IaC Program Optimization",
+        "Infrastructure QA and Management"
+      ]
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "aws",
+        "localstack"
+      ]
+    },
+    "subject_labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Environment Migration",
+          "Cloud Environment Setup",
+          "Multi-Environment Consistency",
+          "Web Application Deployment",
+          "Serverless Infrastructure (Functions as Code)",
+          "CI/CD Pipeline",
+          "Failure Recovery Automation",
+          "Security Configuration as Code",
+          "IaC Diagnosis/Edits",
+          "IaC Optimization",
+          "Infrastructure Analysis/Monitoring",
+          "General Infrastructure Tooling QA"
+        ]
+      },
+      "minItems": 1
+    },
+    "aws_services": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of AWS services used, e.g., VPC, Lambda, S3"
+    },
+    "wave": {
+      "type": "string",
+      "enum": [
+        "P0",
+        "P1"
+      ]
+    }
+  }
+}
