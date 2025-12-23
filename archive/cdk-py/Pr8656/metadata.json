@@ -11,6 +11,19 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": [],
-  "wave": "P0"
+  "aws_services": [
+    "RDS",
+    "S3",
+    "CloudFront",
+    "IAM",
+    "EC2"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
