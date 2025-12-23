@@ -8,6 +8,7 @@
   "startedAt": "2025-08-19T01:48:41.014Z",
   "provider": "localstack",
   "subtask": "Application Deployment",
+  "wave": "P0",
   "subject_labels": [
     "Web Application Deployment",
     "Serverless Infrastructure (Functions as Code)"
