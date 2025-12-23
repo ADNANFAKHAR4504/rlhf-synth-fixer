@@ -1,0 +1,34 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291571",
+  "team": "synth-2",
+  "startedAt": "2025-08-18T11:46:51.380Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "Monitoring Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudTrail",
+    "GuardDuty",
+    "Config",
+    "S3",
+    "CloudWatch",
+    "Systems Manager"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr1584"
+  }
+}
