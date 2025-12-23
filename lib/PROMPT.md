@@ -32,7 +32,7 @@ Create a security-first infrastructure foundation using **Terraform with HCL** t
 **3. Fine-Grained IAM Access Controls**
 - Implement IAM roles with session duration limits of 1 hour
 - Enforce MFA for role assumption via aws:MultiFactorAuthPresent condition
-- Follow least-privilege principle with no Resource: '*' statements
+- Follow least-privilege principle with no wildcard Resource statements
 - All IAM policies must be specific and scoped
 
 **4. VPC Endpoint Security**
@@ -43,7 +43,7 @@ Create a security-first infrastructure foundation using **Terraform with HCL** t
 - Create standardized data classification tags: PII, Confidential, Public
 - All resources must include these classification tags
 - Resource names must include environmentSuffix for uniqueness
-- Follow naming pattern: {environment}-{service}-{purpose}-{environmentSuffix}
+- Follow naming pattern: environment-service-purpose-environmentSuffix
 
 **6. Service Control Policies**
 - Implement SCPs preventing root account usage
@@ -65,9 +65,9 @@ Create a security-first infrastructure foundation using **Terraform with HCL** t
 - All infrastructure defined using **Terraform with HCL**
 - Use Terraform 1.5+ and AWS provider 5.x
 - Deploy primarily to us-east-1 region
-- Use KMS for encryption (multi-region keys)
+- Use KMS for encryption with multi-region keys
 - Use Secrets Manager for credential storage
-- Use Lambda (Python 3.9) for secret rotation
+- Use Lambda with Python 3.9 for secret rotation
 - Use AWS Config for compliance monitoring
 - Use CloudWatch Logs for centralized logging
 - Resource names must include environmentSuffix parameter for uniqueness
@@ -80,12 +80,12 @@ Create a security-first infrastructure foundation using **Terraform with HCL** t
 - KMS keys: deletion window exactly 7 days, automatic rotation enabled
 - Secrets Manager: use ignore_changes lifecycle for secret versions
 - IAM roles: session duration 1 hour max, MFA enforcement required
-- IAM policies: no Resource: '*' allowed, must be specific
+- IAM policies: no wildcard Resource patterns allowed, must be specific
 - KMS key policies: must explicitly deny root account decrypt operations
 - Lambda validation: rotation functions must validate secret format
 - AWS Config: minimum 5 custom rules required
 - Lifecycle rules: all Terraform resources must have prevent_destroy
-- Naming convention: {environment}-{service}-{purpose}-{environmentSuffix}
+- Naming convention: environment-service-purpose-environmentSuffix
 
 **Security Requirements:**
 - All data encrypted at rest using customer-managed KMS keys
@@ -95,8 +95,8 @@ Create a security-first infrastructure foundation using **Terraform with HCL** t
 - Root account usage prevention via SCPs
 - Least-privilege access controls throughout
 
-**Deployment Requirements (CRITICAL):**
-- All resources must be destroyable (no RemovalPolicy: RETAIN)
+**Deployment Requirements - CRITICAL:**
+- All resources must be destroyable 
 - Resource names MUST include environmentSuffix for uniqueness
 - Use random provider for generating unique suffixes
 - Include validation commands in outputs using AWS CLI
@@ -104,7 +104,7 @@ Create a security-first infrastructure foundation using **Terraform with HCL** t
 ### Optional Enhancements
 
 If time permits, consider adding:
-- GuardDuty for real-time threat detection (NOTE: One detector per account limit)
+- GuardDuty for real-time threat detection - NOTE: One detector per account limit
 - Security Hub for centralized compliance dashboards
 - Systems Manager Parameter Store for non-rotating configuration values
 
@@ -119,7 +119,7 @@ If time permits, consider adding:
 
 **Security:**
 - All encryption uses customer-managed keys
-- No Resource: '*' in IAM policies
+- No wildcard Resource patterns in IAM policies
 - Root account explicitly denied decrypt operations
 - All resources properly tagged with classification
 - Compliance rules detect violations
@@ -139,8 +139,8 @@ If time permits, consider adding:
 ## What to deliver
 
 - Complete Terraform HCL implementation with modular structure
-- KMS multi-region key configuration (us-east-1, eu-west-1, ap-southeast-1)
-- Secrets Manager with Lambda rotation functions (Python 3.9)
+- KMS multi-region key configuration : us-east-1, eu-west-1, ap-southeast-1
+- Secrets Manager with Lambda rotation functions using Python 3.9
 - IAM roles and policies following least-privilege
 - VPC endpoints with resource-based policies
 - Service Control Policies for organization-level controls
