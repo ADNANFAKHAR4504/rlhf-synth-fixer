@@ -22,5 +22,6 @@
     "VPC Flow Logs",
     "EC2"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": "P1"
 }
