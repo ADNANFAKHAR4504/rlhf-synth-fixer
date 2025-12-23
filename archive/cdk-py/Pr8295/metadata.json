@@ -21,5 +21,12 @@
     "Secrets Manager"
   ],
   "startedAt": "2025-08-13T13:21:33.214Z",
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
 }
