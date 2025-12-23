@@ -11,7 +11,7 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "wave": "0",
+  "wave": "P0",
   "aws_services": [
     "VPC",
     "S3 Bucket",
