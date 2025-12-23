@@ -1,6 +1,6 @@
 import fs from 'fs';
-import path from 'path';
 import yaml from 'js-yaml';
+import path from 'path';
 
 describe('Failure Recovery and High Availability Stack Unit Tests', () => {
   let template: any;
@@ -39,6 +39,10 @@ describe('Failure Recovery and High Availability Stack Unit Tests', () => {
       new yaml.Type('!Base64', {
         kind: 'scalar',
         construct: data => ({ 'Fn::Base64': data }),
+      }),
+      new yaml.Type('!If', {
+        kind: 'sequence',
+        construct: data => ({ 'Fn::If': data }),
       }),
     ]);
 

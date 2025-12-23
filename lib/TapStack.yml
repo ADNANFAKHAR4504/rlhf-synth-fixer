@@ -55,6 +55,12 @@ Conditions:
       - Fn::Equals:
         - Ref: pAcmCertificateArn
         - ''
+  # Skip Backup resources in LocalStack (account 000000000000) as they're not fully supported
+  IsNotLocalStack:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: AWS::AccountId
+        - '000000000000'
 
 Resources:
   #
@@ -87,6 +93,7 @@ Resources:
 
   BackupRole:
     Type: AWS::IAM::Role
+    Condition: IsNotLocalStack
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -493,11 +500,13 @@ Resources:
   #
   BackupVault:
     Type: AWS::Backup::BackupVault
+    Condition: IsNotLocalStack
     Properties:
       BackupVaultName: !Sub ${AWS::StackName}-Vault
 
   BackupPlan:
     Type: AWS::Backup::BackupPlan
+    Condition: IsNotLocalStack
     Properties:
       BackupPlan:
         BackupPlanName: !Sub ${AWS::StackName}-Daily-Plan
@@ -510,6 +519,7 @@ Resources:
 
   BackupSelection:
     Type: AWS::Backup::BackupSelection
+    Condition: IsNotLocalStack
     Properties:
       BackupPlanId: !GetAtt BackupPlan.BackupPlanId
       BackupSelection:
