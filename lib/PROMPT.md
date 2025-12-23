@@ -28,14 +28,14 @@ Create a production-ready migration infrastructure using **Terraform with HCL** 
 3. **Application Deployment**
    - ECS Fargate for containerized web frontend and API backend
    - Auto-scaling based on CPU and memory metrics
-   - Use Graviton2 instances (ARM64) for cost optimization
+   - Use Graviton2 instances, specifically ARM64, for cost optimization
    - Application configuration migrated to AWS SSM Parameter Store
 
 4. **Load Balancing and Traffic Management**
    - Application Load Balancer with health checks
    - SSL termination using ACM certificates
    - Route 53 hosted zone with weighted routing for gradual traffic migration
-   - Initial routing: 0% to AWS (100% on-premises), gradually increase
+   - Initial routing: 0% to AWS with all traffic on-premises, gradually increase
 
 5. **Monitoring and Alerting**
    - CloudWatch dashboards showing migration progress
@@ -58,10 +58,10 @@ Create a production-ready migration infrastructure using **Terraform with HCL** 
 
 - All infrastructure defined using **Terraform with HCL**
 - Use **VPC** with 3 availability zones, public and private subnets
-- Use **ECS Fargate** with auto-scaling (Graviton2 instances)
+- Use **ECS Fargate** with auto-scaling using Graviton2 instances
 - Use **RDS Aurora PostgreSQL** Multi-AZ with read replicas
 - Use **Application Load Balancer** for SSL termination and health checks
-- Use **Route 53** for weighted routing (gradual traffic migration)
+- Use **Route 53** for weighted routing to enable gradual traffic migration
 - Use **AWS DMS** for continuous database replication
 - Use **CloudWatch** for dashboards, alarms, and logs
 - Use **SNS** for migration alerts and notifications
@@ -70,10 +70,10 @@ Create a production-ready migration infrastructure using **Terraform with HCL** 
 - Use **AWS SSM Parameter Store** for application configuration
 - Use **Lambda** for rollback automation
 - Use **NAT Gateway** for private subnet outbound connectivity
-- Resource names must include **environment_suffix** for uniqueness
-- Follow naming convention: `{resource-type}-environment-suffix`
+- All infrastructure names must include **environment_suffix** for uniqueness
+- Follow naming convention: resource-type-environment-suffix
 - Deploy to **us-east-1** region
-- All resources must be destroyable (no Retain policies)
+- All resources must be destroyable without Retain policies
 - Implement proper IAM roles with least privilege
 - Enable encryption at rest and in transit
 
@@ -100,7 +100,7 @@ Create a production-ready migration infrastructure using **Terraform with HCL** 
 - **Rollback Capability**: Automated rollback on failure detection
 - **Security**: All credentials in Secrets Manager, encrypted data at rest and in transit
 - **Cost Optimization**: Graviton2 instances and serverless options where appropriate
-- **Resource Naming**: All resources include environment_suffix for uniqueness
+- **Naming Convention**: All infrastructure includes environment_suffix for uniqueness
 - **Destroyability**: All resources can be cleanly torn down
 - **Code Quality**: Well-structured HCL, properly modularized, comprehensive tests
 
@@ -110,7 +110,7 @@ Create a production-ready migration infrastructure using **Terraform with HCL** 
 - VPC with 3 AZs, public and private subnets, NAT Gateways
 - RDS Aurora PostgreSQL Multi-AZ cluster with read replicas
 - AWS DMS replication instance and tasks
-- ECS Fargate services with auto-scaling (Graviton2)
+- ECS Fargate services with auto-scaling using Graviton2
 - Application Load Balancer with SSL termination
 - Route 53 hosted zone with weighted routing policies
 - CloudWatch dashboards, alarms, and log groups
