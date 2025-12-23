@@ -1,0 +1,28 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-26T06:25:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EKS",
+    "Fargate",
+    "VPC",
+    "IAM",
+    "CloudWatch",
+    "Secrets Manager",
+    "ECR",
+    "KMS",
+    "SNS",
+    "ALB",
+    "Autoscaling"
+  ],
+  "po_id": "101912663",
+  "provider": "localstack",
+  "wave": "P0"
+}
