@@ -1,6 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, multi-region AWS infrastructure template with comprehensive logging, security, and data protection'
 
+Parameters:
+  LatestAmiId:
+    Type: String
+    Default: ami-ff0fea8310f3
+    Description: AMI ID for EC2 instance (LocalStack compatible)
+
 Resources:
   # ========================================
   # NETWORKING & LOGGING INFRASTRUCTURE
@@ -196,7 +202,7 @@ Resources:
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-ff0fea8310f3  # LocalStack mock AMI ID
+      ImageId: !Ref LatestAmiId
       InstanceType: t2.micro
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
