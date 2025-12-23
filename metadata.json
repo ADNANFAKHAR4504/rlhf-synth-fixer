@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912301",
+  "wave": "P0",
+  "team": "synth",
+  "startedAt": "2025-12-23T16:51:06.991Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "Key",
+    "Alias",
+    "LogGroup",
+    "MetricFilter",
+    "InsightRule",
+    "AnomalyDetector",
+    "Canary",
+    "Bucket",
+    "BucketPolicy",
+    "Role",
+    "Policy",
+    "Function",
+    "Permission",
+    "Rule",
+    "Alarm",
+    "CompositeAlarm",
+    "Dashboard",
+    "SamplingRule",
+    "QueryDefinition",
+    "Topic",
+    "Subscription",
+    "Link"
+  ]
+}
