@@ -21,5 +21,6 @@
     "S3",
     "SecretsManager"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": "P1"
 }
