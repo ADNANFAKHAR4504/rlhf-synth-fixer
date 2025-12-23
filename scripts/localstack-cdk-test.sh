@@ -131,7 +131,7 @@ echo -e "${YELLOW}  • SSL Verification: Disabled${NC}"
 # Verify CDK stack is deployed
 echo -e "${YELLOW}🔍 Verifying CDK stack deployment...${NC}"
 ENVIRONMENT_SUFFIX="${ENVIRONMENT_SUFFIX:-dev}"
-STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
+STACK_NAME="TapStack-${ENVIRONMENT_SUFFIX}"
 
 STACK_STATUS=$(awslocal cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
 

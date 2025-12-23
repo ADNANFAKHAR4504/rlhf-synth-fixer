@@ -4,19 +4,23 @@ This document presents the perfect Infrastructure as Code (IaC) solution for dep
 
 ## Architecture Overview
 
-The solution implements a three-tier architecture spanning three availability zones in the us-east-2 region:
+Platform: CDK (cdk)
+Language: Python (py)
+
+The solution implements a three-tier architecture spanning two availability zones in the us-east-1 region (LocalStack compatible):
 
 - **Presentation Layer**: Application Load Balancer in public subnets
-- **Application Layer**: EC2 instances with Auto Scaling Group in private subnets
+- **Application Layer**: EC2 instances with Auto Scaling Group in public subnets (LocalStack compatible)
 - **Data Layer**: RDS MySQL database in isolated private subnets
 
 ## Key Features
 
 ### 1. High Availability & Scalability
-- **Multi-AZ Deployment**: Resources distributed across 3 availability zones
+- **Multi-AZ Deployment**: Resources distributed across 2 availability zones (LocalStack compatible)
 - **Auto Scaling**: Dynamic scaling based on CPU utilization (70% threshold)
 - **Load Balancing**: Application Load Balancer distributes traffic evenly
 - **Health Checks**: ELB health checks ensure only healthy instances serve traffic
+- **LocalStack Compatibility**: NAT Gateways disabled for LocalStack deployment compatibility
 
 ### 2. Security
 - **Network Isolation**: VPC with public, private, and isolated database subnets
