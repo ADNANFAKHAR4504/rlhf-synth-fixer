@@ -98,6 +98,14 @@ desired_capacity=2 if self.env_suffix == "prod" else 1
 
 # CPU-based scaling policy
 target_utilization_percent=70
+
+# LocalStack compatibility: Override launch template version
+# LocalStack returns non-string for LatestVersionNumber property
+cfn_asg = self.asg.node.default_child
+cfn_asg.launch_template = {
+    "launchTemplateId": self.launch_template.launch_template_id,
+    "version": "$Latest"
+}
 ```
 
 #### Database Configuration
