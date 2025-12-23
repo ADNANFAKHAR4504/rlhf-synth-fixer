@@ -18,6 +18,13 @@
     "AWS KMS",
     "Amazon CloudWatch",
     "AWS IAM",
-    "CloudWatch Logs"
-  ]
+    "Amazon EventBridge"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
