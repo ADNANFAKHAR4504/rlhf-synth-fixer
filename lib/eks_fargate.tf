@@ -67,20 +67,21 @@ resource "aws_eks_fargate_profile" "alb_controller" {
   ]
 }
 
+# NOTE: kubectl commands disabled for LocalStack compatibility
 # Patch CoreDNS to run on Fargate
-resource "null_resource" "patch_coredns" {
-  provisioner "local-exec" {
-    command = <<-EOT
-      aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.main.name}
-      kubectl patch deployment coredns \
-        -n kube-system \
-        --type json \
-        -p='[{"op": "remove", "path": "/spec/template/metadata/annotations/eks.amazonaws.com~1compute-type"}]' || true
-    EOT
-  }
-
-  depends_on = [
-    aws_eks_fargate_profile.coredns,
-    aws_eks_addon.coredns,
-  ]
-}
+# resource "null_resource" "patch_coredns" {
+#   provisioner "local-exec" {
+#     command = <<-EOT
+#       aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.main.name}
+#       kubectl patch deployment coredns \
+#         -n kube-system \
+#         --type json \
+#         -p='[{"op": "remove", "path": "/spec/template/metadata/annotations/eks.amazonaws.com~1compute-type"}]' || true
+#     EOT
+#   }
+#
+#   depends_on = [
+#     aws_eks_fargate_profile.coredns,
+#     aws_eks_addon.coredns,
+#   ]
+# }

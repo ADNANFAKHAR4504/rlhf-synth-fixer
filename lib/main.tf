@@ -191,10 +191,11 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
 }
 
 resource "aws_flow_log" "main" {
-  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
+  iam_role_arn           = aws_iam_role.vpc_flow_logs.arn
+  log_destination        = aws_cloudwatch_log_group.vpc_flow_logs.arn
+  traffic_type           = "ALL"
+  vpc_id                 = aws_vpc.main.id
+  max_aggregation_interval = 600
 
   tags = {
     Name = "eks-vpc-flowlog-${var.environment_suffix}"

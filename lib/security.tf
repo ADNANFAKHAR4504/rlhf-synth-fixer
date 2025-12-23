@@ -89,68 +89,69 @@ resource "aws_secretsmanager_secret_version" "app_secrets" {
   })
 }
 
+# NOTE: Kubernetes resources disabled for LocalStack compatibility
 # Network Policy ConfigMap for zero-trust communication
-resource "kubernetes_config_map" "network_policy" {
-  metadata {
-    name      = "network-policy-config"
-    namespace = "kube-system"
-  }
-
-  data = {
-    "default-deny.yaml" = <<-EOT
-      apiVersion: networking.k8s.io/v1
-      kind: NetworkPolicy
-      metadata:
-        name: default-deny-all
-        namespace: default
-      spec:
-        podSelector: {}
-        policyTypes:
-        - Ingress
-        - Egress
-    EOT
-
-    "allow-dns.yaml" = <<-EOT
-      apiVersion: networking.k8s.io/v1
-      kind: NetworkPolicy
-      metadata:
-        name: allow-dns-access
-        namespace: default
-      spec:
-        podSelector: {}
-        policyTypes:
-        - Egress
-        egress:
-        - to:
-          - namespaceSelector:
-              matchLabels:
-                name: kube-system
-          ports:
-          - protocol: UDP
-            port: 53
-    EOT
-
-    "allow-same-namespace.yaml" = <<-EOT
-      apiVersion: networking.k8s.io/v1
-      kind: NetworkPolicy
-      metadata:
-        name: allow-same-namespace
-        namespace: default
-      spec:
-        podSelector: {}
-        policyTypes:
-        - Ingress
-        ingress:
-        - from:
-          - podSelector: {}
-    EOT
-  }
-
-  depends_on = [
-    aws_eks_cluster.main,
-    aws_eks_node_group.frontend,
-  ]
-}
+# resource "kubernetes_config_map" "network_policy" {
+#   metadata {
+#     name      = "network-policy-config"
+#     namespace = "kube-system"
+#   }
+#
+#   data = {
+#     "default-deny.yaml" = <<-EOT
+#       apiVersion: networking.k8s.io/v1
+#       kind: NetworkPolicy
+#       metadata:
+#         name: default-deny-all
+#         namespace: default
+#       spec:
+#         podSelector: {}
+#         policyTypes:
+#         - Ingress
+#         - Egress
+#     EOT
+#
+#     "allow-dns.yaml" = <<-EOT
+#       apiVersion: networking.k8s.io/v1
+#       kind: NetworkPolicy
+#       metadata:
+#         name: allow-dns-access
+#         namespace: default
+#       spec:
+#         podSelector: {}
+#         policyTypes:
+#         - Egress
+#         egress:
+#         - to:
+#           - namespaceSelector:
+#               matchLabels:
+#                 name: kube-system
+#           ports:
+#           - protocol: UDP
+#             port: 53
+#     EOT
+#
+#     "allow-same-namespace.yaml" = <<-EOT
+#       apiVersion: networking.k8s.io/v1
+#       kind: NetworkPolicy
+#       metadata:
+#         name: allow-same-namespace
+#         namespace: default
+#       spec:
+#         podSelector: {}
+#         policyTypes:
+#         - Ingress
+#         ingress:
+#         - from:
+#           - podSelector: {}
+#     EOT
+#   }
+#
+#   depends_on = [
+#     aws_eks_cluster.main,
+#     aws_eks_node_group.frontend,
+#   ]
+# }
 
 # Security group rules for pod-to-pod encryption
 resource "aws_security_group_rule" "nodes_ingress_istio" {

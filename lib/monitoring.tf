@@ -149,115 +149,116 @@ resource "aws_iam_role_policy_attachment" "fluent_bit" {
   policy_arn = aws_iam_policy.fluent_bit.arn
 }
 
+# NOTE: Kubernetes resources disabled for LocalStack compatibility
 # Kubernetes namespace for monitoring
-resource "kubernetes_namespace" "amazon_cloudwatch" {
-  metadata {
-    name = "amazon-cloudwatch"
-    labels = {
-      name = "amazon-cloudwatch"
-    }
-  }
-
-  depends_on = [
-    aws_eks_cluster.main,
-    aws_eks_node_group.frontend,
-  ]
-}
+# resource "kubernetes_namespace" "amazon_cloudwatch" {
+#   metadata {
+#     name = "amazon-cloudwatch"
+#     labels = {
+#       name = "amazon-cloudwatch"
+#     }
+#   }
+#
+#   depends_on = [
+#     aws_eks_cluster.main,
+#     aws_eks_node_group.frontend,
+#   ]
+# }
 
 # Service Account for CloudWatch Agent
-resource "kubernetes_service_account" "cloudwatch_agent" {
-  metadata {
-    name      = "cloudwatch-agent"
-    namespace = kubernetes_namespace.amazon_cloudwatch.metadata[0].name
-    annotations = {
-      "eks.amazonaws.com/role-arn" = aws_iam_role.cloudwatch_agent.arn
-    }
-  }
-}
+# resource "kubernetes_service_account" "cloudwatch_agent" {
+#   metadata {
+#     name      = "cloudwatch-agent"
+#     namespace = kubernetes_namespace.amazon_cloudwatch.metadata[0].name
+#     annotations = {
+#       "eks.amazonaws.com/role-arn" = aws_iam_role.cloudwatch_agent.arn
+#     }
+#   }
+# }
 
 # Service Account for Fluent Bit
-resource "kubernetes_service_account" "fluent_bit" {
-  metadata {
-    name      = "fluent-bit"
-    namespace = kubernetes_namespace.amazon_cloudwatch.metadata[0].name
-    annotations = {
-      "eks.amazonaws.com/role-arn" = aws_iam_role.fluent_bit.arn
-    }
-  }
-}
+# resource "kubernetes_service_account" "fluent_bit" {
+#   metadata {
+#     name      = "fluent-bit"
+#     namespace = kubernetes_namespace.amazon_cloudwatch.metadata[0].name
+#     annotations = {
+#       "eks.amazonaws.com/role-arn" = aws_iam_role.fluent_bit.arn
+#     }
+#   }
+# }
 
 # Deploy CloudWatch Agent using Helm
-resource "helm_release" "cloudwatch_agent" {
-  name       = "aws-cloudwatch-metrics"
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-cloudwatch-metrics"
-  namespace  = kubernetes_namespace.amazon_cloudwatch.metadata[0].name
-  version    = "0.0.9"
-
-  set {
-    name  = "clusterName"
-    value = aws_eks_cluster.main.name
-  }
-
-  set {
-    name  = "serviceAccount.create"
-    value = "false"
-  }
-
-  set {
-    name  = "serviceAccount.name"
-    value = kubernetes_service_account.cloudwatch_agent.metadata[0].name
-  }
-
-  depends_on = [
-    kubernetes_service_account.cloudwatch_agent,
-    aws_cloudwatch_log_group.container_insights,
-  ]
-}
+# resource "helm_release" "cloudwatch_agent" {
+#   name       = "aws-cloudwatch-metrics"
+#   repository = "https://aws.github.io/eks-charts"
+#   chart      = "aws-cloudwatch-metrics"
+#   namespace  = kubernetes_namespace.amazon_cloudwatch.metadata[0].name
+#   version    = "0.0.9"
+#
+#   set {
+#     name  = "clusterName"
+#     value = aws_eks_cluster.main.name
+#   }
+#
+#   set {
+#     name  = "serviceAccount.create"
+#     value = "false"
+#   }
+#
+#   set {
+#     name  = "serviceAccount.name"
+#     value = kubernetes_service_account.cloudwatch_agent.metadata[0].name
+#   }
+#
+#   depends_on = [
+#     kubernetes_service_account.cloudwatch_agent,
+#     aws_cloudwatch_log_group.container_insights,
+#   ]
+# }
 
 # Deploy Fluent Bit for log collection
-resource "helm_release" "fluent_bit" {
-  name       = "aws-for-fluent-bit"
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-for-fluent-bit"
-  namespace  = kubernetes_namespace.amazon_cloudwatch.metadata[0].name
-  version    = "0.1.32"
-
-  set {
-    name  = "cloudWatch.region"
-    value = var.aws_region
-  }
-
-  set {
-    name  = "cloudWatch.logGroupName"
-    value = "/aws/containerinsights/${var.cluster_name}-${var.environment_suffix}/application"
-  }
-
-  set {
-    name  = "serviceAccount.create"
-    value = "false"
-  }
-
-  set {
-    name  = "serviceAccount.name"
-    value = kubernetes_service_account.fluent_bit.metadata[0].name
-  }
-
-  set {
-    name  = "firehose.enabled"
-    value = "false"
-  }
-
-  set {
-    name  = "kinesis.enabled"
-    value = "false"
-  }
-
-  depends_on = [
-    kubernetes_service_account.fluent_bit,
-    aws_cloudwatch_log_group.application,
-  ]
-}
+# resource "helm_release" "fluent_bit" {
+#   name       = "aws-for-fluent-bit"
+#   repository = "https://aws.github.io/eks-charts"
+#   chart      = "aws-for-fluent-bit"
+#   namespace  = kubernetes_namespace.amazon_cloudwatch.metadata[0].name
+#   version    = "0.1.32"
+#
+#   set {
+#     name  = "cloudWatch.region"
+#     value = var.aws_region
+#   }
+#
+#   set {
+#     name  = "cloudWatch.logGroupName"
+#     value = "/aws/containerinsights/${var.cluster_name}-${var.environment_suffix}/application"
+#   }
+#
+#   set {
+#     name  = "serviceAccount.create"
+#     value = "false"
+#   }
+#
+#   set {
+#     name  = "serviceAccount.name"
+#     value = kubernetes_service_account.fluent_bit.metadata[0].name
+#   }
+#
+#   set {
+#     name  = "firehose.enabled"
+#     value = "false"
+#   }
+#
+#   set {
+#     name  = "kinesis.enabled"
+#     value = "false"
+#   }
+#
+#   depends_on = [
+#     kubernetes_service_account.fluent_bit,
+#     aws_cloudwatch_log_group.application,
+#   ]
+# }
 
 # SNS Topic for CloudWatch Alarms
 resource "aws_sns_topic" "eks_alerts" {
