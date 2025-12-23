@@ -11,5 +11,6 @@
   "subject_labels": [
     "General Infrastructure Tooling QA"
   ],
-  "aws_services": []
+  "aws_services": [],
+  "wave": "P1"
 }
