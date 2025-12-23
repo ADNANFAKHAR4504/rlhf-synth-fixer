@@ -1,0 +1,25 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291676",
+  "team": "synth-2",
+  "startedAt": "2025-08-15T21:27:47.138Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "CloudFront",
+    "WAFv2",
+    "Route53",
+    "ACM",
+    "IAM",
+    "CloudWatch"
+  ],
+  "wave": "P1"
+}
