@@ -70,5 +70,23 @@ export class TapStack extends cdk.Stack {
     //     env: { ...props?.env, region: 'us-west-2' },
     //   });
     // }
+
+    // Stack Outputs
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: networking.vpc.vpcId,
+      description: 'VPC ID',
+      exportName: `${projectName}-${environmentSuffix}-vpc-id`,
+    });
+
+    new cdk.CfnOutput(this, 'VpcArn', {
+      value: networking.vpc.vpcArn,
+      description: 'VPC ARN',
+      exportName: `${projectName}-${environmentSuffix}-vpc-arn`,
+    });
+
+    new cdk.CfnOutput(this, 'Region', {
+      value: this.region,
+      description: 'Deployment Region',
+    });
   }
 }
