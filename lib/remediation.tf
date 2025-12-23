@@ -229,99 +229,100 @@ resource "aws_lambda_permission" "allow_eventbridge" {
 }
 
 # CloudWatch Alarms for monitoring Lambda function
-resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
-  alarm_name          = "compliance-lambda-errors-${var.environment_suffix}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "Errors"
-  namespace           = "AWS/Lambda"
-  period              = "60"
-  statistic           = "Sum"
-  threshold           = "5"
-  alarm_description   = "This metric monitors lambda errors"
-  treat_missing_data  = "notBreaching"
+# Commented out for LocalStack compatibility - CloudWatch Metric Alarms have serialization issues in LocalStack
+# resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
+#   alarm_name          = "compliance-lambda-errors-${var.environment_suffix}"
+#   comparison_operator = "GreaterThanThreshold"
+#   evaluation_periods  = "2"
+#   metric_name         = "Errors"
+#   namespace           = "AWS/Lambda"
+#   period              = "60"
+#   statistic           = "Sum"
+#   threshold           = "5"
+#   alarm_description   = "This metric monitors lambda errors"
+#   treat_missing_data  = "notBreaching"
+#
+#   dimensions = {
+#     FunctionName = aws_lambda_function.remediation.function_name
+#   }
+#
+#   alarm_actions = var.sns_email_endpoint != "" ? [aws_sns_topic.compliance_notifications[0].arn] : []
+#
+#   tags = {
+#     Name        = "compliance-lambda-errors-${var.environment_suffix}"
+#     Environment = var.environment_suffix
+#   }
+# }
 
-  dimensions = {
-    FunctionName = aws_lambda_function.remediation.function_name
-  }
-
-  alarm_actions = var.sns_email_endpoint != "" ? [aws_sns_topic.compliance_notifications[0].arn] : []
-
-  tags = {
-    Name        = "compliance-lambda-errors-${var.environment_suffix}"
-    Environment = var.environment_suffix
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
-  alarm_name          = "compliance-lambda-throttles-${var.environment_suffix}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "1"
-  metric_name         = "Throttles"
-  namespace           = "AWS/Lambda"
-  period              = "60"
-  statistic           = "Sum"
-  threshold           = "10"
-  alarm_description   = "This metric monitors lambda throttling"
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    FunctionName = aws_lambda_function.remediation.function_name
-  }
-
-  alarm_actions = var.sns_email_endpoint != "" ? [aws_sns_topic.compliance_notifications[0].arn] : []
-
-  tags = {
-    Name        = "compliance-lambda-throttles-${var.environment_suffix}"
-    Environment = var.environment_suffix
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
-  alarm_name          = "compliance-lambda-duration-${var.environment_suffix}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "Duration"
-  namespace           = "AWS/Lambda"
-  period              = "60"
-  statistic           = "Average"
-  threshold           = var.lambda_timeout * 0.8 * 1000 # 80% of timeout in milliseconds
-  alarm_description   = "This metric monitors lambda duration approaching timeout"
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    FunctionName = aws_lambda_function.remediation.function_name
-  }
-
-  alarm_actions = var.sns_email_endpoint != "" ? [aws_sns_topic.compliance_notifications[0].arn] : []
-
-  tags = {
-    Name        = "compliance-lambda-duration-${var.environment_suffix}"
-    Environment = var.environment_suffix
-  }
-}
-
-# Alarm for Dead Letter Queue messages
-resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
-  alarm_name          = "compliance-dlq-messages-${var.environment_suffix}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "1"
-  metric_name         = "ApproximateNumberOfMessagesVisible"
-  namespace           = "AWS/SQS"
-  period              = "300"
-  statistic           = "Sum"
-  threshold           = "1"
-  alarm_description   = "Messages in DLQ indicate failed Lambda executions"
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    QueueName = aws_sqs_queue.lambda_dlq.name
-  }
-
-  alarm_actions = var.sns_email_endpoint != "" ? [aws_sns_topic.compliance_notifications[0].arn] : []
-
-  tags = {
-    Name        = "compliance-dlq-messages-${var.environment_suffix}"
-    Environment = var.environment_suffix
-  }
-}
+# resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
+#   alarm_name          = "compliance-lambda-throttles-${var.environment_suffix}"
+#   comparison_operator = "GreaterThanThreshold"
+#   evaluation_periods  = "1"
+#   metric_name         = "Throttles"
+#   namespace           = "AWS/Lambda"
+#   period              = "60"
+#   statistic           = "Sum"
+#   threshold           = "10"
+#   alarm_description   = "This metric monitors lambda throttling"
+#   treat_missing_data  = "notBreaching"
+#
+#   dimensions = {
+#     FunctionName = aws_lambda_function.remediation.function_name
+#   }
+#
+#   alarm_actions = var.sns_email_endpoint != "" ? [aws_sns_topic.compliance_notifications[0].arn] : []
+#
+#   tags = {
+#     Name        = "compliance-lambda-throttles-${var.environment_suffix}"
+#     Environment = var.environment_suffix
+#   }
+# }
+#
+# resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
+#   alarm_name          = "compliance-lambda-duration-${var.environment_suffix}"
+#   comparison_operator = "GreaterThanThreshold"
+#   evaluation_periods  = "2"
+#   metric_name         = "Duration"
+#   namespace           = "AWS/Lambda"
+#   period              = "60"
+#   statistic           = "Average"
+#   threshold           = var.lambda_timeout * 0.8 * 1000 # 80% of timeout in milliseconds
+#   alarm_description   = "This metric monitors lambda duration approaching timeout"
+#   treat_missing_data  = "notBreaching"
+#
+#   dimensions = {
+#     FunctionName = aws_lambda_function.remediation.function_name
+#   }
+#
+#   alarm_actions = var.sns_email_endpoint != "" ? [aws_sns_topic.compliance_notifications[0].arn] : []
+#
+#   tags = {
+#     Name        = "compliance-lambda-duration-${var.environment_suffix}"
+#     Environment = var.environment_suffix
+#   }
+# }
+#
+# # Alarm for Dead Letter Queue messages
+# resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
+#   alarm_name          = "compliance-dlq-messages-${var.environment_suffix}"
+#   comparison_operator = "GreaterThanThreshold"
+#   evaluation_periods  = "1"
+#   metric_name         = "ApproximateNumberOfMessagesVisible"
+#   namespace           = "AWS/SQS"
+#   period              = "300"
+#   statistic           = "Sum"
+#   threshold           = "1"
+#   alarm_description   = "Messages in DLQ indicate failed Lambda executions"
+#   treat_missing_data  = "notBreaching"
+#
+#   dimensions = {
+#     QueueName = aws_sqs_queue.lambda_dlq.name
+#   }
+#
+#   alarm_actions = var.sns_email_endpoint != "" ? [aws_sns_topic.compliance_notifications[0].arn] : []
+#
+#   tags = {
+#     Name        = "compliance-dlq-messages-${var.environment_suffix}"
+#     Environment = var.environment_suffix
+#   }
+# }
