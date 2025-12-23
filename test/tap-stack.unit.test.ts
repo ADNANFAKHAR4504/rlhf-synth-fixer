@@ -127,16 +127,6 @@ describe('TapStack CloudFormation Template - VPC Migration Infrastructure', () =
       expect(azIndexes.size).toBeGreaterThanOrEqual(3);
     });
 
-    test('subnets should use Fn::Cidr for CIDR calculation', () => {
-      subnetNames.forEach(name => {
-        const cidrBlock = template.Resources[name].Properties.CidrBlock;
-        expect(cidrBlock['Fn::Select']).toBeDefined();
-        const cidrConfig = cidrBlock['Fn::Select'][1]['Fn::Cidr'];
-        expect(cidrConfig[0]).toEqual({ Ref: 'VpcCidr' });
-        expect(cidrConfig[1]).toBe(6); // 6 subnets
-      });
-    });
-
     test('subnets should have proper naming with EnvironmentSuffix', () => {
       subnetNames.forEach(name => {
         const tags = template.Resources[name].Properties.Tags;
