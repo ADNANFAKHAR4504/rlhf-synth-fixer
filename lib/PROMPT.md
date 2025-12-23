@@ -1,29 +1,10 @@
-```yml
-Act as an expert DevOps engineer. Generate a production-grade AWS CloudFormation template (YAML) that defines a complete serverless infrastructure in the us-east-1 region.
+Create a CloudFormation YAML template for a serverless API setup in us-east-1.
 
-Requirements:
+I need:
+- A Lambda function that handles API requests and sends logs to CloudWatch
+- An HTTP API Gateway connected to the Lambda function so HTTP requests trigger Lambda execution
+- CloudWatch log groups with 7 day retention for monitoring both the API and Lambda
 
-The infrastructure must use AWS Lambda for running serverless application code.
+All resources should be in one stack with names prefixed with "projectX". The Lambda should have minimal IAM permissions - only what it needs for basic execution and logging.
 
-Provision an Amazon API Gateway (HTTP API) to trigger the Lambda function via HTTP requests.
-
-Enable detailed monitoring and logging using Amazon CloudWatch for both API Gateway and Lambda (i.e., log groups, metrics, and log retention policies).
-
-All resources must be defined within a single CloudFormation stack.
-
-Enforce consistent naming conventions by prefixing all relevant resource names with projectX.
-
-Use parameters for configurable values such as function name, handler, runtime, and memory size.
-
-Include Outputs to expose the API Gateway URL and Lambda function ARN.
-
-Apply serverless best practices, such as:
-
-Minimum privilege IAM role for the Lambda function.
-
-Log retention set to 7 days.
-
-Proper dependencies (DependsOn) where needed.
-
-Ensure the template is clean, readable, and deployable as-is.
-```
+Make the function name, handler, runtime, and memory configurable via parameters. Output the API Gateway URL and Lambda ARN so I can use them.
