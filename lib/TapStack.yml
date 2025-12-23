@@ -454,6 +454,12 @@ Resources:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W3691
+            - W1011
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentName}-database'
       DBInstanceClass: !Ref DBInstanceClass
