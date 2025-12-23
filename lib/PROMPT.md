@@ -16,13 +16,13 @@ Create a production-ready VPC infrastructure using **Terraform with HCL** for a 
 
 1. **VPC Foundation**
    - VPC with appropriately sized CIDR block for growth
-   - Support for multiple availability zones (minimum 2 AZs)
+   - Support for multiple availability zones with minimum 2 AZs
    - DNS hostname and DNS resolution enabled
 
-2. **Network Segmentation (Three-Tier Architecture)**
-   - Public subnets for internet-facing resources (load balancers, bastion hosts)
-   - Private subnets for application tier (application servers)
-   - Isolated subnets for data tier (payment processing, databases)
+2. **Network Segmentation - Three-Tier Architecture**
+   - Public subnets for internet-facing resources like load balancers and bastion hosts
+   - Private subnets for application tier with application servers
+   - Isolated subnets for data tier including payment processing and databases
    - Each tier deployed across multiple AZs
 
 3. **Internet Connectivity**
@@ -38,7 +38,7 @@ Create a production-ready VPC infrastructure using **Terraform with HCL** for a 
 
 5. **High Availability**
    - Multi-AZ deployment across at least 2 availability zones
-   - Redundant NAT Gateways (one per AZ)
+   - Redundant NAT Gateways with one per AZ
    - Subnets distributed across AZs for each tier
 
 ### Technical Requirements
@@ -50,26 +50,26 @@ Create a production-ready VPC infrastructure using **Terraform with HCL** for a 
 - Use **Security Groups** for instance-level security
 - Use **Network ACL** for subnet-level security
 - Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `{resource-type}-{purpose}-{environment-suffix}`
+- Follow naming convention: resource-type-purpose-environment-suffix format
 - Deploy to **us-east-1** region
-- All resources must be destroyable (no Retain policies)
+- All resources must be destroyable with no Retain policies
 
 ### PCI DSS Compliance Requirements
 
 - Network segmentation between DMZ, application, and database tiers
-- No direct internet routing to sensitive subnets (isolated tier)
+- No direct internet routing to sensitive isolated tier subnets
 - Security groups with specific port restrictions
 - Network ACLs providing additional network-level filtering
 - VPC Flow Logs capturing traffic for audit requirements
 - Proper tagging for compliance tracking
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements - CRITICAL
 
 - All resource names must include **environmentSuffix** parameter for multi-environment support
-- All resources must use DeletionPolicy Delete or RemovalPolicy DESTROY (no Retain policies)
+- All resources must use DeletionPolicy Delete or RemovalPolicy DESTROY with no Retain policies
 - Infrastructure must be completely destroyable for testing environments
 - VPC Flow Logs should write to CloudWatch Logs with appropriate IAM role
-- NAT Gateways require Elastic IPs - ensure proper allocation
+- NAT Gateways require Elastic IPs so ensure proper allocation
 
 ### Constraints
 
@@ -89,7 +89,7 @@ Create a production-ready VPC infrastructure using **Terraform with HCL** for a 
 - **Compliance**: Meets PCI DSS network segmentation and audit requirements
 - **Resource Naming**: All resources include environmentSuffix parameter
 - **Code Quality**: Clean HCL, well-tested, properly documented
-- **Destroyability**: All resources can be cleanly destroyed (no Retain policies)
+- **Destroyability**: All resources can be cleanly destroyed with no Retain policies
 
 ## What to deliver
 
