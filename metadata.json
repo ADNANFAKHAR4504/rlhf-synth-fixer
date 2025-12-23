@@ -1,0 +1,27 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-24T05:18:04+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "101912607",
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "API Gateway",
+    "EventBridge",
+    "ECR",
+    "SQS",
+    "CloudWatch Logs",
+    "KMS",
+    "IAM"
+  ],
+  "provider": "localstack",
+  "wave": "P0"
+}
