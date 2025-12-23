@@ -114,7 +114,9 @@ export class TapStack extends cdk.Stack {
           cidrMask: 24,
           name: 'Private',
           // Use PRIVATE_ISOLATED in LocalStack (no NAT Gateway), PRIVATE_WITH_EGRESS in real AWS
-          subnetType: isLocalStack ? ec2.SubnetType.PRIVATE_ISOLATED : ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: isLocalStack
+            ? ec2.SubnetType.PRIVATE_ISOLATED
+            : ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
           cidrMask: 24,
