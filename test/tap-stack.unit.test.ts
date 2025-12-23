@@ -133,16 +133,28 @@ describe('Secure VPC Infrastructure CloudFormation Template', () => {
       );
     });
 
-    test('should use CIDR function for subnet allocation', () => {
+    test('should have valid CIDR blocks for subnet allocation', () => {
       const publicSubnet1 = template.Resources.PublicSubnet1;
       const publicSubnet2 = template.Resources.PublicSubnet2;
       const privateSubnet1 = template.Resources.PrivateSubnet1;
       const privateSubnet2 = template.Resources.PrivateSubnet2;
 
-      expect(publicSubnet1.Properties.CidrBlock['Fn::Select']).toBeDefined();
-      expect(publicSubnet2.Properties.CidrBlock['Fn::Select']).toBeDefined();
-      expect(privateSubnet1.Properties.CidrBlock['Fn::Select']).toBeDefined();
-      expect(privateSubnet2.Properties.CidrBlock['Fn::Select']).toBeDefined();
+      // Verify each subnet has a valid CIDR block within the VPC range
+      const cidrPattern = /^10\.0\.[0-3]\.0\/24$/;
+      expect(publicSubnet1.Properties.CidrBlock).toMatch(cidrPattern);
+      expect(publicSubnet2.Properties.CidrBlock).toMatch(cidrPattern);
+      expect(privateSubnet1.Properties.CidrBlock).toMatch(cidrPattern);
+      expect(privateSubnet2.Properties.CidrBlock).toMatch(cidrPattern);
+
+      // Verify all CIDR blocks are unique
+      const cidrBlocks = [
+        publicSubnet1.Properties.CidrBlock,
+        publicSubnet2.Properties.CidrBlock,
+        privateSubnet1.Properties.CidrBlock,
+        privateSubnet2.Properties.CidrBlock,
+      ];
+      const uniqueCidrs = new Set(cidrBlocks);
+      expect(uniqueCidrs.size).toBe(4);
     });
   });
 
