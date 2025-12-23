@@ -11,5 +11,6 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": []
+  "aws_services": [],
+  "wave": "P0"
 }
