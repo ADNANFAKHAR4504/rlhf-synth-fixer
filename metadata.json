@@ -3,14 +3,18 @@
   "language": "py",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "291348",
+  "po_id": "LS-291348",
   "team": "synth-2",
   "startedAt": "2025-08-05T09:21:28.007Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Security Configuration as Code"
   ],
   "aws_services": [],
-  "wave": "P1"
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291348",
+    "pr": "Pr494"
+  }
 }
