@@ -601,14 +601,14 @@ This will remove all AWS resources created by the stack, ensuring no ongoing cos
 
 This solution provides a complete, production-ready serverless architecture that:
 
-- ✅ Uses Pulumi in Python for Infrastructure as Code
-- ✅ Creates S3 bucket with versioning enabled in us-east-1
-- ✅ Implements Lambda function with Python 3.9 runtime
-- ✅ Follows principle of least privilege for IAM permissions
-- ✅ Configures S3-to-Lambda trigger for ObjectCreated events
-- ✅ Uses S3 backend for Pulumi state management
-- ✅ Exports bucket and Lambda ARNs as stack outputs
-- ✅ Includes comprehensive integration tests
-- ✅ Ready for deployment with single `pulumi up` command
+-  Uses Pulumi in Python for Infrastructure as Code
+-  Creates S3 bucket with versioning enabled in us-east-1
+-  Implements Lambda function with Python 3.9 runtime
+-  Follows principle of least privilege for IAM permissions
+-  Configures S3-to-Lambda trigger for ObjectCreated events
+-  Uses S3 backend for Pulumi state management
+-  Exports bucket and Lambda ARNs as stack outputs
+-  Includes comprehensive integration tests
+-  Ready for deployment with single `pulumi up` command
 
 The code is clean, well-commented, and follows AWS and Pulumi best practices for production workloads.
