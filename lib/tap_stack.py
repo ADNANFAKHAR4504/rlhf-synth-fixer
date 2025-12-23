@@ -241,11 +241,12 @@ class TapStack(cdk.Stack):
         allow_all_outbound=False
     )
 
-    # Allow SSH access from specific CIDR (replace with your IP range)
+    # Allow SSH access only from bastion host or specific management subnet
+    # Restrict to minimal CIDR range for enhanced security
     ec2_sg.add_ingress_rule(
-        peer=ec2.Peer.ipv4("10.0.1.0/24"),  # Only from VPC
+        peer=ec2.Peer.ipv4("10.0.0.0/28"),  # Only from public subnet for bastion
         connection=ec2.Port.tcp(22),
-        description="SSH access from VPC"
+        description="SSH access from bastion subnet only"
     )
 
     # Allow HTTP traffic if needed (uncomment if required)
