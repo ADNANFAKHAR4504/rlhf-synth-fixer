@@ -26,6 +26,24 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     Description: 'Database admin username'
+    
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 128
+    Description: 'Database admin password (required for LocalStack compatibility)'
+    Default: 'TempPassword123!'
+    
+  KeyPairName:
+    Type: String
+    Default: 'my-key-pair'
+    Description: 'Name of an existing EC2 KeyPair'
+
+  EC2ImageId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-1e749f67
+    Description: AMI ID for EC2 instances. Default is Ubuntu 14.04 for LocalStack.
 
 Resources:
   # ============================================================================
@@ -230,18 +248,6 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
 
   # ============================================================================
-  # SECURITY & KEY PAIR
-  # ============================================================================
-
-  KeyPair:
-    Type: AWS::EC2::KeyPair
-    Properties:
-      KeyName: !Sub '${EnvironmentName}-key-pair'
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-KeyPair'
-
-  # ============================================================================
   # SECURITY GROUPS
   # ============================================================================
 
@@ -287,11 +293,6 @@ Resources:
           ToPort: 443
           SourceSecurityGroupId: !Ref ApplicationLoadBalancerSecurityGroup
           Description: 'HTTPS from ALB'
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          SourceSecurityGroupId: !Ref BastionSecurityGroup
-          Description: 'SSH from Bastion'
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -328,10 +329,10 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
+          FromPort: 5432
+          ToPort: 5432
           SourceSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: 'MySQL access from web servers'
+          Description: 'PostgreSQL access from web servers'
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Database-SecurityGroup'
@@ -449,71 +450,6 @@ Resources:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Database-SubnetGroup'
 
-  DatabaseParameterGroup:
-    Type: AWS::RDS::DBParameterGroup
-    Properties:
-      DBParameterGroupName: !Sub '${EnvironmentName}-mysql-parameters'
-      Description: 'Custom parameter group for MySQL'
-      Family: mysql8.0
-      Parameters:
-        innodb_buffer_pool_size: '{DBInstanceClassMemory*3/4}'
-        slow_query_log: 1
-        long_query_time: 2
-        general_log: 1
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-Database-ParameterGroup'
-
-  DatabaseKMSKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: 'KMS Key for RDS encryption'
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
-          - Sid: Allow RDS Service
-            Effect: Allow
-            Principal:
-              Service: rds.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
-            Resource: '*'
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-Database-KMS-Key'
-
-  DatabaseKMSKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub 'alias/${EnvironmentName}-database-key'
-      TargetKeyId: !Ref DatabaseKMSKey
-
-  DatabaseSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub '${EnvironmentName}-database-secret'
-      Description: 'Database credentials for RDS instance'
-      KmsKeyId: !Ref DatabaseKMSKey
-      GenerateSecretString:
-        SecretStringTemplate: !Sub |
-          {
-            "username": "${DBUsername}"
-          }
-        GenerateStringKey: "password"
-        PasswordLength: 16
-        ExcludeCharacters: '"@/\'
-        RequireEachIncludedType: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-Database-Secret'
-
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
@@ -521,45 +457,37 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentName}-database'
       DBInstanceClass: !Ref DBInstanceClass
-      Engine: mysql
-      EngineVersion: '8.0.42'
-      AllocatedStorage: 100
-      StorageType: gp3
-      StorageEncrypted: true
-      KmsKeyId: !Ref DatabaseKMSKey
+      Engine: postgres
+      EngineVersion: '11.22'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: false
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${EnvironmentName}-database-secret:SecretString:password::}}'
+      MasterUserPassword: !Ref DBPassword
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
-      DBParameterGroupName: !Ref DatabaseParameterGroup
-      BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      MultiAZ: true
-      AutoMinorVersionUpgrade: true
-      DeletionProtection: true
-      EnablePerformanceInsights: false
-      EnableCloudwatchLogsExports:
-        - error
-        - general
+      BackupRetentionPeriod: 0
+      MultiAZ: false
+      PubliclyAccessible: false
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Database'
 
-  DatabaseReadReplica:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceIdentifier: !Sub '${EnvironmentName}-database-replica'
-      DBInstanceClass: !Ref DBInstanceClass
-      SourceDBInstanceIdentifier: !Ref DatabaseInstance
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
-      AutoMinorVersionUpgrade: true
-      EnablePerformanceInsights: false
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-Database-ReadReplica'
+  # DatabaseReadReplica:
+  #   Type: AWS::RDS::DBInstance
+  #   Properties:
+  #     DBInstanceIdentifier: !Sub '${EnvironmentName}-database-replica'
+  #     DBInstanceClass: !Ref DBInstanceClass
+  #     SourceDBInstanceIdentifier: !Ref DatabaseInstance
+  #     VPCSecurityGroups:
+  #       - !Ref DatabaseSecurityGroup
+  #     AutoMinorVersionUpgrade: true
+  #     EnablePerformanceInsights: false
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub '${EnvironmentName}-Database-ReadReplica'
+  # NOTE: Read replica disabled for LocalStack compatibility - not fully supported
 
   # ============================================================================
   # COMPUTE LAYER
@@ -614,9 +542,9 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentName}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: ami-04681a1dbd79675a5
+        ImageId: !Ref EC2ImageId
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPair
+        KeyName: !Ref KeyPairName
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -624,9 +552,9 @@ Resources:
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
             Ebs:
-              VolumeSize: 20
-              VolumeType: gp3
-              Encrypted: true
+              VolumeSize: 8
+              VolumeType: gp2
+              Encrypted: false
               DeleteOnTermination: true
         UserData:
           Fn::Base64: !Sub |
@@ -770,36 +698,6 @@ Resources:
           Value: !Ref AutoScalingGroup
       AlarmActions:
         - !Ref ScaleDownPolicy
-
-  # Bastion Host
-  BastionHost:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: ami-04681a1dbd79675a5
-      InstanceType: t3.micro
-      KeyName: !Ref KeyPair
-      SubnetId: !Ref PublicSubnet1
-      SecurityGroupIds:
-        - !Ref BastionSecurityGroup
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 10
-            VolumeType: gp3
-            Encrypted: true
-            DeleteOnTermination: true
-      UserData:
-        Fn::Base64: |
-          #!/bin/bash
-          yum update -y
-          yum install -y amazon-cloudwatch-agent
-          
-          # Configure CloudWatch Agent for bastion
-          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default -s
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-Bastion'
 
   # ============================================================================
   # MONITORING & LOGGING
@@ -975,12 +873,6 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-BackupBucketName'
 
-  BastionHostPublicIP:
-    Description: 'Bastion Host Public IP'
-    Value: !GetAtt BastionHost.PublicIp
-    Export:
-      Name: !Sub '${AWS::StackName}-BastionHostPublicIP'
-
   AutoScalingGroupName:
     Description: 'Auto Scaling Group Name'
     Value: !Ref AutoScalingGroup
@@ -1000,7 +892,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-EnvironmentName'
 
   KeyPairName:
-    Description: 'EC2 Key Pair Name'
-    Value: !Ref KeyPair
+    Description: 'EC2 Key Pair Name (parameter)'
+    Value: !Ref KeyPairName
     Export:
       Name: !Sub '${AWS::StackName}-KeyPairName'
