@@ -11,6 +11,12 @@ const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
+// Detect LocalStack environment - skip secondary region deployment for LocalStack
+// LocalStack Community edition has limitations with multi-region deployments
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
+
 // Apply tags to all stacks in this app
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Project', 'SecureInfrastructure');
@@ -29,14 +35,16 @@ new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
   },
 });
 
-// Deploy to secondary region (us-east-1)
-// Stack naming: TapStack{environmentSuffix}-Secondary to match CI/CD script pattern grep "TapStack${env_suffix}"
-new TapStack(app, `TapStack${environmentSuffix}-Secondary`, {
-  stackName: `TapStack${environmentSuffix}-Secondary`,
-  environmentSuffix: environmentSuffix,
-  isPrimaryRegion: false,
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1',
-  },
-});
+// Deploy to secondary region (us-east-1) - conditionally skipped for LocalStack
+// In LocalStack, we only deploy the primary region to avoid multi-region complexity
+if (!isLocalStack) {
+  new TapStack(app, `TapStack${environmentSuffix}-Secondary`, {
+    stackName: `TapStack${environmentSuffix}-Secondary`,
+    environmentSuffix: environmentSuffix,
+    isPrimaryRegion: false,
+    env: {
+      account: process.env.CDK_DEFAULT_ACCOUNT,
+      region: 'us-east-1',
+    },
+  });
+}
