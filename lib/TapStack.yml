@@ -510,7 +510,7 @@ Resources:
         - !Ref PublicSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: '$Latest'
       MinSize: 1
       MaxSize: 5
       DesiredCapacity: 2
