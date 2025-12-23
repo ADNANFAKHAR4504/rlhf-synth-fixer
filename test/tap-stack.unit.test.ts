@@ -496,7 +496,7 @@ describe('Secure Lambda CloudFormation Template', () => {
     });
 
     test('should have correct number of resources', () => {
-      const expectedResourceCount: number = 14; // All Lambda infrastructure resources (LogsBucket is conditional)
+      const expectedResourceCount: number = 15; // All Lambda infrastructure resources (LogsBucket is conditional)
       const resourceCount: number = Object.keys(template.Resources).length;
       expect(resourceCount).toBe(expectedResourceCount);
     });
