@@ -145,15 +145,13 @@ class SecurityComponent(pulumi.ComponentResource):
     # IAM Role for Lambda execution with least privilege
     lambda_assume_role_policy = {
         "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Action": "sts:AssumeRole",
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "lambda.amazonaws.com"
-                }
+        "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "lambda.amazonaws.com"
             }
-        ]
+        }]
     }
 
     self.lambda_execution_role = aws.iam.Role(
@@ -167,7 +165,6 @@ class SecurityComponent(pulumi.ComponentResource):
     json_lambda_policy = {
         "Version": "2012-10-17",
         "Statement": [
-            # CloudWatch Logs permissions
             {
                 "Effect": "Allow",
                 "Action": [
@@ -177,7 +174,6 @@ class SecurityComponent(pulumi.ComponentResource):
                 ],
                 "Resource": f"arn:aws:logs:{region}:*:*"
             },
-            # VPC permissions for Lambda
             {
                 "Effect": "Allow",
                 "Action": [
@@ -189,7 +185,6 @@ class SecurityComponent(pulumi.ComponentResource):
                 ],
                 "Resource": "*"
             },
-            # DynamoDB permissions (scoped to specific table)
             {
                 "Effect": "Allow",
                 "Action": [
@@ -202,7 +197,6 @@ class SecurityComponent(pulumi.ComponentResource):
                 ],
                 "Resource": f"arn:aws:dynamodb:{region}:*:table/pulumi-optimization-*"
             },
-            # S3 permissions (scoped to specific bucket)
             {
                 "Effect": "Allow",
                 "Action": [
@@ -210,9 +204,8 @@ class SecurityComponent(pulumi.ComponentResource):
                     "s3:PutObject",
                     "s3:DeleteObject"
                 ],
-                "Resource": f"arn:aws:s3:::pulumi-optimization-*/*"
+                "Resource": "arn:aws:s3:::pulumi-optimization-*/*"
             },
-            # KMS permissions for decryption
             {
                 "Effect": "Allow",
                 "Action": [
