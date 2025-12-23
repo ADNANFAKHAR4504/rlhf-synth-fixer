@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+cdk.out/
+dist/
+coverage/
+
+# Generated files
+*.js
+*.d.ts
+
+# Directories to ignore
+worktree/
+test/
+bin/
+cli/
+
+# Claude templates and configuration
+.claude/**
+**/.claude/**
+
+# Python files
+*.py
+__pycache__/
+.venv/
+venv/
+
+# Other
+.git/
+.github/
