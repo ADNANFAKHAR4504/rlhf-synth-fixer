@@ -6,10 +6,10 @@
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-17T05:18:52Z",
-  "subtask": "Security, Compliance, and Governance",
+  "subtask": "Provisioning of Infrastructure Environments",
   "review": "adnan-turing",
   "subject_labels": [
-    "Security Configuration as Code"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "IAM",
