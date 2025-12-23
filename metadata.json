@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291694",
+  "team": "synth-2",
+  "startedAt": "2025-08-11T12:09:52.506Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS",
+    "DynamoDB",
+    "Lambda",
+    "IAM",
+    "ALB"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291694",
+    "pr": "Pr905"
+  }
+}
