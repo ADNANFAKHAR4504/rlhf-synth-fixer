@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291335",
+  "team": "synth-2",
+  "startedAt": "2025-08-07T20:22:52.538Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "ec2",
+    "vpc",
+    "alb",
+    "dynamodb",
+    "s3",
+    "lambda",
+    "iam",
+    "cloudwatch",
+    "sns",
+    "ssm"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291335",
+    "pr": "Pr710"
+  }
+}
