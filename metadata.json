@@ -1,5 +1,5 @@
 {
-  "platform": "cloudformation",
+  "platform": "cfn",
   "language": "json",
   "complexity": "hard",
   "turn_type": "single",
