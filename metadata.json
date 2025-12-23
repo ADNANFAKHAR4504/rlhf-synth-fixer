@@ -1,0 +1,26 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291641",
+  "team": "synth-2",
+  "startedAt": "2025-08-12T12:26:29.410Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "dynamodb",
+    "ec2",
+    "autoscaling",
+    "iam",
+    "cloudwatch"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291641",
+    "pr": "Pr999"
+  }
+}
