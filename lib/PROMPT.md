@@ -55,10 +55,10 @@ Create a serverless webhook processing infrastructure using **Terraform with HCL
 - Follow naming convention: resource-type-environment-suffix
 - Deploy to **us-east-1** region
 
-### Deployment Requirements (CRITICAL)
+### Critical Deployment Requirements
 
 - All resources must include environmentSuffix variable for unique naming across deployments
-- All resources must be destroyable (no Retain deletion policies, no deletion protection)
+- All resources must be destroyable without Retain deletion policies or deletion protection
 - No hardcoded resource names - use variables with suffix
 - Include proper IAM roles and policies with least privilege
 - Enable encryption at rest for all data stores
@@ -73,7 +73,7 @@ Create a serverless webhook processing infrastructure using **Terraform with HCL
 - Lambda functions must have reserved concurrent executions set to prevent throttling
 - CloudWatch Log groups must have KMS encryption enabled
 - Deploy to us-east-1 region only
-- All resources must be destroyable (no Retain policies)
+- All resources must be destroyable without Retain policies
 - Include proper error handling and logging
 
 ## Success Criteria
