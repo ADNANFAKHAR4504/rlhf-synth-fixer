@@ -689,6 +689,7 @@ main() {
     print_status $GREEN "✅ Detected platform: $platform"
     print_status $GREEN "✅ Detected language: $language"
     echo ""
+
     # Run tests and capture exit code
     if ! run_tests "$platform" "$language"; then
         echo ""
