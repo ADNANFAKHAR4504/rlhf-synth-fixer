@@ -1,6 +1,8 @@
 CDKTF Python Prompt: AWS Serverless Infrastructure Setup
 
-Create a secure, highly available serverless infrastructure in AWS using Python CDKTF, organized in the following folder structure:
+Create a secure, highly available serverless infrastructure in AWS using Python CDKTF. The infrastructure should include REST API Gateway integrated with Lambda functions that connect to DynamoDB for data persistence, all deployed within a VPC. Lambda functions should send logs to CloudWatch and be traced via X-Ray.
+
+Organize the code in the following folder structure:
 
 
 
@@ -19,32 +21,29 @@ root/
 - Deploy to us-west-2
 - All resources must reside within a VPC distributed across at least 2 Availability Zones
 
-###  Serverless Compute
-- Use AWS Lambda for compute
-- Attach Lambdas to private subnets in the VPC
+###  Service Integration Architecture
 
-###  API Gateway
-- Use REST API Gateway to expose Lambda endpoints
-- Enable X-Ray tracing
+- REST API Gateway connected to Lambda functions to expose HTTP endpoints
+- Lambda functions deployed in private subnets within the VPC that read/write data to DynamoDB
+- DynamoDB table accessible by Lambda through IAM roles with least privilege permissions
+- Lambda functions send logs to CloudWatch Logs and traces to X-Ray for observability
+- VPC endpoints allow Lambda to communicate with DynamoDB without internet egress
 
-###  IAM & Permissions
-- Use IAM roles with least privilege access for Lambda functions
-- Allow access to DynamoDB and VPC as needed
-
-###  Database
-- Use DynamoDB for serverless persistence
+###  Database Layer
+- DynamoDB table for serverless persistence
 - Must support on-demand PAY_PER_REQUEST mode
 - Enable encryption at rest and point-in-time recovery
+- Connected to Lambda via IAM role permissions
 
-### Observability
-- Enable CloudWatch logs for Lambda and API Gateway
-- Set up CloudWatch alarms for Lambda errors and API 4xx errors
-- Enable X-Ray tracing on Lambda and API Gateway
+### Observability & Monitoring
+- CloudWatch Logs receive logs from Lambda functions and API Gateway requests
+- CloudWatch Alarms monitor Lambda errors and API 4xx errors, triggering alerts when thresholds are exceeded
+- X-Ray traces requests from API Gateway through Lambda to DynamoDB for end-to-end visibility
 
-###  Deployment
+###  Deployment & State Management
 - Infrastructure must be written in Python CDKTF
 - Use no more than 5 files in total to define the stack
-- All state must be stored in an S3 backend using Terraform
+- S3 backend stores Terraform state for infrastructure versioning
 - Use Terraform 1.0+ compatible features only
 
 ---
