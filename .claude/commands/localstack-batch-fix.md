@@ -1,22 +1,32 @@
 ---
 name: localstack-batch-fix
-description: Batch fix multiple LocalStack PRs in parallel (up to 20 concurrent agents) with caching and template application
+description: Batch fix multiple LocalStack PRs in parallel (up to 20 concurrent agents) with caching, template application, failure analysis, and smart features
 color: purple
 model: sonnet
 ---
 
-# LocalStack Batch Fix Command
+# LocalStack Batch Fix Command (Enhanced)
 
-Process and fix multiple LocalStack PRs in parallel with optimized caching, template application, and comprehensive error fixing. Designed for **up to 20 concurrent agents** for maximum throughput.
+Process and fix multiple LocalStack PRs in parallel with optimized caching, template application, comprehensive error fixing, and advanced features. Designed for **up to 20 concurrent agents** for maximum throughput.
 
 ## Features
 
+### Core Features
 - **20 Concurrent Agents**: Process up to 20 PRs simultaneously
 - **Dependency Caching**: Shared NPM cache for fast installs
 - **Fix Templates**: Auto-apply platform-specific templates
 - **Batch Fix Strategy**: Apply ALL fixes preventively before deployment
 - **Progress Tracking**: Real-time status and reporting
-- **Resource Management**: Automatic memory/CPU monitoring
+
+### Enhanced Features (NEW)
+- **🔄 Checkpoint/Resume**: Interrupt and resume without losing progress
+- **📊 Smart Ordering**: Prioritize PRs by success probability
+- **🚀 Local Deploy Testing**: Test deployment before pushing
+- **⚡ Resource Throttling**: Auto-adjust concurrency based on CPU/memory
+- **🔍 Failure Analysis**: Categorize and learn from errors
+- **🔔 Notifications**: Desktop/Slack alerts on completion
+- **⏱️ Rate Limiting**: Automatic GitHub API rate limit handling
+- **🛡️ Graceful Interruption**: Clean up properly on Ctrl+C
 
 ## Usage
 
@@ -38,7 +48,41 @@ Process and fix multiple LocalStack PRs in parallel with optimized caching, temp
 
 # Wait for CI/CD after each fix
 /localstack-batch-fix --wait-cicd PR1 PR2 ...
+
+# NEW: Resume from last checkpoint
+/localstack-batch-fix --resume
+
+# NEW: Test local deployment before pushing
+/localstack-batch-fix --test-deploy PR1 PR2 ...
+
+# NEW: Order PRs by success probability
+/localstack-batch-fix --smart-order PR1 PR2 ...
+
+# NEW: Combine features
+/localstack-batch-fix --smart-order --test-deploy --from-file prs.txt
+
+# NEW: Verbose output
+/localstack-batch-fix --verbose PR1 PR2 ...
+
+# NEW: Disable notifications
+/localstack-batch-fix --no-notify PR1 PR2 ...
 ```
+
+## Command Line Options
+
+| Option | Description |
+|--------|-------------|
+| `--status`, `-s` | Show status of current batch |
+| `--failed-only` | Re-process only failed PRs from last batch |
+| `--from-file`, `-f` | Read PR numbers from file (one per line) |
+| `--wait-cicd` | Wait for CI/CD to complete for each PR |
+| `--max-concurrent`, `-j` | Maximum parallel processes (default: 20) |
+| `--resume` | **NEW**: Resume from last checkpoint |
+| `--test-deploy` | **NEW**: Test local deployment before pushing |
+| `--smart-order` | **NEW**: Order PRs by success probability |
+| `--verbose`, `-v` | **NEW**: Verbose output |
+| `--no-notify` | **NEW**: Disable notifications |
+| `--help`, `-h` | Show help |
 
 ## Pre-Requisites
 
@@ -290,6 +334,95 @@ Logs are stored in `.claude/reports/batch-fix-logs/`:
 - `batch-status.json` - Current batch status
 - `batch-results-{timestamp}.json` - Final results
 
+## Enhanced Features Details
+
+### Checkpoint/Resume (`--resume`)
+
+The script automatically saves checkpoints as PRs complete. If interrupted (Ctrl+C), you can resume:
+
+```bash
+# Start a batch
+/localstack-batch-fix 7179 7180 7181 7182 7183
+# Press Ctrl+C to interrupt
+
+# Resume where you left off
+/localstack-batch-fix --resume 7179 7180 7181 7182 7183
+# Already completed PRs will be skipped
+```
+
+Checkpoint files are saved in `.claude/reports/batch-fix-logs/checkpoint.json`.
+
+### Smart Ordering (`--smart-order`)
+
+Orders PRs by success probability based on:
+- Compatibility score from `localstack-compatibility-check.sh`
+- Past failure history from error patterns file
+- Platform complexity
+
+```bash
+# Process easiest PRs first for faster wins
+/localstack-batch-fix --smart-order 7179 7180 7181 7182 7183
+```
+
+### Local Deployment Testing (`--test-deploy`)
+
+Tests deployment locally before pushing to avoid CI failures:
+- CDK: Runs `cdklocal synth`
+- Terraform: Runs `tflocal validate`
+- Pulumi: Runs `pulumi preview`
+
+```bash
+/localstack-batch-fix --test-deploy PR1 PR2 ...
+```
+
+### Resource-Based Throttling
+
+Automatically reduces concurrency when system resources are constrained:
+- CPU > 85%: Reduces concurrency by half
+- Memory > 90%: Reduces concurrency by half
+- Minimum 2 concurrent agents
+
+Concurrency is gradually restored when resources become available.
+
+### Failure Analysis
+
+Categorizes failures into types:
+- `typescript_error`: TypeScript compilation errors
+- `npm_error`: NPM install failures
+- `connection_error`: LocalStack connection issues
+- `rate_limited`: GitHub API rate limited
+- `git_conflict`: Git merge conflicts
+- `auth_error`: Authentication/permission errors
+- `timeout`: Operation timeouts
+- `validation_error`: Metadata/schema validation errors
+
+Error patterns are saved for learning in `.claude/reports/batch-fix-logs/error-patterns.json`.
+
+### Notifications
+
+Sends notifications on completion:
+- **macOS**: Desktop notification via `osascript`
+- **Linux**: Desktop notification via `notify-send`
+- **Slack**: Webhook (set `SLACK_WEBHOOK` environment variable)
+- **Terminal**: Bell sound
+
+```bash
+# Disable notifications
+/localstack-batch-fix --no-notify PR1 PR2 ...
+
+# Enable Slack notifications
+export SLACK_WEBHOOK="https://hooks.slack.com/services/..."
+/localstack-batch-fix PR1 PR2 ...
+```
+
+### Graceful Interruption
+
+Press Ctrl+C to cleanly interrupt:
+1. Saves checkpoint
+2. Kills background jobs
+3. Cleans up worktrees
+4. Shows resume command
+
 ## Troubleshooting
 
 ### Common Issues
@@ -317,14 +450,40 @@ rm -rf worktree/batch-fix-*
 .claude/scripts/localstack-cache-manager.sh warm
 ```
 
+**"GitHub API rate limit"**
+The script handles this automatically, but you can reduce load:
+```bash
+# Use smaller batches
+/localstack-batch-fix -j 5 PR1 PR2 ...
+```
+
+**"Interrupted batch"**
+```bash
+# Resume from checkpoint
+/localstack-batch-fix --resume PR1 PR2 ...
+```
+
 ### Re-Running Failed PRs
 
 ```bash
-# Show which PRs failed
+# Show which PRs failed (with failure types)
 .claude/scripts/localstack-batch-fix.sh --status
 
 # Re-run only failed ones
 /localstack-batch-fix --failed-only
+
+# Re-run with smart ordering (easiest failures first)
+/localstack-batch-fix --failed-only --smart-order
+```
+
+### Viewing Error Patterns
+
+```bash
+# View common errors
+cat .claude/reports/batch-fix-logs/error-patterns.json | jq '.summary.by_type'
+
+# View recent failures
+cat .claude/reports/batch-fix-logs/error-patterns.json | jq '.patterns[-10:]'
 ```
 
 ## Performance Tips
