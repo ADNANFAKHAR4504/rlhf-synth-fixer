@@ -1,0 +1,28 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350088",
+  "team": "synth",
+  "startedAt": "2025-11-12T12:17:57.977Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "EC2",
+    "CloudWatch",
+    "Cost Explorer",
+    "STS",
+    "IAM"
+  ],
+  "provider": "localstack",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
