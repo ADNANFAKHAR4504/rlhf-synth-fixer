@@ -24,7 +24,7 @@ describe('Secure VPC Infrastructure Integration Tests', () => {
   let ec2Client: EC2Client;
   let iamClient: IAMClient;
 
-  const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'dev'}`;
+  const stackName = `localstack-stack-${process.env.ENVIRONMENT_SUFFIX || 'dev'}`;
   const region = process.env.AWS_REGION || 'us-east-1';
 
   let stackOutputs: { [key: string]: string } = {};
