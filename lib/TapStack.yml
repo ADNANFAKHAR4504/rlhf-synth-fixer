@@ -300,11 +300,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-DynamoDBTableName'
 
-  EC2InstanceId:
-    Description: 'ID of the launched EC2 instance'
-    Value: !Ref EC2Instance
-    Export:
-      Name: !Sub '${AWS::StackName}-EC2InstanceId'
+  # EC2InstanceId output commented out since EC2Instance is disabled
+  # EC2InstanceId:
+  #   Description: 'ID of the launched EC2 instance'
+  #   Value: !Ref EC2Instance
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-EC2InstanceId'
 
   VPCId:
     Description: 'ID of the created VPC'
