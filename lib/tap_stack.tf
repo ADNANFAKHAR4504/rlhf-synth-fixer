@@ -337,17 +337,16 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = false
 
+  # Explicitly disable access logs for LocalStack compatibility
+  access_logs {
+    enabled = false
+  }
+
   tags = {
     Name        = "alb-${var.environment}-${var.environment_suffix}"
     Environment = var.environment
     Project     = var.project_name
     ManagedBy   = "terraform"
-  }
-
-  # Prevent Terraform from attempting to configure logging attributes
-  # LocalStack doesn't support these features
-  lifecycle {
-    ignore_changes = all
   }
 }
 
