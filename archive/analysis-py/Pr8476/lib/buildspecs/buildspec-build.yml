@@ -1,0 +1,88 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo "Logging in to Docker registry..."
+      - export DOCKER_PASSWORD=$(aws secretsmanager get-secret-value --secret-id $DOCKER_REGISTRY_PASSWORD_SECRET --query SecretString --output text | jq -r .password)
+      - export DOCKER_REGISTRY=$(aws secretsmanager get-secret-value --secret-id $DOCKER_REGISTRY_PASSWORD_SECRET --query SecretString --output text | jq -r .registry)
+      - export DOCKER_USERNAME=$(aws secretsmanager get-secret-value --secret-id $DOCKER_REGISTRY_PASSWORD_SECRET --query SecretString --output text | jq -r .username)
+      - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin $DOCKER_REGISTRY
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+      - REPOSITORY_URI=$DOCKER_REGISTRY/payment-service
+      - echo "Building Docker image with tag $IMAGE_TAG"
+
+  build:
+    commands:
+      - echo "Building Docker image..."
+      - docker build -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+
+  post_build:
+    commands:
+      - echo "Pushing Docker image..."
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo "Creating imagedefinitions.json..."
+      - printf '[{"name":"payment-service","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - echo "Creating taskdef.json..."
+      - |
+        cat > taskdef.json <<EOF
+        {
+          "family": "payment-service-$ENVIRONMENT",
+          "executionRoleArn": "arn:aws:iam::AWS_ACCOUNT_ID:role/ecs-task-execution-role-$ENVIRONMENT",
+          "taskRoleArn": "arn:aws:iam::AWS_ACCOUNT_ID:role/ecs-task-role-$ENVIRONMENT",
+          "networkMode": "awsvpc",
+          "containerDefinitions": [
+            {
+              "name": "payment-service",
+              "image": "<IMAGE1_NAME>",
+              "portMappings": [
+                {
+                  "containerPort": 8080,
+                  "protocol": "tcp"
+                }
+              ],
+              "essential": true,
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "/ecs/payment-service-$ENVIRONMENT",
+                  "awslogs-region": "us-east-2",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              }
+            }
+          ],
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512"
+        }
+        EOF
+      - echo "Creating appspec.yaml..."
+      - |
+        cat > appspec.yaml <<EOF
+        version: 0.0
+        Resources:
+          - TargetService:
+              Type: AWS::ECS::Service
+              Properties:
+                TaskDefinition: <TASK_DEFINITION>
+                LoadBalancerInfo:
+                  ContainerName: "payment-service"
+                  ContainerPort: 8080
+                PlatformVersion: "LATEST"
+        EOF
+      - echo "Build completed successfully at $(date)"
+
+artifacts:
+  files:
+    - imagedefinitions.json
+    - taskdef.json
+    - appspec.yaml
+  name: build_output
+
+cache:
+  paths:
+    - '/root/.docker/**/*'

@@ -6,7 +6,7 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=${SERVICES:-s3,lambda,dynamodb,cloudformation,cloudfront,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs,ecr,vpc,secretsmanager,ssm,autoscaling,elb,elbv2,wafv2,acm,kms,route53}
+      - SERVICES=${SERVICES:-s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs,ecr,elb,autoscaling}
       - DEBUG=1
       - DATA_DIR=/tmp/localstack/data
       - DOCKER_HOST=unix:///var/run/docker.sock
