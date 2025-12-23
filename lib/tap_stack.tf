@@ -233,7 +233,7 @@ resource "aws_route_table" "primary_private" {
   dynamic "route" {
     for_each = var.enable_nat_gateway ? [1] : []
     content {
-    cidr_block     = "0.0.0.0/0"
+      cidr_block     = "0.0.0.0/0"
       nat_gateway_id = aws_nat_gateway.primary[0].id
     }
   }
@@ -811,7 +811,7 @@ resource "aws_iam_policy" "ec2_policy" {
         Resource = var.enable_secondary_region ? [
           "${aws_cloudwatch_log_group.app_logs.arn}:*",
           "${aws_cloudwatch_log_group.app_logs_secondary[0].arn}:*"
-        ] : [
+          ] : [
           "${aws_cloudwatch_log_group.app_logs.arn}:*"
         ]
       }
