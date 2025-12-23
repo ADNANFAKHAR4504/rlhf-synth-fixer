@@ -1,5 +1,6 @@
 import json
 
+
 def lambda_handler(event, context):
     # Print the event to CloudWatch logs (useful for debugging)
     print("Received event: " + json.dumps(event))
