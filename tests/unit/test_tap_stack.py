@@ -168,11 +168,12 @@ class TestTapStack(unittest.TestCase):
 
     @mark.it("normalizes bucket_prefix by adding trailing slash")
     def test_normalizes_prefix_with_trailing_slash(self):
+        # Create a parent stack first, then nest the S3 stack within it
+        parent_stack = cdk.Stack(self.app, "ParentStackForPrefix")
+        
         from lib.s3_stack import S3AccessIamStack
-
-        # Create nested stack directly with prefix without trailing slash
         nested = S3AccessIamStack(
-            self.app,
+            parent_stack,
             "TestNestedStack",
             bucket_name="test-bucket",
             bucket_prefix="apps/tap",
