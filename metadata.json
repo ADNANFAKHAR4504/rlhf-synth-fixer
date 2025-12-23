@@ -10,7 +10,7 @@
   "provider": "localstack",
   "wave": "P0",
   "subject_labels": [
-    "Multi-Environment Consistency"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "s3",
