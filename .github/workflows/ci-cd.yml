@@ -1231,6 +1231,7 @@ jobs:
                - Terraform: platform=tf, language=hcl
                - CloudFormation: platform=cfn, language=yaml
                - Pulumi Python: platform=pulumi, language=py
+               - Pulumi Go: platform=pulumi, language=go
             3. Update metadata.json to match your actual code
             4. Push your changes"
 
