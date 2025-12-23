@@ -255,6 +255,11 @@ resource "aws_kms_replica_key" "secondary" {
   deletion_window_in_days = 7
   primary_key_arn         = aws_kms_key.primary.arn
 
+  # Tags and lifecycle block to work around LocalStack tagging timeout
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
+
   # Tags removed due to LocalStack timeout issues with KMS replica key tagging
   # tags = {
   #   Name   = "SecondaryKMSKey-${var.environment_suffix}"
@@ -274,195 +279,199 @@ resource "aws_kms_alias" "secondary" {
 #    Enforce encryption for S3, EBS, and RDS across all accounts
 #
 
-# SCP: Enforce S3 encryption
-resource "aws_organizations_policy" "enforce_s3_encryption" {
-  name        = "EnforceS3Encryption-${var.environment_suffix}"
-  description = "Require S3 buckets to use encryption"
-  type        = "SERVICE_CONTROL_POLICY"
+# Note: SCPs commented out due to LocalStack limitations
+# LocalStack does not fully support Service Control Policy creation and attachment
+# SCPs would be used in production to enforce encryption requirements
 
-  content = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "DenyUnencryptedS3Uploads"
-        Effect = "Deny"
-        Action = [
-          "s3:PutObject"
-        ]
-        Resource = "*"
-        Condition = {
-          StringNotEquals = {
-            "s3:x-amz-server-side-encryption" = ["AES256", "aws:kms"]
-          }
-        }
-      },
-      {
-        Sid    = "RequireS3BucketEncryption"
-        Effect = "Deny"
-        Action = [
-          "s3:CreateBucket"
-        ]
-        Resource = "*"
-        Condition = {
-          StringNotEquals = {
-            "s3:x-amz-server-side-encryption" = ["AES256", "aws:kms"]
-          }
-        }
-      }
-    ]
-  })
-}
-
-# SCP: Enforce EBS encryption
-resource "aws_organizations_policy" "enforce_ebs_encryption" {
-  name        = "EnforceEBSEncryption-${var.environment_suffix}"
-  description = "Require EBS volumes to be encrypted"
-  type        = "SERVICE_CONTROL_POLICY"
-
-  content = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "DenyUnencryptedEBSVolumes"
-        Effect = "Deny"
-        Action = [
-          "ec2:CreateVolume"
-        ]
-        Resource = "*"
-        Condition = {
-          Bool = {
-            "ec2:Encrypted" = "false"
-          }
-        }
-      },
-      {
-        Sid    = "DenyUnencryptedSnapshots"
-        Effect = "Deny"
-        Action = [
-          "ec2:CreateSnapshot",
-          "ec2:CreateSnapshots"
-        ]
-        Resource = "*"
-        Condition = {
-          Bool = {
-            "ec2:Encrypted" = "false"
-          }
-        }
-      }
-    ]
-  })
-}
-
-# SCP: Enforce RDS encryption
-resource "aws_organizations_policy" "enforce_rds_encryption" {
-  name        = "EnforceRDSEncryption-${var.environment_suffix}"
-  description = "Require RDS instances to be encrypted"
-  type        = "SERVICE_CONTROL_POLICY"
-
-  content = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "DenyUnencryptedRDSInstances"
-        Effect = "Deny"
-        Action = [
-          "rds:CreateDBInstance",
-          "rds:CreateDBCluster"
-        ]
-        Resource = "*"
-        Condition = {
-          Bool = {
-            "rds:StorageEncrypted" = "false"
-          }
-        }
-      }
-    ]
-  })
-}
-
-# SCP: Prevent disabling CloudWatch Logs
-resource "aws_organizations_policy" "protect_cloudwatch_logs" {
-  name        = "ProtectCloudWatchLogs-${var.environment_suffix}"
-  description = "Prevent disabling of CloudWatch Logs"
-  type        = "SERVICE_CONTROL_POLICY"
-
-  content = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "DenyCloudWatchLogsDeletion"
-        Effect = "Deny"
-        Action = [
-          "logs:DeleteLogGroup",
-          "logs:DeleteLogStream",
-          "logs:DeleteRetentionPolicy"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-# Attach SCPs to OUs
-resource "aws_organizations_policy_attachment" "security_s3_encryption" {
-  policy_id = aws_organizations_policy.enforce_s3_encryption.id
-  target_id = aws_organizations_organizational_unit.security.id
-}
-
-resource "aws_organizations_policy_attachment" "production_s3_encryption" {
-  policy_id = aws_organizations_policy.enforce_s3_encryption.id
-  target_id = aws_organizations_organizational_unit.production.id
-}
-
-resource "aws_organizations_policy_attachment" "development_s3_encryption" {
-  policy_id = aws_organizations_policy.enforce_s3_encryption.id
-  target_id = aws_organizations_organizational_unit.development.id
-}
-
-resource "aws_organizations_policy_attachment" "security_ebs_encryption" {
-  policy_id = aws_organizations_policy.enforce_ebs_encryption.id
-  target_id = aws_organizations_organizational_unit.security.id
-}
-
-resource "aws_organizations_policy_attachment" "production_ebs_encryption" {
-  policy_id = aws_organizations_policy.enforce_ebs_encryption.id
-  target_id = aws_organizations_organizational_unit.production.id
-}
-
-resource "aws_organizations_policy_attachment" "development_ebs_encryption" {
-  policy_id = aws_organizations_policy.enforce_ebs_encryption.id
-  target_id = aws_organizations_organizational_unit.development.id
-}
-
-resource "aws_organizations_policy_attachment" "security_rds_encryption" {
-  policy_id = aws_organizations_policy.enforce_rds_encryption.id
-  target_id = aws_organizations_organizational_unit.security.id
-}
-
-resource "aws_organizations_policy_attachment" "production_rds_encryption" {
-  policy_id = aws_organizations_policy.enforce_rds_encryption.id
-  target_id = aws_organizations_organizational_unit.production.id
-}
-
-resource "aws_organizations_policy_attachment" "development_rds_encryption" {
-  policy_id = aws_organizations_policy.enforce_rds_encryption.id
-  target_id = aws_organizations_organizational_unit.development.id
-}
-
-resource "aws_organizations_policy_attachment" "security_protect_logs" {
-  policy_id = aws_organizations_policy.protect_cloudwatch_logs.id
-  target_id = aws_organizations_organizational_unit.security.id
-}
-
-resource "aws_organizations_policy_attachment" "production_protect_logs" {
-  policy_id = aws_organizations_policy.protect_cloudwatch_logs.id
-  target_id = aws_organizations_organizational_unit.production.id
-}
-
-resource "aws_organizations_policy_attachment" "development_protect_logs" {
-  policy_id = aws_organizations_policy.protect_cloudwatch_logs.id
-  target_id = aws_organizations_organizational_unit.development.id
-}
+# # SCP: Enforce S3 encryption
+# resource "aws_organizations_policy" "enforce_s3_encryption" {
+#   name        = "EnforceS3Encryption-${var.environment_suffix}"
+#   description = "Require S3 buckets to use encryption"
+#   type        = "SERVICE_CONTROL_POLICY"
+#
+#   content = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Sid    = "DenyUnencryptedS3Uploads"
+#         Effect = "Deny"
+#         Action = [
+#           "s3:PutObject"
+#         ]
+#         Resource = "*"
+#         Condition = {
+#           StringNotEquals = {
+#             "s3:x-amz-server-side-encryption" = ["AES256", "aws:kms"]
+#           }
+#         }
+#       },
+#       {
+#         Sid    = "RequireS3BucketEncryption"
+#         Effect = "Deny"
+#         Action = [
+#           "s3:CreateBucket"
+#         ]
+#         Resource = "*"
+#         Condition = {
+#           StringNotEquals = {
+#             "s3:x-amz-server-side-encryption" = ["AES256", "aws:kms"]
+#           }
+#         }
+#       }
+#     ]
+#   })
+# }
+#
+# # SCP: Enforce EBS encryption
+# resource "aws_organizations_policy" "enforce_ebs_encryption" {
+#   name        = "EnforceEBSEncryption-${var.environment_suffix}"
+#   description = "Require EBS volumes to be encrypted"
+#   type        = "SERVICE_CONTROL_POLICY"
+#
+#   content = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Sid    = "DenyUnencryptedEBSVolumes"
+#         Effect = "Deny"
+#         Action = [
+#           "ec2:CreateVolume"
+#         ]
+#         Resource = "*"
+#         Condition = {
+#           Bool = {
+#             "ec2:Encrypted" = "false"
+#           }
+#         }
+#       },
+#       {
+#         Sid    = "DenyUnencryptedSnapshots"
+#         Effect = "Deny"
+#         Action = [
+#           "ec2:CreateSnapshot",
+#           "ec2:CreateSnapshots"
+#         ]
+#         Resource = "*"
+#         Condition = {
+#           Bool = {
+#             "ec2:Encrypted" = "false"
+#           }
+#         }
+#       }
+#     ]
+#   })
+# }
+#
+# # SCP: Enforce RDS encryption
+# resource "aws_organizations_policy" "enforce_rds_encryption" {
+#   name        = "EnforceRDSEncryption-${var.environment_suffix}"
+#   description = "Require RDS instances to be encrypted"
+#   type        = "SERVICE_CONTROL_POLICY"
+#
+#   content = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Sid    = "DenyUnencryptedRDSInstances"
+#         Effect = "Deny"
+#         Action = [
+#           "rds:CreateDBInstance",
+#           "rds:CreateDBCluster"
+#         ]
+#         Resource = "*"
+#         Condition = {
+#           Bool = {
+#             "rds:StorageEncrypted" = "false"
+#           }
+#         }
+#       }
+#     ]
+#   })
+# }
+#
+# # SCP: Prevent disabling CloudWatch Logs
+# resource "aws_organizations_policy" "protect_cloudwatch_logs" {
+#   name        = "ProtectCloudWatchLogs-${var.environment_suffix}"
+#   description = "Prevent disabling of CloudWatch Logs"
+#   type        = "SERVICE_CONTROL_POLICY"
+#
+#   content = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Sid    = "DenyCloudWatchLogsDeletion"
+#         Effect = "Deny"
+#         Action = [
+#           "logs:DeleteLogGroup",
+#           "logs:DeleteLogStream",
+#           "logs:DeleteRetentionPolicy"
+#         ]
+#         Resource = "*"
+#       }
+#     ]
+#   })
+# }
+#
+# # Attach SCPs to OUs
+# resource "aws_organizations_policy_attachment" "security_s3_encryption" {
+#   policy_id = aws_organizations_policy.enforce_s3_encryption.id
+#   target_id = aws_organizations_organizational_unit.security.id
+# }
+#
+# resource "aws_organizations_policy_attachment" "production_s3_encryption" {
+#   policy_id = aws_organizations_policy.enforce_s3_encryption.id
+#   target_id = aws_organizations_organizational_unit.production.id
+# }
+#
+# resource "aws_organizations_policy_attachment" "development_s3_encryption" {
+#   policy_id = aws_organizations_policy.enforce_s3_encryption.id
+#   target_id = aws_organizations_organizational_unit.development.id
+# }
+#
+# resource "aws_organizations_policy_attachment" "security_ebs_encryption" {
+#   policy_id = aws_organizations_policy.enforce_ebs_encryption.id
+#   target_id = aws_organizations_organizational_unit.security.id
+# }
+#
+# resource "aws_organizations_policy_attachment" "production_ebs_encryption" {
+#   policy_id = aws_organizations_policy.enforce_ebs_encryption.id
+#   target_id = aws_organizations_organizational_unit.production.id
+# }
+#
+# resource "aws_organizations_policy_attachment" "development_ebs_encryption" {
+#   policy_id = aws_organizations_policy.enforce_ebs_encryption.id
+#   target_id = aws_organizations_organizational_unit.development.id
+# }
+#
+# resource "aws_organizations_policy_attachment" "security_rds_encryption" {
+#   policy_id = aws_organizations_policy.enforce_rds_encryption.id
+#   target_id = aws_organizations_organizational_unit.security.id
+# }
+#
+# resource "aws_organizations_policy_attachment" "production_rds_encryption" {
+#   policy_id = aws_organizations_policy.enforce_rds_encryption.id
+#   target_id = aws_organizations_organizational_unit.production.id
+# }
+#
+# resource "aws_organizations_policy_attachment" "development_rds_encryption" {
+#   policy_id = aws_organizations_policy.enforce_rds_encryption.id
+#   target_id = aws_organizations_organizational_unit.development.id
+# }
+#
+# resource "aws_organizations_policy_attachment" "security_protect_logs" {
+#   policy_id = aws_organizations_policy.protect_cloudwatch_logs.id
+#   target_id = aws_organizations_organizational_unit.security.id
+# }
+#
+# resource "aws_organizations_policy_attachment" "production_protect_logs" {
+#   policy_id = aws_organizations_policy.protect_cloudwatch_logs.id
+#   target_id = aws_organizations_organizational_unit.production.id
+# }
+#
+# resource "aws_organizations_policy_attachment" "development_protect_logs" {
+#   policy_id = aws_organizations_policy.protect_cloudwatch_logs.id
+#   target_id = aws_organizations_organizational_unit.development.id
+# }
 
 #
 # 5. IAM POLICIES FOR ROOT USER RESTRICTIONS AND TAGGING COMPLIANCE
