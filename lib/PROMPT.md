@@ -13,32 +13,32 @@ Create a serverless webhook processing infrastructure using **Terraform with HCL
 ### Core Requirements
 
 1. **API Gateway REST API**
-   - Create REST API with resource path `/webhook/{provider}`
-   - Accept POST requests to handle incoming webhooks
+   - Create REST API that accepts POST requests to dynamically handle incoming webhooks at the provider-specific endpoint
+   - API Gateway triggers Lambda function directly for webhook processing through Lambda proxy integration
    - Implement request validation using JSON schema
    - Set throttling limit at 1000 requests per minute
    - Integrate with Lambda for processing
 
 2. **Lambda Functions**
-   - Deploy Lambda function to validate and transform webhooks based on provider parameter
+   - Deploy Lambda function that receives events from API Gateway, validates webhook signatures, transforms provider-specific data formats, and writes normalized records to DynamoDB table
+   - Lambda function connects to SQS dead letter queue to send failed events for later replay
    - Use ARM64 architecture for cost optimization
    - Set reserved concurrent executions to prevent throttling
-   - Encrypt environment variables with customer-managed KMS keys
-   - Configure dead letter queue using SQS for failed processing
+   - Encrypt environment variables with customer-managed KMS keys using the customer-managed key
 
 3. **DynamoDB Storage**
-   - Create table with partition key `transaction_id` and sort key `timestamp`
+   - Create table that stores processed webhook data from Lambda with partition key transaction_id and sort key timestamp
    - Enable point-in-time recovery for compliance requirements
-   - Store processed webhook data for audit trail
+   - Lambda has IAM permissions to write items to this table
 
 4. **Step Functions Orchestration**
-   - Implement state machine to orchestrate validation, transformation, and storage workflow
+   - Implement state machine that orchestrates the entire workflow by invoking Lambda for validation, triggering transformation logic, and coordinating writes to DynamoDB
    - Handle error states and retries
    - Provide workflow visibility
 
 5. **Monitoring and Alerting**
-   - Create CloudWatch dashboard displaying API latency, Lambda errors, and DynamoDB throttles
-   - Set up CloudWatch alarms for Lambda error rate exceeding 1% over 5 minutes
+   - Create CloudWatch dashboard that pulls metrics from API Gateway for latency, Lambda for error rates, and DynamoDB for throttles
+   - Set up CloudWatch alarms that monitor Lambda error rate and trigger notifications when exceeding 1% over 5 minutes
    - Enable CloudWatch Logs with KMS encryption for audit compliance
 
 ### Technical Requirements
@@ -52,7 +52,7 @@ Create a serverless webhook processing infrastructure using **Terraform with HCL
 - Use **CloudWatch** for monitoring and alarms
 - Use **KMS** customer-managed keys for encryption
 - Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `{resource-type}-{environment-suffix}`
+- Follow naming convention: resource-type-environment-suffix
 - Deploy to **us-east-1** region
 
 ### Deployment Requirements (CRITICAL)
