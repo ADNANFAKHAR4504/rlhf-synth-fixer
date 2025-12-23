@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import { Construct } from 'constructs';
@@ -165,6 +165,14 @@ export class TapStack extends cdk.Stack {
         }),
       }
     );
+
+    // LocalStack fix: Override the launch template version to use "$Latest" string
+    // instead of Fn::GetAtt which LocalStack doesn't handle correctly for LatestVersionNumber
+    if (isLocalStack) {
+      const cfnAsg = autoScalingGroup.node
+        .defaultChild as autoscaling.CfnAutoScalingGroup;
+      cfnAsg.addPropertyOverride('LaunchTemplate.Version', '$Latest');
+    }
 
     // Application Load Balancer
     const alb = new elbv2.ApplicationLoadBalancer(this, 'WebAppALB', {
