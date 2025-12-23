@@ -10,7 +10,7 @@
   "provider": "localstack",
   "wave": "P0",
   "subject_labels": [
-    "Serverless Infrastructure (Functions as Code)"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "s3",
