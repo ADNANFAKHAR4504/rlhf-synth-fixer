@@ -1,45 +1,42 @@
-The prompt below is designed to be used with a large language model to generate infrastructure-as-code. It is a detailed and professional request for a Python script using the AWS Cloud Development Kit (CDK) that provisions a serverless architecture.
+Need a Python CDK script to set up serverless S3 processing with multiple environments.
 
-***
+Here's what I need:
 
-### **Prompt**
+**Infrastructure Setup:**
 
-I need you to generate a Python script using the **AWS Cloud Development Kit (CDK)** to deploy a serverless infrastructure. The solution must be structured in a way that supports multiple environments, specifically **development** and **production**.
+- S3 bucket that triggers a Lambda function when objects are created
+- Lambda function in Python that processes S3 events
+- DynamoDB table to store object metadata
+- Separate deployments for dev and prod environments
 
-The script should perform the following tasks and adhere to all specified constraints:
+**Lambda Function Requirements:**
 
-**Core Architecture:**
+The Lambda needs to:
+- Get triggered only on S3 ObjectCreated events
+- Extract the object name from the S3 event
+- Log the object name to CloudWatch
+- Store metadata in DynamoDB with ObjectID as partition key - must be String type
 
-* **S3 Bucket:** Create an Amazon S3 bucket.
-* **AWS Lambda Function:** Create a Python Lambda function that is triggered by the S3 bucket.
-* **S3 Event Trigger:** Configure the S3 bucket to trigger the Lambda function **only on `s3:ObjectCreated:*` events.**
-* **Lambda Function Logic:** The Lambda function must be able to do the following:
-    * Access the S3 event data.
-    * Log the name of the newly created object to **Amazon CloudWatch Logs**.
-    * Store the processed object metadata in a **DynamoDB** table.
-* **DynamoDB Table:** Deploy a DynamoDB table to store the metadata.
-    * The table's **partition key** must be named `ObjectID` and be of type **String**.
+**IAM and Security:**
 
-**Configuration and Best Practices:**
+Lambda IAM role should have these specific permissions:
+- Write to its CloudWatch log group
+- s3:GetObject and s3:GetObjectAcl on the bucket only
+- dynamodb:PutItem on the table only
 
-* **Environment-Specific Configuration:** Implement logic to handle separate configurations for `development` and `production` environments. This includes deploying a unique set of S3 buckets, Lambda functions, and DynamoDB tables for each environment. Use **AWS CDK Stacks** to manage these environments.
-* **Resource Tagging:** All provisioned resources (S3, Lambda, DynamoDB, and IAM roles) must be tagged with a key `Environment` and the value set to the current stack's environment (e.g., `development` or `production`).
-* **Least Privilege IAM:**
-    * Create a dedicated **IAM Role** for the Lambda function.
-    * This role must be configured with a strict **least privilege** policy. It should only have permissions to:
-        * Write logs to its own **CloudWatch Log Group**.
-        * Perform `s3:GetObject` and `s3:GetObjectAcl` actions on the specific S3 bucket that triggers it.
-        * Perform `dynamodb:PutItem` on the DynamoDB table to store metadata.
-* **Output Exports:** Use CDK's stack outputs to export the **S3 bucket name** and the **Lambda function ARN** for each environment.
+No wildcards - keep it tight for least privilege.
 
----
+**Environment Handling:**
 
-### **Expected Output**
+Use CDK stacks to manage dev vs prod configurations. Each environment gets its own S3 bucket, Lambda, and DynamoDB table. Tag everything with Environment=dev or Environment=prod so we can track resources.
 
-The final output should be a complete and runnable Python script in a file named `app.py`, and a `lambda_handler.py` file for the Lambda function's code.
+**Outputs:**
 
-**`app.py`:**
-A Python script that uses the AWS CDK to define and deploy the entire infrastructure as described above. The script should be modular and use constructs effectively.
+Export the S3 bucket name and Lambda ARN for each environment so other stacks can reference them.
 
-**`lambda_handler.py`:**
-A Python script containing the Lambda function's logic. It will accept the S3 event, extract the object name, log it to CloudWatch, and save metadata to the DynamoDB table. It should be packaged with the CDK stack.
+**Deliverables:**
+
+- app.py with the CDK stack definition
+- lambda_handler.py with the function logic
+
+Make it modular and production-ready. We'll be deploying this to both environments so it needs to be solid.
