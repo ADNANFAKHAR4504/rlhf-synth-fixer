@@ -8,6 +8,7 @@
   "startedAt": "2025-08-14T11:11:30.754Z",
   "subtask": "Application Deployment",
   "provider": "localstack",
+  "wave": "P0",
   "subject_labels": [
     "Web Application Deployment"
   ],
