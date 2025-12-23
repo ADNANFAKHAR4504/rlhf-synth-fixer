@@ -1,6 +1,6 @@
 I'll create a comprehensive AWS CDK project that meets all your security-first infrastructure requirements. Let me break this down into the required files with proper security configurations.
 
-## 📂 Complete CDK Project Structure
+## Complete CDK Project Structure
 
 ### `tap.py` - CDK App Entry Point
 
