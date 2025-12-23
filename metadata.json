@@ -1,14 +1,14 @@
 {
-  "platform": "pulumi",
+  "platform": "analysis",
   "language": "py",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "y4t4w0m6",
   "team": "synth",
   "startedAt": "2025-12-03T18:10:45-00:00",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Cloud Environment Setup"
+    "Infrastructure Analysis/Monitoring"
   ],
   "aws_services": [
     "S3",
