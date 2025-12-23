@@ -1,18 +1,13 @@
-import * as cdk from 'aws-cdk-lib';
-import { TapStack } from '../lib/tap-stack';
-import * as fs from 'fs';
-import * as path from 'path';
+import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import {
-  S3Client,
   GetBucketEncryptionCommand,
   GetPublicAccessBlockCommand,
+  S3Client,
 } from '@aws-sdk/client-s3';
-import {
-  EC2Client,
-  DescribeInstancesCommand,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
-import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
+import * as cdk from 'aws-cdk-lib';
+import * as fs from 'fs';
+import * as path from 'path';
+import { TapStack } from '../lib/tap-stack';
 
 // LocalStack endpoint configuration
 const endpointUrl = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
@@ -62,7 +57,7 @@ describe('TapStack Integration Tests', () => {
 // Integration tests against live deployed resources
 describe('TapStack Live Integration Tests', () => {
   let outputs: any = {};
-  const region = 'us-west-2';
+  const region = process.env.AWS_REGION || 'us-east-1';
 
   beforeAll(() => {
     // Load the deployment outputs
