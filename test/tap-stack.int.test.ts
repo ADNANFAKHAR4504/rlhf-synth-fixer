@@ -19,9 +19,11 @@ import {
   GetMetricStatisticsCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
-  ConfigServiceClient,
-  DescribeDeliveryChannelsCommand,
-  // Note: ConfigurationRecorder commands removed to avoid account-level conflicts
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
+import {
+  ConfigServiceClient
 } from '@aws-sdk/client-config-service';
 import {
   DescribeFlowLogsCommand,
@@ -38,25 +40,20 @@ import {
   DescribeListenersCommand,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand,
-  ElasticLoadBalancingV2Client,
+  ElasticLoadBalancingV2Client
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
-  IAMClient,
   GetRoleCommand,
+  IAMClient,
   ListAttachedRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
 import {
   DescribeKeyCommand,
+  GetKeyPolicyCommand,
+  GetKeyRotationStatusCommand,
   KMSClient,
   ListAliasesCommand,
-  GetKeyRotationStatusCommand,
-  GetKeyPolicyCommand,
 } from '@aws-sdk/client-kms';
-import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
-} from '@aws-sdk/client-cloudwatch-logs';
 import {
   DescribeDBInstancesCommand,
   DescribeDBParameterGroupsCommand,
@@ -65,34 +62,32 @@ import {
 } from '@aws-sdk/client-rds';
 import {
   GetBucketEncryptionCommand,
-  GetBucketPolicyCommand,
-  GetBucketVersioningCommand,
   GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
-  HeadBucketCommand,
   ListBucketsCommand,
-  S3Client,
+  S3Client
 } from '@aws-sdk/client-s3';
 import {
-  SecretsManagerClient,
   DescribeSecretCommand,
   GetSecretValueCommand,
   ListSecretsCommand,
+  SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
 import {
+  GetTopicAttributesCommand,
+  ListSubscriptionsByTopicCommand,
   ListTopicsCommand,
   SNSClient,
-  ListSubscriptionsByTopicCommand,
-  GetTopicAttributesCommand,
 } from '@aws-sdk/client-sns';
 import {
-  STSClient,
   GetCallerIdentityCommand,
+  STSClient,
 } from '@aws-sdk/client-sts';
 import {
-  WAFV2Client,
-  ListWebACLsCommand,
   GetWebACLCommand,
+  ListWebACLsCommand,
+  WAFV2Client,
 } from '@aws-sdk/client-wafv2';
 import axios from 'axios';
 import fs from 'fs';
@@ -101,23 +96,27 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 const region = process.env.AWS_REGION || 'us-east-1';
 
-// Initialize AWS clients
-const cloudFormationClient = new CloudFormationClient({ region });
-const ec2Client = new EC2Client({ region });
-const elbv2Client = new ElasticLoadBalancingV2Client({ region });
-const rdsClient = new RDSClient({ region });
-const autoScalingClient = new AutoScalingClient({ region });
-const kmsClient = new KMSClient({ region });
-const iamClient = new IAMClient({ region });
-const s3Client = new S3Client({ region });
-const snsClient = new SNSClient({ region });
-const cloudWatchClient = new CloudWatchClient({ region });
-const logsClient = new CloudWatchLogsClient({ region });
-const cloudTrailClient = new CloudTrailClient({ region });
-const configClient = new ConfigServiceClient({ region });
-const secretsManagerClient = new SecretsManagerClient({ region });
-const stsClient = new STSClient({ region });
-const wafClient = new WAFV2Client({ region });
+// LocalStack endpoint configuration (AWS SDK v3 requires explicit endpoint)
+const endpoint = process.env.AWS_ENDPOINT_URL || undefined;
+const clientConfig = endpoint ? { region, endpoint } : { region };
+
+// Initialize AWS clients with optional LocalStack endpoint
+const cloudFormationClient = new CloudFormationClient(clientConfig);
+const ec2Client = new EC2Client(clientConfig);
+const elbv2Client = new ElasticLoadBalancingV2Client(clientConfig);
+const rdsClient = new RDSClient(clientConfig);
+const autoScalingClient = new AutoScalingClient(clientConfig);
+const kmsClient = new KMSClient(clientConfig);
+const iamClient = new IAMClient(clientConfig);
+const s3Client = new S3Client(clientConfig);
+const snsClient = new SNSClient(clientConfig);
+const cloudWatchClient = new CloudWatchClient(clientConfig);
+const logsClient = new CloudWatchLogsClient(clientConfig);
+const cloudTrailClient = new CloudTrailClient(clientConfig);
+const configClient = new ConfigServiceClient(clientConfig);
+const secretsManagerClient = new SecretsManagerClient(clientConfig);
+const stsClient = new STSClient(clientConfig);
+const wafClient = new WAFV2Client(clientConfig);
 
 describe('TapStack Integration Tests', () => {
   let stackOutputs: Record<string, string> = {};
@@ -208,7 +207,7 @@ describe('TapStack Integration Tests', () => {
         'UPDATE_COMPLETE',
         'IMPORT_COMPLETE'
       ];
-      
+
       stackResources.forEach(resource => {
         expect(successfulStates).toContain(resource.ResourceStatus);
       });
@@ -248,8 +247,8 @@ describe('TapStack Integration Tests', () => {
       const azs = new Set(subnets.map(subnet => subnet.AvailabilityZone));
       expect(azs.size).toBeGreaterThanOrEqual(2);
 
-      const publicSubnets = subnets.filter(subnet => 
-        subnet.SubnetId === stackOutputs.PublicSubnet1Id || 
+      const publicSubnets = subnets.filter(subnet =>
+        subnet.SubnetId === stackOutputs.PublicSubnet1Id ||
         subnet.SubnetId === stackOutputs.PublicSubnet2Id
       );
       publicSubnets.forEach(subnet => {
@@ -262,19 +261,19 @@ describe('TapStack Integration Tests', () => {
       const natGatewayResource = stackResources.find(
         resource => resource.LogicalResourceId === 'NatGateway1'
       );
-      
+
       if (!natGatewayResource) {
         fail('NAT Gateway resource not found in CloudFormation stack');
       }
-      
+
       console.log(`NAT Gateway CloudFormation Status: ${natGatewayResource.ResourceStatus}`);
       console.log(`NAT Gateway Physical ID: ${natGatewayResource.PhysicalResourceId}`);
       console.log(`NAT Gateway from stack outputs: ${stackOutputs.NatGateway1Id}`);
-      
+
       expect(natGatewayResource.ResourceStatus).toBe('CREATE_COMPLETE');
-      
+
       let natGateways: any[] = [];
-      
+
       // Strategy 0: First, let's see what NAT Gateways exist in this VPC without any ID filters
       try {
         console.log(`Strategy 0: Listing all NAT Gateways in VPC: ${stackOutputs.VPCId}`);
@@ -297,7 +296,7 @@ describe('TapStack Integration Tests', () => {
       } catch (error: any) {
         console.log(`Strategy 0 failed: ${error.message}`);
       }
-      
+
       // Strategy 1: Try direct lookup by stack output ID
       const stackOutputId = stackOutputs.NatGateway1Id;
       if (stackOutputId) {
@@ -313,7 +312,7 @@ describe('TapStack Integration Tests', () => {
           console.log(`Strategy 1 failed: ${error.message}`);
         }
       }
-      
+
       // Strategy 2: Try direct lookup by CloudFormation physical resource ID
       if (natGateways.length === 0 && natGatewayResource.PhysicalResourceId) {
         try {
@@ -328,7 +327,7 @@ describe('TapStack Integration Tests', () => {
           console.log(`Strategy 2 failed: ${error.message}`);
         }
       }
-      
+
       // Strategy 3: Search NAT Gateways by VPC only (remove state filter in case that's the issue)
       if (natGateways.length === 0) {
         try {
@@ -344,9 +343,9 @@ describe('TapStack Integration Tests', () => {
           const searchResponse = await ec2Client.send(searchCommand);
           const allNatInVpc = searchResponse.NatGateways || [];
           console.log(`Strategy 3 (VPC filter only): Found ${allNatInVpc.length} NAT Gateways`);
-          
+
           // Filter for available/pending states manually
-          natGateways = allNatInVpc.filter(ngw => 
+          natGateways = allNatInVpc.filter(ngw =>
             ngw.State === 'available' || ngw.State === 'pending'
           );
           console.log(`Strategy 3 (after state filter): Found ${natGateways.length} available/pending NAT Gateways`);
@@ -354,9 +353,9 @@ describe('TapStack Integration Tests', () => {
           console.log(`Strategy 3 failed: ${error.message}`);
         }
       }
-      
+
       console.log(`Final result: Found ${natGateways.length} NAT Gateways`);
-      
+
       if (natGateways.length > 0) {
         const natGw = natGateways[0];
         console.log(`NAT Gateway State: ${natGw.State}, VPC: ${natGw.VpcId}, Subnet: ${natGw.SubnetId}, ID: ${natGw.NatGatewayId}`);
@@ -367,12 +366,12 @@ describe('TapStack Integration Tests', () => {
       if (natGateways.length === 0) {
         console.warn('NAT Gateway not found via EC2 API despite CREATE_COMPLETE status in CloudFormation');
         console.warn('This could indicate permissions issues or resource state inconsistency');
-        
+
         // At minimum, verify the CloudFormation resource exists and is in good state
         expect(natGatewayResource.ResourceStatus).toBe('CREATE_COMPLETE');
         expect(natGatewayResource.PhysicalResourceId).toBeDefined();
         expect(natGatewayResource.PhysicalResourceId).toMatch(/^nat-[a-f0-9]+$/);
-        
+
         // Skip the detailed EC2 API validation for now
         console.log('Skipping detailed NAT Gateway validation due to API access issues');
         return;
@@ -419,7 +418,7 @@ describe('TapStack Integration Tests', () => {
       const nacls = response.NetworkAcls || [];
 
       expect(nacls.length).toBeGreaterThanOrEqual(3); // Default + 2 custom
-      
+
       const customNacls = nacls.filter(nacl => !nacl.IsDefault);
       expect(customNacls).toHaveLength(2); // Public and Private NACLs
     });
@@ -438,13 +437,13 @@ describe('TapStack Integration Tests', () => {
       const response = await ec2Client.send(command);
       const securityGroups = response.SecurityGroups || [];
 
-      const albSg = securityGroups.find(sg => 
+      const albSg = securityGroups.find(sg =>
         sg.GroupName?.includes('TapALBSecurityGroup')
       );
-      const ec2Sg = securityGroups.find(sg => 
+      const ec2Sg = securityGroups.find(sg =>
         sg.GroupName?.includes('TapEC2SecurityGroup')
       );
-      const rdsSg = securityGroups.find(sg => 
+      const rdsSg = securityGroups.find(sg =>
         sg.GroupName?.includes('TapRDSSecurityGroup')
       );
 
@@ -476,7 +475,7 @@ describe('TapStack Integration Tests', () => {
       expect(alb.Scheme).toBe('internet-facing');
       expect(alb.Type).toBe('application');
       expect(alb.VpcId).toBe(stackOutputs.VPCId);
-      
+
       // Check enhanced security attributes (these are configured in the template)
       expect(alb.LoadBalancerArn).toBeDefined();
     });
@@ -494,10 +493,10 @@ describe('TapStack Integration Tests', () => {
 
       // Should have at least HTTP listener, HTTPS listener is conditional
       expect(listeners.length).toBeGreaterThanOrEqual(1);
-      
+
       const httpListener = listeners.find(l => l.Port === 80 && l.Protocol === 'HTTP');
       expect(httpListener).toBeDefined();
-      
+
       // Check for HTTPS listener if SSL is enabled
       const httpsListener = listeners.find(l => l.Port === 443 && l.Protocol === 'HTTPS');
       if (httpsListener) {
@@ -514,7 +513,7 @@ describe('TapStack Integration Tests', () => {
       expect(targetGroups[0].Port).toBe(80);
       expect(targetGroups[0].Protocol).toBe('HTTP');
       expect(targetGroups[0].TargetType).toBe('instance');
-      
+
       // Check health check configuration
       const targetGroup = targetGroups[0];
       expect(targetGroup.HealthCheckProtocol).toBe('HTTP');
@@ -534,7 +533,7 @@ describe('TapStack Integration Tests', () => {
           timeout: 10000,
           validateStatus: () => true, // Accept any status code
         });
-        
+
         // Should get some response (could be 503 if targets not healthy yet)
         expect([200, 503, 502]).toContain(response.status);
       } catch (error) {
@@ -588,13 +587,13 @@ describe('TapStack Integration Tests', () => {
 
       if (asg?.Instances && asg.Instances.length > 0) {
         const instanceId = asg.Instances[0].InstanceId;
-        
+
         const instanceCommand = new DescribeInstancesCommand({
           InstanceIds: [instanceId!],
         });
         const instanceResponse = await ec2Client.send(instanceCommand);
         const instance = instanceResponse.Reservations?.[0]?.Instances?.[0];
-        
+
         if (instance?.BlockDeviceMappings && instance.BlockDeviceMappings.length > 0) {
           // EBS encryption is configured in the launch template
           // The presence of block device mappings indicates volumes are attached
@@ -612,7 +611,7 @@ describe('TapStack Integration Tests', () => {
       const activities = response.Activities || [];
 
       expect(activities.length).toBeGreaterThan(0);
-      
+
       // Should have at least one successful activity
       const successfulActivities = activities.filter(
         activity => activity.StatusCode === 'Successful'
@@ -687,7 +686,7 @@ describe('TapStack Integration Tests', () => {
       expect(db.MonitoringInterval).toBe(60);
       expect(db.MonitoringRoleArn).toBeDefined();
       expect(db.CACertificateIdentifier).toBe('rds-ca-rsa2048-g1');
-      
+
       // Check enhanced monitoring and log exports
       expect(db.EnabledCloudwatchLogsExports).toContain('error');
       expect(db.EnabledCloudwatchLogsExports).toContain('general');
@@ -715,7 +714,7 @@ describe('TapStack Integration Tests', () => {
 
       expect(subnetGroups).toHaveLength(1);
       const subnetGroup = subnetGroups[0];
-      
+
       expect(subnetGroup.Subnets).toHaveLength(2);
       const subnetIds = subnetGroup.Subnets?.map(subnet => subnet.SubnetIdentifier) || [];
       expect(subnetIds).toContain(stackOutputs.PrivateSubnet1Id);
@@ -771,7 +770,7 @@ describe('TapStack Integration Tests', () => {
       const policyArns = policies.map(policy => policy.PolicyArn);
       expect(policyArns).toContain('arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore');
       expect(policyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
-      
+
       // Role should exist and have proper assume role policy
       const role = roleResponse.Role;
       expect(role?.AssumeRolePolicyDocument).toContain('ec2.amazonaws.com');
@@ -808,7 +807,7 @@ describe('TapStack Integration Tests', () => {
       });
       const roleResponse = await iamClient.send(roleCommand);
       expect(roleResponse.Role).toBeDefined();
-      
+
       // Config role has inline policies for service permissions
       const role = roleResponse.Role;
       expect(role?.AssumeRolePolicyDocument).toContain('config.amazonaws.com');
@@ -830,7 +829,7 @@ describe('TapStack Integration Tests', () => {
           });
           const response = await s3Client.send(command);
           expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-          
+
           const rule = response.ServerSideEncryptionConfiguration?.Rules?.[0];
           expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
           expect(rule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBeDefined();
@@ -876,7 +875,7 @@ describe('TapStack Integration Tests', () => {
             Bucket: s3Resource.PhysicalResourceId,
           });
           const response = await s3Client.send(command);
-          
+
           expect(response.Status).toBe('Enabled');
         } catch (error) {
           console.log(`Bucket ${s3Resource.PhysicalResourceId} versioning check failed:`, error);
@@ -895,10 +894,10 @@ describe('TapStack Integration Tests', () => {
             Bucket: s3Resource.PhysicalResourceId,
           });
           const response = await s3Client.send(command);
-          
+
           expect(response.Rules).toBeDefined();
           expect(response.Rules?.length).toBeGreaterThan(0);
-          
+
           // Check if bucket has lifecycle rules for cost optimization
           const rules = response.Rules || [];
           expect(rules.some(rule => rule.Status === 'Enabled')).toBe(true);
@@ -932,7 +931,7 @@ describe('TapStack Integration Tests', () => {
       const response = await snsClient.send(command);
       const topics = response.Topics || [];
 
-      const alertTopic = topics.find(topic => 
+      const alertTopic = topics.find(topic =>
         topic.TopicArn === stackOutputs.SNSTopicArn
       );
       expect(alertTopic).toBeDefined();
@@ -972,28 +971,28 @@ describe('TapStack Integration Tests', () => {
       // Debug logging
       console.log('=== CloudTrail Debug Info ===');
       console.log('Environment suffix:', environmentSuffix);
-      
+
       // First try to find CloudTrail by stack resources
       const cloudTrailResource = stackResources.find(
         resource => resource.ResourceType === 'AWS::CloudTrail::Trail'
       );
       console.log('CloudTrail resource from stack:', cloudTrailResource);
-      
+
       // List all stack resources to see what's available
       const cloudTrailResources = stackResources.filter(
         resource => resource.ResourceType?.includes('CloudTrail')
       );
       console.log('All CloudTrail-related resources in stack:', cloudTrailResources);
-      
+
       let trails: any[] = [];
-      
+
       if (cloudTrailResource?.PhysicalResourceId) {
         // Use the physical resource ID from stack
         console.log('Using physical resource ID:', cloudTrailResource.PhysicalResourceId);
-        
+
         // Debug: Check CloudTrail client configuration
         console.log('CloudTrail client region:', (cloudTrailClient as any).config?.region);
-        
+
         // Try specific trail lookup first
         try {
           const command = new DescribeTrailsCommand({
@@ -1005,7 +1004,7 @@ describe('TapStack Integration Tests', () => {
         } catch (error) {
           console.log('Error in specific trail lookup:', error);
         }
-        
+
         // Also try with includeShadowTrails in case it's a shadow trail
         if (trails.length === 0) {
           try {
@@ -1027,11 +1026,11 @@ describe('TapStack Integration Tests', () => {
         const allTrailsCommand = new DescribeTrailsCommand({});
         const allTrailsResponse = await cloudTrailClient.send(allTrailsCommand);
         const allTrails = allTrailsResponse.trailList || [];
-        
+
         console.log('All trails found:', allTrails.map(t => ({ name: t.Name, arn: t.TrailARN })));
-        
-        trails = allTrails.filter(trail => 
-          trail.Name?.includes(environmentSuffix) || 
+
+        trails = allTrails.filter(trail =>
+          trail.Name?.includes(environmentSuffix) ||
           trail.Name?.includes('TapCloudTrail')
         );
         console.log('Filtered trails matching our criteria:', trails.map(t => ({ name: t.Name, arn: t.TrailARN })));
@@ -1101,15 +1100,15 @@ describe('TapStack Integration Tests', () => {
       const natGatewayResource = stackResources.find(
         resource => resource.LogicalResourceId === 'NatGateway1'
       );
-      
+
       if (!natGatewayResource) {
         fail('NAT Gateway resource not found in CloudFormation stack');
       }
-      
+
       expect(natGatewayResource.ResourceStatus).toBe('CREATE_COMPLETE');
-      
+
       let natGateways: any[] = [];
-      
+
       // Strategy 0: First, let's see what NAT Gateways exist in this VPC without any ID filters
       try {
         console.log(`HA Test - Strategy 0: Listing all NAT Gateways in VPC: ${stackOutputs.VPCId}`);
@@ -1132,7 +1131,7 @@ describe('TapStack Integration Tests', () => {
       } catch (error: any) {
         console.log(`HA Test - Strategy 0 failed: ${error.message}`);
       }
-      
+
       // Strategy 1: Try direct lookup by stack output ID
       const stackOutputId = stackOutputs.NatGateway1Id;
       if (stackOutputId) {
@@ -1148,7 +1147,7 @@ describe('TapStack Integration Tests', () => {
           console.log(`HA Test - Strategy 1 failed: ${error.message}`);
         }
       }
-      
+
       // Strategy 2: Try direct lookup by CloudFormation physical resource ID
       if (natGateways.length === 0 && natGatewayResource.PhysicalResourceId) {
         try {
@@ -1163,7 +1162,7 @@ describe('TapStack Integration Tests', () => {
           console.log(`HA Test - Strategy 2 failed: ${error.message}`);
         }
       }
-      
+
       // Strategy 3: Search NAT Gateways by VPC only (remove state filter in case that's the issue)
       if (natGateways.length === 0) {
         try {
@@ -1179,9 +1178,9 @@ describe('TapStack Integration Tests', () => {
           const searchResponse = await ec2Client.send(searchCommand);
           const allNatInVpc = searchResponse.NatGateways || [];
           console.log(`HA Test - Strategy 3 (VPC filter only): Found ${allNatInVpc.length} NAT Gateways`);
-          
+
           // Filter for available/pending states manually
-          natGateways = allNatInVpc.filter(ngw => 
+          natGateways = allNatInVpc.filter(ngw =>
             ngw.State === 'available' || ngw.State === 'pending'
           );
           console.log(`HA Test - Strategy 3 (after state filter): Found ${natGateways.length} available/pending NAT Gateways`);
@@ -1195,12 +1194,12 @@ describe('TapStack Integration Tests', () => {
       if (natGateways.length === 0) {
         console.warn('HA Test - NAT Gateway not found via EC2 API despite CREATE_COMPLETE status in CloudFormation');
         console.warn('HA Test - This could indicate permissions issues or resource state inconsistency');
-        
+
         // At minimum, verify the CloudFormation resource exists and is in good state
         expect(natGatewayResource.ResourceStatus).toBe('CREATE_COMPLETE');
         expect(natGatewayResource.PhysicalResourceId).toBeDefined();
         expect(natGatewayResource.PhysicalResourceId).toMatch(/^nat-[a-f0-9]+$/);
-        
+
         // Skip the detailed EC2 API validation for now
         console.log('HA Test - Skipping detailed NAT Gateway validation due to API access issues');
         return;
@@ -1208,7 +1207,7 @@ describe('TapStack Integration Tests', () => {
 
       // This template only creates 1 NAT Gateway for cost optimization
       expect(natGateways).toHaveLength(1);
-      
+
       if (natGateways.length > 0) {
         const natGw = natGateways[0];
         console.log(`HA Test - NAT Gateway State: ${natGw.State}, VPC: ${natGw.VpcId}, Subnet: ${natGw.SubnetId}, ID: ${natGw.NatGatewayId}`);
@@ -1241,14 +1240,14 @@ describe('TapStack Integration Tests', () => {
       );
 
       expect(s3Resources.length).toBeGreaterThan(0);
-      
+
       for (const s3Resource of s3Resources) {
         try {
           const command = new GetBucketLifecycleConfigurationCommand({
             Bucket: s3Resource.PhysicalResourceId,
           });
           const response = await s3Client.send(command);
-          
+
           if (response.Rules && response.Rules.length > 0) {
             // Check if CloudTrail bucket has cost optimization transitions
             if (s3Resource.PhysicalResourceId?.includes('cloudtrail')) {
@@ -1283,27 +1282,27 @@ describe('TapStack Integration Tests', () => {
     test('should validate KMS key rotation and policies', async () => {
       const kmsKeyId = stackOutputs.KMSKeyId;
       expect(kmsKeyId).toBeDefined();
-      
+
       try {
         const describeKeyCommand = new DescribeKeyCommand({ KeyId: kmsKeyId });
         const keyResponse = await kmsClient.send(describeKeyCommand);
-        
+
         expect(keyResponse.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
         expect(keyResponse.KeyMetadata?.KeyState).toBe('Enabled');
-        
+
         // Check key rotation - this template doesn't enable automatic rotation
         const getKeyRotationCommand = new GetKeyRotationStatusCommand({ KeyId: kmsKeyId });
         const rotationResponse = await kmsClient.send(getKeyRotationCommand);
         expect(rotationResponse.KeyRotationEnabled).toBeFalsy();
-        
+
         // Verify key policy allows necessary services
-        const getKeyPolicyCommand = new GetKeyPolicyCommand({ 
-          KeyId: kmsKeyId, 
-          PolicyName: 'default' 
+        const getKeyPolicyCommand = new GetKeyPolicyCommand({
+          KeyId: kmsKeyId,
+          PolicyName: 'default'
         });
         const policyResponse = await kmsClient.send(getKeyPolicyCommand);
         const policy = JSON.parse(policyResponse.Policy || '{}');
-        
+
         expect(policy.Statement).toBeDefined();
         expect(policy.Statement.length).toBeGreaterThan(0);
       } catch (error) {
@@ -1314,16 +1313,16 @@ describe('TapStack Integration Tests', () => {
 
     test('should validate S3 bucket security configurations', async () => {
       const buckets = await s3Client.send(new ListBucketsCommand({}));
-      const stackBuckets = buckets.Buckets?.filter(bucket => 
-        bucket.Name?.includes(environmentSuffix) && 
+      const stackBuckets = buckets.Buckets?.filter(bucket =>
+        bucket.Name?.includes(environmentSuffix) &&
         (bucket.Name.includes('cloudtrail') || bucket.Name.includes('config'))
       ) || [];
-      
+
       expect(stackBuckets.length).toBeGreaterThan(0);
-      
+
       for (const bucket of stackBuckets) {
         if (!bucket.Name) continue;
-        
+
         // Check bucket encryption
         try {
           const encryptionResponse = await s3Client.send(
@@ -1336,13 +1335,13 @@ describe('TapStack Integration Tests', () => {
             throw error;
           }
         }
-        
+
         // Check bucket versioning
         const versioningResponse = await s3Client.send(
           new GetBucketVersioningCommand({ Bucket: bucket.Name })
         );
         expect(versioningResponse.Status).toBe('Enabled');
-        
+
         // Check public access block
         const publicAccessResponse = await s3Client.send(
           new GetPublicAccessBlockCommand({ Bucket: bucket.Name })
@@ -1357,10 +1356,10 @@ describe('TapStack Integration Tests', () => {
     test('should validate WAF rules effectiveness', async () => {
       const wafs = await wafClient.send(new ListWebACLsCommand({ Scope: 'REGIONAL' }));
       const stackWAF = wafs.WebACLs?.find(waf => waf.Name?.includes(environmentSuffix));
-      
+
       expect(stackWAF).toBeDefined();
       expect(stackWAF?.ARN).toBeDefined();
-      
+
       if (stackWAF?.Id && stackWAF?.Name) {
         try {
           const wafDetails = await wafClient.send(new GetWebACLCommand({
@@ -1368,15 +1367,15 @@ describe('TapStack Integration Tests', () => {
             Name: stackWAF.Name,
             Scope: 'REGIONAL'
           }));
-          
+
           expect(wafDetails.WebACL?.Rules).toBeDefined();
           expect(wafDetails.WebACL?.Rules?.length).toBeGreaterThan(0);
-          
+
           // Check for managed rule groups
           const ruleNames = wafDetails.WebACL?.Rules?.map(rule => rule.Name) || [];
           expect(ruleNames).toContain('AWSManagedRulesCommonRuleSet');
           expect(ruleNames).toContain('AWSManagedRulesKnownBadInputsRuleSet');
-          
+
           // Verify rate limiting rule exists
           const rateLimitRule = wafDetails.WebACL?.Rules?.find(rule => rule.Name === 'RateLimitRule');
           expect(rateLimitRule).toBeDefined();
@@ -1393,9 +1392,9 @@ describe('TapStack Integration Tests', () => {
       const dbSecretArn = stackResources.find(
         resource => resource.LogicalResourceId === 'DBSecret'
       )?.PhysicalResourceId;
-      
+
       let dbSecret;
-      
+
       if (dbSecretArn) {
         // Use the ARN from stack resources
         try {
@@ -1405,12 +1404,12 @@ describe('TapStack Integration Tests', () => {
           console.log('Could not describe secret from stack resources:', error);
         }
       }
-      
+
       // Fallback: search by name pattern if stack resource lookup failed
       if (!dbSecret) {
         const secrets = await secretsManagerClient.send(new ListSecretsCommand({}));
-        const foundSecret = secrets.SecretList?.find(secret => 
-          (secret.Name?.includes('tap-db-secret') || secret.Name?.includes('TapDB')) && 
+        const foundSecret = secrets.SecretList?.find(secret =>
+          (secret.Name?.includes('tap-db-secret') || secret.Name?.includes('TapDB')) &&
           secret.Name?.includes(environmentSuffix)
         );
         if (foundSecret?.ARN) {
@@ -1422,17 +1421,17 @@ describe('TapStack Integration Tests', () => {
           }
         }
       }
-      
+
       expect(dbSecret).toBeDefined();
       expect(dbSecret?.ARN).toBeDefined();
-      
+
       if (dbSecret?.ARN) {
         try {
           const secretValue = await secretsManagerClient.send(
             new GetSecretValueCommand({ SecretId: dbSecret.ARN })
           );
           expect(secretValue.SecretString).toBeDefined();
-          
+
           const secretData = JSON.parse(secretValue.SecretString || '{}');
           expect(secretData.username).toBeDefined();
           expect(secretData.password).toBeDefined();
@@ -1449,22 +1448,22 @@ describe('TapStack Integration Tests', () => {
     test('should validate load balancer performance settings', async () => {
       const albDns = stackOutputs.ApplicationLoadBalancerDNS;
       expect(albDns).toBeDefined();
-      
+
       // Test multiple concurrent requests to validate load balancer
       const requests = [];
       for (let i = 0; i < 10; i++) {
         requests.push(
-          fetch(`http://${albDns}`, { 
+          fetch(`http://${albDns}`, {
             method: 'GET'
           }).catch(error => ({ error: error.message }))
         );
       }
-      
+
       const responses = await Promise.all(requests);
-      const successfulResponses = responses.filter(response => 
+      const successfulResponses = responses.filter(response =>
         response && !('error' in response)
       );
-      
+
       // At least some requests should succeed (service might not be fully ready)
       expect(responses.length).toBe(10);
       console.log(`Load balancer test: ${successfulResponses.length}/10 requests successful`);
@@ -1473,13 +1472,13 @@ describe('TapStack Integration Tests', () => {
     test('should validate auto scaling configuration', async () => {
       const asgName = stackOutputs.AutoScalingGroupName;
       expect(asgName).toBeDefined();
-      
+
       const asgResponse = await autoScalingClient.send(
         new DescribeAutoScalingGroupsCommand({
           AutoScalingGroupNames: [asgName]
         })
       );
-      
+
       const asg = asgResponse.AutoScalingGroups?.[0];
       expect(asg).toBeDefined();
       expect(asg?.MinSize).toBeDefined();
@@ -1487,7 +1486,7 @@ describe('TapStack Integration Tests', () => {
       expect(asg?.DesiredCapacity).toBeDefined();
       expect(asg?.HealthCheckType).toBe('ELB');
       expect(asg?.HealthCheckGracePeriod).toBeGreaterThan(0);
-      
+
       // Validate launch template
       expect(asg?.LaunchTemplate).toBeDefined();
       expect(asg?.LaunchTemplate?.LaunchTemplateId).toBeDefined();
@@ -1496,18 +1495,18 @@ describe('TapStack Integration Tests', () => {
     test('should validate RDS performance monitoring', async () => {
       const rdsEndpoint = stackOutputs.RDSInstanceEndpoint;
       expect(rdsEndpoint).toBeDefined();
-      
+
       const dbInstances = await rdsClient.send(new DescribeDBInstancesCommand({}));
-      const stackDB = dbInstances.DBInstances?.find(db => 
+      const stackDB = dbInstances.DBInstances?.find(db =>
         db.DBInstanceIdentifier?.includes(environmentSuffix)
       );
-      
+
       expect(stackDB).toBeDefined();
       expect(stackDB?.MultiAZ).toBe(true);
       expect(stackDB?.StorageEncrypted).toBe(true);
       expect(stackDB?.MonitoringInterval).toBeGreaterThan(0);
       expect(stackDB?.PerformanceInsightsEnabled).toBeDefined();
-      
+
       // Check enabled log types
       expect(stackDB?.EnabledCloudwatchLogsExports).toContain('error');
       expect(stackDB?.EnabledCloudwatchLogsExports).toContain('general');
@@ -1518,14 +1517,14 @@ describe('TapStack Integration Tests', () => {
   describe('Disaster Recovery and Business Continuity', () => {
     test('should validate backup configurations', async () => {
       const dbInstances = await rdsClient.send(new DescribeDBInstancesCommand({}));
-      const stackDB = dbInstances.DBInstances?.find(db => 
+      const stackDB = dbInstances.DBInstances?.find(db =>
         db.DBInstanceIdentifier?.includes(environmentSuffix)
       );
-      
+
       expect(stackDB).toBeDefined();
       expect(stackDB?.BackupRetentionPeriod).toBeGreaterThan(0);
       expect(stackDB?.BackupRetentionPeriod).toBeLessThanOrEqual(35); // AWS maximum
-      
+
       // Check automated backup window
       expect(stackDB?.PreferredBackupWindow).toBeDefined();
       expect(stackDB?.PreferredMaintenanceWindow).toBeDefined();
@@ -1537,18 +1536,18 @@ describe('TapStack Integration Tests', () => {
           { Name: 'tag:Environment', Values: [environmentSuffix] }
         ]
       }));
-      
+
       const azs = new Set(subnets.Subnets?.map(subnet => subnet.AvailabilityZone) || []);
       expect(azs.size).toBeGreaterThanOrEqual(2); // Multi-AZ deployment
-      
+
       // Validate private and public subnets in different AZs
-      const privateSubnets = subnets.Subnets?.filter(subnet => 
+      const privateSubnets = subnets.Subnets?.filter(subnet =>
         subnet.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('Private'))
       ) || [];
-      const publicSubnets = subnets.Subnets?.filter(subnet => 
+      const publicSubnets = subnets.Subnets?.filter(subnet =>
         subnet.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('Public'))
       ) || [];
-      
+
       expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
       expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
     });
@@ -1557,22 +1556,22 @@ describe('TapStack Integration Tests', () => {
       // Debug logging
       console.log('=== CloudTrail Audit Debug Info ===');
       console.log('Environment suffix:', environmentSuffix);
-      
+
       // First try to find CloudTrail by stack resources
       const cloudTrailResource = stackResources.find(
         resource => resource.ResourceType === 'AWS::CloudTrail::Trail'
       );
       console.log('CloudTrail resource from stack:', cloudTrailResource);
-      
+
       let stackTrail;
-      
+
       if (cloudTrailResource?.PhysicalResourceId) {
         // Use the physical resource ID from stack
         console.log('Using physical resource ID:', cloudTrailResource.PhysicalResourceId);
-        
+
         // Debug: Check CloudTrail client configuration
         console.log('CloudTrail client region:', (cloudTrailClient as any).config?.region);
-        
+
         // Try specific trail lookup first
         try {
           const command = new DescribeTrailsCommand({
@@ -1584,7 +1583,7 @@ describe('TapStack Integration Tests', () => {
         } catch (error) {
           console.log('Error in specific trail lookup:', error);
         }
-        
+
         // Also try with includeShadowTrails in case it's a shadow trail
         if (!stackTrail) {
           try {
@@ -1605,17 +1604,17 @@ describe('TapStack Integration Tests', () => {
         console.log('No CloudTrail resource found in stack, searching all trails...');
         const trails = await cloudTrailClient.send(new DescribeTrailsCommand({}));
         console.log('All trails found:', trails.trailList?.map(t => ({ name: t.Name, arn: t.TrailARN })));
-        
-        stackTrail = trails.trailList?.find(trail => 
-          trail.Name?.includes(environmentSuffix) || 
+
+        stackTrail = trails.trailList?.find(trail =>
+          trail.Name?.includes(environmentSuffix) ||
           trail.Name?.includes('TapCloudTrail')
         );
         console.log('Filtered trail matching our criteria:', stackTrail ? { name: stackTrail.Name, arn: stackTrail.TrailARN } : 'None found');
       }
-      
+
       console.log('Final stackTrail:', stackTrail ? { name: stackTrail.Name, arn: stackTrail.TrailARN } : 'undefined');
       console.log('=====================================');
-      
+
       // If no trail found via API but CloudFormation shows the resource exists, 
       // this might be a permissions or region issue - at least verify stack resource exists
       if (!stackTrail && cloudTrailResource?.ResourceStatus === 'CREATE_COMPLETE') {
@@ -1625,12 +1624,12 @@ describe('TapStack Integration Tests', () => {
         expect(cloudTrailResource.PhysicalResourceId).toContain('TapCloudTrail');
         return; // Skip detailed API validation
       }
-      
+
       expect(stackTrail).toBeDefined();
       expect(stackTrail?.IncludeGlobalServiceEvents).toBe(true);
       expect(stackTrail?.LogFileValidationEnabled).toBe(true);
       expect(stackTrail?.KmsKeyId).toBeDefined();
-      
+
       if (stackTrail?.Name) {
         const trailStatus = await cloudTrailClient.send(
           new GetTrailStatusCommand({ Name: stackTrail.Name })
@@ -1645,14 +1644,14 @@ describe('TapStack Integration Tests', () => {
 
     test('should validate resource tagging compliance', async () => {
       const requiredTags = ['Environment']; // Project tag is not included in RDS instance tags in this template
-      
+
       // Check EC2 instances
       const instances = await ec2Client.send(new DescribeInstancesCommand({
         Filters: [
           { Name: 'tag:Environment', Values: [environmentSuffix] }
         ]
       }));
-      
+
       instances.Reservations?.forEach(reservation => {
         reservation.Instances?.forEach(instance => {
           const tagKeys = instance.Tags?.map(tag => tag.Key) || [];
@@ -1661,13 +1660,13 @@ describe('TapStack Integration Tests', () => {
           });
         });
       });
-      
+
       // Check RDS instances - this template only has Environment tag, not Project tag
       const dbInstances = await rdsClient.send(new DescribeDBInstancesCommand({}));
-      const stackDB = dbInstances.DBInstances?.find(db => 
+      const stackDB = dbInstances.DBInstances?.find(db =>
         db.DBInstanceIdentifier?.includes(environmentSuffix)
       );
-      
+
       if (stackDB?.TagList) {
         const tagKeys = stackDB.TagList.map(tag => tag.Key) || [];
         requiredTags.forEach(requiredTag => {
@@ -1684,9 +1683,9 @@ describe('TapStack Integration Tests', () => {
           { Name: 'tag:Environment', Values: [environmentSuffix] }
         ]
       }));
-      
+
       expect(flowLogs.FlowLogs?.length).toBeGreaterThan(0);
-      
+
       const stackFlowLog = flowLogs.FlowLogs?.[0];
       expect(stackFlowLog?.TrafficType).toBe('ALL');
       expect(stackFlowLog?.LogDestinationType).toBe('cloud-watch-logs');
@@ -1699,7 +1698,7 @@ describe('TapStack Integration Tests', () => {
           { Name: 'tag:Environment', Values: [environmentSuffix] }
         ]
       }));
-      
+
       securityGroups.SecurityGroups?.forEach(sg => {
         // Check ingress rules are not too permissive
         sg.IpPermissions?.forEach(rule => {
@@ -1711,7 +1710,7 @@ describe('TapStack Integration Tests', () => {
             }
           });
         });
-        
+
         // Check egress rules - be more flexible with security group egress
         sg.IpPermissionsEgress?.forEach(rule => {
           // Most security groups will have some egress rules for normal operation
@@ -1731,17 +1730,17 @@ describe('TapStack Integration Tests', () => {
           { Name: 'tag:Environment', Values: [environmentSuffix] }
         ]
       }));
-      
+
       expect(nacls.NetworkAcls?.length).toBeGreaterThan(0);
-      
+
       nacls.NetworkAcls?.forEach(nacl => {
         // Check that NACLs have both ingress and egress rules
         const ingressRules = nacl.Entries?.filter(entry => !entry.Egress) || [];
         const egressRules = nacl.Entries?.filter(entry => entry.Egress) || [];
-        
+
         expect(ingressRules.length).toBeGreaterThan(0);
         expect(egressRules.length).toBeGreaterThan(0);
-        
+
         // Check for deny rules (rule number 32767 is default deny)
         const denyRules = nacl.Entries?.filter(entry => entry.RuleAction === 'deny') || [];
         expect(denyRules.length).toBeGreaterThan(0);
@@ -1754,7 +1753,7 @@ describe('TapStack Integration Tests', () => {
       // Get metrics for the stack
       const endTime = new Date();
       const startTime = new Date(endTime.getTime() - 3600000); // 1 hour ago
-      
+
       // Check ALB metrics
       const albMetrics = await cloudWatchClient.send(new GetMetricStatisticsCommand({
         Namespace: 'AWS/ApplicationELB',
@@ -1770,10 +1769,10 @@ describe('TapStack Integration Tests', () => {
           }
         ]
       }));
-      
+
       // Metrics might not be available immediately after deployment
       expect(albMetrics.Datapoints).toBeDefined();
-      
+
       // Check RDS metrics
       const rdsMetrics = await cloudWatchClient.send(new GetMetricStatisticsCommand({
         Namespace: 'AWS/RDS',
@@ -1789,7 +1788,7 @@ describe('TapStack Integration Tests', () => {
           }
         ]
       }));
-      
+
       expect(rdsMetrics.Datapoints).toBeDefined();
     });
 
@@ -1797,13 +1796,13 @@ describe('TapStack Integration Tests', () => {
       const alarms = await cloudWatchClient.send(new DescribeAlarmsCommand({
         AlarmNamePrefix: `Tap`
       }));
-      
-      const stackAlarms = alarms.MetricAlarms?.filter(alarm => 
+
+      const stackAlarms = alarms.MetricAlarms?.filter(alarm =>
         alarm.AlarmName?.includes(environmentSuffix)
       ) || [];
-      
+
       expect(stackAlarms.length).toBeGreaterThan(0);
-      
+
       // Check alarm states - they should be OK or INSUFFICIENT_DATA (for new stacks)
       stackAlarms.forEach(alarm => {
         expect(['OK', 'INSUFFICIENT_DATA', 'ALARM']).toContain(alarm.StateValue);
@@ -1815,19 +1814,19 @@ describe('TapStack Integration Tests', () => {
     test('should validate SNS topic subscriptions', async () => {
       const snsTopicArn = stackOutputs.SNSTopicArn;
       expect(snsTopicArn).toBeDefined();
-      
+
       const subscriptions = await snsClient.send(new ListSubscriptionsByTopicCommand({
         TopicArn: snsTopicArn
       }));
-      
+
       // Topic should exist even if no subscriptions are configured yet
       expect(subscriptions.Subscriptions).toBeDefined();
-      
+
       // Verify topic attributes
       const topicAttributes = await snsClient.send(new GetTopicAttributesCommand({
         TopicArn: snsTopicArn
       }));
-      
+
       expect(topicAttributes.Attributes?.KmsMasterKeyId).toBeDefined();
       expect(topicAttributes.Attributes?.DisplayName).toContain(environmentSuffix);
     });
