@@ -23,13 +23,13 @@ Create a multi-region disaster recovery infrastructure using **Terraform with HC
    - Create Lambda functions in both regions for payment webhook processing
    - Functions need 1GB memory allocation
    - Deploy identical function code and configuration to both regions
-   - Functions must access both Aurora and DynamoDB
+   - Functions need specific read/write access to Aurora and DynamoDB tables
 
 3. **DNS and Traffic Management**
    - Configure Route 53 hosted zone with health checks
    - Implement primary and secondary failover routing policies
    - Health checks must detect regional outages
-   - Failover must complete within 5 minutes (RTO requirement)
+   - Failover must complete within 5 minutes to meet RTO requirement
 
 4. **Session Management**
    - Implement DynamoDB global tables for session data
@@ -51,8 +51,8 @@ Create a multi-region disaster recovery infrastructure using **Terraform with HC
 
 7. **Security and Access Control**
    - Implement IAM roles with least-privilege policies
-   - Lambda execution role must access Aurora and DynamoDB
-   - Cross-region access permissions where needed
+   - Lambda execution role needs specific permissions for Aurora RDS and DynamoDB operations
+   - Grant only required cross-region permissions for replication
    - Proper encryption for data at rest and in transit
 
 8. **Resource Organization**
@@ -75,7 +75,7 @@ Create a multi-region disaster recovery infrastructure using **Terraform with HC
 - Use **VPC** infrastructure with proper subnet design
 - Use **IAM** for security and access control
 - Resource names must include **environmentSuffix** for uniqueness
-- Deploy to **us-east-1** (primary) and **us-west-2** (secondary) regions
+- Deploy to **us-east-1** as primary and **us-west-2** as secondary regions
 
 ### Optional Enhancements
 
@@ -86,11 +86,11 @@ If time permits, consider adding:
 
 ### Constraints
 
-- RTO (Recovery Time Objective) must be under 5 minutes
-- RPO (Recovery Point Objective) must be under 1 minute
+- RTO must be under 5 minutes
+- RPO must be under 1 minute
 - Aurora Global Database must span exactly 2 regions
 - Cost optimization: secondary region runs minimal capacity until failover
-- All resources must be destroyable (no Retain policies)
+- All resources must be destroyable without Retain policies
 - Use consistent naming with region suffixes
 - CloudWatch alarms must trigger SNS notifications
 - Include proper error handling and logging
