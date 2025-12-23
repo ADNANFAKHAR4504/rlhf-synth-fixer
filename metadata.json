@@ -17,5 +17,6 @@
     "IAM",
     "S3",
     "EventBridge"
-  ]
+  ],
+  "wave": "P0"
 }
