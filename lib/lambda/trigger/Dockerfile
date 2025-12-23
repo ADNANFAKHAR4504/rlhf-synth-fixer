@@ -1,4 +1,4 @@
-FROM public.ecr.aws/lambda/python:3.11-arm64
+FROM public.ecr.aws/lambda/python:3.11
 
 # Copy function code
 COPY handler.py ${LAMBDA_TASK_ROOT}/
