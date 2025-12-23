@@ -6,15 +6,12 @@
   "po_id": "291580",
   "team": "synth-2",
   "startedAt": "2025-08-21T13:05:47.580Z",
-  "subtask": "General Infrastructure Provisioning",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "General Infrastructure Tooling QA",
     "Web Application Deployment",
-    "Security Configuration",
-    "Database Management",
-    "Network Configuration",
-    "Resource Scaling",
-    "Monitoring Setup"
+    "Security Configuration as Code",
+    "Infrastructure Analysis/Monitoring"
   ],
   "aws_services": [
     "EC2",
@@ -33,9 +30,5 @@
     "Security Groups"
   ],
   "provider": "localstack",
-  "wave": "P0",
-  "migrated_from": {
-    "po_id": "barun-turing",
-    "pr": "Pr1903"
-  }
+  "wave": "P0"
 }
