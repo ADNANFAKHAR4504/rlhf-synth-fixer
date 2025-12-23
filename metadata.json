@@ -1,0 +1,28 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912656",
+  "team": "synth",
+  "startedAt": "2025-11-26T05:32:00-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "RDS Aurora",
+    "Route 53",
+    "S3",
+    "KMS",
+    "Secrets Manager",
+    "Lambda",
+    "SNS",
+    "SQS",
+    "CloudWatch",
+    "IAM",
+    "VPC"
+  ],
+  "provider": "localstack",
+  "wave": "P0"
+}
