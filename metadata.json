@@ -30,5 +30,6 @@
     "Security Groups",
     "IAM"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": "P1"
 }
