@@ -1,0 +1,7 @@
+name: ComplianceScanner
+runtime:
+  name: python
+  options:
+    virtualenv: venv
+description: AWS infrastructure compliance scanner
+main: lib/

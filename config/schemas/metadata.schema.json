@@ -17,6 +17,9 @@
     "wave"
   ],
   "additionalProperties": false,
+  "definitions": {
+    "localstack_migration_comment": "The migrated_from object is OPTIONAL and only populated for LocalStack-migrated tasks. When present, po_id should follow pattern LS-{ORIGINAL_PO_ID}"
+  },
   "properties": {
     "platform": {
       "type": "string",
@@ -137,6 +140,27 @@
         "P0",
         "P1"
       ]
+    },
+    "migrated_from": {
+      "type": "object",
+      "description": "Migration tracking object. Only populated for LocalStack-migrated tasks.",
+      "additionalProperties": false,
+      "required": [
+        "po_id",
+        "pr"
+      ],
+      "properties": {
+        "po_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Original task PO ID before LocalStack migration (e.g., trainr97)"
+        },
+        "pr": {
+          "type": "string",
+          "pattern": "^Pr[0-9]+$",
+          "description": "Original PR number before LocalStack migration (e.g., Pr7179)"
+        }
+      }
     }
   }
 }
