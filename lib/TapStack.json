@@ -1,690 +1,680 @@
 {
-    "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Highly Available Web Application with Auto Scaling, RDS Failover, Static EIP, Monitoring, and IAM.",
-    "Parameters": {
-        "InstanceType": {
-            "Type": "String",
-            "Default": "t3.micro",
-            "AllowedValues": [
-                "t2.micro",
-                "t3.micro",
-                "t3.small"
-            ],
-            "Description": "EC2 instance type"
-        },
-        "KeyName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Default": "nova-key-291295",
-            "Description": "Name of an existing EC2 KeyPair to enable SSH access"
-        },
-        "VpcCIDR": {
-            "Type": "String",
-            "Default": "10.0.0.0/16"
-        },
-        "PublicSubnet1CIDR": {
-            "Type": "String",
-            "Default": "10.0.1.0/24"
-        },
-        "PublicSubnet2CIDR": {
-            "Type": "String",
-            "Default": "10.0.2.0/24"
-        },
-        "PrivateSubnet1CIDR": {
-            "Type": "String",
-            "Default": "10.0.3.0/24"
-        },
-        "PrivateSubnet2CIDR": {
-            "Type": "String",
-            "Default": "10.0.4.0/24"
-        }
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Highly Available Web Application with Auto Scaling, RDS Failover, Static EIP, Monitoring, and IAM.",
+  "Parameters": {
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.micro",
+      "AllowedValues": [
+        "t2.micro",
+        "t3.micro",
+        "t3.small"
+      ],
+      "Description": "EC2 instance type"
     },
-    "Resources": {
-        "VPC": {
-            "Type": "AWS::EC2::VPC",
-            "Properties": {
-                "CidrBlock": {
-                    "Ref": "VpcCIDR"
-                },
-                "EnableDnsSupport": true,
-                "EnableDnsHostnames": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "HA-VPC"
-                    }
-                ]
-            }
-        },
-        "InternetGateway": {
-            "Type": "AWS::EC2::InternetGateway"
-        },
-        "AttachGateway": {
-            "Type": "AWS::EC2::VPCGatewayAttachment",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "InternetGatewayId": {
-                    "Ref": "InternetGateway"
-                }
-            }
-        },
-        "PublicSubnet1": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": {
-                    "Ref": "PublicSubnet1CIDR"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
-                "MapPublicIpOnLaunch": true
-            }
-        },
-        "PublicSubnet2": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": {
-                    "Ref": "PublicSubnet2CIDR"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
-                "MapPublicIpOnLaunch": true
-            }
-        },
-        "PrivateSubnet1": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": {
-                    "Ref": "PrivateSubnet1CIDR"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                }
-            }
-        },
-        "PrivateSubnet2": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": {
-                    "Ref": "PrivateSubnet2CIDR"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                }
-            }
-        },
-        "PublicRouteTable": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                }
-            }
-        },
-        "PublicRoute": {
-            "Type": "AWS::EC2::Route",
-            "DependsOn": "AttachGateway",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "GatewayId": {
-                    "Ref": "InternetGateway"
-                }
-            }
-        },
-        "PublicSubnet1RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PublicSubnet1"
-                },
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                }
-            }
-        },
-        "PublicSubnet2RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PublicSubnet2"
-                },
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                }
-            }
-        },
-        "EIP1": {
-            "Type": "AWS::EC2::EIP",
-            "Properties": {
-                "Domain": "vpc"
-            }
-        },
-        "EIP2": {
-            "Type": "AWS::EC2::EIP",
-            "Properties": {
-                "Domain": "vpc"
-            }
-        },
-        "NLB": {
-            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-            "Properties": {
-                "Name": "HA-NLB",
-                "Type": "network",
-                "Scheme": "internet-facing",
-                "IpAddressType": "ipv4",
-                "SubnetMappings": [
-                    {
-                        "SubnetId": {
-                            "Ref": "PublicSubnet1"
-                        },
-                        "AllocationId": {
-                            "Fn::GetAtt": [
-                                "EIP1",
-                                "AllocationId"
-                            ]
-                        }
-                    },
-                    {
-                        "SubnetId": {
-                            "Ref": "PublicSubnet2"
-                        },
-                        "AllocationId": {
-                            "Fn::GetAtt": [
-                                "EIP2",
-                                "AllocationId"
-                            ]
-                        }
-                    }
-                ],
-                "LoadBalancerAttributes": [
-                    {
-                        "Key": "load_balancing.cross_zone.enabled",
-                        "Value": true
-                    }
-                ]
-            }
-        },
-        "NLBTargetGroup": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Port": 80,
-                "Protocol": "TCP",
-                "TargetType": "instance",
-                "HealthCheckProtocol": "TCP"
-            }
-        },
-        "NLBListener": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties": {
-                "LoadBalancerArn": {
-                    "Ref": "NLB"
-                },
-                "Port": 80,
-                "Protocol": "TCP",
-                "DefaultActions": [
-                    {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "NLBTargetGroup"
-                        }
-                    }
-                ]
-            }
-        },
-        "WebAppRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "ec2.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "Path": "/",
-                "Policies": [
-                    {
-                        "PolicyName": "WebAppPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogGroup",
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents"
-                                    ],
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "WebAppInstanceProfile": {
-            "Type": "AWS::IAM::InstanceProfile",
-            "Properties": {
-                "Roles": [
-                    {
-                        "Ref": "WebAppRole"
-                    }
-                ]
-            }
-        },
-        "InstanceSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Enable HTTP",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ]
-            }
-        },
-        "LaunchTemplate": {
-            "Type": "AWS::EC2::LaunchTemplate",
-            "Properties": {
-                "LaunchTemplateName": "WebAppTemplate",
-                "LaunchTemplateData": {
-                    "InstanceType": {
-                        "Ref": "InstanceType"
-                    },
-                    "KeyName": {
-                        "Ref": "KeyName"
-                    },
-                    "IamInstanceProfile": {
-                        "Arn": {
-                            "Fn::GetAtt": [
-                                "WebAppInstanceProfile",
-                                "Arn"
-                            ]
-                        }
-                    },
-                    "ImageId": "ami-0c55b159cbfafe1f0",
-                    "SecurityGroupIds": [
-                        {
-                            "Ref": "InstanceSecurityGroup"
-                        }
-                    ],
-                    "UserData": {
-                        "Fn::Base64": "#!/bin/bash\nyum install -y httpd\nsystemctl enable httpd\nsystemctl start httpd\necho \"Healthy\" > /var/www/html/index.html\n"
-                    }
-                }
-            }
-        },
-        "AutoScalingGroup": {
-            "Type": "AWS::AutoScaling::AutoScalingGroup",
-            "Properties": {
-                "VPCZoneIdentifier": [
-                    {
-                        "Ref": "PublicSubnet1"
-                    },
-                    {
-                        "Ref": "PublicSubnet2"
-                    }
-                ],
-                "LaunchTemplate": {
-                    "LaunchTemplateId": {
-                        "Ref": "LaunchTemplate"
-                    },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "LaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
-                },
-                "MinSize": 2,
-                "MaxSize": 4,
-                "DesiredCapacity": 2,
-                "TargetGroupARNs": [
-                    {
-                        "Ref": "NLBTargetGroup"
-                    }
-                ],
-                "HealthCheckType": "EC2",
-                "HealthCheckGracePeriod": 60,
-                "MetricsCollection": [
-                    {
-                        "Granularity": "1Minute"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "WebApp",
-                        "PropagateAtLaunch": true
-                    }
-                ]
-            }
-        },
-        "RDSSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "RDS Access",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 3306,
-                        "ToPort": 3306,
-                        "SourceSecurityGroupId": {
-                            "Ref": "InstanceSecurityGroup"
-                        }
-                    }
-                ]
-            }
-        },
-        "DBSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Properties": {
-                "DBSubnetGroupDescription": "RDS Subnet Group",
-                "SubnetIds": [
-                    {
-                        "Ref": "PrivateSubnet1"
-                    },
-                    {
-                        "Ref": "PrivateSubnet2"
-                    }
-                ]
-            }
-        },
-        "MyRDSSecret": {
-            "Type": "AWS::SecretsManager::Secret",
-            "Properties": {
-                "Name": "MyRDSSecret",
-                "Description": "RDS master user credentials",
-                "GenerateSecretString": {
-                    "SecretStringTemplate": "{\"username\": \"postgres\"}",
-                    "GenerateStringKey": "password",
-                    "PasswordLength": 20,
-                    "ExcludeCharacters": "\"@/\\"
-                }
-            }
-        },
-        "RDSInstance": {
-            "Type": "AWS::RDS::DBInstance",
-            "Properties": {
-                "DBInstanceClass": "db.t3.micro",
-                "Engine": "mysql",
-                "EngineVersion": "8.0.43",
-                "MultiAZ": true,
-                "MasterUsername": {
-                    "Fn::Sub": [
-                        "{{resolve:secretsmanager:${SecretArn}::username}}",
-                        {
-                            "SecretArn": {
-                                "Ref": "MyRDSSecret"
-                            }
-                        }
-                    ]
-                },
-                "MasterUserPassword": {
-                    "Fn::Sub": [
-                        "{{resolve:secretsmanager:${SecretArn}::password}}",
-                        {
-                            "SecretArn": {
-                                "Ref": "MyRDSSecret"
-                            }
-                        }
-                    ]
-                },
-                "AllocatedStorage": 20,
-                "DBInstanceIdentifier": "WebAppDB",
-                "VPCSecurityGroups": [
-                    {
-                        "Ref": "RDSSecurityGroup"
-                    }
-                ],
-                "DBSubnetGroupName": {
-                    "Ref": "DBSubnetGroup"
-                }
-            }
-        },
-        "AlarmTopic": {
-            "Type": "AWS::SNS::Topic",
-            "Properties": {
-                "Subscription": [
-                    {
-                        "Endpoint": "your-email@example.com",
-                        "Protocol": "email"
-                    }
-                ],
-                "TopicName": "AlarmNotifications"
-            }
-        },
-        "CloudWatchAlarm": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-                "AlarmDescription": "Trigger if any instance CPU > 80%",
-                "Namespace": "AWS/EC2",
-                "MetricName": "CPUUtilization",
-                "Dimensions": [
-                    {
-                        "Name": "AutoScalingGroupName",
-                        "Value": {
-                            "Ref": "AutoScalingGroup"
-                        }
-                    }
-                ],
-                "Statistic": "Average",
-                "Period": 60,
-                "EvaluationPeriods": 1,
-                "Threshold": 80,
-                "ComparisonOperator": "GreaterThanThreshold",
-                "AlarmActions": [
-                    {
-                        "Ref": "AlarmTopic"
-                    }
-                ],
-                "OKActions": [
-                    {
-                        "Ref": "AlarmTopic"
-                    }
-                ]
-            }
-        }
+    "KeyName": {
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Default": "nova-key-291295",
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access"
     },
-    "Outputs": {
-        "VPCId": {
-            "Description": "VPC ID",
-            "Value": {
-                "Ref": "VPC"
-            }
-        },
-        "PublicSubnet1Id": {
-            "Description": "Public Subnet 1 ID",
-            "Value": {
-                "Ref": "PublicSubnet1"
-            }
-        },
-        "PublicSubnet2Id": {
-            "Description": "Public Subnet 2 ID",
-            "Value": {
-                "Ref": "PublicSubnet2"
-            }
-        },
-        "PrivateSubnet1Id": {
-            "Description": "Private Subnet 1 ID",
-            "Value": {
-                "Ref": "PrivateSubnet1"
-            }
-        },
-        "PrivateSubnet2Id": {
-            "Description": "Private Subnet 2 ID",
-            "Value": {
-                "Ref": "PrivateSubnet2"
-            }
-        },
-        "ElasticIP1": {
-            "Description": "Elastic IP for Subnet 1",
-            "Value": {
-                "Ref": "EIP1"
-            }
-        },
-        "ElasticIP2": {
-            "Description": "Elastic IP for Subnet 2",
-            "Value": {
-                "Ref": "EIP2"
-            }
-        },
-        "LoadBalancerDNS": {
-            "Description": "NLB DNS",
-            "Value": {
-                "Fn::GetAtt": [
-                    "NLB",
-                    "DNSName"
-                ]
-            }
-        },
-        "LoadBalancerArn": {
-            "Description": "ARN of the NLB",
-            "Value": {
-                "Ref": "NLB"
-            }
-        },
-        "TargetGroupArn": {
-            "Description": "Target Group ARN",
-            "Value": {
-                "Ref": "NLBTargetGroup"
-            }
-        },
-        "AutoScalingGroupName": {
-            "Description": "Auto Scaling Group Name",
-            "Value": {
-                "Ref": "AutoScalingGroup"
-            }
-        },
-        "LaunchTemplateId": {
-            "Description": "EC2 Launch Template ID",
-            "Value": {
-                "Ref": "LaunchTemplate"
-            }
-        },
-        "LaunchTemplateLatestVersion": {
-            "Description": "Latest Version of Launch Template",
-            "Value": {
-                "Fn::GetAtt": [
-                    "LaunchTemplate",
-                    "LatestVersionNumber"
-                ]
-            }
-        },
-        "IAMRoleName": {
-            "Description": "EC2 IAM Role Name",
-            "Value": {
-                "Ref": "WebAppRole"
-            }
-        },
-        "InstanceProfileArn": {
-            "Description": "EC2 Instance Profile ARN",
-            "Value": {
-                "Fn::GetAtt": [
-                    "WebAppInstanceProfile",
-                    "Arn"
-                ]
-            }
-        },
-        "RDSEndpoint": {
-            "Description": "RDS Endpoint",
-            "Value": {
-                "Fn::GetAtt": [
-                    "RDSInstance",
-                    "Endpoint.Address"
-                ]
-            }
-        },
-        "RDSInstanceIdentifier": {
-            "Description": "RDS Instance Identifier",
-            "Value": {
-                "Ref": "RDSInstance"
-            }
-        },
-        "RDSSubnetGroupName": {
-            "Description": "RDS Subnet Group",
-            "Value": {
-                "Ref": "DBSubnetGroup"
-            }
-        },
-        "RDSSecurityGroupId": {
-            "Description": "RDS Security Group ID",
-            "Value": {
-                "Ref": "RDSSecurityGroup"
-            }
-        },
-        "InstanceSecurityGroupId": {
-            "Description": "EC2 Security Group ID",
-            "Value": {
-                "Ref": "InstanceSecurityGroup"
-            }
-        },
-        "CloudWatchAlarmName": {
-            "Description": "Name of CloudWatch Alarm",
-            "Value": {
-                "Ref": "CloudWatchAlarm"
-            }
-        },
-        "AlarmSNSTopicArn": {
-            "Description": "SNS Topic for Alarm",
-            "Value": {
-                "Ref": "AlarmTopic"
-            }
-        }
+    "VpcCIDR": {
+      "Type": "String",
+      "Default": "10.0.0.0/16"
+    },
+    "PublicSubnet1CIDR": {
+      "Type": "String",
+      "Default": "10.0.1.0/24"
+    },
+    "PublicSubnet2CIDR": {
+      "Type": "String",
+      "Default": "10.0.2.0/24"
+    },
+    "PrivateSubnet1CIDR": {
+      "Type": "String",
+      "Default": "10.0.3.0/24"
+    },
+    "PrivateSubnet2CIDR": {
+      "Type": "String",
+      "Default": "10.0.4.0/24"
     }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VpcCIDR"
+        },
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "HA-VPC"
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway"
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet1CIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet2CIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet1CIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        }
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet2CIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        }
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "EIP1": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "EIP2": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "NLB": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": "HA-NLB",
+        "Type": "network",
+        "Scheme": "internet-facing",
+        "IpAddressType": "ipv4",
+        "SubnetMappings": [
+          {
+            "SubnetId": {
+              "Ref": "PublicSubnet1"
+            },
+            "AllocationId": {
+              "Fn::GetAtt": [
+                "EIP1",
+                "AllocationId"
+              ]
+            }
+          },
+          {
+            "SubnetId": {
+              "Ref": "PublicSubnet2"
+            },
+            "AllocationId": {
+              "Fn::GetAtt": [
+                "EIP2",
+                "AllocationId"
+              ]
+            }
+          }
+        ],
+        "LoadBalancerAttributes": [
+          {
+            "Key": "load_balancing.cross_zone.enabled",
+            "Value": true
+          }
+        ]
+      }
+    },
+    "NLBTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Port": 80,
+        "Protocol": "TCP",
+        "TargetType": "instance",
+        "HealthCheckProtocol": "TCP"
+      }
+    },
+    "NLBListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "NLB"
+        },
+        "Port": 80,
+        "Protocol": "TCP",
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "NLBTargetGroup"
+            }
+          }
+        ]
+      }
+    },
+    "WebAppRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "WebAppPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "WebAppInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "WebAppRole"
+          }
+        ]
+      }
+    },
+    "InstanceSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Enable HTTP",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "LaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateName": "WebAppTemplate",
+        "LaunchTemplateData": {
+          "InstanceType": {
+            "Ref": "InstanceType"
+          },
+          "KeyName": {
+            "Ref": "KeyName"
+          },
+          "IamInstanceProfile": {
+            "Arn": {
+              "Fn::GetAtt": [
+                "WebAppInstanceProfile",
+                "Arn"
+              ]
+            }
+          },
+          "ImageId": "ami-0c55b159cbfafe1f0",
+          "SecurityGroupIds": [
+            {
+              "Ref": "InstanceSecurityGroup"
+            }
+          ],
+          "UserData": {
+            "Fn::Base64": "#!/bin/bash\nyum install -y httpd\nsystemctl enable httpd\nsystemctl start httpd\necho \"Healthy\" > /var/www/html/index.html\n"
+          }
+        }
+      }
+    },
+    "AutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "PublicSubnet1"
+          },
+          {
+            "Ref": "PublicSubnet2"
+          }
+        ],
+        "LaunchTemplate": {
+          "LaunchTemplateId": {
+            "Ref": "LaunchTemplate"
+          },
+          "Version": "$Latest"
+        },
+        "MinSize": 2,
+        "MaxSize": 4,
+        "DesiredCapacity": 2,
+        "TargetGroupARNs": [
+          {
+            "Ref": "NLBTargetGroup"
+          }
+        ],
+        "HealthCheckType": "EC2",
+        "HealthCheckGracePeriod": 60,
+        "MetricsCollection": [
+          {
+            "Granularity": "1Minute"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "WebApp",
+            "PropagateAtLaunch": true
+          }
+        ]
+      }
+    },
+    "RDSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "RDS Access",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "InstanceSecurityGroup"
+            }
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "RDS Subnet Group",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ]
+      }
+    },
+    "MyRDSSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": "MyRDSSecret",
+        "Description": "RDS master user credentials",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"postgres\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 20,
+          "ExcludeCharacters": "\"@/\\"
+        }
+      }
+    },
+    "RDSInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceClass": "db.t3.micro",
+        "Engine": "mysql",
+        "EngineVersion": "8.0.43",
+        "MultiAZ": true,
+        "MasterUsername": {
+          "Fn::Sub": [
+            "{{resolve:secretsmanager:${SecretArn}::username}}",
+            {
+              "SecretArn": {
+                "Ref": "MyRDSSecret"
+              }
+            }
+          ]
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": [
+            "{{resolve:secretsmanager:${SecretArn}::password}}",
+            {
+              "SecretArn": {
+                "Ref": "MyRDSSecret"
+              }
+            }
+          ]
+        },
+        "AllocatedStorage": 20,
+        "DBInstanceIdentifier": "WebAppDB",
+        "VPCSecurityGroups": [
+          {
+            "Ref": "RDSSecurityGroup"
+          }
+        ],
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        }
+      }
+    },
+    "AlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "Subscription": [
+          {
+            "Endpoint": "your-email@example.com",
+            "Protocol": "email"
+          }
+        ],
+        "TopicName": "AlarmNotifications"
+      }
+    },
+    "CloudWatchAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Trigger if any instance CPU > 80%",
+        "Namespace": "AWS/EC2",
+        "MetricName": "CPUUtilization",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "AutoScalingGroup"
+            }
+          }
+        ],
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "AlarmActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      }
+    },
+    "PublicSubnet1Id": {
+      "Description": "Public Subnet 1 ID",
+      "Value": {
+        "Ref": "PublicSubnet1"
+      }
+    },
+    "PublicSubnet2Id": {
+      "Description": "Public Subnet 2 ID",
+      "Value": {
+        "Ref": "PublicSubnet2"
+      }
+    },
+    "PrivateSubnet1Id": {
+      "Description": "Private Subnet 1 ID",
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      }
+    },
+    "PrivateSubnet2Id": {
+      "Description": "Private Subnet 2 ID",
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      }
+    },
+    "ElasticIP1": {
+      "Description": "Elastic IP for Subnet 1",
+      "Value": {
+        "Ref": "EIP1"
+      }
+    },
+    "ElasticIP2": {
+      "Description": "Elastic IP for Subnet 2",
+      "Value": {
+        "Ref": "EIP2"
+      }
+    },
+    "LoadBalancerDNS": {
+      "Description": "NLB DNS",
+      "Value": {
+        "Fn::GetAtt": [
+          "NLB",
+          "DNSName"
+        ]
+      }
+    },
+    "LoadBalancerArn": {
+      "Description": "ARN of the NLB",
+      "Value": {
+        "Ref": "NLB"
+      }
+    },
+    "TargetGroupArn": {
+      "Description": "Target Group ARN",
+      "Value": {
+        "Ref": "NLBTargetGroup"
+      }
+    },
+    "AutoScalingGroupName": {
+      "Description": "Auto Scaling Group Name",
+      "Value": {
+        "Ref": "AutoScalingGroup"
+      }
+    },
+    "LaunchTemplateId": {
+      "Description": "EC2 Launch Template ID",
+      "Value": {
+        "Ref": "LaunchTemplate"
+      }
+    },
+    "LaunchTemplateLatestVersion": {
+      "Description": "Latest Version of Launch Template",
+      "Value": "1"
+    },
+    "IAMRoleName": {
+      "Description": "EC2 IAM Role Name",
+      "Value": {
+        "Ref": "WebAppRole"
+      }
+    },
+    "InstanceProfileArn": {
+      "Description": "EC2 Instance Profile ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "WebAppInstanceProfile",
+          "Arn"
+        ]
+      }
+    },
+    "RDSEndpoint": {
+      "Description": "RDS Endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "RDSInstance",
+          "Endpoint.Address"
+        ]
+      }
+    },
+    "RDSInstanceIdentifier": {
+      "Description": "RDS Instance Identifier",
+      "Value": {
+        "Ref": "RDSInstance"
+      }
+    },
+    "RDSSubnetGroupName": {
+      "Description": "RDS Subnet Group",
+      "Value": {
+        "Ref": "DBSubnetGroup"
+      }
+    },
+    "RDSSecurityGroupId": {
+      "Description": "RDS Security Group ID",
+      "Value": {
+        "Ref": "RDSSecurityGroup"
+      }
+    },
+    "InstanceSecurityGroupId": {
+      "Description": "EC2 Security Group ID",
+      "Value": {
+        "Ref": "InstanceSecurityGroup"
+      }
+    },
+    "CloudWatchAlarmName": {
+      "Description": "Name of CloudWatch Alarm",
+      "Value": {
+        "Ref": "CloudWatchAlarm"
+      }
+    },
+    "AlarmSNSTopicArn": {
+      "Description": "SNS Topic for Alarm",
+      "Value": {
+        "Ref": "AlarmTopic"
+      }
+    }
+  }
 }

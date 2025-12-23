@@ -225,7 +225,7 @@ Resources:
         - !Ref PublicSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: 2
       MaxSize: 4
       DesiredCapacity: 2
@@ -370,7 +370,7 @@ Outputs:
 
   LaunchTemplateLatestVersion:
     Description: Latest Version of Launch Template
-    Value: !GetAtt LaunchTemplate.LatestVersionNumber
+    Value: "1"
 
   IAMRoleName:
     Description: EC2 IAM Role Name
