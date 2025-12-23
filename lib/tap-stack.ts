@@ -1,15 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
-import * as iam from 'aws-cdk-lib/aws-iam';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
-
-// LocalStack detection
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-                     process.env.LOCALSTACK === 'true';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
@@ -137,19 +132,15 @@ export class TapStack extends cdk.Stack {
     );
 
     // Using standard ElastiCache cluster instead of Serverless for LocalStack compatibility
-    const cacheCluster = new elasticache.CfnCacheCluster(
-      this,
-      'RedisCache',
-      {
-        engine: 'redis',
-        cacheNodeType: 'cache.t3.micro',
-        numCacheNodes: 1,
-        clusterName: `tap-cache-${props.environmentSuffix}`,
-        cacheSubnetGroupName: cacheSubnetGroup.cacheSubnetGroupName,
-        vpcSecurityGroupIds: [cacheSecurityGroup.securityGroupId],
-        engineVersion: '7.0',
-      }
-    );
+    const cacheCluster = new elasticache.CfnCacheCluster(this, 'RedisCache', {
+      engine: 'redis',
+      cacheNodeType: 'cache.t3.micro',
+      numCacheNodes: 1,
+      clusterName: `tap-cache-${props.environmentSuffix}`,
+      cacheSubnetGroupName: cacheSubnetGroup.cacheSubnetGroupName,
+      vpcSecurityGroupIds: [cacheSecurityGroup.securityGroupId],
+      engineVersion: '7.0',
+    });
 
     // Ensure cache subnet group is created before the cache
     cacheCluster.addDependency(cacheSubnetGroup);
