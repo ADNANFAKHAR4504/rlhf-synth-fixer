@@ -18,19 +18,21 @@ Create a production-grade VPC network infrastructure using **Terraform with HCL*
    - Must support future expansion to at least 4000 hosts
 
 2. **Subnet Architecture**
-   - Deploy 9 subnets total across 3 availability zones (us-east-1a, us-east-1b, us-east-1c)
+   - Deploy 9 subnets total across 3 availability zones in us-east-1a, us-east-1b, and us-east-1c
    - 3 public subnets: 10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24
    - 3 private subnets: 10.0.11.0/24, 10.0.12.0/24, 10.0.13.0/24
    - 3 database subnets: 10.0.21.0/24, 10.0.22.0/24, 10.0.23.0/24
    - Database subnets must have no direct internet access
 
 3. **Internet Gateway**
-   - Configure Internet Gateway and attach to VPC
+   - Configure Internet Gateway that attaches to VPC for bidirectional internet access
+   - Create route in public route table that directs internet-bound traffic to Internet Gateway
    - Provide internet access for public subnets
 
 4. **NAT Gateway High Availability**
-   - Deploy NAT Gateway in each of the 3 public subnets
-   - Allocate 3 Elastic IPs for the NAT Gateways
+   - Deploy NAT Gateway in each of the 3 public subnets that connects to the Internet Gateway
+   - Allocate 3 Elastic IPs that attach to NAT Gateways for outbound internet access
+   - Configure private subnets to route outbound traffic through their local NAT Gateway
    - Ensure high availability mode across all availability zones
 
 5. **Route Tables**
@@ -40,20 +42,21 @@ Create a production-grade VPC network infrastructure using **Terraform with HCL*
    - Associate appropriate subnets to each route table
 
 6. **Network ACLs**
-   - Public NACL: allow ports 80 and 443 inbound
-   - Private NACL: allow ports 8080-8090 inbound
-   - Database NACL: allow port 5432 only from private subnet ranges
+   - Public NACL: allow ports 80 and 443 inbound for web traffic from internet
+   - Private NACL: allow ports 8080-8090 inbound for application traffic from public tier
+   - Database NACL: allow port 5432 only from private subnet ranges for secure database access
    - All NACLs must explicitly deny all traffic by default
 
 7. **VPC Flow Logs**
-   - Enable VPC Flow Logs to CloudWatch Logs
+   - Enable VPC Flow Logs that stream to CloudWatch Logs for centralized monitoring
    - Create CloudWatch log group with 30-day retention
+   - Configure IAM role granting VPC Flow Logs write access to CloudWatch using specific actions: logs:CreateLogGroup, logs:CreateLogStream, and logs:PutLogEvents
    - Capture all network traffic for audit compliance
 
-8. **Resource Tagging**
-   - Tag all resources with Environment=Production
-   - Tag all resources with Project=PaymentGateway
-   - Include **environmentSuffix** parameter in all resource names for uniqueness
+8. **Tagging Strategy**
+   - Tag all components with Environment=Production
+   - Tag all components with Project=PaymentGateway
+   - Include **environmentSuffix** parameter in all component names for uniqueness
 
 ### Technical Requirements
 
@@ -62,10 +65,10 @@ Create a production-grade VPC network infrastructure using **Terraform with HCL*
 - Use NAT Gateway for high availability outbound connectivity
 - Use Internet Gateway for public subnet internet access
 - Use CloudWatch Logs for VPC Flow Logs storage
-- Resource names must include **environmentSuffix** variable for environment-specific deployments
-- Follow naming convention: resource-type-environmentSuffix
+- Component names must include **environmentSuffix** variable for environment-specific deployments
+- Follow naming convention: component-type-environmentSuffix
 - Deploy to **us-east-1** region
-- All resources must be destroyable (use proper deletion policies, no retain policies)
+- All components must be destroyable with proper deletion policies and no retain policies
 
 ### Constraints
 
@@ -78,9 +81,9 @@ Create a production-grade VPC network infrastructure using **Terraform with HCL*
 
 ### Deployment Requirements (CRITICAL)
 
-- **Resource Naming**: All resources MUST include the **environmentSuffix** variable in their names (example: vpc-${var.environmentSuffix}, nat-gateway-${var.environmentSuffix}-az1)
-- **Destroyability**: All resources must be fully destroyable without manual intervention. Do not use retain or snapshot policies
-- **Region Configuration**: Target region is us-east-1 with availability zones us-east-1a, us-east-1b, us-east-1c
+- **Naming Convention**: Every infrastructure component MUST include the **environmentSuffix** variable in its name following the pattern vpc-SUFFIX or nat-gateway-SUFFIX-az1
+- **Destroyability**: Every component must be fully destroyable without manual intervention. Do not use retain or snapshot policies
+- **Region Configuration**: Target region is us-east-1 with availability zones us-east-1a, us-east-1b, and us-east-1c
 
 ## Success Criteria
 
@@ -88,8 +91,8 @@ Create a production-grade VPC network infrastructure using **Terraform with HCL*
 - **High Availability**: NAT Gateways deployed in all 3 availability zones
 - **Network Isolation**: Database tier has no internet access, strict NACL rules enforced
 - **Compliance**: VPC Flow Logs enabled with 30-day retention for PCI DSS audit requirements
-- **Resource Naming**: All resources include environmentSuffix variable
-- **Tagging**: All resources tagged with Environment=Production and Project=PaymentGateway
+- **Naming Convention**: All components include environmentSuffix variable
+- **Tagging**: All components tagged with Environment=Production and Project=PaymentGateway
 - **Code Quality**: Clean HCL code, properly structured, documented
 
 ## What to deliver
