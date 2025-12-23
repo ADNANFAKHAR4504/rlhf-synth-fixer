@@ -80,13 +80,13 @@ export class RdsStack extends cdk.Stack {
       deleteAutomatedBackups: false,
       deletionProtection: false, // Set to true for production
 
-      // Multi-AZ for high availability
-      multiAz: true,
+      // Multi-AZ for high availability - disabled for LocalStack (causes timeout)
+      multiAz: false,
 
-      // Monitoring and logging
-      monitoringInterval: cdk.Duration.seconds(0), // Disable enhanced monitoring for cost
+      // Monitoring and logging - CloudWatch logs disabled for LocalStack
+      monitoringInterval: cdk.Duration.seconds(0), // Disable enhanced monitoring
       enablePerformanceInsights: false,
-      cloudwatchLogsExports: ['error', 'general', 'slowquery'],
+      // cloudwatchLogsExports: ['error', 'general', 'slowquery'], // Disabled for LocalStack
 
       // Parameter group
       parameterGroup: parameterGroup,
