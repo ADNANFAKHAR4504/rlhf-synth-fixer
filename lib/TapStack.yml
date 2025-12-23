@@ -696,7 +696,7 @@ Resources:
       AutoScalingGroupName: Production-ASG
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !Sub "${LaunchTemplate.LatestVersionNumber}"
+        Version: $Default
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
