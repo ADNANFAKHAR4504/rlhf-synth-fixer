@@ -50,19 +50,13 @@ const clientConfig = isLocalStack
 type TfOutputValue = { sensitive: boolean; type: string; value: any };
 
 function readDeploymentOutputs(): Record<string, any> {
-  const filePath = path.resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
+  const filePath = path.resolve(process.cwd(), 'cfn-outputs/flat-outputs.json');
   if (!fs.existsSync(filePath)) {
     throw new Error(`Outputs file not found at ${filePath}`);
   }
   const outputs = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  const extractedValues: Record<string, any> = {};
-  for (const key in outputs) {
-    const output = outputs[key as keyof typeof outputs] as TfOutputValue;
-    if (output?.value !== null && output?.value !== undefined) {
-      extractedValues[key] = output.value;
-    }
-  }
-  return extractedValues;
+  // flat-outputs.json has direct key-value pairs, not nested with .value
+  return outputs;
 }
 
 // AWS Clients initialization with LocalStack support
