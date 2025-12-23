@@ -55,10 +55,11 @@ output "database_route_table_id" {
   value       = aws_route_table.database.id
 }
 
-output "vpc_flow_log_id" {
-  description = "ID of the VPC Flow Log"
-  value       = aws_flow_log.main.id
-}
+# Commented out for LocalStack compatibility
+# output "vpc_flow_log_id" {
+#   description = "ID of the VPC Flow Log"
+#   value       = aws_flow_log.main.id
+# }
 
 output "vpc_flow_log_group_name" {
   description = "Name of the CloudWatch Log Group for VPC Flow Logs"
