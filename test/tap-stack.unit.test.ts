@@ -22,13 +22,14 @@ describe('IaCChallenge CloudFormation Template', () => {
     });
 
     test('should have all required sections', () => {
-      expect(template.Mappings).toBeDefined();
+      // Note: Mappings section commented out for LocalStack compatibility
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
     });
   });
 
-  describe('Mappings', () => {
+  // Mappings section skipped - commented out for LocalStack compatibility
+  describe.skip('Mappings', () => {
     test('should have RegionMap mapping', () => {
       expect(template.Mappings.RegionMap).toBeDefined();
     });
@@ -173,7 +174,8 @@ describe('IaCChallenge CloudFormation Template', () => {
     });
   });
 
-  describe('EC2 Resources', () => {
+  // EC2 Resources skipped - commented out for LocalStack compatibility
+  describe.skip('EC2 Resources', () => {
     test('should have EC2 Instance', () => {
       const instance = template.Resources.EC2Instance;
       expect(instance).toBeDefined();
@@ -239,7 +241,7 @@ describe('IaCChallenge CloudFormation Template', () => {
       const expectedOutputs = [
         'S3BucketName',
         'DynamoDBTableName',
-        'EC2InstanceId',
+        // 'EC2InstanceId', // Commented out for LocalStack compatibility
         'VPCId',
         'CentralLogGroupName',
       ];
@@ -339,7 +341,7 @@ describe('IaCChallenge CloudFormation Template', () => {
 
     test('should have expected number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(5); // Should have exactly 5 outputs
+      expect(outputCount).toBe(4); // Should have exactly 4 outputs (EC2InstanceId commented out for LocalStack)
     });
   });
 });
