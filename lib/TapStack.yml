@@ -1,5 +1,5 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-ready multi-tier web application infrastructure in us-west-2'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Production-ready multi-tier web application infrastructure in us-west-2"
 
 # Template Parameters
 Parameters:
@@ -11,28 +11,28 @@ Parameters:
   KeyName:
     Description: (Optional) EC2 Key Pair for SSH access - leave empty to disable SSH key
     Type: String
-    Default: ''
+    Default: ""
 
   DBUsername:
     Description: Database master username
     Type: String
     MinLength: 1
     MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
     Default: dbadmin
 
   CreateNATGateways:
     Description: Create NAT Gateways for private subnet internet access (requires 2 EIPs - AWS limit is 5 per region)
     Type: String
-    Default: 'false'
+    Default: "false"
     AllowedValues:
-      - 'true'
-      - 'false'
+      - "true"
+      - "false"
 
 Conditions:
-  HasKeyPair: !Not [!Equals [!Ref KeyName, '']]
-  ShouldCreateNATGateways: !Equals [!Ref CreateNATGateways, 'true']
+  HasKeyPair: !Not [!Equals [!Ref KeyName, ""]]
+  ShouldCreateNATGateways: !Equals [!Ref CreateNATGateways, "true"]
 
 Resources:
   # ==========================================
@@ -44,14 +44,14 @@ Resources:
     Properties:
       Description: KMS key for EBS and S3 encryption
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
           - Sid: Allow services to use the key
             Effect: Allow
             Principal:
@@ -61,10 +61,10 @@ Resources:
                 - rds.amazonaws.com
                 - cloudwatch.amazonaws.com
             Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
-              - 'kms:CreateGrant'
-            Resource: '*'
+              - "kms:Decrypt"
+              - "kms:GenerateDataKey"
+              - "kms:CreateGrant"
+            Resource: "*"
       Tags:
         - Key: Environment
           Value: Production
@@ -132,7 +132,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -145,7 +145,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -159,7 +159,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.10.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       Tags:
         - Key: Name
           Value: Private-Subnet-AZ1
@@ -171,7 +171,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.20.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ""]
       Tags:
         - Key: Name
           Value: Private-Subnet-AZ2
@@ -366,34 +366,34 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: ec2.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
         - PolicyName: S3AccessPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 's3:GetObject'
-                  - 's3:PutObject'
+                  - "s3:GetObject"
+                  - "s3:PutObject"
                 Resource:
-                  - !Sub '${LogsBucket.Arn}/*'
+                  - !Sub "${LogsBucket.Arn}/*"
               - Effect: Allow
                 Action:
-                  - 's3:ListBucket'
+                  - "s3:ListBucket"
                 Resource:
                   - !GetAtt LogsBucket.Arn
               - Effect: Allow
                 Action:
-                  - 'kms:Decrypt'
-                  - 'kms:GenerateDataKey'
+                  - "kms:Decrypt"
+                  - "kms:GenerateDataKey"
                 Resource:
                   - !GetAtt KMSKey.Arn
       Tags:
@@ -413,7 +413,7 @@ Resources:
   LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'production-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub "production-logs-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -443,7 +443,7 @@ Resources:
   ContentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'production-content-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub "production-content-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -467,9 +467,9 @@ Resources:
           - Sid: AllowCloudFrontAccess
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}'
-            Action: 's3:GetObject'
-            Resource: !Sub '${ContentBucket.Arn}/*'
+              AWS: !Sub "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}"
+            Action: "s3:GetObject"
+            Resource: !Sub "${ContentBucket.Arn}/*"
 
   # ==========================================
   # CloudFront Distribution
@@ -492,7 +492,7 @@ Resources:
           - Id: S3Origin
             DomainName: !GetAtt ContentBucket.RegionalDomainName
             S3OriginConfig:
-              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
+              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOAI}"
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
@@ -503,7 +503,7 @@ Resources:
             - GET
             - HEAD
           Compress: true
-          DefaultTTL: 86400  # 24 hours
+          DefaultTTL: 86400 # 24 hours
           MinTTL: 0
           MaxTTL: 31536000
           ForwardedValues:
@@ -540,20 +540,20 @@ Resources:
       DBInstanceIdentifier: production-database
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.39'
+      EngineVersion: "8.0.39"
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
       KmsKeyId: !Ref KMSKey
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       MultiAZ: true
       BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      PreferredBackupWindow: "03:00-04:00"
+      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
       Tags:
         - Key: Environment
           Value: Production
@@ -616,7 +616,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
         InstanceType: t3.micro
-        KeyName: !If [HasKeyPair, !Ref KeyName, !Ref 'AWS::NoValue']
+        KeyName: !If [HasKeyPair, !Ref KeyName, !Ref "AWS::NoValue"]
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -696,7 +696,7 @@ Resources:
       AutoScalingGroupName: Production-ASG
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: !Sub "${LaunchTemplate.LatestVersionNumber}"
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
@@ -938,7 +938,7 @@ Outputs:
 
   DatabasePort:
     Description: RDS Database Port
-    Value: '3306'
+    Value: "3306"
     Export:
       Name: Production-DB-Port
 
