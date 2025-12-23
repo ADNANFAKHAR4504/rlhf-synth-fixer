@@ -1,0 +1,14 @@
+// Minimal build.gradle for CDKTF Python project
+// This is a Python CDKTF project - Gradle is used only for dependency tracking
+
+plugins {
+    id 'base'
+}
+
+group = 'com.turinggpt'
+version = '1.0.0'
+
+description = 'CDKTF Python Infrastructure Project'
+
+// No Java/Kotlin compilation needed - this is a Python project
+// The build.gradle exists only to satisfy Gradle dependency submission workflow

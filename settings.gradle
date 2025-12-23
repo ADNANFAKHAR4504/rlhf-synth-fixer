@@ -1,0 +1,7 @@
+// Gradle settings for CDKTF Python project
+// This file is required for Gradle dependency submission workflow
+
+rootProject.name = 'iac-test-automations'
+
+// No subprojects - this is a Python CDKTF project
+// Gradle is used only for dependency tracking
