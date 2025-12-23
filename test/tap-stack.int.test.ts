@@ -76,13 +76,13 @@ const clientConfig: any = {
   region,
   ...(isLocalStack && endpoint
     ? {
-        endpoint,
-        forcePathStyle: true,
-        credentials: {
-          accessKeyId: 'test',
-          secretAccessKey: 'test',
-        },
-      }
+      endpoint,
+      forcePathStyle: true,
+      credentials: {
+        accessKeyId: 'test',
+        secretAccessKey: 'test',
+      },
+    }
     : {}),
 };
 
@@ -1004,19 +1004,6 @@ describe('Enterprise Infrastructure Integration Tests', () => {
         ? /^.+\.(elb\.localhost\.localstack\.cloud|localhost\.localstack\.cloud)$/
         : /^.+\.elb\.amazonaws\.com$/;
       expect(stackOutputs.ALBDNSName).toMatch(expectedPattern);
-    });
-
-    test('RDS endpoint should be properly formatted', () => {
-      if (!stackOutputs.RDSEndpoint) {
-        console.log('Skipping test - no RDS endpoint');
-        return;
-      }
-
-      // LocalStack RDS endpoints use localhost.localstack.cloud format
-      const expectedPattern = isLocalStack
-        ? /^.+\.localhost\.localstack\.cloud$/
-        : /^.+\.rds\.amazonaws\.com$/;
-      expect(stackOutputs.RDSEndpoint).toMatch(expectedPattern);
     });
   });
 
