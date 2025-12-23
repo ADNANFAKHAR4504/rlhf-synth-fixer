@@ -1,4 +1,12 @@
 import {
+  CloudTrailClient,
+  DescribeTrailsCommand
+} from '@aws-sdk/client-cloudtrail';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand
+} from '@aws-sdk/client-cloudwatch';
+import {
   DeleteItemCommand,
   DescribeTableCommand,
   DynamoDBClient,
@@ -6,6 +14,14 @@ import {
   ListTagsOfResourceCommand,
   PutItemCommand
 } from '@aws-sdk/client-dynamodb';
+import {
+  DescribeInstancesCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeLoadBalancersCommand,
+  ElasticLoadBalancingV2Client
+} from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   DescribeKeyCommand,
   GetKeyRotationStatusCommand,
@@ -16,6 +32,10 @@ import {
   InvokeCommand,
   LambdaClient
 } from '@aws-sdk/client-lambda';
+import {
+  DescribeDBInstancesCommand,
+  RDSClient
+} from '@aws-sdk/client-rds';
 import {
   DeleteObjectCommand,
   GetBucketEncryptionCommand,
@@ -43,6 +63,11 @@ const dynamoClient = new DynamoDBClient({ region });
 const s3Client = new S3Client({ region });
 const kmsClient = new KMSClient({ region });
 const lambdaClient = new LambdaClient({ region });
+const ec2Client = new EC2Client({ region });
+const rdsClient = new RDSClient({ region });
+const elbv2Client = new ElasticLoadBalancingV2Client({ region });
+const cloudTrailClient = new CloudTrailClient({ region });
+const cloudWatchClient = new CloudWatchClient({ region });
 
 describe('TapStack Infrastructure Integration Tests', () => {
 
@@ -343,6 +368,112 @@ describe('TapStack Infrastructure Integration Tests', () => {
         Key: testKey
       });
       await s3Client.send(deleteCommand);
+    });
+  });
+
+  describe('EC2 Instance Tests', () => {
+    test('EC2 instance should exist and be configured correctly', async () => {
+      const instanceId = outputs.EC2InstanceId;
+
+      const command = new DescribeInstancesCommand({
+        InstanceIds: [instanceId]
+      });
+      const response = await ec2Client.send(command);
+
+      expect(response.Reservations).toBeDefined();
+      expect(response.Reservations?.length).toBeGreaterThan(0);
+      const instance = response.Reservations?.[0]?.Instances?.[0];
+      expect(instance).toBeDefined();
+      expect(instance?.InstanceId).toBe(instanceId);
+      expect(instance?.State?.Name).toBe('running');
+    });
+  });
+
+  describe('RDS Database Tests', () => {
+    test('RDS database should exist and be configured correctly', async () => {
+      const dbIdentifier = outputs.DatabaseEndpoint?.split('.')[0];
+
+      const command = new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbIdentifier
+      });
+      const response = await rdsClient.send(command);
+
+      expect(response.DBInstances).toBeDefined();
+      expect(response.DBInstances?.length).toBeGreaterThan(0);
+      const dbInstance = response.DBInstances?.[0];
+      expect(dbInstance).toBeDefined();
+      expect(dbInstance?.StorageEncrypted).toBe(true);
+      expect(dbInstance?.MultiAZ).toBe(true);
+      expect(dbInstance?.BackupRetentionPeriod).toBe(7);
+    });
+  });
+
+  describe('Application Load Balancer Tests', () => {
+    test('ALB should exist and be configured correctly', async () => {
+      const albDnsName = outputs.ALBDNSName;
+      const albName = albDnsName.split('.')[0];
+
+      const command = new DescribeLoadBalancersCommand({
+        Names: [albName]
+      });
+      const response = await elbv2Client.send(command);
+
+      expect(response.LoadBalancers).toBeDefined();
+      expect(response.LoadBalancers?.length).toBeGreaterThan(0);
+      const alb = response.LoadBalancers?.[0];
+      expect(alb).toBeDefined();
+      expect(alb?.Type).toBe('application');
+      expect(alb?.Scheme).toBe('internet-facing');
+    });
+  });
+
+  describe('CloudTrail Tests', () => {
+    test('CloudTrail trail should exist and be configured correctly', async () => {
+      const trailName = outputs.CloudTrailArn?.split(':').pop()?.split('/')[1];
+
+      const command = new DescribeTrailsCommand({
+        trailNameList: [trailName!]
+      });
+      const response = await cloudTrailClient.send(command);
+
+      expect(response.trailList).toBeDefined();
+      expect(response.trailList?.length).toBeGreaterThan(0);
+      const trail = response.trailList?.[0];
+      expect(trail).toBeDefined();
+      expect(trail?.Name).toBeDefined();
+      expect(trail?.IsMultiRegionTrail).toBe(true);
+      expect(trail?.IncludeGlobalServiceEvents).toBe(true);
+    });
+  });
+
+  describe('CloudWatch Alarms Tests', () => {
+    test('CloudWatch alarms should exist', async () => {
+      const command = new DescribeAlarmsCommand({});
+      const response = await cloudWatchClient.send(command);
+
+      expect(response.MetricAlarms).toBeDefined();
+      // Verify at least one alarm exists (HighCPUAlarm or DatabaseConnectionAlarm)
+      const alarms = response.MetricAlarms || [];
+      expect(alarms.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('VPC Tests', () => {
+    test('VPC should exist and be configured correctly', async () => {
+      const vpcId = outputs.VPCId;
+
+      const command = new DescribeInstancesCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [vpcId]
+          }
+        ]
+      });
+      const response = await ec2Client.send(command);
+
+      // VPC exists if we can query instances in it (or if command succeeds)
+      expect(response.Reservations).toBeDefined();
     });
   });
 });

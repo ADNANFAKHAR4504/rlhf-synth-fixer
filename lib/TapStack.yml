@@ -10,6 +10,10 @@ Metadata:
           - EnvironmentSuffix
           - TeamName
           - Owner
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W1020  # Fn::Sub used with Fn::Base64 for UserData (required for proper YAML formatting)
 
 Parameters:
   EnvironmentSuffix:
@@ -96,6 +100,17 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
       Tags:
         - Key: Name
           Value: !Sub 'S3-${TeamName}-SecureBucket-${EnvironmentSuffix}'
@@ -117,6 +132,15 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
       Tags:
         - Key: Name
           Value: !Sub 'S3-${TeamName}-ALBLogs-${EnvironmentSuffix}'
@@ -150,6 +174,51 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   # ===== S3 BUCKET POLICIES =====
+  SecureS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SecureS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}'
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+
+  ALBLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ALBLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${ALBLogsBucket}'
+              - !Sub 'arn:aws:s3:::${ALBLogsBucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Sid: AllowALBLogging
+            Effect: Allow
+            Principal:
+              Service: 'logdelivery.elasticloadbalancing.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${ALBLogsBucket}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
   CloudTrailLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -157,6 +226,16 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}'
+              - !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
             Principal:
@@ -296,6 +375,423 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # ===== VPC =====
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'VPC-${TeamName}-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'Subnet-${TeamName}-Public1-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'Subnet-${TeamName}-Public2-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.3.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub 'Subnet-${TeamName}-Private1-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.4.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub 'Subnet-${TeamName}-Private2-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'IGW-${TeamName}-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'RT-${TeamName}-Public-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # ===== SECURITY GROUPS =====
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'SG-${TeamName}-WebServer-${EnvironmentSuffix}'
+      GroupDescription: Security group for web servers
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTP from internet
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS from internet
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub 'SG-${TeamName}-WebServer-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'SG-${TeamName}-Database-${EnvironmentSuffix}'
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: Allow MySQL from web servers
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub 'SG-${TeamName}-Database-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== IAM ROLES FOR EC2 =====
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: S3ReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt SecureS3Bucket.Arn
+                  - !Sub '${SecureS3Bucket.Arn}/*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'Role-${TeamName}-EC2-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+      InstanceProfileName: !Sub 'Profile-${TeamName}-EC2-${EnvironmentSuffix}'
+
+  # ===== EC2 INSTANCE =====
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c55b159cbfafe1f0
+      InstanceType: t3.micro
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+      Tags:
+        - Key: Name
+          Value: !Sub 'EC2-${TeamName}-WebServer-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== RDS DATABASE =====
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub 'DBSubnetGroup-${TeamName}-${EnvironmentSuffix}'
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'DBSubnetGroup-${TeamName}-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub 'RDS-${TeamName}-Database-${EnvironmentSuffix}'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0.44'
+      MasterUsername: admin
+      MasterUserPassword: !Sub '${TeamName}-${EnvironmentSuffix}-${AWS::AccountId}-Secure123!'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      KmsKeyId: !GetAtt SecurityKMSKey.Arn
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      MultiAZ: true
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      EnablePerformanceInsights: true
+      PerformanceInsightsKMSKeyId: !GetAtt SecurityKMSKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub 'RDS-${TeamName}-Database-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== APPLICATION LOAD BALANCER =====
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub 'ALB-${TeamName}-${EnvironmentSuffix}'
+      Type: application
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref WebServerSecurityGroup
+      LoadBalancerAttributes:
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref ALBLogsBucket
+        - Key: access_logs.s3.prefix
+          Value: 'alb-logs'
+      Tags:
+        - Key: Name
+          Value: !Sub 'ALB-${TeamName}-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub 'TG-${TeamName}-${EnvironmentSuffix}'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetType: instance
+      Targets:
+        - Id: !Ref WebServerInstance
+          Port: 80
+      Tags:
+        - Key: Name
+          Value: !Sub 'TG-${TeamName}-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+
+  # ===== CLOUDTRAIL =====
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub 'CloudTrail-${TeamName}-${EnvironmentSuffix}'
+      S3BucketName: !Ref CloudTrailLogsBucket
+      S3KeyPrefix: 'cloudtrail-logs'
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'CloudTrail-${TeamName}-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== CLOUDWATCH ALARMS =====
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'Alarm-${TeamName}-HighCPU-${EnvironmentSuffix}'
+      AlarmDescription: Alarm when CPU exceeds 80%
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref WebServerInstance
+      Tags:
+        - Key: Name
+          Value: !Sub 'Alarm-${TeamName}-HighCPU-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DatabaseConnectionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'Alarm-${TeamName}-DatabaseConnections-${EnvironmentSuffix}'
+      AlarmDescription: Alarm when database connections exceed threshold
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 50
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DatabaseInstance
+      Tags:
+        - Key: Name
+          Value: !Sub 'Alarm-${TeamName}-DatabaseConnections-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
   # ===== GUARDDUTY =====
   GuardDuty:
     Type: AWS::GuardDuty::Detector
@@ -376,3 +872,33 @@ Outputs:
     Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  EC2InstanceId:
+    Description: 'EC2 Instance ID'
+    Value: !Ref WebServerInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2InstanceId'
+
+  DatabaseEndpoint:
+    Description: 'RDS Database Endpoint'
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
+
+  ALBDNSName:
+    Description: 'Application Load Balancer DNS Name'
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBDNSName'
+
+  CloudTrailArn:
+    Description: 'CloudTrail Trail ARN'
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailArn'
