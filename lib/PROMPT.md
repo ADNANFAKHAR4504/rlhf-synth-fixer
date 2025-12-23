@@ -1,60 +1,47 @@
-You are tasked with deploying a serverless infrastructure using AWS CloudFormation. Your deployment must include these components:
+I need help setting up a serverless API infrastructure using CloudFormation YAML for LocalStack deployment. Here's what I'm trying to build:
 
-Lambda Function:
+Lambda Function Setup:
+- Deploy a Lambda function that processes incoming HTTP requests routed from API Gateway
+- Should run on python3.11 runtime
+- Lambda writes processed request data to an S3 bucket
 
-Deploy an AWS Lambda function in the us-east-1 region.
+API Gateway Integration:
+- API Gateway REST API integrated with Lambda using proxy integration
+- All HTTP requests flow through API Gateway to Lambda
+- Both root path and wildcard paths connect to the same Lambda function
 
-The Lambda must handle HTTP requests routed through an Amazon API Gateway (REST or HTTP API as preferred).
+IAM Permissions:
+- Lambda execution role with specific least-privilege permissions
+- CloudWatch Logs access limited to its own log group for writing logs
+- S3 access scoped to the data bucket only: GetObject, PutObject, DeleteObject for objects and ListBucket for the bucket
+- KMS permissions restricted to decrypt and generate data keys for the bucket encryption key
 
-IAM Role and Permissions:
+S3 Data Storage:
+- S3 bucket receives processed data from Lambda
+- Customer-managed KMS key encrypts all bucket objects
+- Public access blocked on the bucket
+- Versioning enabled
 
-The Lambda function should have an IAM execution role with least privilege.
+CloudWatch Logging:
+- Lambda sends all logs to a dedicated CloudWatch log group
+- Log group configured with 14 day retention
+- Captures incoming requests and outgoing responses
 
-Permissions must include only what is necessary to:
+KMS Encryption:
+- Customer-managed KMS key created for S3 bucket encryption
+- Lambda accesses this key to encrypt data written to S3
+- Key alias added for easier reference
 
-Write logs to CloudWatch.
+LocalStack Compatibility:
+- Skip key rotation since LocalStack doesn't support it
+- No bucket lifecycle policies
+- No CloudWatch alarms
+- Use inline IAM policies instead of managed policy ARNs
 
-Read/write objects to a designated S3 bucket for processed data.
+Stack Outputs:
+- API Gateway URL for testing the endpoint
+- Lambda function ARN
+- S3 bucket name
+- KMS key ID and alias
 
-(Optional: Include additional permissions only if strictly required by Lambda runtime or integration.)
-
-Logging:
-
-All Lambda invocations (requests and responses) must be logged in Amazon CloudWatch.
-
-Ensure a CloudWatch Log Group and appropriate log permissions.
-
-S3 Bucket for Processed Data:
-
-Automate the creation of an S3 bucket (unique name, e.g., with random/resource suffix).
-
-All objects in this bucket must be encrypted using a customer-managed AWS KMS key.
-
-The Lambda function uses this bucket for any data handling.
-
-CloudWatch Monitoring:
-
-Requests to the Lambda function must be tracked in CloudWatch (using metrics/alarms if desired).
-
-Outputs:
-
-The stack must produce these outputs, clearly labeled:
-
-The API Gateway invocation URL (for testing/consuming the API).
-
-The Lambda function’s Amazon Resource Name (ARN).
-
-The S3 bucket name.
-
-Constraints:
-
-Provide the full working YAML template.
-
-No manual configuration should be required after stack deployment.
-
-All encryption, permissions, and logging must be automated by the template.
-
-The CloudFormation stack outputs must be readily verifiable immediately after deployment.
-
-Expected Output:
-A single, production-grade CloudFormation YAML file fully meeting the above requirements and constraints, designed for direct deployment in the us-east-1 AWS region. Place explanations or comments inline as YAML comments—not in the main output document.
+Lambda should accept incoming requests through API Gateway, extract HTTP method, path, query params, and body, save that data to S3 as JSON files organized by date, and return a success response with request ID and S3 location.
