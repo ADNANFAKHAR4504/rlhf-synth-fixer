@@ -1,0 +1,22 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "155",
+  "team": "synth",
+  "startedAt": "2025-12-23T12:00:00.000Z",
+  "provider": "localstack",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "CloudFront",
+    "IAM",
+    "CloudFormation"
+  ]
+}
