@@ -1,9 +1,16 @@
-Your mission is to act as a Senior AWS Cloud Infrastructure Engineer specializing in security-first infrastructure as code using AWS CDK (Python). You are tasked with provisioning a secure environment for the SecureApp application, adhering to strict compliance, encryption, and access control policies.
+Your mission is to act as a Senior AWS Cloud Infrastructure Engineer specializing in security-first infrastructure as code using AWS CDK with Python. You are tasked with provisioning a secure environment for the SecureApp application, adhering to strict compliance, encryption, and access control policies.
+
+## Service Integration Architecture
+
+The infrastructure must demonstrate clear service connectivity patterns:
+- IAM roles with principle of least privilege connecting to EC2, S3 access, CloudWatch permissions 
+- KMS key with rotation encrypting S3 buckets storing application data and logging
+- EC2 instances in VPC private subnets using Instance Roles for secure AWS service access
+- CloudWatch agent installed on EC2 forwarding logs to encrypted CloudWatch log groups
+- VPC Flow Logs capturing network traffic and routing to S3 audit trail
+- Security groups controlling traffic between EC2 instances and other AWS services
 
 Project Structure
-graphql
-Copy
-Edit
 root/
 ├── tap.py                     # CDK App entry point
 ├── lib/
@@ -24,7 +31,7 @@ All resources must have names prefixed with secureapp-.
 
 IAM:
 
-Define IAM roles with the principle of least privilege for application components (EC2, S3 access, CloudWatch permissions, etc.).
+Define IAM roles with the principle of least privilege for application components including EC2, S3 access, CloudWatch permissions.
 
 S3 & KMS:
 
@@ -42,7 +49,7 @@ VPC Networking:
 
 Define a VPC with public and private subnets.
 
-Configure Security Groups to allow only required inbound/outbound traffic (e.g., SSH on port 22, HTTP on 80 if needed).
+Configure Security Groups to allow only required inbound/outbound traffic such as SSH on port 22, HTTP on 80 if needed.
 
 Attach EC2 instances only to the required subnets.
 
@@ -73,4 +80,4 @@ test_tap_stack.py: Contains both unit tests and integration tests for critical c
 
 The solution must pass cdk synth and cdk deploy without errors
 
-Use Python CDK v2 best practices (constructs, tags, context)
+Use Python CDK v2 best practices including constructs, tags, and context
