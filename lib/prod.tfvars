@@ -16,12 +16,12 @@ asg_min_size         = 2
 asg_max_size         = 6
 asg_desired_capacity = 3
 
-# RDS Configuration
+# RDS Configuration (commented out: RDS not deployed in LocalStack)
 db_instance_class        = "db.t3.medium"
 db_allocated_storage     = 100
 db_name                  = "appdb"
 db_username              = "admin"
-db_password              = "ProdPassword123!"
+# db_password            = "PLACEHOLDER" # Set via environment variable or secrets manager
 db_multi_az              = true
 db_backup_retention_days = 30
 
