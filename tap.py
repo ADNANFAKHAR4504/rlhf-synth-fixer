@@ -46,3 +46,4 @@ stack = TapStack(
     ),
 )
 
+# Pulumi entry point
