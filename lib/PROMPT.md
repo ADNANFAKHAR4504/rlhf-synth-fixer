@@ -1,27 +1,27 @@
 ### Secure AWS S3 Configuration with Python CDK
 
-Hey team, we're shifting gears on our secure configuration project. Instead of CloudFormation YAML, we'll use Python and the AWS Cloud Development Kit to define our infrastructure. This gives us more flexibility and familiar programming concepts.
+Hey team, we're shifting to Python and AWS CDK for our secure configuration project instead of CloudFormation YAML. This gives us more flexibility with familiar programming.
 
-Your task is to create a Python CDK application that sets up a secure IAM role for interacting with AWS S3. This is critical infrastructure, so it needs to follow our security best practices.
+Your task is to create a Python CDK application that sets up a secure IAM role for AWS Lambda to interact with S3.
 
 ### Requirements
 
-Here's what the solution needs to do:
+* **IAM Role with AssumeRole Policy:** Create an IAM Role that AWS Lambda service connects to and assumes. Lambda functions will use this role to access S3 securely.
 
-* **IAM Role and Least Privilege:** Create an IAM Role that Lambda functions can assume. The role must have a customer-managed policy that grants minimal S3 permissions - specifically s3:GetObject for reading objects and s3:ListBucket for listing, but scoped to a specific S3 bucket prefix. The policy should use conditions to restrict access to only the apps/tap/* prefix.
+* **Customer Managed Policy:** The role must attach a policy granting s3:GetObject and s3:ListBucket permissions. The policy connects these actions to a specific S3 bucket and uses a Condition that restricts access to the apps/tap/* prefix only.
 
-* **Service Integration:** The IAM role uses an AssumeRole policy allowing AWS Lambda service to assume it. Lambda functions will use this role to securely read objects from S3 without needing hardcoded credentials.
+* **Service Flow:** Lambda assumes the IAM role, which grants access to S3. The policy uses IAM conditions to limit what S3 paths Lambda can read from.
 
-* **Tagging:** All resources including the IAM Role and its managed policy must be tagged with Environment: Production and Owner: DevOps for proper resource tracking.
+* **Tagging:** Tag all resources with Environment: Production and Owner: DevOps for tracking.
 
-* **Security:** Follow AWS security best practices - use least-privilege IAM policies with specific resource ARNs and conditions rather than wildcard permissions.
+* **Security:** Use least-privilege IAM policies with specific resource ARNs rather than wildcards.
 
 ### Technical Specifications
 
 * Language: Python
-* Framework: AWS CDK
-* Environment: Design for us-east-1 region
+* Framework: AWS CDK  
+* Region: us-east-1
 
 ### Deliverable
 
-Please submit a complete Python CDK project including the main application file and the stack definition file. The project should be ready to deploy with cdk synth and cdk deploy.
+Submit a complete Python CDK project with the main application file and stack definition. Should be ready to deploy with cdk synth and cdk deploy.
