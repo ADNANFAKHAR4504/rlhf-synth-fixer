@@ -33,21 +33,21 @@ from constructs import Construct
 
 
 class TapStackProps(cdk.StackProps):
-  """
-  TapStackProps defines the properties for the TapStack CDK stack.
+    """
+    TapStackProps defines the properties for the TapStack CDK stack.
 
-  Args:
-    environment_suffix (Optional[str]): An optional suffix to identify the
-    deployment environment (e.g., 'dev', 'prod').
-    **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
+    Args:
+        environment_suffix (Optional[str]): An optional suffix to identify the
+        deployment environment (e.g., 'dev', 'prod').
+        **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
 
-  Attributes:
-    environment_suffix (Optional[str]): Stores the environment suffix for the stack.
-  """
+    Attributes:
+        environment_suffix (Optional[str]): Stores the environment suffix for the stack.
+    """
 
-  def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
-    super().__init__(**kwargs)
-    self.environment_suffix = environment_suffix
+    def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.environment_suffix = environment_suffix
 
 
 class TapStack(cdk.Stack):
