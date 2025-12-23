@@ -27,22 +27,22 @@ resource "null_resource" "build_and_push_lambda_images" {
 
       # Build and push validator image
       echo "Building validator image..."
-      docker build --platform linux/arm64 -t $ECR_REPO:validator-latest ${path.module}/lambda/validator
+      docker build -t $ECR_REPO:validator-latest ${path.module}/lambda/validator
       docker push $ECR_REPO:validator-latest
 
       # Build and push processor image
       echo "Building processor image..."
-      docker build --platform linux/arm64 -t $ECR_REPO:processor-latest ${path.module}/lambda/processor
+      docker build -t $ECR_REPO:processor-latest ${path.module}/lambda/processor
       docker push $ECR_REPO:processor-latest
 
       # Build and push enricher image
       echo "Building enricher image..."
-      docker build --platform linux/arm64 -t $ECR_REPO:enricher-latest ${path.module}/lambda/enricher
+      docker build -t $ECR_REPO:enricher-latest ${path.module}/lambda/enricher
       docker push $ECR_REPO:enricher-latest
 
       # Build and push trigger image
       echo "Building trigger image..."
-      docker build --platform linux/arm64 -t $ECR_REPO:trigger-latest ${path.module}/lambda/trigger
+      docker build -t $ECR_REPO:trigger-latest ${path.module}/lambda/trigger
       docker push $ECR_REPO:trigger-latest
 
       echo "All images built and pushed successfully"
