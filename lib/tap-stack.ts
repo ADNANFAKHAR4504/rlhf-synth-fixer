@@ -9,8 +9,7 @@ interface TapStackProps extends cdk.StackProps {
 // Re-export CiCdPipelineStack as TapStack for backward compatibility
 export class TapStack extends CiCdPipelineStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
-    const environmentSuffix =
-      props?.environmentSuffix || 'dev';
+    const environmentSuffix = props?.environmentSuffix || 'dev';
 
     super(scope, id, {
       ...props,

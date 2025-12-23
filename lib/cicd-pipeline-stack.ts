@@ -7,7 +7,8 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import { Construct } from 'constructs';
 
-// LocalStack detection
+// LocalStack detection - variable reserved for future endpoint customization
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const isLocalStack =
   process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
   process.env.AWS_ENDPOINT_URL?.includes('4566') ||
