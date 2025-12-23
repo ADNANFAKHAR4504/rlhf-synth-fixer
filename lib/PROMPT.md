@@ -16,7 +16,7 @@ Create an infrastructure compliance analysis system using **CloudFormation with 
 
 1. **Compliance Monitoring**
    - Deploy AWS Config with custom rules to evaluate CloudFormation stack compliance against company policies
-   - Implement Config Rules that check for required tags (Environment, Owner, CostCenter, ComplianceLevel)
+   - Implement Config Rules that check for required tags: Environment, Owner, CostCenter, ComplianceLevel
    - Validate encryption settings on all applicable resources
    - Verify security group configurations meet security standards
    - Config Rules must evaluate stacks every 6 hours using scheduled frequency
@@ -58,15 +58,15 @@ Create an infrastructure compliance analysis system using **CloudFormation with 
 - Use **IAM** for role-based access control
 - Use **CloudWatch** for metrics and dashboards
 - Use **KMS** for encryption key management
-- Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `resource-type-${environmentSuffix}`
-- Deploy to **us-east-1** region (primary)
+- Resource names must include an environmentSuffix for uniqueness
+- Follow naming convention: resource-type-environmentSuffix
+- Deploy to us-east-1 as the primary region
 
 ### Constraints
 
 - Lambda execution roles must follow least-privilege principle with no wildcard permissions
 - All resources must have mandatory tags: Environment, Owner, CostCenter, ComplianceLevel
-- All resources must be destroyable (no Retain policies unless absolutely necessary)
+- All resources must be destroyable - no Retain policies unless absolutely necessary
 - Secrets should be fetched from existing AWS Secrets Manager entries, not created by the stack
 - Include proper error handling and logging
 - VPC endpoints should be used for private access to AWS services where applicable
@@ -79,7 +79,7 @@ Create an infrastructure compliance analysis system using **CloudFormation with 
 - **Multi-Region**: Successfully aggregates compliance data from us-east-1, us-west-2, and eu-west-1
 - **Performance**: Compliance checks complete within 6-hour window without timeout
 - **Security**: All data encrypted at rest and in transit, roles follow least privilege
-- **Resource Naming**: All resources include environmentSuffix for multi-environment support
+- Names: All resources include environmentSuffix for multi-environment support
 - **Lifecycle**: Reports automatically cleaned up after 90 days
 - **Visualization**: CloudWatch dashboard provides clear compliance metrics
 
