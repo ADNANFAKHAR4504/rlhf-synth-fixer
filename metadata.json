@@ -27,6 +27,5 @@
     "Systems Manager Parameter Store",
     "CloudWatch"
   ],
-  "wave": "P0",
-  "training_quality": 8
+  "wave": "P0"
 }
