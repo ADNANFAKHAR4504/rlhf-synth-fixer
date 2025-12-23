@@ -647,7 +647,7 @@ aws logs tail /aws/lambda/stack-analysis-function-prod --follow
 View CloudWatch metrics:
 ```bash
 aws cloudwatch get-metric-statistics \
-  --namespace StackAnalysis \
+  --namespace=StackAnalysis \
   --metric-name CriticalFindings \
   --start-time 2025-11-11T00:00:00Z \
   --end-time 2025-11-12T00:00:00Z \
