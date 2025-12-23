@@ -33,7 +33,7 @@ A financial services startup needs a serverless event processing system to handl
 - **Platform**: Terraform
 - **Language**: HCL
 - **Complexity**: expert
-- **Region**: us-east-1 (default)
+- **Region**: us-east-1 as default
 - **Environment Suffix**: All resource names MUST include var.environment_suffix to prevent conflicts across parallel deployments
 
 ## Expected Output
