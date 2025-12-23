@@ -162,13 +162,10 @@ describe('TapStack', () => {
   });
 
   describe('EC2 and Auto Scaling', () => {
-    test('creates launch template with correct configuration', () => {
-      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-        LaunchTemplateName: `multi-app-${environmentSuffix}-lt`,
-        LaunchTemplateData: {
-          InstanceType: 't3.micro',
-          UserData: Match.anyValue(),
-        },
+    test('creates launch configuration with correct configuration', () => {
+      template.hasResourceProperties('AWS::AutoScaling::LaunchConfiguration', {
+        InstanceType: 't3.micro',
+        UserData: Match.anyValue(),
       });
     });
 
@@ -180,7 +177,7 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates CPU-based scaling policies', () => {
+    test('creates CPU-based scaling policy', () => {
       template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
         PolicyType: 'TargetTrackingScaling',
         TargetTrackingConfiguration: {
@@ -188,16 +185,6 @@ describe('TapStack', () => {
             PredefinedMetricType: 'ASGAverageCPUUtilization',
           },
           TargetValue: 70,
-        },
-      });
-
-      template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
-        PolicyType: 'TargetTrackingScaling',
-        TargetTrackingConfiguration: {
-          PredefinedMetricSpecification: {
-            PredefinedMetricType: 'ASGAverageCPUUtilization',
-          },
-          TargetValue: 30,
         },
       });
     });

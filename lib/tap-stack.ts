@@ -115,32 +115,47 @@ export class TapStack extends cdk.Stack {
       securityGroup: albSecurityGroup,
     });
 
-    // Create Auto Scaling Group
-    // Note: Using inline properties instead of LaunchTemplate for LocalStack compatibility
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'ASG', {
-      vpc: vpc,
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      userData: userData,
-      role: ec2Role,
-      securityGroup: ec2SecurityGroup,
-      minCapacity: environment === 'production' ? 2 : 1,
-      maxCapacity: environment === 'production' ? 6 : 3,
-      desiredCapacity: environment === 'production' ? 2 : 1,
-      vpcSubnets: {
+    // Create Launch Configuration (LocalStack compatible alternative to Launch Template)
+    const launchConfig = new autoscaling.CfnLaunchConfiguration(
+      this,
+      'LaunchConfig',
+      {
+        imageId: ec2.MachineImage.latestAmazonLinux2().getImage(this)
+          .imageId,
+        instanceType: 't3.micro',
+        iamInstanceProfile: new iam.CfnInstanceProfile(this, 'ASGInstanceProfile', {
+          roles: [ec2Role.roleName],
+        }).ref,
+        securityGroups: [ec2SecurityGroup.securityGroupId],
+        userData: cdk.Fn.base64(userData.render()),
+      }
+    );
+
+    // Create Auto Scaling Group using L1 construct for LocalStack compatibility
+    const asgCfn = new autoscaling.CfnAutoScalingGroup(this, 'ASG', {
+      launchConfigurationName: launchConfig.ref,
+      minSize: (environment === 'production' ? 2 : 1).toString(),
+      maxSize: (environment === 'production' ? 6 : 3).toString(),
+      desiredCapacity: (environment === 'production' ? 2 : 1).toString(),
+      vpcZoneIdentifier: vpc.selectSubnets({
         subnetType: ec2.SubnetType.PUBLIC,
-      },
+      }).subnetIds,
+      healthCheckType: 'ELB',
+      healthCheckGracePeriod: 300,
+      tags: [
+        {
+          key: 'Name',
+          value: `${applicationName}-${envShort}-asg-instance`,
+          propagateAtLaunch: true,
+        },
+      ],
     });
 
-    // Create Target Group
+    // Create Target Group (without initial targets - will attach ASG separately)
     const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
       vpc: vpc,
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
-      targets: [autoScalingGroup],
       healthCheck: {
         enabled: true,
         healthyHttpCodes: '200',
@@ -152,6 +167,9 @@ export class TapStack extends cdk.Stack {
         healthyThresholdCount: 2,
       },
     });
+
+    // Attach ASG to Target Group
+    asgCfn.targetGroupArns = [targetGroup.targetGroupArn];
 
     // Create Listener
     loadBalancer.addListener('Listener', {
@@ -166,7 +184,7 @@ export class TapStack extends cdk.Stack {
         namespace: 'AWS/EC2',
         metricName: 'CPUUtilization',
         dimensionsMap: {
-          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+          AutoScalingGroupName: asgCfn.ref,
         },
         statistic: 'Average',
       }),
@@ -175,13 +193,16 @@ export class TapStack extends cdk.Stack {
       alarmDescription: `High CPU utilization for ${environment} in ${region}`,
     });
 
-    // Create scaling policies
-    autoScalingGroup.scaleOnCpuUtilization('ScaleUp', {
-      targetUtilizationPercent: 70,
-    });
-
-    autoScalingGroup.scaleOnCpuUtilization('ScaleDown', {
-      targetUtilizationPercent: 30,
+    // Create Target Tracking Scaling Policy for scale up/down based on CPU
+    new autoscaling.CfnScalingPolicy(this, 'CPUTargetTrackingPolicy', {
+      autoScalingGroupName: asgCfn.ref,
+      policyType: 'TargetTrackingScaling',
+      targetTrackingConfiguration: {
+        predefinedMetricSpecification: {
+          predefinedMetricType: 'ASGAverageCPUUtilization',
+        },
+        targetValue: 70,
+      },
     });
 
     // Create S3 bucket for static content
