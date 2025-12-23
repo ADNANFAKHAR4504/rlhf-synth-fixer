@@ -12,6 +12,7 @@ import random
 import string
 import boto3
 import pytest
+from botocore.exceptions import ClientError
 
 
 def run_cli(command):
@@ -138,8 +139,11 @@ class TestS3BucketDeployment:
             encryption_rules = response["ServerSideEncryptionConfiguration"]["Rules"]
             assert len(encryption_rules) > 0
             assert encryption_rules[0]["ApplyServerSideEncryptionByDefault"]["SSEAlgorithm"] == "AES256"
-        except s3_client.exceptions.ServerSideEncryptionConfigurationNotFoundError:
-            pytest.fail("Bucket encryption not configured")
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ServerSideEncryptionConfigurationNotFoundError':
+                pytest.fail("Bucket encryption not configured")
+            else:
+                raise
 
     def test_s3_bucket_operations(self, s3_client, outputs):
         """Test S3 bucket upload, download, and delete operations."""
@@ -471,9 +475,12 @@ class TestSecurityConfiguration:
         try:
             s3_client.get_bucket_policy(Bucket=bucket_name)
             # If policy exists, it should not allow public access
-        except s3_client.exceptions.NoSuchBucketPolicy:
-            # No policy is good - means no public access granted
-            pass
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchBucketPolicy':
+                # No policy is good - means no public access granted
+                pass
+            else:
+                raise
 
         # Check public access block configuration
         try:
@@ -483,6 +490,9 @@ class TestSecurityConfiguration:
             if config:
                 assert config.get("BlockPublicAcls", False)
                 assert config.get("BlockPublicPolicy", False)
-        except s3_client.exceptions.NoSuchPublicAccessBlockConfiguration:
-            # No explicit block configuration (default behavior)
-            pass
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchPublicAccessBlockConfiguration':
+                # No explicit block configuration (default behavior)
+                pass
+            else:
+                raise
