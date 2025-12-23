@@ -447,6 +447,7 @@ Resources:
         - !Ref PrivateSubnet3
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
+        Version: '1'
       MinSize: '2'
       MaxSize: '6'
       DesiredCapacity: '2'
