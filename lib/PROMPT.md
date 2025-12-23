@@ -1,38 +1,13 @@
-Prompt:
-You are acting as a Cloud Engineer responsible for designing a secure production environment on AWS. This must be implemented using CloudFormation in YAML, adhering to AWS best practices for security, scalability, and compliance.
+Need to set up a secure production environment in AWS using CloudFormation. We're deploying a multi-tier web app with load balancing and auto scaling.
 
-The deployment region is us-west-2.
+Start with VPC spanning two availability zones with public and private subnets. NAT gateways in public subnets route outbound traffic from private subnets while blocking inbound. Internet gateway attached to VPC for public subnet internet access.
 
-Requirements
-Your CloudFormation template must meet the following specifications:
+Application Load Balancer in public subnets forwards HTTP traffic to target group. Auto Scaling Group launches EC2 instances in private subnets across both AZs with minimum 2 instances. Security groups restrict traffic so ALB only accepts HTTP/HTTPS from internet, and instances only accept traffic from ALB on port 80.
 
-S3 Security
-All S3 buckets must be private by default.
-Enable server-side encryption with AWS KMS (SSE-KMS) for all data at rest.
-IAM Roles
-Define IAM roles following the principle of least privilege for all AWS services.
-EC2 & Auto Scaling
-All EC2 instances must be launched as part of an Auto Scaling Group (ASG).
-Minimum ASG capacity: 2 instances.
-Elastic Load Balancer (ELB)
-Integrate an ELB to distribute incoming traffic across the ASG.
-CloudTrail
-Enable CloudTrail to log all API calls.
-Deliver logs to a secure, encrypted S3 bucket.
-VPC
-Deploy all resources within a single, isolated VPC.
-AWS Config
-Enable AWS Config to track resource changes and generate compliance reports.
-Resource Tagging
-Apply the following tags to all resources:
-Environment: Production
-Project: IaC - AWS Nova Model Breaking
-Naming Conventions
-Follow AWS naming best practices.
-Append a prod suffix to all resource names.
-Expected Output
-A single YAML CloudFormation template named: secure_infrastructure.yaml
-The template must be:
-Complete
-Validated (passes cfn-lint / AWS validation)
-Deployable in us-west-2
+For compliance and auditing, enable CloudTrail logging all API calls to encrypted S3 bucket. KMS key encrypts CloudTrail logs. AWS Config tracks resource configuration changes and delivers findings to S3 bucket every 24 hours.
+
+IAM role for EC2 instances grants permissions to write CloudWatch logs and read SSM parameters. Separate IAM role for AWS Config allows it to access resources and write to S3.
+
+Lambda function handles S3 bucket cleanup on stack deletion. Function needs IAM role with permissions to delete S3 objects and manage CloudWatch logs.
+
+All resources tagged with Environment Production and Project IaC - AWS Nova Model Breaking. Use prod- prefix for resource names. Region is us-west-2.
