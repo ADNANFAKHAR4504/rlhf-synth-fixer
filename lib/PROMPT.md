@@ -21,9 +21,9 @@ Create a multi-environment infrastructure deployment using **Terraform with HCL*
 
 2. **Networking Infrastructure**
    - VPC with proper CIDR allocation for each environment
-   - Public and private subnets across multiple availability zones (minimum 2 AZs)
+   - Public and private subnets across multiple availability zones, at least 2 AZs
    - Internet Gateway for public subnet access
-   - NAT Gateways for private subnet outbound connectivity (Multi-AZ for prod)
+   - NAT Gateways for private subnet outbound connectivity with Multi-AZ for production
    - Route tables with proper associations
    - Network ACLs following least privilege principles
 
@@ -40,17 +40,17 @@ Create a multi-environment infrastructure deployment using **Terraform with HCL*
    - Encryption at rest using KMS
    - Automated backups with appropriate retention periods
    - Multi-AZ deployment for staging and production
-   - Single-AZ for development (cost optimization)
+   - Single-AZ for development to optimize costs
    - Database subnet group in private subnets
    - Database security group restricting access to application tier only
 
 5. **Security and Compliance**
-   - KMS keys for encryption at rest (separate keys per environment)
+   - KMS keys for encryption at rest with separate keys per environment
    - CloudTrail enabled for audit logging of API calls
    - CloudWatch log groups for application and infrastructure logs
    - IAM roles and instance profiles following least privilege
    - Security groups implementing network segmentation
-   - All data encrypted in transit (HTTPS/TLS)
+   - All data encrypted in transit using HTTPS and TLS
 
 6. **Monitoring and Observability**
    - CloudWatch alarms for critical metrics
@@ -70,43 +70,43 @@ Create a multi-environment infrastructure deployment using **Terraform with HCL*
 - Use **CloudWatch** for monitoring and logging
 - Use **IAM** for access management
 - Resource names must include **environmentSuffix** for uniqueness across environments
-- Follow naming convention: `{resource-type}-{environment}-{suffix}`
+- Follow naming convention: resource-type-environment-suffix pattern
 - Deploy to **us-east-1** region
 - All infrastructure must use AWS-managed encryption where available
 
 ### Environment-Specific Configurations
 
 **Development Environment:**
-- Smaller EC2 instance types (t3.small or t3.medium)
+- Smaller EC2 instance types like t3.small or t3.medium
 - RDS instance: db.t3.small with single-AZ deployment
-- Minimal auto-scaling capacity (min: 1, max: 2)
-- Single NAT Gateway (cost optimization)
-- Shorter backup retention (7 days)
+- Minimal auto-scaling capacity with min 1 and max 2 instances
+- Single NAT Gateway to optimize costs
+- Shorter backup retention of 7 days
 
 **Staging Environment:**
-- Medium EC2 instance types (t3.medium or t3.large)
+- Medium EC2 instance types like t3.medium or t3.large
 - RDS instance: db.t3.medium with Multi-AZ deployment
-- Moderate auto-scaling capacity (min: 2, max: 4)
+- Moderate auto-scaling capacity with min 2 and max 4 instances
 - NAT Gateways in multiple AZs
-- Standard backup retention (14 days)
+- Standard backup retention of 14 days
 
 **Production Environment:**
-- Large EC2 instance types (t3.large or c5.xlarge)
+- Large EC2 instance types like t3.large or c5.xlarge
 - RDS instance: db.r5.large or db.r5.xlarge with Multi-AZ deployment
-- Full auto-scaling capacity (min: 3, max: 10)
+- Full auto-scaling capacity with min 3 and max 10 instances
 - NAT Gateways in multiple AZs for high availability
-- Extended backup retention (30 days)
+- Extended backup retention of 30 days
 - Enhanced monitoring enabled
 
 ### Deployment Requirements (CRITICAL)
 
-- All resources must be destroyable (use appropriate lifecycle policies)
+- All resources must be destroyable using appropriate lifecycle policies
 - No hardcoded credentials or secrets in code
 - Use Terraform variables for all configurable values
-- Provide separate tfvars files for each environment (dev.tfvars, staging.tfvars, prod.tfvars)
-- Use remote state backend configuration (S3 + DynamoDB for state locking)
+- Provide separate tfvars files for each environment: dev.tfvars, staging.tfvars, and prod.tfvars
+- Use remote state backend configuration with S3 and DynamoDB for state locking
 - Include proper resource dependencies using depends_on where necessary
-- Tag all resources with Environment, Project, ManagedBy tags
+- Tag all resources with Environment, Project, and ManagedBy tags
 
 ### Constraints
 
@@ -114,7 +114,7 @@ Create a multi-environment infrastructure deployment using **Terraform with HCL*
 - All data must be encrypted at rest and in transit
 - Database must not be publicly accessible
 - Application tier must be behind load balancer
-- No public SSH access to instances (use Session Manager instead)
+- No public SSH access to instances, use Session Manager instead
 - All resources must be within private subnets except load balancer
 - Must support zero-downtime deployments
 - Infrastructure must be reproducible and version controlled
@@ -138,7 +138,7 @@ Create a multi-environment infrastructure deployment using **Terraform with HCL*
 - outputs.tf with useful output values
 - provider.tf with AWS provider configuration
 - Environment-specific tfvars files: dev.tfvars, staging.tfvars, prod.tfvars
-- backend.tf for remote state configuration (optional but recommended)
+- backend.tf for remote state configuration, optional but recommended
 - README.md with deployment instructions and architecture overview
 - Comprehensive tests using Terratest or similar framework
 - All code must be production-ready and deployable
