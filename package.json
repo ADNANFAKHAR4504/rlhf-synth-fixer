@@ -22,7 +22,7 @@
     "build": "tsc --skipLibCheck",
     "build:strict": "tsc",
     "start": "ts-node cli/create-task.ts",
-    "lint": "eslint .",
+    "lint": "eslint . --ignore-pattern '.claude/**'",
     "synth": "cdk synth --all",
     "format": "prettier --write 'lib/*.{ts,tsx}' 'bin/*.{ts,tsx}' 'test/*.{ts,tsx}' 'cli/*.{ts,tsx}'",
     "format:check": "prettier --check 'lib/*.{ts,tsx}'",
