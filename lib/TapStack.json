@@ -33,7 +33,7 @@
             "Ref": "UserTable"
           },
           "LOG_LEVEL": {
-            "If": [
+            "Fn::If": [
               "IsProd",
               "INFO",
               "DEBUG"
@@ -50,13 +50,13 @@
     },
     "Api": {
       "Name": {
-        "Sub": "${Environment}-default-api"
+        "Fn::Sub": "${Environment}-default-api"
       }
     }
   },
   "Conditions": {
     "IsProd": {
-      "Equals": [
+      "Fn::Equals": [
         {
           "Ref": "Environment"
         },
@@ -69,13 +69,16 @@
       "Type": "AWS::Serverless::Function",
       "Properties": {
         "FunctionName": {
-          "Sub": "${Environment}-create-user-function"
+          "Fn::Sub": "${Environment}-create-user-function"
         },
         "InlineCode": "import json\nimport os\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Lambda function to create a new user\n    \"\"\"\n    return {\n        'statusCode': 200,\n        'body': json.dumps({\n            'message': 'User created successfully',\n            'function_name': os.environ.get('FUNCTION_NAME', 'CreateUser')\n        })\n    }\n",
         "Handler": "index.lambda_handler",
         "Description": "Function to create new users",
         "Role": {
-          "GetAtt": "LambdaExecutionRole.Arn"
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
         },
         "Environment": {
           "Variables": {
@@ -94,7 +97,10 @@
         "DeadLetterQueue": {
           "Type": "SQS",
           "TargetArn": {
-            "GetAtt": "CreateUserDLQ.Arn"
+            "Fn::GetAtt": [
+              "CreateUserDLQ",
+              "Arn"
+            ]
           }
         }
       }
@@ -103,13 +109,16 @@
       "Type": "AWS::Serverless::Function",
       "Properties": {
         "FunctionName": {
-          "Sub": "${Environment}-get-user-function"
+          "Fn::Sub": "${Environment}-get-user-function"
         },
         "InlineCode": "import json\nimport os\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Lambda function to retrieve user information\n    \"\"\"\n    user_id = event.get('pathParameters', {}).get('id', 'unknown')\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps({\n            'message': f'Retrieved user {user_id}',\n            'function_name': os.environ.get('FUNCTION_NAME', 'GetUser')\n        })\n    }\n",
         "Handler": "index.lambda_handler",
         "Description": "Function to retrieve user information",
         "Role": {
-          "GetAtt": "LambdaExecutionRole.Arn"
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
         },
         "Environment": {
           "Variables": {
@@ -128,7 +137,10 @@
         "DeadLetterQueue": {
           "Type": "SQS",
           "TargetArn": {
-            "GetAtt": "GetUserDLQ.Arn"
+            "Fn::GetAtt": [
+              "GetUserDLQ",
+              "Arn"
+            ]
           }
         }
       }
@@ -137,7 +149,7 @@
       "Type": "AWS::DynamoDB::Table",
       "Properties": {
         "TableName": {
-          "Sub": "${Environment}-users-table"
+          "Fn::Sub": "${Environment}-users-table"
         },
         "BillingMode": "PAY_PER_REQUEST",
         "AttributeDefinitions": [
@@ -179,7 +191,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Sub": "${Environment}-lambda-execution-role"
+          "Fn::Sub": "${Environment}-lambda-execution-role"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -214,7 +226,10 @@
                     "dynamodb:Scan"
                   ],
                   "Resource": {
-                    "GetAtt": "UserTable.Arn"
+                    "Fn::GetAtt": [
+                      "UserTable",
+                      "Arn"
+                    ]
                   }
                 }
               ]
@@ -232,10 +247,16 @@
                   ],
                   "Resource": [
                     {
-                      "GetAtt": "CreateUserDLQ.Arn"
+                      "Fn::GetAtt": [
+                        "CreateUserDLQ",
+                        "Arn"
+                      ]
                     },
                     {
-                      "GetAtt": "GetUserDLQ.Arn"
+                      "Fn::GetAtt": [
+                        "GetUserDLQ",
+                        "Arn"
+                      ]
                     }
                   ]
                 }
@@ -261,7 +282,7 @@
       "Type": "AWS::SQS::Queue",
       "Properties": {
         "QueueName": {
-          "Sub": "${Environment}-create-user-dlq"
+          "Fn::Sub": "${Environment}-create-user-dlq"
         },
         "MessageRetentionPeriod": 1209600,
         "Tags": [
@@ -282,7 +303,7 @@
       "Type": "AWS::SQS::Queue",
       "Properties": {
         "QueueName": {
-          "Sub": "${Environment}-get-user-dlq"
+          "Fn::Sub": "${Environment}-get-user-dlq"
         },
         "MessageRetentionPeriod": 1209600,
         "Tags": [
@@ -303,7 +324,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Sub": "/aws/lambda/${Environment}-create-user-function"
+          "Fn::Sub": "/aws/lambda/${Environment}-create-user-function"
         },
         "RetentionInDays": {
           "Ref": "LogRetentionDays"
@@ -326,7 +347,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Sub": "/aws/lambda/${Environment}-get-user-function"
+          "Fn::Sub": "/aws/lambda/${Environment}-get-user-function"
         },
         "RetentionInDays": {
           "Ref": "LogRetentionDays"
@@ -349,7 +370,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Sub": "/aws/apigateway/${Environment}-default-api"
+          "Fn::Sub": "/aws/apigateway/${Environment}-default-api"
         },
         "RetentionInDays": {
           "Ref": "LogRetentionDays"
@@ -372,7 +393,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Sub": "${Environment}-CreateUserFunction-Errors"
+          "Fn::Sub": "${Environment}-CreateUserFunction-Errors"
         },
         "AlarmDescription": "Monitor errors in CreateUserFunction",
         "MetricName": "Errors",
@@ -408,7 +429,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Sub": "${Environment}-GetUserFunction-Errors"
+          "Fn::Sub": "${Environment}-GetUserFunction-Errors"
         },
         "AlarmDescription": "Monitor errors in GetUserFunction",
         "MetricName": "Errors",
@@ -447,7 +468,7 @@
           "Ref": "CreateUserFunction"
         },
         "Description": {
-          "Sub": "Version for ${Environment} environment"
+          "Fn::Sub": "Version for ${Environment} environment"
         }
       }
     },
@@ -458,13 +479,16 @@
           "Ref": "CreateUserFunction"
         },
         "FunctionVersion": {
-          "GetAtt": "CreateUserFunctionVersion.Version"
+          "Fn::GetAtt": [
+            "CreateUserFunctionVersion",
+            "Version"
+          ]
         },
         "Name": {
           "Ref": "Environment"
         },
         "Description": {
-          "Sub": "Alias for ${Environment} environment"
+          "Fn::Sub": "Alias for ${Environment} environment"
         }
       }
     },
@@ -475,7 +499,7 @@
           "Ref": "GetUserFunction"
         },
         "Description": {
-          "Sub": "Version for ${Environment} environment"
+          "Fn::Sub": "Version for ${Environment} environment"
         }
       }
     },
@@ -486,13 +510,16 @@
           "Ref": "GetUserFunction"
         },
         "FunctionVersion": {
-          "GetAtt": "GetUserFunctionVersion.Version"
+          "Fn::GetAtt": [
+            "GetUserFunctionVersion",
+            "Version"
+          ]
         },
         "Name": {
           "Ref": "Environment"
         },
         "Description": {
-          "Sub": "Alias for ${Environment} environment"
+          "Fn::Sub": "Alias for ${Environment} environment"
         }
       }
     }
@@ -501,33 +528,39 @@
     "ApiEndpoint": {
       "Description": "API Gateway endpoint URL",
       "Value": {
-        "Sub": "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+        "Fn::Sub": "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
       },
       "Export": {
         "Name": {
-          "Sub": "${Environment}-api-endpoint"
+          "Fn::Sub": "${Environment}-api-endpoint"
         }
       }
     },
     "CreateUserFunctionArn": {
       "Description": "CreateUserFunction ARN",
       "Value": {
-        "GetAtt": "CreateUserFunction.Arn"
+        "Fn::GetAtt": [
+          "CreateUserFunction",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
-          "Sub": "${Environment}-create-user-function-arn"
+          "Fn::Sub": "${Environment}-create-user-function-arn"
         }
       }
     },
     "GetUserFunctionArn": {
       "Description": "GetUserFunction ARN",
       "Value": {
-        "GetAtt": "GetUserFunction.Arn"
+        "Fn::GetAtt": [
+          "GetUserFunction",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
-          "Sub": "${Environment}-get-user-function-arn"
+          "Fn::Sub": "${Environment}-get-user-function-arn"
         }
       }
     },
@@ -538,18 +571,21 @@
       },
       "Export": {
         "Name": {
-          "Sub": "${Environment}-user-table-name"
+          "Fn::Sub": "${Environment}-user-table-name"
         }
       }
     },
     "UserTableArn": {
       "Description": "DynamoDB User Table ARN",
       "Value": {
-        "GetAtt": "UserTable.Arn"
+        "Fn::GetAtt": [
+          "UserTable",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
-          "Sub": "${Environment}-user-table-arn"
+          "Fn::Sub": "${Environment}-user-table-arn"
         }
       }
     }
