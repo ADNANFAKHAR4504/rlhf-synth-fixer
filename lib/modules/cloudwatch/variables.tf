@@ -27,3 +27,9 @@ variable "email_endpoints" {
   description = "Email endpoints for SNS notifications"
   type        = list(string)
 }
+
+variable "enable_alarms" {
+  description = "Enable CloudWatch alarm creation (set to false for LocalStack compatibility)"
+  type        = bool
+  default     = true
+}

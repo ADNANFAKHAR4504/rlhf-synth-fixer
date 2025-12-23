@@ -10,15 +10,15 @@ output "sns_topic_name" {
 
 output "cpu_alarm_arn" {
   description = "CPU utilization alarm ARN"
-  value       = aws_cloudwatch_metric_alarm.cpu_utilization.arn
+  value       = try(aws_cloudwatch_metric_alarm.cpu_utilization[0].arn, null)
 }
 
 output "connections_alarm_arn" {
   description = "Database connections alarm ARN"
-  value       = aws_cloudwatch_metric_alarm.database_connections.arn
+  value       = try(aws_cloudwatch_metric_alarm.database_connections[0].arn, null)
 }
 
 output "replica_lag_alarm_arn" {
   description = "Aurora replica lag alarm ARN"
-  value       = aws_cloudwatch_metric_alarm.aurora_replica_lag.arn
+  value       = try(aws_cloudwatch_metric_alarm.aurora_replica_lag[0].arn, null)
 }

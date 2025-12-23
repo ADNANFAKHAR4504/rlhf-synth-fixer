@@ -46,6 +46,12 @@ variable "alert_email_addresses" {
   default     = []
 }
 
+variable "enable_cloudwatch_alarms" {
+  description = "Enable CloudWatch alarms (set to false for LocalStack compatibility)"
+  type        = bool
+  default     = false
+}
+
 variable "master_username" {
   description = "Master username for Aurora database"
   type        = string
@@ -295,6 +301,7 @@ module "cloudwatch_primary" {
 
   sns_topic_name  = "dr-payment-alerts-primary-${var.environment_suffix}"
   email_endpoints = var.alert_email_addresses
+  enable_alarms   = var.enable_cloudwatch_alarms
 }
 
 # CloudWatch Alarms for secondary Aurora cluster
@@ -312,6 +319,7 @@ module "cloudwatch_secondary" {
 
   sns_topic_name  = "dr-payment-alerts-secondary-${var.environment_suffix}"
   email_endpoints = var.alert_email_addresses
+  enable_alarms   = var.enable_cloudwatch_alarms
 }
 
 # ===========================

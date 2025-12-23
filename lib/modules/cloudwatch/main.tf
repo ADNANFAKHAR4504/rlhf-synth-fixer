@@ -14,6 +14,8 @@ resource "aws_sns_topic_subscription" "email" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_utilization" {
+  count = var.enable_alarms ? 1 : 0
+
   alarm_name          = "${var.alarm_prefix}-cpu-utilization"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
@@ -35,6 +37,8 @@ resource "aws_cloudwatch_metric_alarm" "cpu_utilization" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "database_connections" {
+  count = var.enable_alarms ? 1 : 0
+
   alarm_name          = "${var.alarm_prefix}-database-connections"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
@@ -56,6 +60,8 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "aurora_replica_lag" {
+  count = var.enable_alarms ? 1 : 0
+
   alarm_name          = "${var.alarm_prefix}-aurora-replica-lag"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
