@@ -24,4 +24,4 @@ app_ami_id = "ami-0c55b159cbfafe1f0"
 db_instance_class = "db.t3.micro"
 db_name           = "testdb"
 db_username       = "testadmin"
-db_password       = "LocalStackTestPassword123!"
+# db_password - Set via TF_VAR_db_password environment variable for security
