@@ -4,7 +4,24 @@ import * as path from 'path';
 
 // Initialize AWS SDK
 const region = 'us-east-1';
-AWS.config.update({ region });
+
+// Configure AWS SDK for LocalStack when LOCALSTACK environment is detected
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                      process.env.AWS_ENDPOINT_URL?.includes('localstack');
+
+if (isLocalStack) {
+  const localStackConfig = {
+    region,
+    accessKeyId: 'test',
+    secretAccessKey: 'test',
+    endpoint: 'http://localhost:4566',
+    s3ForcePathStyle: true
+  };
+
+  AWS.config.update(localStackConfig);
+} else {
+  AWS.config.update({ region });
+}
 
 const iam = new AWS.IAM();
 const ec2 = new AWS.EC2();
