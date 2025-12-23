@@ -59,7 +59,10 @@ import fs from 'fs';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
+// For LocalStack, use the LocalStack CI/CD stack naming convention
+const stackName = isLocalStack
+  ? `localstack-stack-${environmentSuffix}`
+  : `TapStack${environmentSuffix}`;
 const region = process.env.AWS_REGION || 'us-east-1';
 
 // LocalStack configuration
@@ -955,7 +958,11 @@ describe('Enterprise Infrastructure Integration Tests', () => {
 
       // This test would normally make an HTTP request to the ALB
       // In a real environment, you would test actual connectivity
-      expect(stackOutputs.ALBDNSName).toMatch(/^.+\.elb\.amazonaws\.com$/);
+      // LocalStack uses different endpoint format
+      const expectedPattern = isLocalStack
+        ? /^.+\.(elb\.localhost\.localstack\.cloud|localhost\.localstack\.cloud)$/
+        : /^.+\.elb\.amazonaws\.com$/;
+      expect(stackOutputs.ALBDNSName).toMatch(expectedPattern);
     });
 
     test('RDS endpoint should be properly formatted', () => {
@@ -964,7 +971,11 @@ describe('Enterprise Infrastructure Integration Tests', () => {
         return;
       }
 
-      expect(stackOutputs.RDSEndpoint).toMatch(/^.+\.rds\.amazonaws\.com$/);
+      // LocalStack RDS endpoints use localhost.localstack.cloud format
+      const expectedPattern = isLocalStack
+        ? /^.+\.localhost\.localstack\.cloud$/
+        : /^.+\.rds\.amazonaws\.com$/;
+      expect(stackOutputs.RDSEndpoint).toMatch(expectedPattern);
     });
   });
 
