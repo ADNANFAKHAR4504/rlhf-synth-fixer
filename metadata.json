@@ -1,15 +1,15 @@
 {
-  "platform": "analysis",
+  "platform": "pulumi",
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "LS-291670",
   "team": "synth-2",
   "startedAt": "2025-08-07T18:51:00.007Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "ec2",
