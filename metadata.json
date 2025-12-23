@@ -6,11 +6,24 @@
   "po_id": "LS-trainr6",
   "team": "synth-2",
   "startedAt": "2025-08-07T12:02:57-05:00",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Multi-Environment Consistency and Replication"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "AutoScaling",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "SSM",
+    "Lambda",
+    "EventBridge",
+    "Route53",
+    "VPCLattice"
+  ],
   "wave": "P1"
 }
