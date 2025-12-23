@@ -8,9 +8,9 @@
   timestamp = datetime.utcnow().isoformat()
 Running full compliance check...
 {
-  "timestamp": "2025-12-05T18:15:32.181102",
+  "timestamp": "2025-12-22T13:09:54.490083",
   "ec2": {
-    "timestamp": "2025-12-05T18:15:32.298522",
+    "timestamp": "2025-12-22T13:09:54.620171",
     "resource_type": "EC2",
     "total_instances": 0,
     "compliant": 0,
@@ -18,7 +18,7 @@ Running full compliance check...
     "details": []
   },
   "s3": {
-    "timestamp": "2025-12-05T18:15:33.286962",
+    "timestamp": "2025-12-22T13:09:55.611428",
     "resource_type": "S3",
     "total_buckets": 0,
     "compliant": 0,
@@ -26,7 +26,7 @@ Running full compliance check...
     "details": []
   },
   "rds": {
-    "timestamp": "2025-12-05T18:15:33.310324",
+    "timestamp": "2025-12-22T13:09:55.634114",
     "resource_type": "RDS",
     "total_instances": 0,
     "compliant": 0,
