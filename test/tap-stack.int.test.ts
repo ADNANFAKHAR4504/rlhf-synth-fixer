@@ -11,8 +11,22 @@ import {
 } from '@aws-sdk/client-ec2';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = 'us-west-2';
-const ec2Client = new EC2Client({ region });
+const region = process.env.AWS_REGION || 'us-east-1';
+
+// LocalStack endpoint configuration
+const localstackEndpoint = process.env.AWS_ENDPOINT_URL || process.env.AWS_ENDPOINT_URL_EC2 || 'http://localhost:4566';
+const isLocalStack = process.env.PROVIDER === 'localstack' || process.env.AWS_ENDPOINT_URL || process.env.AWS_ENDPOINT_URL_EC2;
+
+const ec2Client = new EC2Client({
+  region,
+  ...(isLocalStack && {
+    endpoint: localstackEndpoint,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test',
+    },
+  }),
+});
 
 let outputs: any = {};
 try {
