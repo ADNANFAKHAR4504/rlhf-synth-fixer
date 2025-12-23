@@ -75,5 +75,8 @@ module.exports = {
     'test/',
     'bin/',
     'cli/',
+    '.claude/',
+    'archive/',
+    'archive-localstack/',
   ],
 };

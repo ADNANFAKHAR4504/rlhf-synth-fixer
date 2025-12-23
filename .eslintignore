@@ -1,0 +1,12 @@
+node_modules/
+cdk.out/
+coverage/
+*.js
+*.d.ts
+worktree/
+test/
+bin/
+cli/
+.claude/
+archive/
+archive-localstack/

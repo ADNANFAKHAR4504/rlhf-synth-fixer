@@ -20,7 +20,14 @@ export class TapStack extends cdk.Stack {
 
     const namePrefix = `tap-${environmentSuffix}`;
 
+    // Detect if running in LocalStack
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+      process.env.LOCALSTACK === 'true';
+
     // Create VPC with CIDR block 10.0.0.0/16
+    // For LocalStack: Use PRIVATE_ISOLATED instead of PRIVATE_WITH_NAT as NAT Gateway support is limited
     const vpc = new ec2.Vpc(this, 'TapVpc', {
       vpcName: `${namePrefix}-vpc`,
       cidr: '10.0.0.0/16',
@@ -34,10 +41,12 @@ export class TapStack extends cdk.Stack {
         {
           cidrMask: 24,
           name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_NAT,
+          subnetType: isLocalStack
+            ? ec2.SubnetType.PRIVATE_ISOLATED
+            : ec2.SubnetType.PRIVATE_WITH_NAT,
         },
       ],
-      natGateways: 1, // Single NAT gateway for cost optimization
+      natGateways: isLocalStack ? 0 : 1, // Skip NAT Gateway for LocalStack
     });
 
     // Create security group for EC2 instances
@@ -63,30 +72,35 @@ export class TapStack extends cdk.Stack {
     );
 
     // Create IAM role for EC2 instances with AWS Compute Optimizer permissions
+    // For LocalStack: Skip managed policies and Compute Optimizer (not supported in Community)
     const instanceRole = new iam.Role(this, 'Ec2InstanceRole', {
       roleName: `${namePrefix}-ec2-role`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'CloudWatchAgentServerPolicy'
-        ),
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'AmazonSSMManagedInstanceCore'
-        ),
-      ],
+      managedPolicies: isLocalStack
+        ? [] // LocalStack: Skip AWS managed policies
+        : [
+            iam.ManagedPolicy.fromAwsManagedPolicyName(
+              'CloudWatchAgentServerPolicy'
+            ),
+            iam.ManagedPolicy.fromAwsManagedPolicyName(
+              'AmazonSSMManagedInstanceCore'
+            ),
+          ],
     });
 
-    // Add permissions for AWS Compute Optimizer
-    instanceRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'compute-optimizer:GetRecommendationSummaries',
-          'compute-optimizer:GetAutoScalingGroupRecommendations',
-        ],
-        resources: ['*'],
-      })
-    );
+    // Add permissions for AWS Compute Optimizer (skip for LocalStack)
+    if (!isLocalStack) {
+      instanceRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'compute-optimizer:GetRecommendationSummaries',
+            'compute-optimizer:GetAutoScalingGroupRecommendations',
+          ],
+          resources: ['*'],
+        })
+      );
+    }
 
     // Create launch template
     const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
@@ -131,6 +145,15 @@ export class TapStack extends cdk.Stack {
       targetUtilizationPercent: 70,
       cooldown: cdk.Duration.seconds(300),
     });
+
+    // Add RemovalPolicy for LocalStack cleanup
+    if (isLocalStack) {
+      vpc.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+      autoScalingGroup.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+      instanceRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+      webSecurityGroup.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+      launchTemplate.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    }
 
     // Add tags for cost tracking
     cdk.Tags.of(this).add('Environment', environmentSuffix);
