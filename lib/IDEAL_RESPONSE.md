@@ -1,6 +1,9 @@
 # Ideal Response
 
-This is the ideal implementation for the CI/CD pipeline infrastructure task. The implementation shown in MODEL_RESPONSE.md already meets all requirements and best practices.
+**Platform:** CDK
+**Language:** TypeScript (ts)
+
+This is the ideal implementation for the CI/CD pipeline infrastructure task using AWS CDK with TypeScript. The implementation shown in MODEL_RESPONSE.md already meets all requirements and best practices.
 
 ## What Makes This Ideal
 
