@@ -6,68 +6,68 @@ Your company is migrating from a legacy on-premises network architecture to AWS.
 
 ## Task
 
-Create infrastructure using **AWS CloudFormation with YAML** to implement a hub-and-spoke network architecture for migrating departmental workloads from on-premises to AWS.
+Create infrastructure using AWS CloudFormation with YAML to implement a hub-and-spoke network architecture for migrating departmental workloads from on-premises to AWS.
 
 ## Requirements
 
 The CloudFormation template must:
 
-1. **Hub VPC**: Create a hub VPC (10.0.0.0/16) with Transit Gateway attachment
+1. Hub VPC: Create a hub VPC with CIDR 10.0.0.0/16 and Transit Gateway attachment
    - 3 availability zones
    - Public subnets: 10.0.100.0/24, 10.0.101.0/24, 10.0.102.0/24
    - Private subnets: 10.0.0.0/24, 10.0.1.0/24, 10.0.2.0/24
 
-2. **Spoke VPCs**: Create three spoke VPCs for different departments:
+2. Spoke VPCs: Create three spoke VPCs for different departments:
    - Finance VPC: 10.1.0.0/16
    - Engineering VPC: 10.2.0.0/16
    - Marketing VPC: 10.3.0.0/16
    - Each with 3 availability zones
-   - Each with public subnets: x.x.100.0/24, x.x.101.0/24, x.x.102.0/24
-   - Each with private subnets: x.x.0.0/24, x.x.1.0/24, x.x.2.0/24
+   - Each with public subnets using pattern x.x.100.0/24, x.x.101.0/24, x.x.102.0/24
+   - Each with private subnets using pattern x.x.0.0/24, x.x.1.0/24, x.x.2.0/24
 
-3. **Transit Gateway**: Configure AWS Transit Gateway with:
-   - Attachments to all VPCs (hub and 3 spokes)
+3. Transit Gateway: Configure AWS Transit Gateway with:
+   - Attachments to all VPCs - hub and 3 spokes
    - Route tables allowing only hub-and-spoke communication:
-     - Finance ↔ Hub
-     - Engineering ↔ Hub
-     - Marketing ↔ Hub
+     - Finance to Hub
+     - Engineering to Hub
+     - Marketing to Hub
    - NO direct spoke-to-spoke communication
    - Proper route propagation enabled
 
-4. **NAT Gateways**: Set up NAT Gateways in each spoke VPC for outbound internet access from private subnets
+4. NAT Gateways: Set up NAT Gateways in each spoke VPC for outbound internet access from private subnets
 
-5. **VPC Flow Logs**: Configure VPC Flow Logs for all VPCs with:
+5. VPC Flow Logs: Configure VPC Flow Logs for all VPCs with:
    - 1-minute intervals
    - Store in CloudWatch Logs
-   - Enabled for all VPCs (hub and all spokes)
+   - Enabled for all VPCs - hub and all spokes
 
-6. **Security Groups**:
-   - Web-tier security group: Allow ports 80/443 from 0.0.0.0/0
+6. Security Groups:
+   - Web-tier security group: Allow ports 80 and 443 from 0.0.0.0/0
    - App-tier security group: Allow custom ports from web-tier only
    - Follow least-privilege principle with documented rules
 
-7. **Network ACLs**: Implement network ACLs that:
+7. Network ACLs: Implement network ACLs that:
    - Deny all traffic by default
-   - Explicitly allow: HTTP/HTTPS inbound to public subnets
+   - Explicitly allow HTTP and HTTPS inbound to public subnets
    - Allow established connections
    - Allow VPC-to-VPC traffic through Transit Gateway
 
-8. **Custom Resource**: Add custom resource using Lambda to test connectivity between VPCs
+8. Lambda Function: Add Lambda function to test connectivity between VPCs
 
-9. **Resource Tagging**: All resources must be tagged with:
-   - Department (Finance/Engineering/Marketing/Hub)
+9. Resource Tagging: All resources must be tagged with:
+   - Department: Finance, Engineering, Marketing, or Hub
    - Environment
    - MigrationPhase
 
-10. **Outputs**: Export the following for use by migration tools:
+10. Outputs: Export the following for use by migration tools:
     - Transit Gateway ID
-    - All VPC IDs (hub and spokes)
-    - All subnet IDs (public and private)
+    - All VPC IDs - hub and spokes
+    - All subnet IDs - public and private
     - Security group IDs
 
 ## Constraints
 
-1. Platform: **CloudFormation** with **YAML** (ignore any mention of CDK/Go in original requirements)
+1. Platform: CloudFormation with YAML - ignore any mention of CDK or Go in original requirements
 2. Transit Gateway must connect all VPCs with proper route propagation
 3. Each department VPC must have exactly 3 availability zones
 4. CIDR blocks must not overlap and follow RFC1918 addressing
@@ -75,6 +75,7 @@ The CloudFormation template must:
 6. VPC Flow Logs must be enabled for all VPCs and stored in CloudWatch Logs
 7. All resources must be tagged with Department, Environment, and MigrationPhase tags
 8. Security groups must follow least-privilege principle with documented rules
+9. IAM roles must specify exact actions and resources - no wildcard permissions
 
 ## Environment
 
@@ -93,8 +94,8 @@ The CloudFormation template must:
 - Amazon CloudWatch Logs
 - Security Groups
 - Network ACLs
-- AWS Lambda (for custom resource)
-- IAM Roles (for Lambda execution)
+- AWS Lambda for connectivity testing
+- IAM Roles for Lambda execution
 
 ## Expected Output
 
