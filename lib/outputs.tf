@@ -68,10 +68,12 @@ output "security_group_data_id" {
   value       = aws_security_group.data.id
 }
 
-output "vpc_flow_log_id" {
-  description = "ID of the VPC flow log"
-  value       = aws_flow_log.main.id
-}
+# VPC Flow Log output commented out due to LocalStack compatibility
+# NOTE: The aws_flow_log.main resource is disabled for LocalStack testing
+# output "vpc_flow_log_id" {
+#   description = "ID of the VPC flow log"
+#   value       = aws_flow_log.main.id
+# }
 
 output "vpc_flow_log_group_name" {
   description = "CloudWatch Log Group name for VPC flow logs"
