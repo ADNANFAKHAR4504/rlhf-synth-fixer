@@ -75,5 +75,6 @@ module.exports = {
     'test/',
     'bin/',
     'cli/',
+    '.claude/',
   ],
 };
