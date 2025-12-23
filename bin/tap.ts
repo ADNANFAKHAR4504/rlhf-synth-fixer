@@ -18,8 +18,9 @@ Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
 // Deploy to primary region (us-west-1)
-new TapStack(app, `TapStack-Primary-${environmentSuffix}`, {
-  stackName: `TapStack-Primary-${environmentSuffix}`,
+// Stack naming: TapStack{environmentSuffix}-Primary to match CI/CD script pattern grep "TapStack${env_suffix}"
+new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+  stackName: `TapStack${environmentSuffix}-Primary`,
   environmentSuffix: environmentSuffix,
   isPrimaryRegion: true,
   env: {
@@ -29,8 +30,9 @@ new TapStack(app, `TapStack-Primary-${environmentSuffix}`, {
 });
 
 // Deploy to secondary region (us-east-1)
-new TapStack(app, `TapStack-Secondary-${environmentSuffix}`, {
-  stackName: `TapStack-Secondary-${environmentSuffix}`,
+// Stack naming: TapStack{environmentSuffix}-Secondary to match CI/CD script pattern grep "TapStack${env_suffix}"
+new TapStack(app, `TapStack${environmentSuffix}-Secondary`, {
+  stackName: `TapStack${environmentSuffix}-Secondary`,
   environmentSuffix: environmentSuffix,
   isPrimaryRegion: false,
   env: {
