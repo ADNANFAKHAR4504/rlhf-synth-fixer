@@ -1,7 +1,7 @@
 {
   "version": 4,
   "terraform_version": "1.9.8",
-  "serial": 60,
+  "serial": 59,
   "lineage": "6d774ceb-0fe3-f7a9-207f-e62098600a21",
   "outputs": {
     "cloudtrail_bucket": {
@@ -77,6 +77,31 @@
             "user_id": "AKIAIOSFODNN7EXAMPLE"
           },
           "sensitive_attributes": []
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_cloudwatch_dashboard",
+      "name": "payment_operations",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "dashboard_arn": "arn:aws:cloudwatch::000000000000:dashboard/payment-operations-synth101912462",
+            "dashboard_body": "{\"widgets\":[{\"properties\":{\"metrics\":[[\"PaymentProcessing\",\"TransactionCount\",{\"label\":\"Total Transactions\",\"stat\":\"Sum\"}],[\".\",\"SuccessfulTransactions\",{\"label\":\"Successful\",\"stat\":\"Sum\"}],[\".\",\"FailedTransactions\",{\"label\":\"Failed\",\"stat\":\"Sum\"}]],\"period\":300,\"region\":\"us-east-1\",\"stat\":\"Sum\",\"title\":\"Payment Transaction Volume\",\"yAxis\":{\"left\":{\"min\":0}}},\"type\":\"metric\"},{\"properties\":{\"metrics\":[[\"PaymentProcessing\",\"TransactionLatency\",{\"label\":\"Avg Latency\",\"stat\":\"Average\"}],[\"...\",{\"label\":\"p50\",\"stat\":\"p50\"}],[\"...\",{\"label\":\"p95\",\"stat\":\"p95\"}],[\"...\",{\"label\":\"p99\",\"stat\":\"p99\"}]],\"period\":300,\"region\":\"us-east-1\",\"title\":\"Transaction Latency Distribution (ms)\",\"yAxis\":{\"left\":{\"min\":0}}},\"type\":\"metric\"},{\"properties\":{\"metrics\":[[\"PaymentProcessing\",\"Errors\",{\"label\":\"Total Errors\",\"stat\":\"Sum\"}],[\".\",\"AuthorizationErrors\",{\"label\":\"Auth Errors\",\"stat\":\"Sum\"}],[\".\",\"GatewayErrors\",{\"label\":\"Gateway Errors\",\"stat\":\"Sum\"}]],\"period\":300,\"region\":\"us-east-1\",\"stat\":\"Sum\",\"title\":\"Error Metrics\",\"yAxis\":{\"left\":{\"min\":0}}},\"type\":\"metric\"},{\"properties\":{\"query\":\"SOURCE '/aws/payment-api-synth101912462' | fields @timestamp, @message | filter @message like /ERROR/ | sort @timestamp desc | limit 20\",\"region\":\"us-east-1\",\"stacked\":false,\"title\":\"Recent Errors\"},\"type\":\"log\"}]}",
+            "dashboard_name": "payment-operations-synth101912462",
+            "id": "payment-operations-synth101912462",
+            "region": "us-east-1"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_cloudwatch_log_group.payment_api_logs",
+            "aws_kms_key.observability",
+            "data.aws_caller_identity.current"
+          ]
         }
       ]
     },
