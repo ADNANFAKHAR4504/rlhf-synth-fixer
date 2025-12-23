@@ -133,9 +133,84 @@ fi
 log_section "Sanitizing Metadata"
 
 if [ -f "$WORK_DIR/metadata.json" ]; then
-  "$SCRIPT_DIR/localstack-sanitize-metadata.sh" "$WORK_DIR/metadata.json"
+  if ! "$SCRIPT_DIR/localstack-sanitize-metadata.sh" "$WORK_DIR/metadata.json"; then
+    log_error "Metadata sanitization failed!"
+    exit 1
+  fi
 else
   log_warn "No metadata.json found in work directory"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VALIDATE SANITIZED METADATA (additional safety check)
+# ═══════════════════════════════════════════════════════════════════════════
+
+log_section "Validating Sanitized Metadata"
+
+if [ -f "$WORK_DIR/metadata.json" ]; then
+  VALIDATION_FAILED=false
+  
+  # Check all required fields are present
+  REQUIRED_FIELDS=("platform" "language" "complexity" "turn_type" "po_id" "team" "startedAt" "subtask" "provider" "subject_labels" "aws_services" "wave")
+  for field in "${REQUIRED_FIELDS[@]}"; do
+    if ! jq -e ".$field" "$WORK_DIR/metadata.json" &>/dev/null; then
+      log_error "Missing required field after sanitization: $field"
+      VALIDATION_FAILED=true
+    fi
+  done
+  
+  # Check for disallowed fields (schema has additionalProperties: false)
+  DISALLOWED_FIELDS=("coverage" "author" "dockerS3Location" "training_quality" "task_id" "pr_id" "localstack_migration" "original_po_id" "original_pr_id")
+  for field in "${DISALLOWED_FIELDS[@]}"; do
+    if jq -e ".$field" "$WORK_DIR/metadata.json" &>/dev/null; then
+      log_error "Disallowed field still present after sanitization: $field"
+      VALIDATION_FAILED=true
+    fi
+  done
+  
+  # Validate required field values
+  TEAM=$(jq -r '.team // ""' "$WORK_DIR/metadata.json")
+  if [[ -z "$TEAM" || "$TEAM" == "null" ]]; then
+    log_error "Team field is empty or null"
+    VALIDATION_FAILED=true
+  fi
+  
+  PROVIDER=$(jq -r '.provider // ""' "$WORK_DIR/metadata.json")
+  if [[ "$PROVIDER" != "localstack" ]]; then
+    log_error "Provider should be 'localstack', got: $PROVIDER"
+    VALIDATION_FAILED=true
+  fi
+  
+  SUBTASK=$(jq -r '.subtask // ""' "$WORK_DIR/metadata.json")
+  if [[ -z "$SUBTASK" || "$SUBTASK" == "null" ]]; then
+    log_error "Subtask field is empty or null"
+    VALIDATION_FAILED=true
+  fi
+  
+  SUBJECT_LABELS_COUNT=$(jq '.subject_labels | length' "$WORK_DIR/metadata.json" 2>/dev/null || echo "0")
+  if [[ "$SUBJECT_LABELS_COUNT" -lt 1 ]]; then
+    log_error "subject_labels array must have at least 1 item"
+    VALIDATION_FAILED=true
+  fi
+  
+  WAVE=$(jq -r '.wave // ""' "$WORK_DIR/metadata.json")
+  if [[ ! "$WAVE" =~ ^(P0|P1)$ ]]; then
+    log_error "Wave must be 'P0' or 'P1', got: $WAVE"
+    VALIDATION_FAILED=true
+  fi
+  
+  if [ "$VALIDATION_FAILED" = true ]; then
+    log_error "Metadata validation failed! Current content:"
+    cat "$WORK_DIR/metadata.json"
+    exit 1
+  fi
+  
+  log_success "Metadata validation passed"
+  log_info "  Team:           $TEAM"
+  log_info "  Provider:       $PROVIDER"
+  log_info "  Subtask:        $SUBTASK"
+  log_info "  Subject Labels: $SUBJECT_LABELS_COUNT items"
+  log_info "  Wave:           $WAVE"
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════
