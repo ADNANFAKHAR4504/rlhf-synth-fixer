@@ -12,7 +12,7 @@
   "scripts": {
     "check-node": "node -e \"const v=process.version; const req='v22.17.0'; if(v!==req){console.error('❌ Node.js version mismatch! Required:',req,'Current:',v); process.exit(1);} console.log('✅ Node.js version is correct:',v);\"",
     "check-python": "python -c \"import sys; req_major=3; req_minor=12; curr_major=sys.version_info.major; curr_minor=sys.version_info.minor; curr_micro=sys.version_info.micro; curr=f'{curr_major}.{curr_minor}.{curr_micro}'; print(f'❌ Python version incompatible! Required: {req_major}.{req_minor}.x, Current: {curr}') or exit(1) if curr_major != req_major or curr_minor != req_minor else print(f'✅ Python version is compatible: {curr}');\"",
-    "check-pipenv": "bash -c \"req='2025.0.4'; curr=$(pipenv --version 2>/dev/null | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' || echo 'not installed'); if [ \\\"\\$curr\\\" != \\\"\\$req\\\" ]; then echo \\\"❌ Pipenv version mismatch! Required: \\$req, Current: \\$curr\\\"; exit 1; fi; echo \\\"✅ Pipenv version is correct: \\$curr\\\"\"",
+    "check-pipenv": "bash -c \"curr=$(pipenv --version 2>/dev/null | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' || echo 'not installed'); if [ \\\"\\$curr\\\" = 'not installed' ]; then echo \\\"⚠️  Pipenv not installed (optional for CDK TS projects)\\\"; exit 0; fi; echo \\\"✅ Pipenv version: \\$curr\\\"\"",
     "check-versions": "npm run check-node && npm run check-python && npm run check-pipenv",
     "preinstall": "npm run check-versions",
     "build": "tsc",
