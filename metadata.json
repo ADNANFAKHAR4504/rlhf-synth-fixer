@@ -8,10 +8,8 @@
   "startedAt": "2025-08-21T13:05:47.580Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Web Application Deployment",
-    "Security Configuration as Code",
-    "Infrastructure Analysis/Monitoring"
+    "Environment Migration",
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "EC2",
@@ -30,5 +28,9 @@
     "Security Groups"
   ],
   "provider": "localstack",
-  "wave": "P0"
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr1903"
+  }
 }
