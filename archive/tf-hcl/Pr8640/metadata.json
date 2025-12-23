@@ -18,5 +18,12 @@
     "IAM",
     "Security Groups"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
