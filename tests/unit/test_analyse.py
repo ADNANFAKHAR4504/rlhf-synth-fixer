@@ -681,6 +681,38 @@ class TestPrintReport:
         print_calls = [str(call) for call in mock_print.call_args_list]
         assert any('75.5' in call for call in print_calls)
 
+    @patch('analyse.boto3.client')
+    @patch('builtins.print')
+    def test_print_report_detailed(self, mock_print, mock_boto_client):
+        """Test report printing with detailed data"""
+        analyzer = InfrastructureAnalyzer('test')
+
+        analysis = {
+            'environment_suffix': 'test',
+            'region': 'us-east-1',
+            'timestamp': '2025-01-01T00:00:00Z',
+            'log_groups': [
+                {'status': 'found', 'name': 'test-lg', 'kms_encrypted': True, 'retention_days': 7, 'stored_bytes': 1024},
+                {'status': 'missing', 'name': 'missing-lg'}
+            ],
+            'alarms': [
+                {'status': 'found', 'name': 'test-alarm', 'state': 'OK', 'has_sns_action': True},
+                {'status': 'missing', 'name': 'missing-alarm'}
+            ],
+            'composite_alarms': [{'status': 'found', 'name': 'test-ca', 'state': 'ALARM'}],
+            'dashboards': [{'status': 'found', 'name': 'test-dash', 'widget_count': 9, 'compliant': True}],
+            'metric_filters': [{'log_group': '/aws/test', 'status': 'found', 'filter_count': 5}],
+            'recommendations': [
+                {'priority': 'high', 'category': 'test', 'resource': 'test', 'message': 'Test rec 1'},
+                {'priority': 'medium', 'category': 'test', 'resource': 'test', 'message': 'Test rec 2'}
+            ],
+            'compliance_score': 45.5
+        }
+
+        analyzer.print_report(analysis)
+
+        assert mock_print.called
+
 
 class TestExportJsonReport:
     """Test export_json_report method"""
@@ -785,3 +817,55 @@ class TestMainFunction:
         # Exception should propagate
         with pytest.raises(Exception, match='Test error'):
             main()
+
+    @patch('analyse.InfrastructureAnalyzer')
+    @patch('analyse.os.getenv')
+    def test_main_with_warning_score(self, mock_getenv, mock_analyzer_class):
+        """Test main function with warning compliance score (50-79%)"""
+        from analyse import main
+
+        mock_getenv.side_effect = lambda key, default=None: {'ENVIRONMENT_SUFFIX': 'pr123', 'AWS_REGION': 'us-east-1', 'OUTPUT_FILE': ''}.get(key, default)
+        mock_analyzer = Mock()
+        mock_analyzer_class.return_value = mock_analyzer
+        mock_analyzer.analyze_infrastructure.return_value = {
+            'compliance_score': 65,
+            'environment_suffix': 'pr123',
+            'region': 'us-east-1',
+            'timestamp': '2025-01-01T00:00:00Z',
+            'log_groups': [],
+            'alarms': [],
+            'composite_alarms': [],
+            'dashboards': [],
+            'metric_filters': [],
+            'recommendations': []
+        }
+
+        result = main()
+
+        assert result == 1
+
+    @patch('analyse.InfrastructureAnalyzer')
+    @patch('analyse.os.getenv')
+    def test_main_with_non_compliant_score(self, mock_getenv, mock_analyzer_class):
+        """Test main function with non-compliant score (< 50%)"""
+        from analyse import main
+
+        mock_getenv.side_effect = lambda key, default=None: {'ENVIRONMENT_SUFFIX': 'pr123', 'AWS_REGION': 'us-east-1', 'OUTPUT_FILE': ''}.get(key, default)
+        mock_analyzer = Mock()
+        mock_analyzer_class.return_value = mock_analyzer
+        mock_analyzer.analyze_infrastructure.return_value = {
+            'compliance_score': 30,
+            'environment_suffix': 'pr123',
+            'region': 'us-east-1',
+            'timestamp': '2025-01-01T00:00:00Z',
+            'log_groups': [],
+            'alarms': [],
+            'composite_alarms': [],
+            'dashboards': [],
+            'metric_filters': [],
+            'recommendations': []
+        }
+
+        result = main()
+
+        assert result == 2
