@@ -1,7 +1,7 @@
 [INFO] Starting infrastructure analysis
-[INFO] Environment Suffix: pr7974
+[INFO] Environment Suffix: pr8478
 [INFO] AWS Region: us-east-1
-[INFO] Analyzing infrastructure for: pr7974
+[INFO] Analyzing infrastructure for: pr8478
   [STEP] Analyzing CloudWatch Log Groups...
   [STEP] Analyzing CloudWatch Alarms...
   [STEP] Analyzing Composite Alarms...
@@ -11,45 +11,45 @@
 ======================================================================
 Infrastructure Analysis Report
 ======================================================================
-Environment Suffix: pr7974
+Environment Suffix: pr8478
 Region: us-east-1
-Timestamp: 2025-12-05T17:15:54.910684+00:00
+Timestamp: 2025-12-23T01:22:15.503963+00:00
 Compliance Score: 0.0%
 
 ----------------------------------------------------------------------
 CloudWatch Log Groups:
-  [MISSING] /aws/payment-api-pr7974
-  [MISSING] /aws/transaction-processor-pr7974
-  [MISSING] /aws/fraud-detector-pr7974
+  [MISSING] /aws/payment-api-pr8478
+  [MISSING] /aws/transaction-processor-pr8478
+  [MISSING] /aws/fraud-detector-pr8478
 
 ----------------------------------------------------------------------
 CloudWatch Alarms:
-  [MISSING] payment-api-error-rate-pr7974
-  [MISSING] payment-api-response-time-pr7974
-  [MISSING] failed-transactions-pr7974
-  [MISSING] transaction-processor-errors-pr7974
-  [MISSING] fraud-detector-errors-pr7974
-  [MISSING] payment-high-load-pr7974
+  [MISSING] payment-api-error-rate-pr8478
+  [MISSING] payment-api-response-time-pr8478
+  [MISSING] failed-transactions-pr8478
+  [MISSING] transaction-processor-errors-pr8478
+  [MISSING] fraud-detector-errors-pr8478
+  [MISSING] payment-high-load-pr8478
 
 ----------------------------------------------------------------------
 Composite Alarms:
-  [MISSING] multi-service-failure-pr7974
+  [MISSING] multi-service-failure-pr8478
 
 ----------------------------------------------------------------------
 CloudWatch Dashboards:
-  [MISSING] payment-monitoring-pr7974
+  [MISSING] payment-monitoring-pr8478
 
 ----------------------------------------------------------------------
 Recommendations:
-  [HIGH] Log group '/aws/payment-api-pr7974' is missing. Deploy Terraform configuration.
-  [HIGH] Log group '/aws/transaction-processor-pr7974' is missing. Deploy Terraform configuration.
-  [HIGH] Log group '/aws/fraud-detector-pr7974' is missing. Deploy Terraform configuration.
+  [HIGH] Log group '/aws/payment-api-pr8478' is missing. Deploy Terraform configuration.
+  [HIGH] Log group '/aws/transaction-processor-pr8478' is missing. Deploy Terraform configuration.
+  [HIGH] Log group '/aws/fraud-detector-pr8478' is missing. Deploy Terraform configuration.
   [HIGH] 6 CloudWatch alarms are missing.
   [HIGH] Composite alarm for multi-service failure detection is missing.
   [LOW] Dashboard has 0 widgets, expected 9.
-  [MEDIUM] No metric filters configured for '/aws/payment-api-pr7974'.
-  [MEDIUM] No metric filters configured for '/aws/transaction-processor-pr7974'.
-  [MEDIUM] No metric filters configured for '/aws/fraud-detector-pr7974'.
+  [MEDIUM] No metric filters configured for '/aws/payment-api-pr8478'.
+  [MEDIUM] No metric filters configured for '/aws/transaction-processor-pr8478'.
+  [MEDIUM] No metric filters configured for '/aws/fraud-detector-pr8478'.
 
 ======================================================================
 [RESULT] Infrastructure is non-compliant
