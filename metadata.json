@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000871",
+  "team": "synth",
+  "startedAt": "2025-11-10T04:09:47",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Auto Scaling",
+    "CloudWatch",
+    "EC2",
+    "ELB",
+    "IAM",
+    "Internet Gateway",
+    "NAT Gateway",
+    "RDS",
+    "VPC"
+  ],
+  "provider": "localstack",
+  "wave": "P0"
+}
