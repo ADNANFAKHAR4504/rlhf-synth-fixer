@@ -149,42 +149,43 @@ resource "aws_route_table_association" "private" {
 }
 
 # Security Group for ALB
-resource "aws_security_group" "alb" {
-  name        = "alb-sg-${var.environment}-${var.environment_suffix}"
-  description = "Security group for Application Load Balancer"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow HTTP traffic"
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow HTTPS traffic"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound traffic"
-  }
-
-  tags = {
-    Name        = "alb-sg-${var.environment}-${var.environment_suffix}"
-    Environment = var.environment
-    Project     = var.project_name
-    ManagedBy   = "terraform"
-  }
-}
+# Commented out: ALB not supported in LocalStack
+# resource "aws_security_group" "alb" {
+#   name        = "alb-sg-${var.environment}-${var.environment_suffix}"
+#   description = "Security group for Application Load Balancer"
+#   vpc_id      = aws_vpc.main.id
+#
+#   ingress {
+#     from_port   = 80
+#     to_port     = 80
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#     description = "Allow HTTP traffic"
+#   }
+#
+#   ingress {
+#     from_port   = 443
+#     to_port     = 443
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#     description = "Allow HTTPS traffic"
+#   }
+#
+#   egress {
+#     from_port   = 0
+#     to_port     = 0
+#     protocol    = "-1"
+#     cidr_blocks = ["0.0.0.0/0"]
+#     description = "Allow all outbound traffic"
+#   }
+#
+#   tags = {
+#     Name        = "alb-sg-${var.environment}-${var.environment_suffix}"
+#     Environment = var.environment
+#     Project     = var.project_name
+#     ManagedBy   = "terraform"
+#   }
+# }
 
 # Security Group for EC2 Instances
 resource "aws_security_group" "ec2" {
@@ -192,13 +193,14 @@ resource "aws_security_group" "ec2" {
   description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-    description     = "Allow HTTP from ALB"
-  }
+  # Commented out: ALB not deployed in LocalStack
+  # ingress {
+  #   from_port       = 80
+  #   to_port         = 80
+  #   protocol        = "tcp"
+  #   security_groups = [aws_security_group.alb.id]
+  #   description     = "Allow HTTP from ALB"
+  # }
 
   ingress {
     from_port   = 22
@@ -328,62 +330,64 @@ resource "aws_iam_instance_profile" "ec2" {
 }
 
 # Application Load Balancer
-# Note: Some attributes are omitted to avoid LocalStack compatibility issues
-resource "aws_lb" "main" {
-  name               = "alb-${var.environment}-${var.environment_suffix}"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
-
-  enable_deletion_protection = false
-
-  tags = {
-    Name        = "alb-${var.environment}-${var.environment_suffix}"
-    Environment = var.environment
-    Project     = var.project_name
-    ManagedBy   = "terraform"
-  }
-}
+# Commented out: ALB not supported in LocalStack
+# resource "aws_lb" "main" {
+#   name               = "alb-${var.environment}-${var.environment_suffix}"
+#   internal           = false
+#   load_balancer_type = "application"
+#   security_groups    = [aws_security_group.alb.id]
+#   subnets            = aws_subnet.public[*].id
+#
+#   enable_deletion_protection = false
+#
+#   tags = {
+#     Name        = "alb-${var.environment}-${var.environment_suffix}"
+#     Environment = var.environment
+#     Project     = var.project_name
+#     ManagedBy   = "terraform"
+#   }
+# }
 
 # Target Group
-resource "aws_lb_target_group" "main" {
-  name     = "tg-${var.environment}-${var.environment_suffix}"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
-  }
-
-  tags = {
-    Name        = "tg-${var.environment}-${var.environment_suffix}"
-    Environment = var.environment
-    Project     = var.project_name
-    ManagedBy   = "terraform"
-  }
-}
+# Commented out: ALB not supported in LocalStack
+# resource "aws_lb_target_group" "main" {
+#   name     = "tg-${var.environment}-${var.environment_suffix}"
+#   port     = 80
+#   protocol = "HTTP"
+#   vpc_id   = aws_vpc.main.id
+#
+#   health_check {
+#     enabled             = true
+#     healthy_threshold   = 2
+#     interval            = 30
+#     matcher             = "200"
+#     path                = "/"
+#     port                = "traffic-port"
+#     protocol            = "HTTP"
+#     timeout             = 5
+#     unhealthy_threshold = 2
+#   }
+#
+#   tags = {
+#     Name        = "tg-${var.environment}-${var.environment_suffix}"
+#     Environment = var.environment
+#     Project     = var.project_name
+#     ManagedBy   = "terraform"
+#   }
+# }
 
 # ALB Listener
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
-  }
-}
+# Commented out: ALB not supported in LocalStack
+# resource "aws_lb_listener" "http" {
+#   load_balancer_arn = aws_lb.main.arn
+#   port              = 80
+#   protocol          = "HTTP"
+#
+#   default_action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.main.arn
+#   }
+# }
 
 # Launch Template for Auto Scaling
 resource "aws_launch_template" "main" {
@@ -432,8 +436,8 @@ resource "aws_launch_template" "main" {
 resource "aws_autoscaling_group" "main" {
   name                      = "asg-${var.environment}-${var.environment_suffix}"
   vpc_zone_identifier       = aws_subnet.private[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
+  # target_group_arns         = [aws_lb_target_group.main.arn]  # Commented out: ALB not deployed
+  health_check_type         = "EC2"  # Changed from ELB since ALB not deployed
   health_check_grace_period = 300
 
   min_size         = var.asg_min_size
@@ -576,10 +580,11 @@ output "vpc_id" {
   value       = aws_vpc.main.id
 }
 
-output "alb_dns_name" {
-  description = "ALB DNS name"
-  value       = aws_lb.main.dns_name
-}
+# Commented out: ALB not supported in LocalStack
+# output "alb_dns_name" {
+#   description = "ALB DNS name"
+#   value       = aws_lb.main.dns_name
+# }
 
 # Commented out: RDS service not enabled in LocalStack
 # output "rds_endpoint" {
