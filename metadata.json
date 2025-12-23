@@ -5,6 +5,7 @@
   "turn_type": "single",
   "po_id": "101912462",
   "team": "synth",
+  "wave": "P1",
   "startedAt": "2025-11-18T11:25:33+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
