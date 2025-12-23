@@ -8,6 +8,7 @@
   "startedAt": "2025-08-06T07:40:04.324Z",
   "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
+  "wave": "P0",
   "subject_labels": [
     "General Infrastructure Tooling QA"
   ],
