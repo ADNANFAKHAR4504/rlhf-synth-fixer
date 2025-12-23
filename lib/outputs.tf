@@ -81,3 +81,4 @@ output "source_db_password_secret_arn" {
   description = "ARN of the Secrets Manager secret containing Source DB password"
   value       = aws_secretsmanager_secret.source_db_password.arn
 }
+
