@@ -9,7 +9,11 @@ Create a secure and optimized AWS infrastructure CloudFormation template that fo
 - Ensuring all data is encrypted at rest and in transit
 - Enabling detailed monitoring and cost management
 
-## 2. Environment Setup
+## 2. Service Connectivity Architecture
+
+EC2 instances connect to RDS database through security group rules that allow database traffic only from the application tier. S3 buckets are accessed via IAM roles attached to EC2 instances, eliminating the need for access keys. CloudTrail logs are stored in a dedicated S3 bucket with encryption and versioning enabled. CloudWatch monitors all resources and sends alerts when thresholds are breached.
+
+## 3. Environment Setup
 
 ### S3 Buckets
 - Enable server-side encryption (SSE)
@@ -48,16 +52,16 @@ Create a secure and optimized AWS infrastructure CloudFormation template that fo
 - Enable MFA for root account
 - Configure cost alerts with AWS Budgets
 
-## 3. Constraints
+## 4. Constraints
 
 ### Technical Constraints
 - Template must pass AWS CloudFormation validation and cfn-lint
-- Use environment variable for region (REGION)
+- Use environment variable REGION for region configuration
 - Use dynamic references for secrets and passwords
 - No unnecessary use of 'Fn::Sub'
 - No unexpected properties
 - Include 'IsLogging: true' for CloudTrail
-- Follow naming convention: <environment>-<module>-<resource>
+- Follow naming convention: environment-module-resource
 
 ### Security Constraints
 - SSE encryption for all S3 buckets
@@ -70,11 +74,11 @@ Create a secure and optimized AWS infrastructure CloudFormation template that fo
 - Private subnet placement for databases
 
 ### Resource Naming
-- Follow convention: <environment>-<module>-<resource>
+- Follow convention: environment-module-resource format
 - Use consistent naming across all resources
 - Include environment identifier in resource names
 
-## 4. Output Expectations
+## 5. Output Expectations
 
 ### Template Requirements
 - Filename: secure-infrastructure.yaml
