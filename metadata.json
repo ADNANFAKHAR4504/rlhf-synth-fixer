@@ -1,0 +1,19 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291159",
+  "team": "synth-2",
+  "startedAt": "2025-08-06T07:40:04.324Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "s3",
+    "lambda",
+    "cloudwatch"
+  ]
+}
