@@ -23,8 +23,9 @@ export class TapStack extends cdk.Stack {
     const region = this.region;
 
     // Detect LocalStack environment
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                         process.env.AWS_ENDPOINT_URL?.includes('4566');
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
 
     // KMS Key for encryption
     const kmsKey = new kms.Key(this, 'EncryptionKey', {
