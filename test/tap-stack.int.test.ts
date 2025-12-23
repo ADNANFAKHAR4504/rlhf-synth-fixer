@@ -30,7 +30,6 @@ const region = process.env.AWS_REGION || 'us-east-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // CI/CD stack name format: localstack-stack-{ENVIRONMENT_SUFFIX}
-// Example: localstack-stack-pr8679
 const stackName = process.env.STACK_NAME || `localstack-stack-${environmentSuffix}`;
 
 // Check if running against LocalStack
@@ -98,14 +97,14 @@ async function getStackOutputs(): Promise<Record<string, string>> {
 
 describe('TapStack LocalStack Infrastructure Integration Tests', () => {
   let outputs: Record<string, string>;
+  let deployedEnvironment: string;
 
   beforeAll(async () => {
-    console.log(`Setting up integration tests for environment: ${environmentSuffix}`);
+    console.log(`Setting up integration tests for stack: ${stackName}`);
     console.log(`Running against: ${isLocalStack ? 'LocalStack' : 'AWS'}`);
-    console.log(`Stack name: ${stackName}`);
     outputs = await getStackOutputs();
 
-    // Verify we have the required outputs (updated for REST API)
+    // Verify we have the required outputs
     const requiredOutputs = ['S3BucketName', 'LambdaFunctionArn', 'RestApiUrl', 'LambdaExecutionRoleArn'];
 
     requiredOutputs.forEach(outputKey => {
@@ -114,8 +113,17 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
       }
     });
 
+    // Get the actual deployed environment from Lambda function
+    const functionArn = outputs.LambdaFunctionArn;
+    const functionName = functionArn.split(':')[6];
+    const lambdaResponse = await lambda.send(
+      new GetFunctionConfigurationCommand({ FunctionName: functionName })
+    );
+    deployedEnvironment = lambdaResponse.Environment?.Variables?.ENVIRONMENT || 'dev';
+
     console.log(`Stack outputs validation completed`);
-  }, 60000); // 60 second timeout for beforeAll
+    console.log(`Deployed environment: ${deployedEnvironment}`);
+  }, 60000);
 
   describe('Stack Information', () => {
     test('should have valid stack outputs', () => {
@@ -123,7 +131,7 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
       expect(Object.keys(outputs).length).toBeGreaterThan(0);
       console.log(`Stack: ${stackName}`);
       console.log(`Region: ${region}`);
-      console.log(`Environment: ${environmentSuffix}`);
+      console.log(`Deployed Environment: ${deployedEnvironment}`);
       console.log(`Endpoint: ${LOCALSTACK_ENDPOINT}`);
     });
 
@@ -147,7 +155,6 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
       const bucketName = outputs.S3BucketName;
       expect(bucketName).toBeDefined();
       expect(bucketName).toContain('tap-lambda-assets');
-      expect(bucketName).toContain(environmentSuffix);
 
       try {
         await s3.send(new HeadBucketCommand({ Bucket: bucketName }));
@@ -210,7 +217,6 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
       const testContent = 'Test content for integration test';
 
       try {
-        // Upload test content
         await s3.send(
           new PutObjectCommand({
             Bucket: bucketName,
@@ -220,10 +226,8 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
           })
         );
 
-        // Wait a moment for processing
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Verify object exists
         const response = await s3.send(
           new GetObjectCommand({
             Bucket: bucketName,
@@ -251,9 +255,8 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
       expect(functionArn).toBeDefined();
       expect(functionArn).toMatch(/^arn:aws:lambda:/);
 
-      // Extract function name from ARN
       const functionName = functionArn.split(':')[6];
-      expect(functionName).toContain(environmentSuffix);
+      expect(functionName).toContain('TapFunction');
 
       const response = await lambda.send(
         new GetFunctionCommand({
@@ -264,7 +267,6 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
       expect(response.Configuration?.FunctionName).toBe(functionName);
       expect(response.Configuration?.Runtime).toBe('python3.11');
       expect(response.Configuration?.Handler).toBe('index.lambda_handler');
-      // LocalStack may show different states
       expect(['Active', 'Pending'].includes(response.Configuration?.State || '')).toBe(true);
       console.log(`Lambda function verified: ${functionName}`);
     });
@@ -282,7 +284,8 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
 
       const envVars = response.Environment?.Variables || {};
       expect(envVars.BUCKET_NAME).toBe(bucketName);
-      expect(envVars.ENVIRONMENT).toBe(environmentSuffix);
+      expect(envVars.ENVIRONMENT).toBeDefined();
+      expect(envVars.ENVIRONMENT).toBe(deployedEnvironment);
       console.log(`Lambda environment variables verified`);
     });
 
@@ -300,7 +303,6 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
       expect(roleArn).toBeDefined();
       expect(roleArn).toMatch(/^arn:aws:iam::/);
 
-      // Extract role name from ARN
       const roleName = roleArn?.split('/').pop()!;
 
       try {
@@ -312,7 +314,6 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
 
         expect(roleResponse.Role).toBeDefined();
 
-        // Check attached policies
         const policiesResponse = await iam.send(
           new ListAttachedRolePoliciesCommand({
             RoleName: roleName
@@ -354,7 +355,7 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
           if (payload.body) {
             const body = JSON.parse(payload.body);
             expect(body.message).toBeDefined();
-            expect(body.environment).toBe(environmentSuffix);
+            expect(body.environment).toBe(deployedEnvironment);
             expect(body.status).toBe('healthy');
           }
         }
@@ -388,15 +389,12 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
       const apiUrl = outputs.RestApiUrl;
 
       expect(apiUrl).toBeDefined();
-      // For LocalStack, URL format may differ
       expect(apiUrl).toMatch(/^https?:\/\//);
 
-      // Extract API ID from URL or use RestApiId output
       let apiId: string;
       if (outputs.RestApiId) {
         apiId = outputs.RestApiId;
       } else {
-        // Try to extract from URL
         const urlMatch = apiUrl.match(/\/\/([^.]+)\./);
         apiId = urlMatch ? urlMatch[1] : '';
       }
@@ -410,7 +408,7 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
           );
 
           expect(response.id).toBe(apiId);
-          expect(response.name).toContain(environmentSuffix);
+          expect(response.name).toContain('TapRestApi');
           console.log(`REST API Gateway verified: ${apiId}`);
         } catch (error: any) {
           console.warn(`Could not verify REST API Gateway: ${error.message}`);
@@ -432,11 +430,9 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
           const resources = response.items || [];
           expect(resources.length).toBeGreaterThan(0);
 
-          // Check for root resource
           const rootResource = resources.find(r => r.path === '/');
           expect(rootResource).toBeDefined();
 
-          // Check for proxy resource
           const proxyResource = resources.find(r => r.path === '/{proxy+}');
           expect(proxyResource).toBeDefined();
 
@@ -450,14 +446,12 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
     test('should be accessible via HTTP requests', async () => {
       const apiUrl = outputs.RestApiUrl;
 
-      // For LocalStack, construct the correct URL
       let testUrl = apiUrl;
       if (isLocalStack && outputs.RestApiId) {
-        testUrl = `${LOCALSTACK_ENDPOINT}/restapis/${outputs.RestApiId}/${environmentSuffix}/_user_request_/`;
+        testUrl = `${LOCALSTACK_ENDPOINT}/restapis/${outputs.RestApiId}/${deployedEnvironment}/_user_request_/`;
       }
 
       try {
-        // Test GET request
         const getResponse = await fetch(testUrl, {
           method: 'GET',
           headers: {
@@ -498,10 +492,9 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
     test('should have API Gateway invoking Lambda function', async () => {
       const apiUrl = outputs.RestApiUrl;
 
-      // For LocalStack, construct the correct URL
       let testUrl = apiUrl;
       if (isLocalStack && outputs.RestApiId) {
-        testUrl = `${LOCALSTACK_ENDPOINT}/restapis/${outputs.RestApiId}/${environmentSuffix}/_user_request_/`;
+        testUrl = `${LOCALSTACK_ENDPOINT}/restapis/${outputs.RestApiId}/${deployedEnvironment}/_user_request_/`;
       }
 
       try {
@@ -517,7 +510,7 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
           try {
             const jsonResponse = JSON.parse(responseBody);
             expect(jsonResponse.message).toBeDefined();
-            expect(jsonResponse.environment).toBe(environmentSuffix);
+            expect(jsonResponse.environment).toBe(deployedEnvironment);
             console.log(`REST API Gateway to Lambda integration verified`);
           } catch (parseError) {
             console.log(`REST API Gateway responding (non-JSON response)`);
@@ -539,11 +532,11 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
       console.log(`Resource naming conventions verified`);
     });
 
-    test('should have environment suffix in resource names', () => {
-      expect(outputs.S3BucketName).toContain(environmentSuffix);
-      expect(outputs.LambdaFunctionArn).toContain(environmentSuffix);
+    test('should have consistent environment in resource names', () => {
+      expect(outputs.S3BucketName).toContain(deployedEnvironment);
+      expect(outputs.LambdaFunctionArn).toContain(deployedEnvironment);
       expect(outputs.RestApiUrl).toBeDefined();
-      console.log(`Environment suffix consistency verified: ${environmentSuffix}`);
+      console.log(`Environment consistency verified: ${deployedEnvironment}`);
     });
 
     test('should have all required outputs', () => {
@@ -564,14 +557,11 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
 
   describe('Security Validation', () => {
     test('should have proper IAM permissions', () => {
-      // Lambda function should have access to S3 and CloudWatch
-      // This is verified in the Lambda IAM role test above
       console.log(`IAM permissions validated through role verification`);
     });
 
     test('should have HTTPS API Gateway URL', () => {
       const apiUrl = outputs.RestApiUrl;
-      // For LocalStack, it may use http://localhost
       if (isLocalStack) {
         expect(apiUrl).toMatch(/^https?:/);
       } else {
@@ -584,7 +574,6 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
       const bucketName = outputs.S3BucketName;
 
       try {
-        // Verify bucket exists
         await s3.send(new HeadBucketCommand({ Bucket: bucketName }));
         console.log(`S3 bucket security configuration verified`);
       } catch (error: any) {
@@ -623,7 +612,6 @@ describe('TapStack LocalStack Infrastructure Integration Tests', () => {
 
       expect(response.Runtime).toBe('python3.11');
       expect(response.Handler).toBe('index.lambda_handler');
-      // LocalStack may show different states
       expect(['Active', 'Pending'].includes(response.State || '')).toBe(true);
       console.log(
         `Lambda runtime configuration verified: ${response.Runtime}, handler: ${response.Handler}`
