@@ -143,7 +143,7 @@ resource "aws_dms_replication_task" "main" {
   replication_instance_arn = aws_dms_replication_instance.main.replication_instance_arn
   source_endpoint_arn      = aws_dms_endpoint.source.endpoint_arn
   target_endpoint_arn      = aws_dms_endpoint.target.endpoint_arn
-  table_mappings           = jsonencode({
+  table_mappings = jsonencode({
     rules = [
       {
         rule-type = "selection"
@@ -160,25 +160,25 @@ resource "aws_dms_replication_task" "main" {
 
   replication_task_settings = jsonencode({
     TargetMetadata = {
-      TargetSchema         = ""
-      SupportLobs          = true
-      FullLobMode          = false
-      LobChunkSize         = 64
-      LimitedSizeLobMode   = true
-      LobMaxSize           = 32
-      InlineLobMaxSize     = 0
-      LoadMaxFileSize      = 0
-      ParallelLoadThreads  = 0
-      BatchApplyEnabled    = false
+      TargetSchema        = ""
+      SupportLobs         = true
+      FullLobMode         = false
+      LobChunkSize        = 64
+      LimitedSizeLobMode  = true
+      LobMaxSize          = 32
+      InlineLobMaxSize    = 0
+      LoadMaxFileSize     = 0
+      ParallelLoadThreads = 0
+      BatchApplyEnabled   = false
     }
     FullLoadSettings = {
-      TargetTablePrepMode       = "DROP_AND_CREATE"
-      CreatePkAfterFullLoad     = false
-      StopTaskCachedChangesApplied = false
+      TargetTablePrepMode             = "DROP_AND_CREATE"
+      CreatePkAfterFullLoad           = false
+      StopTaskCachedChangesApplied    = false
       StopTaskCachedChangesNotApplied = false
-      MaxFullLoadSubTasks       = 8
-      TransactionConsistencyTimeout = 600
-      CommitRate                = 10000
+      MaxFullLoadSubTasks             = 8
+      TransactionConsistencyTimeout   = 600
+      CommitRate                      = 10000
     }
     Logging = {
       EnableLogging = true
@@ -216,11 +216,11 @@ resource "aws_dms_replication_task" "main" {
       StatementCacheSize            = 50
     }
     ControlTablesSettings = {
-      historyTimeslotInMinutes = 5
-      ControlSchema            = ""
-      HistoryTableEnabled      = false
+      historyTimeslotInMinutes    = 5
+      ControlSchema               = ""
+      HistoryTableEnabled         = false
       SuspendedTablesTableEnabled = false
-      StatusTableEnabled       = false
+      StatusTableEnabled          = false
     }
   })
 
