@@ -235,8 +235,21 @@ class SecurityComponent(pulumi.ComponentResource):
     # LocalStack Community Edition does not support WAF
     # self.waf_web_acl = aws.wafv2.WebAcl(...)
 
+    # LOCALSTACK FIX: Shorten ALB name to avoid 32 character limit
+    # Extract region suffix (e.g., "useast1") and environment (e.g., "prod")
+    # AWS ALB names cannot exceed 32 characters
+    alb_name_parts = name.split("-")
+    if len(alb_name_parts) >= 3:
+        # Format: security-useast1-prod -> sec-ue1-prod
+        region_abbr = alb_name_parts[1][:4]  # useast1 -> usea
+        env_abbr = alb_name_parts[2][:4]     # prod -> prod
+        short_name = f"sec-{region_abbr}-{env_abbr}"
+    else:
+        short_name = name[:20]  # Fallback: just truncate
+
     self.alb = aws.lb.LoadBalancer(
         f"{name}-alb",
+        name=short_name + "-alb",
         security_groups=[self.alb_security_group.id],
         subnets=subnets,
         load_balancer_type="application",
