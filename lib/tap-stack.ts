@@ -84,23 +84,19 @@ export class TapStack extends cdk.Stack {
     // Auto Scaling Group - using CfnAutoScalingGroup for LocalStack compatibility
     // LocalStack doesn't properly return LatestVersionNumber attribute
     const asgName = `tap-asg-${props.environmentSuffix}`;
-    new autoscaling.CfnAutoScalingGroup(
-      this,
-      'WebAutoScalingGroup',
-      {
-        autoScalingGroupName: asgName,
-        minSize: '2',
-        maxSize: '10',
-        desiredCapacity: '2',
-        launchTemplate: {
-          launchTemplateId: launchTemplate.launchTemplateId,
-          version: '$Latest',
-        },
-        vpcZoneIdentifier: vpc.privateSubnets.map(
-          (subnet: ec2.ISubnet) => subnet.subnetId
-        ),
-      }
-    );
+    new autoscaling.CfnAutoScalingGroup(this, 'WebAutoScalingGroup', {
+      autoScalingGroupName: asgName,
+      minSize: '2',
+      maxSize: '10',
+      desiredCapacity: '2',
+      launchTemplate: {
+        launchTemplateId: launchTemplate.launchTemplateId,
+        version: '$Latest',
+      },
+      vpcZoneIdentifier: vpc.privateSubnets.map(
+        (subnet: ec2.ISubnet) => subnet.subnetId
+      ),
+    });
 
     // ElastiCache configuration - using standard cluster for LocalStack compatibility
     const cacheSubnetGroup = new elasticache.CfnSubnetGroup(
@@ -109,7 +105,9 @@ export class TapStack extends cdk.Stack {
       {
         cacheSubnetGroupName: `tap-cache-subnet-${props.environmentSuffix}`,
         description: 'Subnet group for ElastiCache',
-        subnetIds: vpc.privateSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId),
+        subnetIds: vpc.privateSubnets.map(
+          (subnet: ec2.ISubnet) => subnet.subnetId
+        ),
       }
     );
 
@@ -179,13 +177,17 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'PublicSubnetIds', {
-      value: vpc.publicSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId).join(','),
+      value: vpc.publicSubnets
+        .map((subnet: ec2.ISubnet) => subnet.subnetId)
+        .join(','),
       description: 'Public Subnet IDs',
       exportName: `tap-public-subnets-${props.environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'PrivateSubnetIds', {
-      value: vpc.privateSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId).join(','),
+      value: vpc.privateSubnets
+        .map((subnet: ec2.ISubnet) => subnet.subnetId)
+        .join(','),
       description: 'Private Subnet IDs',
       exportName: `tap-private-subnets-${props.environmentSuffix}`,
     });
