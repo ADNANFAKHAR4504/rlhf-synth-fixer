@@ -225,34 +225,35 @@ resource "aws_security_group" "ec2" {
 }
 
 # Security Group for RDS
-resource "aws_security_group" "rds" {
-  name        = "rds-sg-${var.environment}-${var.environment_suffix}"
-  description = "Security group for RDS database"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ec2.id]
-    description     = "Allow MySQL access from EC2"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound traffic"
-  }
-
-  tags = {
-    Name        = "rds-sg-${var.environment}-${var.environment_suffix}"
-    Environment = var.environment
-    Project     = var.project_name
-    ManagedBy   = "terraform"
-  }
-}
+# Commented out: RDS service not enabled in LocalStack
+# resource "aws_security_group" "rds" {
+#   name        = "rds-sg-${var.environment}-${var.environment_suffix}"
+#   description = "Security group for RDS database"
+#   vpc_id      = aws_vpc.main.id
+#
+#   ingress {
+#     from_port       = 3306
+#     to_port         = 3306
+#     protocol        = "tcp"
+#     security_groups = [aws_security_group.ec2.id]
+#     description     = "Allow MySQL access from EC2"
+#   }
+#
+#   egress {
+#     from_port   = 0
+#     to_port     = 0
+#     protocol    = "-1"
+#     cidr_blocks = ["0.0.0.0/0"]
+#     description = "Allow all outbound traffic"
+#   }
+#
+#   tags = {
+#     Name        = "rds-sg-${var.environment}-${var.environment_suffix}"
+#     Environment = var.environment
+#     Project     = var.project_name
+#     ManagedBy   = "terraform"
+#   }
+# }
 
 # IAM Role for EC2 Instances
 resource "aws_iam_role" "ec2" {
@@ -476,47 +477,49 @@ resource "aws_autoscaling_group" "main" {
 }
 
 # RDS Subnet Group
-resource "aws_db_subnet_group" "main" {
-  name       = "rds-subnet-group-${var.environment}-${var.environment_suffix}"
-  subnet_ids = aws_subnet.private[*].id
-
-  tags = {
-    Name        = "rds-subnet-group-${var.environment}-${var.environment_suffix}"
-    Environment = var.environment
-    Project     = var.project_name
-    ManagedBy   = "terraform"
-  }
-}
+# Commented out: RDS service not enabled in LocalStack
+# resource "aws_db_subnet_group" "main" {
+#   name       = "rds-subnet-group-${var.environment}-${var.environment_suffix}"
+#   subnet_ids = aws_subnet.private[*].id
+#
+#   tags = {
+#     Name        = "rds-subnet-group-${var.environment}-${var.environment_suffix}"
+#     Environment = var.environment
+#     Project     = var.project_name
+#     ManagedBy   = "terraform"
+#   }
+# }
 
 # RDS Instance
-resource "aws_db_instance" "main" {
-  identifier             = "rds-${var.environment}-${var.environment_suffix}"
-  engine                 = "mysql"
-  engine_version         = "8.0"
-  instance_class         = var.db_instance_class
-  allocated_storage      = var.db_allocated_storage
-  storage_type           = "gp2"
-  db_name                = var.db_name
-  username               = var.db_username
-  password               = var.db_password
-  parameter_group_name   = "default.mysql8.0"
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [aws_security_group.rds.id]
-
-  multi_az                = false
-  publicly_accessible     = false
-  skip_final_snapshot     = true
-  backup_retention_period = 0
-
-  deletion_protection = false
-
-  tags = {
-    Name        = "rds-${var.environment}-${var.environment_suffix}"
-    Environment = var.environment
-    Project     = var.project_name
-    ManagedBy   = "terraform"
-  }
-}
+# Commented out: RDS service not enabled in LocalStack
+# resource "aws_db_instance" "main" {
+#   identifier             = "rds-${var.environment}-${var.environment_suffix}"
+#   engine                 = "mysql"
+#   engine_version         = "8.0"
+#   instance_class         = var.db_instance_class
+#   allocated_storage      = var.db_allocated_storage
+#   storage_type           = "gp2"
+#   db_name                = var.db_name
+#   username               = var.db_username
+#   password               = var.db_password
+#   parameter_group_name   = "default.mysql8.0"
+#   db_subnet_group_name   = aws_db_subnet_group.main.name
+#   vpc_security_group_ids = [aws_security_group.rds.id]
+#
+#   multi_az                = false
+#   publicly_accessible     = false
+#   skip_final_snapshot     = true
+#   backup_retention_period = 0
+#
+#   deletion_protection = false
+#
+#   tags = {
+#     Name        = "rds-${var.environment}-${var.environment_suffix}"
+#     Environment = var.environment
+#     Project     = var.project_name
+#     ManagedBy   = "terraform"
+#   }
+# }
 
 # S3 Bucket for Application Storage
 resource "aws_s3_bucket" "app" {
@@ -584,10 +587,11 @@ output "alb_dns_name" {
   value       = aws_lb.main.dns_name
 }
 
-output "rds_endpoint" {
-  description = "RDS endpoint"
-  value       = aws_db_instance.main.endpoint
-}
+# Commented out: RDS service not enabled in LocalStack
+# output "rds_endpoint" {
+#   description = "RDS endpoint"
+#   value       = aws_db_instance.main.endpoint
+# }
 
 output "s3_bucket_name" {
   description = "S3 bucket name"
