@@ -1,21 +1,19 @@
-hey so we need to migrate our fintech client's payment infrastructure and its kind of urgent. right now everything is running in a single AZ which is obviously not great - they literally have everything on 10.0.0.0/16 with their payment gateway on some t3.large instances and postgres db on db.t3.medium. if that zone goes down they're completely offline which is terrifying for a payment processor
+got a fintech client that needs to migrate their payment processing setup asap. right now everything is in one availability zone on 10.0.0.0/16 - payment gateway running on t3.large boxes and postgres on db.t3.medium. if that zone dies their whole payment system goes offline which is not acceptable
 
-we need to build them a proper multi-AZ setup in 172.16.0.0/16 before we start the migration. cant take anything down during the move obviously since they process transactions 24/7
+need to build a new multi-AZ environment on 172.16.0.0/16 so we can migrate them over without any downtime. they process payments 24/7 so cant interrupt anything
 
-client wants cloudformation json templates (not yaml) and they're really paranoid about security since they need to stay PCI compliant. also they keep asking about data transfer costs so we should probably use vpc endpoints for s3
+they want cloudformation json templates - their ops team doesnt use yaml. theyre super paranoid about PCI compliance and security. also keep bugging me about data transfer costs so lets use vpc endpoints for s3 stuff
 
-here's what i'm thinking:
+thinking we need a vpc in us-east-1 with 3 public subnets and 3 private subnets across different AZs. each private subnet gets its own nat gateway for redundancy - dont want a single nat gateway being a failure point
 
-need a new vpc in us-east-1 with 3 public and 3 private subnets spread across availability zones. each private subnet needs its own nat gateway for redundancy - cant have a single nat be the point of failure
+for security groups need one for the web tier that accepts port 443 from the internet, and another for the database tier that only accepts postgres traffic on port 5432 from the web tier security group. super important - the database sg cannot have 0.0.0.0/0 allowed or the security team will reject it
 
-for security groups we need one for the web tier (port 443 from internet) and one for the database tier (port 5432 but ONLY from the web tier sg, not from anywhere else). really important that the db sg doesnt allow connections from 0.0.0.0/0 or security team will lose it
+also need an s3 bucket to store migration logs with versioning and encryption enabled. attach an s3 vpc endpoint to avoid data transfer charges when writing logs
 
-also need an s3 bucket for migration logs with versioning turned on and encryption enabled. should use the s3 vpc endpoint to keep costs down
+parameterize the cidr blocks and add an environment suffix parameter so we can spin up copies in dev staging and prod without naming collisions
 
-make sure to parameterize the cidr blocks and add an environment suffix param so we can deploy this to dev/staging/prod without conflicts
+tag everything with Environment Project and Owner tags per company policy
 
-oh and tag everything with Environment, Project, and Owner tags - thats in our tagging policy
+outputs need vpc id all the subnet ids and security group ids because the next step is deploying the actual ec2 instances and rds which will reference these
 
-outputs should include the vpc id, all the subnet ids, and the security group ids since we'll need those for the next phase when we actually deploy the instances
-
-let me know if you need any clarification on the networking setup
+the flow is: internet -> alb in public subnets -> ec2 instances in private subnets -> rds in private subnets. private subnets route outbound through nat gateways. public subnets route through internet gateway
