@@ -19,6 +19,16 @@ else:
 
 REGION = "us-west-2"
 
+# LocalStack endpoint configuration
+# Check if we're running against LocalStack
+LOCALSTACK_ENDPOINT = os.environ.get('AWS_ENDPOINT_URL')
+if LOCALSTACK_ENDPOINT:
+    # LocalStack is being used
+    BOTO_CONFIG = {'endpoint_url': LOCALSTACK_ENDPOINT, 'region_name': REGION}
+else:
+    # Real AWS
+    BOTO_CONFIG = {'region_name': REGION}
+
 
 @mark.describe("TapStack Integration")
 class TestTapStackIntegration(unittest.TestCase):
@@ -28,7 +38,7 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_load_balancer_exists(self):
         alb_dns = flat_outputs.get("LoadBalancerDNS")
         self.assertIsNotNone(alb_dns, "LoadBalancerDNS output is missing")
-        elbv2 = boto3.client("elbv2", region_name=REGION)
+        elbv2 = boto3.client("elbv2", **BOTO_CONFIG)
         try:
             lbs = elbv2.describe_load_balancers()
             # LocalStack compatibility: Check for partial DNS match or any load balancer
@@ -50,7 +60,7 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_rds_instance_exists(self):
         db_endpoint = flat_outputs.get("DatabaseEndpoint")
         self.assertIsNotNone(db_endpoint, "DatabaseEndpoint output is missing")
-        rds = boto3.client("rds", region_name=REGION)
+        rds = boto3.client("rds", **BOTO_CONFIG)
         try:
             instances = rds.describe_db_instances()
             # LocalStack compatibility: Check for partial endpoint match or any DB instance
@@ -72,7 +82,7 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_database_secret_exists(self):
         secret_arn = flat_outputs.get("DatabaseSecretArn")
         self.assertIsNotNone(secret_arn, "DatabaseSecretArn output is missing")
-        sm = boto3.client("secretsmanager", region_name=REGION)
+        sm = boto3.client("secretsmanager", **BOTO_CONFIG)
         try:
             response = sm.describe_secret(SecretId=secret_arn)
             self.assertEqual(response["ARN"], secret_arn)
