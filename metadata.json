@@ -4,11 +4,16 @@
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "cloud_environment_setup_Terraform_HCL_b9f6h1p2t3j4",
+  "team": "synth",
   "startedAt": "2025-07-31T10:01:19.004Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "krishna-devops-ai",
-  "dockerS3Location": ""
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "aws",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2"
+  ],
+  "wave": "P0"
 }
