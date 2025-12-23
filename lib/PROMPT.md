@@ -1,114 +1,105 @@
-# AWS CloudFormation Template Design Challenge
+# CloudFormation Template for Multi-Tier Web App
 
-## Objective
+Need a production-ready CloudFormation template in YAML that sets up a complete web application infrastructure with high availability.
 
-Design a CloudFormation YAML template that deploys a highly available web application stack consisting of:
+## What to Deploy
 
-- Application Load Balancer (ALB)
-- Auto Scaling Group (ASG) with EC2 instances
-- Multi-AZ Amazon RDS database
-- S3 bucket with encryption
-- CloudWatch logging
-- Secure networking (VPC, subnets, NACLs, SGs)
-- IAM roles with least-privilege access to S3, RDS, and CloudWatch
+Core components:
+- Application Load Balancer distributing traffic to EC2 instances
+- Auto Scaling Group managing EC2 fleet (scales based on demand)
+- Multi-AZ RDS database (MySQL or Postgres) that the EC2 instances connect to
+- S3 bucket for application storage that EC2 instances can write to
+- CloudWatch for logs from ALB, EC2, and RDS
+- VPC with proper networking (public/private subnets, NAT, IGW)
+- Security Groups controlling traffic between ALB, EC2, RDS, and S3
+- IAM roles letting EC2 access S3, RDS, and CloudWatch
 
-The infrastructure must handle variable traffic, maintain security best practices, and comply with AWS architecture standards.
+## Service Connectivity
 
-## Technical and Compliance Requirements
+The ALB sits in public subnets and forwards traffic to EC2 instances in private subnets. EC2 instances connect to the RDS database in private subnets through security group rules. EC2 instances write logs to CloudWatch and store files in S3 using IAM role permissions. All database credentials stored in Secrets Manager and accessed by EC2 at runtime.
 
-### 1. Cross-Account Executability
+Internet traffic hits ALB on port 80/443, ALB forwards to EC2 target group, EC2 connects to RDS on port 3306/5432, EC2 pushes logs to CloudWatch Logs, EC2 writes/reads from S3 bucket.
 
-- The template must run unchanged across any AWS account.
-- No hardcoded values — all dynamic values (like account IDs, ARNs, regions) must use pseudo parameters, functions (!Ref, !Sub, !GetAtt), or stack parameters.
-- Never assume a specific account or region setup.
+## Required Parameters
 
-### 2. Region and Availability
-
-- The stack must deploy successfully in any region, but defaults should target `us-east-1`.
-- Must include at least two Availability Zones for high availability.
-
-### 3. Mandatory Parameters
-
-Include this exact parameter block:
+Must include this exact parameter:
 
 ```yaml
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Description: 'Suffix for resource names to support multiple parallel deployments (e.g., PR number from CI/CD)'
+    Description: 'Suffix for resource names to support multiple parallel deployments (like PR number from CI/CD)'
     Default: "pr4056"
     AllowedPattern: '^[a-zA-Z0-9\-]*$'
     ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
 ```
 
-Additional parameters should include (but are not limited to):
+Also need:
+- ProjectName
+- Environment (dev/test/prod)
+- AllowedCidr (which IPs can access the ALB)
+- InstanceType
+- DBName, DBUsername, DBPassword (use NoEcho: true)
+- VpcCidrBlock
 
-- `ProjectName`
-- `Environment` (dev, test, prod)
-- `AllowedCidr`
-- `InstanceType`
-- `DBName`, `DBUsername`, `DBPassword` (use `NoEcho: true`)
-- `VpcCidrBlock`
+## Naming Convention
 
-### 4. Naming Convention (Mandatory)
+Every resource name must follow this pattern:
 
-Every resource must follow this strict naming rule for the `Name` property:
+`Name: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-<resource-type>"`
 
-```yaml
-Name: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-[resource-type]"
-```
+Examples:
+- VPC name: `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc`
+- Public subnet: `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1`
+- EC2 instance: `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-instance`
+- ALB: `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb`
 
-**Examples:**
+This is required for all resources.
 
-- VPC → `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc`
-- Subnet → `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1`
-- EC2 → `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-instance`
-- ALB → `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb`
+## Security Requirements
 
-This rule is non-negotiable — all resources must adhere to it.
+- S3 buckets must use server-side encryption (AES256)
+- CloudWatch Logs for app logs, system logs, and database logs
+- Security Groups restrict access to AllowedCidr range only
+- IAM roles grant minimum permissions needed (no wildcards)
+- RDS in private subnets only, accessible through security groups
 
-### 5. Security and Logging
+## Architecture
 
-- All S3 buckets must use SSE-S3 encryption (AES256).
-- CloudWatch Logs must be configured for application, system, and database logging.
-- Security Groups and NACLs must restrict access to only the `AllowedCidr` range.
-- IAM roles must grant only the minimal necessary permissions for EC2 instances to access S3, RDS, and CloudWatch.
+Networking:
+- VPC spanning 2 availability zones
+- Public subnets (for ALB)
+- Private subnets (for EC2 and RDS)
+- Internet Gateway and NAT Gateways
+- Route tables for each subnet type
 
-## Core Architecture Components
+Compute:
+- Launch Template with user data
+- Auto Scaling Group (min 2 instances for HA)
+- ALB with target group health checks
 
-### Networking Layer
+Database:
+- Multi-AZ RDS for failover
+- Encrypted storage
+- Log exports to CloudWatch
 
-- VPC, public/private subnets across 2 AZs.
-- Internet Gateway, NAT Gateway(s), route tables.
-- Security groups and NACLs for each tier.
+Storage:
+- S3 bucket with versioning
+- Server-side encryption enabled
 
-### Compute Layer
+IAM:
+- Instance profile for EC2
+- Policy allowing S3 read/write
+- Policy allowing CloudWatch Logs write
+- Policy allowing RDS Describe (for connection)
 
-- Launch Template or Launch Configuration.
-- Auto Scaling Group with health checks.
-- Application Load Balancer for traffic distribution.
+## Output
 
-### Database Layer
+Single YAML file that:
+- Deploys without manual steps
+- Works in any AWS account/region (use pseudo parameters)
+- Includes comments for each section
+- Passes `aws cloudformation validate-template`
+- Uses proper CloudFormation intrinsic functions (!Ref, !Sub, !GetAtt)
 
-- Multi-AZ RDS instance (MySQL or PostgreSQL).
-- Encrypted storage and CloudWatch log exports.
-
-### Storage and Logging
-
-- Encrypted S3 bucket (SSE-S3).
-- CloudWatch Log Groups with retention policies.
-- Optional: S3 access logs or ALB access logs.
-
-### IAM and Monitoring
-
-- Instance role and profile.
-- Policies for S3, RDS, CloudWatch.
-- CloudWatch alarms (optional but preferred).
-
-## Output Requirements
-
-- Output a single valid YAML CloudFormation template.
-- Include comments for major sections.
-- Use logical IDs and references clearly.
-- The template must be fully deployable and self-contained — no manual configuration needed.
-- Validate that the syntax is 100% YAML-compliant and passes `aws cloudformation validate-template`.
+The stack should be production-ready - handle failures, scale automatically, log everything, and be secure by default.
