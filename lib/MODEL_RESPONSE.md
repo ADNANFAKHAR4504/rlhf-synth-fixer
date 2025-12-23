@@ -69,13 +69,13 @@ Resources:
         - Key: Name
           Value: !Sub '${AWS::StackName}-NAT-EIP'
 
-  # Public Subnet 1 (us-east-1a)
+  # Public Subnet 1 (First AZ)
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
-      AvailabilityZone: us-east-1a
-      CidrBlock: !Select [0, !Cidr [!Ref VpcCidrBlock, 4, 8]]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.0.0/24'
       MapPublicIpOnLaunch: false # Security best practice - no auto-assign public IPs
       Tags:
         - Key: Name
@@ -83,13 +83,13 @@ Resources:
         - Key: Type
           Value: Public
 
-  # Public Subnet 2 (us-east-1b)
+  # Public Subnet 2 (Second AZ)
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
-      AvailabilityZone: us-east-1b
-      CidrBlock: !Select [1, !Cidr [!Ref VpcCidrBlock, 4, 8]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.1.0/24'
       MapPublicIpOnLaunch: false # Security best practice - no auto-assign public IPs
       Tags:
         - Key: Name
@@ -97,26 +97,26 @@ Resources:
         - Key: Type
           Value: Public
 
-  # Private Subnet 1 (us-east-1a)
+  # Private Subnet 1 (First AZ)
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
-      AvailabilityZone: us-east-1a
-      CidrBlock: !Select [2, !Cidr [!Ref VpcCidrBlock, 4, 8]]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.2.0/24'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-PrivateSubnet1-AZ1a'
         - Key: Type
           Value: Private
 
-  # Private Subnet 2 (us-east-1b)
+  # Private Subnet 2 (Second AZ)
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
-      AvailabilityZone: us-east-1b
-      CidrBlock: !Select [3, !Cidr [!Ref VpcCidrBlock, 4, 8]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.3.0/24'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-PrivateSubnet2-AZ1b'

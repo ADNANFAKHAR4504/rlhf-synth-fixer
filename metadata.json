@@ -17,5 +17,5 @@
     "Security Groups"
   ],
   "provider": "localstack",
-  "wave": "P0"
+  "wave": "P1"
 }

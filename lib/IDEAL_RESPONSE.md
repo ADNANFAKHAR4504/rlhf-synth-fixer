@@ -81,7 +81,7 @@ Resources:
     Properties:
       VpcId: !Ref SecureVPC
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !Select [0, !Cidr [!Ref VpcCidrBlock, 4, 8]]
+      CidrBlock: '10.0.0.0/24'
       MapPublicIpOnLaunch: false # Security best practice - no auto-assign public IPs
       Tags:
         - Key: Name
@@ -95,7 +95,7 @@ Resources:
     Properties:
       VpcId: !Ref SecureVPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Select [1, !Cidr [!Ref VpcCidrBlock, 4, 8]]
+      CidrBlock: '10.0.1.0/24'
       MapPublicIpOnLaunch: false # Security best practice - no auto-assign public IPs
       Tags:
         - Key: Name
@@ -109,7 +109,7 @@ Resources:
     Properties:
       VpcId: !Ref SecureVPC
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !Select [2, !Cidr [!Ref VpcCidrBlock, 4, 8]]
+      CidrBlock: '10.0.2.0/24'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-PrivateSubnet1-AZ1a'
@@ -122,7 +122,7 @@ Resources:
     Properties:
       VpcId: !Ref SecureVPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Select [3, !Cidr [!Ref VpcCidrBlock, 4, 8]]
+      CidrBlock: '10.0.3.0/24'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-PrivateSubnet2-AZ1b'
