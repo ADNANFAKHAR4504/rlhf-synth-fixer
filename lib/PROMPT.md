@@ -1,10 +1,10 @@
 # Task: Cloud Environment Setup
 
 ## Background
-A startup is launching a new API service and needs to set up their initial AWS cloud environment. They require a secure, well-architected foundation that includes networking, compute, and data storage components with proper isolation and monitoring.
+A startup is launching a new API service and needs to set up their initial AWS cloud environment. They require a secure, well-architected foundation where the Application Load Balancer routes traffic to EC2 instances, which connect to an RDS PostgreSQL database for data persistence. VPC Flow Logs stream network telemetry to CloudWatch for monitoring and security analysis.
 
 ## Environment
-AWS cloud environment in us-east-1 region featuring VPC with public and private subnets across two availability zones. Infrastructure includes EC2 instances in private subnets, RDS PostgreSQL database in Multi-AZ configuration, Application Load Balancer in public subnets, and CloudWatch Logs for monitoring. Network architecture uses NAT Gateways for outbound internet access from private subnets.
+AWS cloud environment in us-east-1 region featuring VPC with public and private subnets across two availability zones. Application Load Balancer in public subnets forwards requests to EC2 instances in private subnets, which query RDS PostgreSQL database for application data. NAT Gateways enable EC2 instances to reach the internet for software updates. VPC Flow Logs capture all network traffic and send logs to CloudWatch for real-time monitoring and security analysis.
 
 **CRITICAL PLATFORM OVERRIDE**: The CSV mandates using **CloudFormation with YAML**. The original task description mentions Pulumi/Python, but you MUST ignore that and implement using CloudFormation YAML templates per the CSV specification.
 
