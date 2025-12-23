@@ -16,7 +16,8 @@
     "CloudWatch Logs",
     "IAM",
     "S3",
-    "EventBridge"
+    "EventBridge",
+    "EC2"
   ],
   "wave": "P0"
 }
