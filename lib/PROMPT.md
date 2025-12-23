@@ -98,8 +98,8 @@ Create a complete infrastructure solution using **Terraform with HCL** that depl
 - **Security**: Network isolation, encryption at rest, secure credential management, VPC endpoints
 - **Compliance**: VPC flow logs enabled, ALB access logs stored, audit trail capabilities
 - **Monitoring**: CloudWatch Container Insights enabled, comprehensive logging
-- **Resource Naming**: All resources include environmentSuffix for uniqueness
-- **Destroyability**: All resources can be cleanly destroyed without manual intervention
+- Naming Convention: All resources include environmentSuffix for uniqueness
+- Destroyability: All resources can be cleanly destroyed without manual intervention
 - **Code Quality**: Modular HCL code, well-organized, properly documented
 
 ## What to deliver
