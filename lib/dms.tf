@@ -200,8 +200,6 @@ resource "aws_dms_replication_task" "main" {
           Severity = "LOGGER_SEVERITY_DEFAULT"
         }
       ]
-      CloudWatchLogGroup  = aws_cloudwatch_log_group.dms.name
-      CloudWatchLogStream = "dms-task-${var.environment_suffix}"
     }
     ChangeProcessingTuning = {
       BatchApplyPreserveTransaction = true
