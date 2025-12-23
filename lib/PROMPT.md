@@ -1,50 +1,61 @@
-You are a Principal Cloud Solutions Architect. Your mission is to design and generate the Infrastructure as Code (IaC) for a highly available, scalable, and auto-healing global web application using AWS CDK and TypeScript. This architecture must uniquely use S3 as a live, mounted file system for the web servers.
+Build me infrastructure for a global website that scales automatically and fails over to a secondary region during outages. The key pattern is serving content directly from S3 by mounting an S3 bucket as a file system on web servers.
 
-## Problem Statement
+## What I Need
 
-You are building the infrastructure for a global website that must automatically scale to meet demand and automatically failover to a secondary region during an outage. The core architectural pattern is to serve website content directly from S3 by mounting an S3 bucket as a file system on the web server instances.
+Set up a multi-region web application with these components:
 
-The end-to-end architecture will function as follows:
+**Content Flow**
+- Admin uploads website files to a primary S3 bucket in us-west-2
+- S3 Cross-Region Replication copies content to a secondary bucket in us-east-2 automatically
 
-1.  **Content Management**: An administrator uploads website content to a primary S3 bucket in `us-west-2`. **S3 Cross-Region Replication (CRR)** instantly copies this content to a secondary bucket in `us-east-2`.
-2.  **Web Serving via S3 Mountpoint**: In each region, an **Auto Scaling Group (ASG)** manages EC2 instances. When a new instance launches, it automatically:
-    a. Installs the AWS S3 Mountpoint client.
-    b. Mounts the local region's S3 bucket to its web server root directory (e.g., `/var/www/html`).
-    c. Runs a web server (e.g., Nginx) that serves content directly from this mount point.
-3.  **Load Balancing & Scaling**: An **Application Load Balancer (ALB)** in each region distributes traffic to the EC2 instances. If CPU usage on an instance gets too high, the ASG will automatically launch a new instance to handle the load.
-4.  **Global Failover**: **Route 53** monitors the health of the ALB in each region. If the primary ALB in `us-west-2` becomes unhealthy, all traffic is automatically re-routed to the healthy ALB in `us-east-2`.
+**Web Server Setup**
+- Auto Scaling Groups manage EC2 instances in each region
+- When instances launch, they install the S3 Mountpoint client, mount the regional S3 bucket to /var/www/html, and start Nginx to serve content from that mount
 
-## Constraints
+**Traffic Handling**
+- Application Load Balancer in each region distributes traffic to instances
+- ASG scales based on CPU - launches new instances when load increases
 
-- **IaC Tool**: AWS CDK with TypeScript.
-- **Regions**: `us-west-2` (Primary) and `us-east-2` (Secondary).
-- **Core Pattern**: EC2 instances must use **S3 Mountpoint** to serve web content live from S3.
-- **Networking**: A new VPC with two public and two private subnets must be created in each region, with a single NAT Gateway for the private subnets.
-- **Scaling**: The ASG in each region should have a `max_capacity` of 1 initially, but must include a CPU utilization scaling policy.
+**Failover**
+- Route 53 monitors ALB health in each region
+- If us-west-2 ALB becomes unhealthy, traffic routes to us-east-2 automatically
 
-## Instructions
+## Technical Requirements
 
-Carefully analyze the requirements to build this advanced, scalable, and resilient architecture.
+Use AWS CDK with TypeScript
 
-1.  **Architectural Outline**: In a `<thinking>` block, detail your plan. Explain how the major components—Route 53, ALB, ASG, and S3 Mountpoint—interact to provide scalability (within a region) and resiliency (across regions).
+Regions: us-west-2 as primary, us-east-2 as secondary
 
-2.  **Generate IaC Code**: Generate the complete TypeScript code for the AWS CDK project. Organize the code into logical constructs for clarity.
+Each region needs a new VPC with two public subnets and two private subnets, plus a single NAT Gateway
 
-3.  **Resource Connectivity & Configuration (Crucial)**:
-    - **EC2 Launch Template**: This is critical. The user data script in the Launch Template must perform all the necessary setup on boot: install Nginx, install the S3 Mountpoint client, and execute the command to mount the S3 bucket.
-    - **ALB and ASG Integration**: The ASG should be configured to use the Launch Template. Create a Target Group for the ASG and configure the ALB's listener to forward traffic to this Target Group. The ALB itself should reside in the public subnets, while the EC2 instances launched by the ASG are placed in the private subnets.
-    - **Networking**: The private subnets' route table must have a default route pointing to the NAT Gateway to allow instances to download software packages during setup.
-    - **Route 53 Failover**: The health checks must target the DNS names of the regional ALBs. The DNS records must use a **Failover Routing Policy**.
-    - **Auto Scaling Policy**: Define a `TargetTrackingScalingPolicy` for the ASG based on average CPU utilization (e.g., scale out when CPU exceeds 70%).
+ASG should start with max capacity of 1 but include CPU-based scaling policy
 
-4.  **Security Best Practices**:
-    - **IAM Role**: The EC2 Instance Profile must have a least-privilege IAM policy granting permissions to mount and read from its regional S3 bucket (`s3:GetObject`, `s3:ListBucket`).
-    - **Security Groups**:
-      - **ALB Security Group**: Allows inbound traffic from the internet on port 80/443.
-      - **EC2 Security Group**: Allows inbound traffic on port 80 **only** from the ALB's Security Group. Also, allow SSH on port 22 from a restricted IP range.
+## Key Implementation Details
 
-5.  **Final Output**:
-    - Present the final, complete TypeScript code for the CDK stack(s).
-    - Provide clear inline comments, especially for the user data script in the Launch Template.
-    - Use `CfnOutput` to export the main Route 53 domain name for the application.
-    - Focus more on the IaC part rather than its setup.
+**Launch Template User Data**
+This is critical - the boot script must install Nginx, install S3 Mountpoint client, and mount the S3 bucket. Make sure it handles errors gracefully.
+
+**ALB and ASG Integration**
+Put ALB in public subnets and EC2 instances in private subnets. Create a Target Group for the ASG and wire up the ALB listener to forward to it.
+
+**Networking**
+Private subnet route tables need a default route through the NAT Gateway so instances can download packages during setup.
+
+**Route 53 DNS Failover**
+Health checks should target ALB DNS names. Use Failover Routing Policy for the DNS records.
+
+**Scaling Policy**
+Add a TargetTrackingScalingPolicy on the ASG - scale out when average CPU goes above 70%.
+
+## Security
+
+**IAM Role for EC2**
+Create an Instance Profile with least-privilege permissions - only s3:GetObject and s3:ListBucket on the specific regional bucket.
+
+**Security Groups**
+- ALB SG: Allow inbound HTTP/HTTPS from internet
+- EC2 SG: Allow port 80 only from ALB Security Group. Allow SSH from VPC CIDR only - not from the internet.
+
+## Output
+
+Generate complete TypeScript CDK code with clear comments, especially for the user data script. Export the Route 53 domain name using CfnOutput.
