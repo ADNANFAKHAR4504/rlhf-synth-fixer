@@ -8,7 +8,7 @@
   "startedAt": "2025-12-03T18:10:45-00:00",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "S3",
