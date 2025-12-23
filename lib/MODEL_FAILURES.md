@@ -17,7 +17,7 @@ The model generated a comprehensive CloudFormation template for a production-rea
 
 ---
 
-## 📋 Issues Found
+## Issues Found
 
 | #   | Issue Type                  | Severity | Line(s) | Category              | Status |
 | --- | --------------------------- | -------- | ------- | --------------------- | ------ |
