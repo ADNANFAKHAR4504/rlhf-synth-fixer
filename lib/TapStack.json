@@ -998,7 +998,7 @@
         "DBInstanceIdentifier": {"Fn::Sub": "postgres-${EnvironmentSuffix}"},
         "DBName": "appdb",
         "Engine": "postgres",
-        "EngineVersion": "14",
+        "EngineVersion": "16.1",
         "DBInstanceClass": {"Ref": "DBInstanceClass"},
         "AllocatedStorage": {
           "Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentName"}, "DBAllocatedStorage"]
