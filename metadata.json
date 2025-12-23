@@ -16,13 +16,7 @@
     "DynamoDB",
     "IAM",
     "Lambda",
-    "GuardDuty",
-    "CloudTrail",
-    "EC2",
-    "VPC",
-    "RDS",
-    "ALB",
-    "CloudWatch"
+    "GuardDuty"
   ],
   "provider": "localstack",
   "wave": "P0",
