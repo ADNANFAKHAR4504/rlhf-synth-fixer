@@ -19,5 +19,6 @@
     "rds",
     "cloudwatch",
     "sns"
-  ]
+  ],
+  "wave": "P0"
 }
