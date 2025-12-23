@@ -1001,9 +1001,9 @@ describe('Terraform Disaster Recovery Infrastructure Integration Tests', () => {
   let discovered: any;
 
   beforeAll(() => {
-    console.log(`🌎 Primary Region: ${PRIMARY_REGION}`);
-    console.log(`🌎 Secondary Region: ${SECONDARY_REGION}`);
-    console.log(`🏷️  Environment Suffix: ${ENVIRONMENT_SUFFIX}`);
+    console.log(`Primary Region: ${PRIMARY_REGION}`);
+    console.log(`Secondary Region: ${SECONDARY_REGION}`);
+    console.log(`Environment Suffix: ${ENVIRONMENT_SUFFIX}`);
 
     // Load outputs from Terraform
     outputs = loadInfrastructureOutputs();
