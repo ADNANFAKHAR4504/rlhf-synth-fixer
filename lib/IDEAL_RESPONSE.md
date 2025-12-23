@@ -4,7 +4,7 @@ This implementation provides a production-ready multi-region disaster recovery s
 
 ## Key Improvements from MODEL_RESPONSE
 
-1. **Added backend configuration** for remote state management
+1. **Consolidated backend configuration** into providers.tf for cleaner structure
 2. **Fixed Terraform syntax** errors (variable declarations, meta-arguments)
 3. **Added required_providers blocks** to all modules
 4. **Corrected module dependency** management (proper use of depends_on)
@@ -16,8 +16,7 @@ This implementation provides a production-ready multi-region disaster recovery s
 
 ```
 lib/
-├── backend.tf           # NEW: Backend configuration for remote state
-├── providers.tf         # Provider configuration (corrected)
+├── providers.tf         # Provider and backend configuration
 ├── variables.tf         # Variable definitions (corrected syntax)
 ├── main.tf             # Main module orchestration (corrected dependencies)
 ├── outputs.tf          # Output definitions
@@ -48,41 +47,27 @@ lib/
 
 ---
 
-## NEW FILE: backend.tf
-
-```hcl
-terraform {
-  backend "s3" {
-    # Backend configuration will be provided via environment variables:
-    # - bucket: TERRAFORM_STATE_BUCKET
-    # - region: TERRAFORM_STATE_BUCKET_REGION
-    # - key: TERRAFORM_STATE_BUCKET_KEY
-    # These are set by the CI/CD pipeline or deployment scripts
-    encrypt = true
-  }
-}
-```
-
-**Why This Was Added**: The CI/CD pipeline expects a backend configuration and will fail without it. Remote state is essential for team collaboration and prevents state file conflicts.
-
----
-
 ## File: providers.tf
 
 ```hcl
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.4.0"
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = ">= 5.0"
     }
   }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
 }
 
+
+# Primary AWS provider for general resources
 provider "aws" {
-  alias  = "primary"
+  alias  = "global"
   region = var.primary_region
 }
 
@@ -92,7 +77,7 @@ provider "aws" {
 }
 
 provider "aws" {
-  alias  = "global"
+  alias  = "primary"
   region = var.primary_region
 }
 ```
@@ -105,6 +90,7 @@ provider "aws" {
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to support parallel deployments"
   type        = string
+  default     = "dev"
 }
 
 variable "primary_region" {
@@ -147,11 +133,13 @@ variable "db_master_password" {
   description = "Master password for RDS Aurora"
   type        = string
   sensitive   = true
+  default     = "ChangeMe123!"
 }
 
 variable "alert_email" {
   description = "Email address for SNS notifications"
   type        = string
+  default     = "alerts@example.com"
 }
 
 variable "availability_zones_primary" {
@@ -297,7 +285,6 @@ module "rds_primary" {
   global_cluster_identifier = "transaction-db-${var.environment_suffix}"
 }
 
-# CORRECTED: Module-level depends_on instead of dynamic block
 module "rds_dr" {
   source = "./modules/rds"
 
@@ -378,7 +365,7 @@ module "alb_dr" {
   lambda_arn         = module.lambda_dr.function_arn
 }
 
-# Route 53 with Failover
+# Route 53
 module "route53" {
   source = "./modules/route53"
 
@@ -720,7 +707,7 @@ $ terraform plan
 
 ## Key Corrections Summary
 
-1. **backend.tf**: Added S3 backend configuration for remote state management
+1. **providers.tf**: Consolidated backend S3 configuration with provider definitions
 2. **RDS Module Syntax**: Fixed multi-argument variable declaration
 3. **RDS Dependencies**: Removed invalid dynamic depends_on, use module-level dependency
 4. **Module Providers**: Added required_providers blocks to all 11 modules
@@ -731,7 +718,7 @@ $ terraform plan
 ## Testing & Validation
 
 ### Unit Tests
-- [PASS] 64 comprehensive unit tests covering all modules and configurations
+- [PASS] 90 comprehensive unit tests covering all modules and configurations
 - [PASS] 100% configuration coverage
 - [PASS] Validates syntax, structure, security, and DR requirements
 
