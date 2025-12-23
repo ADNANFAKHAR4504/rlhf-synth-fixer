@@ -2,7 +2,7 @@ Hey team,
 
 We have a fintech startup that needs to process real-time transaction notifications from multiple payment providers. They're getting bombarded with events and need a serverless pipeline that can handle validation, processing, and enrichment of these payment events while maintaining strict compliance and security controls. The business wants everything to be asynchronous, cost-effective, and completely auditable for regulatory purposes.
 
-The system needs to receive events through SNS topics, process them through a series of Lambda functions orchestrated by Step Functions, and store everything in DynamoDB for compliance auditing. They also want proper error handling with dead letter queues and comprehensive monitoring through CloudWatch. All Lambda functions should use container images for flexibility and must run on ARM architecture for cost savings.
+The system receives events through SNS topics, which connect to EventBridge rules that trigger Step Functions workflows. Step Functions orchestrates three Lambda functions in sequence: first, validator checks event schema and data quality; second, processor transforms and standardizes the payment data; third, enricher adds business context like customer segments and risk scores. Each Lambda writes its results to DynamoDB for compliance auditing and reads configuration from environment variables. When Lambda functions fail, they send error details to dedicated SQS dead letter queues for operations team review. CloudWatch Log Groups capture all execution logs from each Lambda, encrypted with customer-managed KMS keys. All Lambda functions use container images from ECR for deployment flexibility and run on ARM64 architecture for cost savings.
 
 Security is paramount - everything needs encryption at rest, KMS keys for CloudWatch logs, and IAM policies that follow strict least privilege principles. The business has had issues with throttling in the past, so they're requiring reserved concurrent execution limits on all Lambda functions. They also want lifecycle policies on ECR repositories to manage container image costs.
 
@@ -18,11 +18,11 @@ Create a serverless event processing pipeline using **Terraform with HCL** that 
 
 2. **Lambda Functions with Container Images**
    - Three Lambda functions: event-validator, event-processor, event-enricher
-   - All functions must use ARM64 architecture (Graviton2 processors)
+   - All functions must use ARM64 architecture for Graviton2 processors
    - Container images stored in private ECR repository
    - Reserved concurrent executions of 100 for each function to prevent throttling
    - Environment variables configured for DynamoDB table name and region
-   - Dead letter queues (SQS) for each Lambda function for error handling
+   - Dead letter queues using SQS for each Lambda function for error handling
 
 3. **Workflow Orchestration**
    - Step Functions Express workflow to orchestrate Lambda functions in sequence
@@ -30,8 +30,8 @@ Create a serverless event processing pipeline using **Terraform with HCL** that 
 
 4. **Data Storage**
    - DynamoDB table with on-demand billing for processed events
-   - Point-in-time recovery (PITR) enabled with 35-day backup retention
-   - Table must be destroyable (no retain policies)
+   - Point-in-time recovery enabled with 35-day backup retention
+   - Table must be destroyable with no retain policies
 
 5. **Container Management**
    - ECR repository for Lambda container images
@@ -66,12 +66,12 @@ Create a serverless event processing pipeline using **Terraform with HCL** that 
 - Use **IAM** for roles and policies
 - Deploy to **us-east-1** region
 - Terraform version 1.5 or higher required
-- All resources must be destroyable (no Retain policies or DeletionProtection)
+- All resources must be destroyable with no Retain policies or DeletionProtection
 - Include proper error handling and monitoring
 
 ### Constraints
 
-- Lambda functions MUST use ARM-based Graviton2 processors (ARM64 architecture)
+- Lambda functions MUST use ARM-based Graviton2 processors with ARM64 architecture
 - DynamoDB tables MUST use point-in-time recovery with 35-day backup retention
 - All Lambda functions MUST have reserved concurrent executions set to 100
 - SNS topics MUST have server-side encryption using AWS managed keys
@@ -84,14 +84,14 @@ Create a serverless event processing pipeline using **Terraform with HCL** that 
 
 ## Success Criteria
 
-- **Functionality**: Events flow from SNS through Lambda functions orchestrated by Step Functions and are stored in DynamoDB
-- **Performance**: Reserved concurrency prevents throttling, ARM64 architecture provides cost optimization
-- **Reliability**: Dead letter queues capture failures, PITR enabled for data recovery
-- **Security**: Server-side encryption on SNS, KMS encryption on CloudWatch logs, least privilege IAM policies
-- **Monitoring**: CloudWatch Log Groups with 30-day retention for all Lambda functions
-- **Resource Naming**: All resources include environmentSuffix for unique identification
-- **Destroyability**: All resources can be destroyed without data retention policies blocking cleanup
-- **Code Quality**: Well-structured HCL, modular design, proper documentation
+- **Functionality**: Events flow from SNS topic to EventBridge, which triggers Step Functions workflow. Step Functions orchestrates three Lambda functions in sequence: validator checks the event structure, processor transforms the data, and enricher adds business metadata. All functions write to a shared DynamoDB table for audit trails. Failed invocations route to dedicated SQS dead letter queues for each function.
+- **Performance**: Reserved concurrency of 100 per Lambda function prevents throttling under load. ARM64 architecture on Graviton2 processors provides cost optimization while maintaining performance.
+- **Reliability**: SQS dead letter queues capture failures from each Lambda function for retry analysis. DynamoDB point-in-time recovery with 35-day retention enables data recovery from corruption or accidental deletes.
+- **Security**: SNS topic encrypts messages at rest using AWS managed keys. CloudWatch Log Groups encrypt all Lambda execution logs using customer-managed KMS keys. IAM roles grant each Lambda function only the specific permissions needed for its DynamoDB operations and log writes.
+- **Monitoring**: CloudWatch Log Groups capture all Lambda execution logs with 30-day retention. Step Functions execution history tracks workflow progress. CloudWatch metrics monitor Lambda invocations, errors, and throttles.
+- **Resource Naming**: All resources include environmentSuffix variable to enable multiple deployments in the same account without naming conflicts.
+- **Destroyability**: All resources can be destroyed cleanly. DynamoDB tables have no retention policies, ECR images follow lifecycle rules, and no resources use deletion protection.
+- **Code Quality**: Well-structured HCL with modular resource definitions, clear variable descriptions, and deployment documentation.
 
 ## What to deliver
 
