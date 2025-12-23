@@ -32,15 +32,15 @@ An ideal IaC response must:
 
 ## Example Implementation Highlights
 
-✅ VPC CIDR: `10.0.0.0/16`  
-✅ **2 Public Subnets** in `us-east-1a` and `us-east-1b`  
-✅ **2 Private Subnets** in `us-east-1a` and `us-east-1b`  
-✅ **Internet Gateway** for public subnets  
-✅ **NAT Gateway** in public subnet for private subnet egress  
-✅ **CloudWatch Log Group** for VPC flow logs with `30` days retention  
-✅ **IAM Role and Policy** with specific log group ARN  
-✅ **Route Tables** and **Associations** for both subnet types  
-✅ All resources tagged with `Environment: Production`
+- VPC CIDR: `10.0.0.0/16`  
+- **2 Public Subnets** in `us-east-1a` and `us-east-1b`  
+- **2 Private Subnets** in `us-east-1a` and `us-east-1b`  
+- **Internet Gateway** for public subnets  
+- **NAT Gateway** in public subnet for private subnet egress  
+- **CloudWatch Log Group** for VPC flow logs with `30` days retention  
+- **IAM Role and Policy** with specific log group ARN  
+- **Route Tables** and **Associations** for both subnet types  
+- All resources tagged with `Environment: Production`
 
 ---
 
