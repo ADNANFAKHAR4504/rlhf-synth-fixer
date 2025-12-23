@@ -4,7 +4,6 @@ runtime:
   options:
     virtualenv: venv
 description: Production-ready serverless S3 to Lambda trigger architecture
-main: tap.py
 template:
   config:
     aws:region:
