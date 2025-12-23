@@ -149,3 +149,53 @@ class TestTapStack(unittest.TestCase):
             "AWS::IAM::Role",
             {"RoleName": "tap-s3-readonly-dev"},
         )
+
+    @mark.it("validates trusted_service and raises on empty string")
+    def test_validation_error_on_empty_service(self):
+        from lib.s3_stack import _validate_trusted_service
+        import pytest
+
+        with pytest.raises(ValueError, match="must be a non-empty string"):
+            _validate_trusted_service("")
+
+    @mark.it("validates trusted_service and raises on invalid format")
+    def test_validation_error_on_invalid_format(self):
+        from lib.s3_stack import _validate_trusted_service
+        import pytest
+
+        with pytest.raises(ValueError, match="must match"):
+            _validate_trusted_service("invalid-service")
+
+    @mark.it("normalizes bucket_prefix by adding trailing slash")
+    def test_normalizes_prefix_with_trailing_slash(self):
+        from lib.s3_stack import S3AccessIamStack
+
+        # Create nested stack directly with prefix without trailing slash
+        nested = S3AccessIamStack(
+            self.app,
+            "TestNestedStack",
+            bucket_name="test-bucket",
+            bucket_prefix="apps/tap",
+            environment_suffix="test",
+        )
+        template = Template.from_stack(nested)
+
+        # Verify that GetObject resource includes the normalized prefix with trailing slash
+        template.has_resource_properties(
+            "AWS::IAM::ManagedPolicy",
+            {
+                "PolicyDocument": {
+                    "Statement": Match.array_with(
+                        [
+                            Match.object_like(
+                                {
+                                    "Resource": Match.array_with(
+                                        [Match.string_like_regexp(r".*apps/tap/\*")]
+                                    )
+                                }
+                            )
+                        ]
+                    )
+                }
+            },
+        )
