@@ -1,0 +1,24 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291356",
+  "team": "synth-2",
+  "startedAt": "2025-08-08T10:26:48.065Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "KMS",
+    "S3",
+    "CloudWatch Logs",
+    "VPC",
+    "RDS",
+    "Lambda",
+    "SQS",
+    "CloudTrail"
+  ]
+}
