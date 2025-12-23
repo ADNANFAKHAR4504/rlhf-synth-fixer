@@ -6,11 +6,11 @@ Hey, I need help setting up a secure AWS infrastructure for our new project. We'
 
 I need to create a secure production environment with these components working together:
 
-- **S3 bucket** that stores sensitive data with AES-256 encryption and blocks all public access. The bucket should enforce SSL-only connections through a bucket policy.
+- **S3 bucket** that stores sensitive data with AES-256 encryption and prevents public access. The bucket should enforce SSL-only connections through a bucket policy.
 
 - **IAM role** that can only read from the S3 bucket above. The role should require MFA for assumption and be restricted to a specific user called "prod-ops-user". 
 
-- **Security group** in a VPC that only allows HTTPS traffic from our office IP range (203.0.113.0/24) and blocks all other inbound traffic. For outbound, it should only allow HTTPS connections.
+- **Security group** in a VPC that only allows HTTPS traffic from our office IP range (203.0.113.0/24) and denies any other inbound connections. For outbound, it should only allow HTTPS connections.
 
 - **VPC** with proper subnets to host the security group and provide network isolation.
 
