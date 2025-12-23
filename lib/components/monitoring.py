@@ -1,3 +1,4 @@
+import os
 import pulumi
 import pulumi_aws as aws
 
@@ -12,6 +13,9 @@ class MonitoringComponent(pulumi.ComponentResource):
             opts=None):
         super().__init__("custom:aws:Monitoring", name, None, opts)
 
+        # Check if running in LocalStack
+        is_localstack = os.getenv('PROVIDER', '').lower() == 'localstack'
+
         # 1. Create SNS Topic
         self.sns_topic = aws.sns.Topic(
             f"{name}-sns-topic",
@@ -20,14 +24,23 @@ class MonitoringComponent(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
-        # 2. Create SNS Subscription (email)
-        self.sns_subscription = aws.sns.TopicSubscription(
-            f"{name}-sns-subscription",
-            topic=self.sns_topic.arn,
-            protocol="email",
-            endpoint=notification_email,
-            opts=pulumi.ResourceOptions(parent=self),
-        )
+        # 2. Create SNS Subscription (skip email for LocalStack - not supported)
+        # LocalStack doesn't support email subscriptions as they require confirmation
+        if not is_localstack:
+            self.sns_subscription = aws.sns.TopicSubscription(
+                f"{name}-sns-subscription",
+                topic=self.sns_topic.arn,
+                protocol="email",
+                endpoint=notification_email,
+                opts=pulumi.ResourceOptions(parent=self),
+            )
+        else:
+            # For LocalStack, create a dummy subscription or skip
+            self.sns_subscription = None
+            pulumi.log.info(
+                "Skipping SNS email subscription in LocalStack (not supported)",
+                resource=self
+            )
 
         # 3. Create alarms for each instance
         self.alarms = []
