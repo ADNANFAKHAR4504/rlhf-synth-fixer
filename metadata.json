@@ -6,11 +6,29 @@
   "po_id": "LS-274773",
   "team": "synth-2",
   "startedAt": "2025-07-29T07:25:34.461Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": [],
-  "wave": "P1"
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "268",
+    "pr": "Pr268"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
 }
