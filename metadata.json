@@ -26,7 +26,13 @@
   ],
   "provider": "localstack",
   "wave": "P0",
-  "migrated_from": {
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": """migrated_from": {
     "po_id": "barun-turing",
     "pr": "Pr2037"
   }
