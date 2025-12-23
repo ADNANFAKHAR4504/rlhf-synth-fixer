@@ -15,16 +15,23 @@
     "s3",
     "codebuild",
     "codepipeline",
-    "iam",
-    "cloudwatch",
-    "sns",
-    "sqs",
     "lambda",
-    "events"
+    "sqs",
+    "sns",
+    "events",
+    "cloudwatch",
+    "iam"
   ],
   "wave": "P0",
   "migrated_from": {
     "po_id": "ls-trainr45",
     "pr": "Pr890"
-  }
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
