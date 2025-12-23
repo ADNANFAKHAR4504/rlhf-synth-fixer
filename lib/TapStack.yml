@@ -43,13 +43,13 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${LambdaFunctionName}'
-      RetentionInDays: 15
+      RetentionInDays: 14
       
   VPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs/${VpcId}'
-      RetentionInDays: 15
+      RetentionInDays: 14
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
