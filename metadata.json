@@ -3,7 +3,7 @@
   "language": "py",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "291355",
+  "po_id": "LS-291355",
   "team": "synth-2",
   "startedAt": "2025-08-07T11:20:02.616Z",
   "subtask": "Application Deployment",
@@ -24,5 +24,9 @@
     "IAM",
     "VPC"
   ],
-  "wave": "P1"
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291355",
+    "pr": "Pr687"
+  }
 }
