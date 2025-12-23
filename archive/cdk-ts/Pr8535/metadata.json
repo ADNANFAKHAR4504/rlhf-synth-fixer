@@ -17,5 +17,12 @@
   "provider": "localstack",
   "complexity": "medium",
   "po_id": "4187",
-  "startedAt": "2025-12-21T10:38:31.000Z"
+  "startedAt": "2025-12-21T10:38:31.000Z",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
