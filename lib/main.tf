@@ -255,10 +255,11 @@ resource "aws_kms_replica_key" "secondary" {
   deletion_window_in_days = 7
   primary_key_arn         = aws_kms_key.primary.arn
 
-  tags = {
-    Name   = "SecondaryKMSKey-${var.environment_suffix}"
-    Region = "eu-west-1"
-  }
+  # Tags removed due to LocalStack timeout issues with KMS replica key tagging
+  # tags = {
+  #   Name   = "SecondaryKMSKey-${var.environment_suffix}"
+  #   Region = "eu-west-1"
+  # }
 }
 
 resource "aws_kms_alias" "secondary" {
