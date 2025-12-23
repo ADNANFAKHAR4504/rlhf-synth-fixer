@@ -92,7 +92,8 @@ describe("Terraform Payment Events Integration Tests", () => {
 
   describe("ECR Repository", () => {
     test("ECR repository URL is in us-east-1 region", () => {
-      expect(outputs.ecr_repository_url).toContain(".dkr.ecr.us-east-1.amazonaws.com/");
+      // Accept both AWS and LocalStack ECR URLs
+      expect(outputs.ecr_repository_url).toMatch(/\.dkr\.ecr\.us-east-1\.(amazonaws\.com|localhost\.localstack\.cloud(:4566)?)\//);
     });
   });
 
@@ -128,8 +129,10 @@ describe("Terraform Payment Events Integration Tests", () => {
       ];
 
       queues.forEach(url => {
-        // Matches: https://sqs.us-east-1.amazonaws.com/123456789012/queue-name
-        expect(url).toMatch(/^https:\/\/sqs\.us-east-1\.amazonaws\.com\/\d+\/.+/);
+        // Matches both AWS and LocalStack SQS URLs:
+        // AWS: https://sqs.us-east-1.amazonaws.com/123456789012/queue-name
+        // LocalStack: http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/queue-name
+        expect(url).toMatch(/^https?:\/\/sqs\.us-east-1\.(amazonaws\.com|localhost\.localstack\.cloud(:4566)?)\/\d+\/.+/);
       });
     });
   });
