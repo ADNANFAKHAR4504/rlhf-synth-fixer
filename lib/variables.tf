@@ -106,7 +106,7 @@ variable "db_password" {
   description = "Database master password"
   type        = string
   sensitive   = true
-  default     = "LocalStackTestPassword123!"
+  default     = "PLACEHOLDER_SET_VIA_ENV"
 }
 
 # Tags
