@@ -29,9 +29,11 @@ describe('TapStack', () => {
     });
 
     test('should use default environment suffix when none provided', () => {
-      const defaultStack = new TapStack(app, 'DefaultStack');
+      // Create a fresh app for this test to avoid multiple synth issue
+      const freshApp = new cdk.App();
+      const defaultStack = new TapStack(freshApp, 'DefaultStack');
       const defaultTemplate = Template.fromStack(defaultStack);
-      
+
       // Should still create resources with default 'dev' suffix
       defaultTemplate.resourceCountIs('AWS::S3::Bucket', 1);
       defaultTemplate.resourceCountIs('AWS::KMS::Key', 1);
