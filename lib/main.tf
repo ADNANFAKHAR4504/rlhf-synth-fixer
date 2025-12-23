@@ -15,8 +15,7 @@ resource "aws_organizations_organization" "main" {
   ]
 
   enabled_policy_types = [
-    "SERVICE_CONTROL_POLICY",
-    "TAG_POLICY"
+    "SERVICE_CONTROL_POLICY"
   ]
 
   feature_set = "ALL"
@@ -830,12 +829,13 @@ resource "aws_iam_role" "config" {
 }
 
 # Attach AWS managed policy for Config
-resource "aws_iam_role_policy_attachment" "config" {
-  role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
-}
+# Note: LocalStack does not include AWS managed policies, using inline policy instead
+# resource "aws_iam_role_policy_attachment" "config" {
+#   role       = aws_iam_role.config.name
+#   policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+# }
 
-# Additional policy for Config to write to S3
+# Config policy with S3 access and Config service permissions
 resource "aws_iam_role_policy" "config_s3" {
   name = "AWSConfigS3Policy-${var.environment_suffix}"
   role = aws_iam_role.config.id
@@ -853,6 +853,16 @@ resource "aws_iam_role_policy" "config_s3" {
           aws_s3_bucket.config.arn,
           "${aws_s3_bucket.config.arn}/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "config:Put*",
+          "config:Get*",
+          "config:List*",
+          "config:Describe*"
+        ]
+        Resource = "*"
       }
     ]
   })
