@@ -146,16 +146,54 @@ git push
 
 ## Allowed Changes
 
+**CRITICAL: ONLY THESE FILES CAN BE MODIFIED - PROTECTED FILES ARE NEVER TOUCHED**
+
 ```
-lib/          ← source code here
-test/         ← tests here
-metadata.json ← task info
-cdk.json      ← CDK settings
-Pulumi.yaml   ← Pulumi settings
-# ⚠️ PROTECTED - NO PERMISSION:
-# - package.json, package-lock.json
-# - tsconfig.json
-# - requirements.txt, pyproject.toml
+✅ ALLOWED FILES ONLY:
+lib/              ← source code here
+test/             ← tests here
+tests/            ← tests here (alternative directory)
+bin/              ← bin directory
+metadata.json     ← task info
+cdk.json          ← CDK settings
+cdktf.json        ← CDKTF settings
+Pulumi.yaml      ← Pulumi settings
+tap.py            ← root level Python file
+tap.ts            ← root level TypeScript file
+*.tf, *.tfvars   ← Terraform files
+
+❌ PROTECTED - NEVER TOUCH IN ANY CONDITION:
+- package.json, package-lock.json
+- tsconfig.json
+- requirements.txt, pyproject.toml
+- scripts/, .github/, .claude/, config/
+- docker-compose.yml, Dockerfile
+- All root config files
+```
+
+**BEFORE ANY FILE MODIFICATION:**
+```bash
+# Validate file is allowed
+is_file_allowed() {
+  local file="$1"
+  [[ "$file" =~ ^lib/ ]] || \
+  [[ "$file" =~ ^test/ ]] || \
+  [[ "$file" =~ ^tests/ ]] || \
+  [[ "$file" =~ ^bin/ ]] || \
+  [[ "$file" == "metadata.json" ]] || \
+  [[ "$file" == "cdk.json" ]] || \
+  [[ "$file" == "cdktf.json" ]] || \
+  [[ "$file" == "Pulumi.yaml" ]] || \
+  [[ "$file" == "tap.py" ]] || \
+  [[ "$file" == "tap.ts" ]] || \
+  [[ "$file" =~ \.(tf|tfvars)$ ]]
+}
+
+# Use before modifying ANY file
+if ! is_file_allowed "$file"; then
+  echo "[SYNTH-AGENT] ❌ BLOCKED: $file is protected - SKIPPING"
+  continue
+fi
 ```
 
 ## Metadata Rules
@@ -296,16 +334,24 @@ ERRORS=$(gh run view "$RUN" --log-failed 2>&1 | head -200)
 | **Claude Review: IDEAL_RESPONSE** (NEW!) | |
 | Archive Folders and Reset Repo | |
 
-**6. Apply fixes**
+**6. Apply fixes (ONLY ALLOWED FILES)**
 
-Based on error, apply appropriate fix:
-- metadata invalid → fix metadata.json
-- **Prompt Quality FAILED** → fix lib/PROMPT.md (see below)
-- build fail → fix code in lib/
-- lint error → fix formatting
-- test fail → fix in test/
-- **coverage low** → ADD tests (don't touch jest.config.js!)
-- **IDEAL_RESPONSE mismatch** → regenerate lib/IDEAL_RESPONSE.md
+**CRITICAL: Before applying any fix, validate the file is allowed!**
+
+Based on error, apply appropriate fix (ONLY to allowed files):
+- metadata invalid → fix metadata.json ✅ (allowed)
+- **Prompt Quality FAILED** → fix lib/PROMPT.md ✅ (allowed - in lib/)
+- build fail → fix code in lib/ ✅ (allowed)
+- lint error → fix formatting in lib/ or test/ ✅ (allowed)
+- test fail → fix in test/ ✅ (allowed)
+- **coverage low** → ADD tests in test/ or tests/ ✅ (allowed - don't touch jest.config.js!)
+- **IDEAL_RESPONSE mismatch** → regenerate lib/IDEAL_RESPONSE.md ✅ (allowed - in lib/)
+
+**NEVER modify:**
+- ❌ package.json, tsconfig.json, requirements.txt, pyproject.toml
+- ❌ jest.config.js (add tests in test/ instead)
+- ❌ scripts/, .github/, .claude/, config/
+- ❌ Any root config files
 
 **Prompt Quality Fix (Claude Review: Prompt Quality job fail):**
 ```
@@ -335,18 +381,19 @@ All lib/ code should be in IDEAL_RESPONSE.md:
 **Coverage Fix Rule:**
 ```
 Coverage below threshold?
-  ❌ DONT: Modify jest.config.js
-  ✅ DO: Add tests in test/ directory
+  ❌ DONT: Modify jest.config.js (it's PROTECTED)
+  ✅ DO: Add tests in test/ or tests/ directory according to lib/ code
   
-  1. Read lib/ source code
-  2. Find uncovered functions
-  3. Add test cases in test/
-  4. Increase actual coverage
+  1. Read lib/ source code to understand what needs testing
+  2. Find uncovered functions/classes/methods
+  3. Add test cases in test/ directory matching lib/ structure
+  4. Match test file names to source files (e.g., lib/tap-stack.ts → test/tap-stack.unit.test.ts)
+  5. Increase actual coverage by adding more test cases
 ```
 
-**7. Show changes and ask user confirmation**
+**7. Show changes (informational only)**
 
-Before committing, show all changes to user:
+Before committing, show all changes (informational):
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -364,21 +411,9 @@ Files changed: 5
   ✎ Modified:  test/tap-stack.unit.test.ts
   ✖ Deleted:   lib/old-file.ts
 ─────────────────────────────────────────────────────────────────────────────
-
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         🤔 CONFIRM COMMIT & PUSH                             ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  [y/yes]  - Commit and push these changes                                    ║
-║  [n/no]   - Cancel and discard changes                                       ║
-║  [d/diff] - Show full diff                                                   ║
-║  [s/skip] - Skip this commit but continue monitoring                         ║
-║  [a/abort]- Abort the entire operation                                       ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-
-Your choice [y/n/d/s/a]: _
 ```
 
-**8. Commit (after user confirmation)**
+**8. Commit automatically (no confirmation required)**
 ```bash
 git add -A
 git commit -m "fix: update files"  # auto-generated based on changes
@@ -566,10 +601,9 @@ Monitor multiple PRs simultaneously:
 2. Monitor all PRs simultaneously  
 3. When any PR fails → collect fixes (don't commit yet)
 4. Wait for all running PRs to complete
-5. When all statuses known → show batch commit prompt
-6. User selects which PRs to commit
+5. When all statuses known → automatically commit all fixes
 
-**Batch Commit Options:**
+**Batch Commit (Automatic):**
 ```
 ╔══════════════════════════════════════════════════════════════╗
 ║        📦 BATCH COMMIT FOR 2 PRs                             ║
@@ -577,17 +611,14 @@ Monitor multiple PRs simultaneously:
 ║  PR #8543: 5 file(s) changed                                 ║
 ║  PR #8544: 3 file(s) changed                                 ║
 ╠══════════════════════════════════════════════════════════════╣
-║  [y/yes]  - Commit and push ALL PRs                          ║
-║  [n/no]   - Skip all commits                                 ║
-║  [8543]   - Only commit PR #8543                             ║
-║  [8543,8544] - Commit selected PRs (comma separated)         ║
+║  [SYNTH-AGENT] Committing all fixes automatically...        ║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
 **Strategy:**
 - If PR #8543 fails and PR #8544 is still running → wait for #8544
-- When both fail → apply fixes to both, then batch commit
-- When one passes and one fails → only fix the failed one
+- When both fail → apply fixes to both, then automatically commit all
+- When one passes and one fails → only fix the failed one and commit automatically
 
 ## Cleanup
 

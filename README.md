@@ -91,8 +91,8 @@ This replaces older instructions that relied on `./scripts/...` helpers.
 3. Restore protected files if needed.
 4. Watch CI/CD jobs in GitHub Actions.
 5. Detect failures, fix code, re-run tests.
-6. Ask you to confirm before committing.
-7. Push changes once everything passes.
+6. Commit and push changes automatically (no confirmation needed).
+7. Wait for CI/CD to pass.
 ```
 
 You will see output similar to:
@@ -101,8 +101,7 @@ You will see output similar to:
 [SYNTH-AGENT] Checking CI/CD status...
 [SYNTH-AGENT] Found errors: Unit Testing failed
 [SYNTH-AGENT] ✓ Fixed: metadata.json
-
-CONFIRM COMMIT & PUSH? (y/n/d)
+[SYNTH-AGENT] ✓ Committing and pushing automatically...
 ```
 
 ## CI/CD Jobs Monitored

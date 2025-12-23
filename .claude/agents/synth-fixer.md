@@ -115,16 +115,55 @@ For major status updates:
 
 ### Core Rules (Read First)
 
+**CRITICAL: PROTECTED FILES ARE NEVER TOUCHED - ONLY ALLOWED FILES ARE FIXED**
+
 1. **scripts/ folder is off-limits** - No reading, writing, or modifying anything in scripts/. This applies everywhere including worktrees.
 
-2. **jest.config.js needs 80%+ coverage** - Before touching this file, verify test coverage meets the threshold. Otherwise treat it as read-only.
+2. **jest.config.js is PROTECTED** - NEVER modify `jest.config.js`. If coverage is low, ADD tests in `test/` or `tests/` directory according to `lib/` code to meet coverage requirements.
 
-3. **Stick to the allowed file list** - Only these can be modified:
-   - `lib/` directory (source files)
-   - `test/` directory (test files)
-   - `metadata.json`, `execution-output.md`, `cdk.json`, `Pulumi.yaml`
-   - **NOTHING ELSE!**
-   - ⚠️ **PROTECTED (DO NOT MODIFY):** `package.json`, `package-lock.json`, `tsconfig.json`, `requirements.txt`, `pyproject.toml`
+3. **ONLY ALLOWED FILES CAN BE MODIFIED** - Strict whitelist approach:
+   - ✅ **ALLOWED:** `lib/` directory (source files)
+   - ✅ **ALLOWED:** `test/` directory (test files - add tests here to meet coverage)
+   - ✅ **ALLOWED:** `tests/` directory (test files - add tests here to meet coverage)
+   - ✅ **ALLOWED:** `bin/` directory
+   - ✅ **ALLOWED:** `metadata.json`, `cdk.json`, `cdktf.json`, `Pulumi.yaml`
+   - ✅ **ALLOWED:** `tap.py`, `tap.ts` (root level files)
+   - ❌ **PROTECTED - NEVER TOUCH:** `package.json`, `package-lock.json`, `tsconfig.json`, `requirements.txt`, `pyproject.toml`
+   - ❌ **PROTECTED - NEVER TOUCH:** `jest.config.js` (add tests in test/ or tests/ instead)
+   - ❌ **PROTECTED - NEVER TOUCH:** All files in `scripts/`, `.github/`, `.claude/`, `config/`
+   - ❌ **PROTECTED - NEVER TOUCH:** All root config files (docker-compose.yml, Dockerfile, etc.)
+
+**BEFORE ANY FILE MODIFICATION, VALIDATE IT'S ALLOWED:**
+```bash
+# Function to check if file can be modified
+is_file_allowed() {
+  local file="$1"
+  
+  # Allowed patterns
+  if [[ "$file" =~ ^lib/ ]] || \
+     [[ "$file" =~ ^test/ ]] || \
+     [[ "$file" =~ ^tests/ ]] || \
+     [[ "$file" =~ ^bin/ ]] || \
+     [[ "$file" == "metadata.json" ]] || \
+     [[ "$file" == "cdk.json" ]] || \
+     [[ "$file" == "cdktf.json" ]] || \
+     [[ "$file" == "Pulumi.yaml" ]] || \
+     [[ "$file" == "tap.py" ]] || \
+     [[ "$file" == "tap.ts" ]] || \
+     [[ "$file" =~ \.(tf|tfvars)$ ]]; then
+    return 0  # Allowed
+  fi
+  
+  # Protected - REJECT
+  return 1  # Not allowed
+}
+
+# Use before ANY file modification
+if ! is_file_allowed "$file"; then
+  echo "[SYNTH-AGENT] [PR #$PR] ❌ BLOCKED: $file is protected - SKIPPING"
+  continue
+fi
+```
 
 ### Off-Limits Directories
 
@@ -216,6 +255,7 @@ blocked_paths:
     - config/
     - lib/              # Source files (in PR dirs only)
     - test/             # Test files (in PR dirs only)
+    - tests/            # Test files (in PR dirs only, alternative directory)
     - archive/
     - archive-localstack/
     - cdktf.out/
@@ -263,7 +303,15 @@ blocked_paths:
 
 ### Auto-Revert Protected Files from Main
 
-**CRITICAL**: If ANY protected file appears in PR "Files changed" section, IMMEDIATELY restore it from main branch.
+**CRITICAL RULE: PROTECTED FILES ARE NEVER MODIFIED - ONLY RESTORED**
+
+**IMPORTANT**: 
+- ❌ **NEVER** modify protected files to "fix" them
+- ❌ **NEVER** try to fix errors in protected files
+- ✅ **ONLY** restore protected files from main if they appear in PR (to undo unwanted changes)
+- ✅ **ONLY** fix allowed files (lib/, test/, tests/, metadata.json, etc.)
+
+If ANY protected file appears in PR "Files changed" section, IMMEDIATELY restore it from main branch (do NOT try to fix it).
 
 ```bash
 # Step 1: Check for unwanted changes in protected files
@@ -364,10 +412,11 @@ check_protected_files() {
 
 **Workflow:**
 1. Before any fix - check PR "Files changed" for protected files
-2. If protected file found → `git checkout main -- <file>`
+2. If protected file found → **RESTORE ONLY** (do NOT fix): `git checkout main -- <file>`
 3. Commit restoration with message "Restore protected files from main"
 4. Push changes
-5. Continue with normal fix workflow
+5. Continue with normal fix workflow (ONLY fixing allowed files)
+6. **NEVER** attempt to fix errors in protected files - skip them entirely
 
 **Example Log Output:**
 ```
@@ -393,21 +442,14 @@ permitted_paths:
   editable:
     - lib/               # IaC source code
     - test/              # Test files
+    - tests/             # Test files (alternative directory)
     - metadata.json      # Task info
-    - execution-output.md # Deploy logs
     - cdk.json           # CDK settings
     # ⚠️ tsconfig.json is NOT editable - NO PERMISSION!
     - Pulumi.yaml        # Pulumi settings
     - *.tf               # Terraform
-    - *.py               # Python (in lib/ or test/)
+    - *.py               # Python (in lib/, test/, or tests/)
     # ⚠️ package.json is NOT editable - NO PERMISSION!
-
-  # jest.config.js has special rules
-  # See coverage check section below
-  jest_rules:
-    file: jest.config.js
-    condition: "coverage >= 80%"
-    threshold: 80
 
   # Always blocked - even in worktree
   always_blocked:
@@ -415,89 +457,43 @@ permitted_paths:
     - .github/           # Workflows
     - .claude/           # Agent files
     - config/            # Schemas
+    - jest.config.js     # NEVER modify - add tests in test/ or tests/ instead
 ```
 
 ### Jest Config Rules
 
-**jest.config.js has coverage requirements**
+**CRITICAL: jest.config.js is PROTECTED - NEVER MODIFY IT**
 
-Before modifying jest.config.js, these conditions must be met:
-
-1. Coverage data exists and shows 80%+ line coverage
-2. The change is needed for tests to run (not cosmetic)
-3. Tests are actually producing coverage output
-
-```bash
-#!/bin/bash
-# Coverage check for jest.config.js modifications
-
-check_jest_permission() {
-  local dir="$1"
-
-  #
-  # Step 1: Check if coverage data exists
-  #
-
-  if [[ ! -d "$dir/coverage" ]] && [[ ! -f "$dir/coverage/coverage-summary.json" ]]; then
-    echo "BLOCKED: No coverage data - run tests first"
-    return 1
-  fi
-
-  #
-  # Step 2: Verify coverage is 80%+
-  #
-
-  if [[ -f "$dir/coverage/coverage-summary.json" ]]; then
-    pct=$(jq -r '.total.lines.pct // 0' "$dir/coverage/coverage-summary.json" 2>/dev/null)
-
-    # Float comparison - use bc if available, otherwise awk
-    is_low() {
-      local val="$1"
-      if command -v bc &>/dev/null; then
-        [[ $(echo "$val < 80" | bc -l 2>/dev/null) -eq 1 ]]
-      else
-        awk -v v="$val" 'BEGIN { exit !(v < 80) }'
-      fi
-    }
-
-    if is_low "$pct"; then
-      echo "BLOCKED: Coverage ${pct}% is below 80%"
-      echo "Improve test coverage before modifying jest.config.js"
-      return 1
-    fi
-
-    echo "OK: Coverage ${pct}%"
-  else
-    echo "BLOCKED: coverage-summary.json missing"
-    return 1
-  fi
-
-  return 0
-}
-```
-
-**If coverage is below 80% - ADD TESTS instead of modifying jest.config.js!**
+**If coverage is low - ADD TESTS in `test/` or `tests/` directory instead!**
 
 ```bash
 # Coverage kam hai? Tests add karo!
 # 1. lib/ mein code dekho
-# 2. test/ mein matching test file dhundho
-# 3. Missing tests add karo
+# 2. test/ ya tests/ mein matching test file dhundho ya naya banao
+# 3. Missing tests add karo according to lib/ code
 
 # Example: lib/tap-stack.ts ke liye
-# test/tap-stack.unit.test.ts mein tests add karo
+# test/tap-stack.unit.test.ts ya tests/tap-stack.unit.test.ts mein tests add karo
 ```
 
 **Test Writing Rules:**
-1. Read `lib/` source code first
-2. Identify untested functions/classes
-3. Add test cases in `test/` directory
+1. Read `lib/` source code first to understand what needs testing
+2. Identify untested functions/classes/methods
+3. Add test cases in `test/` or `tests/` directory matching the structure of `lib/`
 4. Cover edge cases, error handling, happy paths
 5. Run tests to verify coverage increases
+6. Match test file names to source files (e.g., `lib/tap-stack.ts` → `test/tap-stack.unit.test.ts` or `tests/tap-stack.unit.test.ts`)
 
 **DO NOT:**
-- ❌ Modify jest.config.js to lower coverage threshold
+- ❌ Modify jest.config.js (it's PROTECTED)
+- ❌ Lower coverage threshold in jest.config.js
 - ❌ Skip tests or mark as .skip()
+- ❌ Change jest.config.js settings
+
+**ALWAYS:**
+- ✅ Add tests in `test/` or `tests/` directory
+- ✅ Write tests according to `lib/` code structure
+- ✅ Increase actual test coverage by adding more test cases
 - ❌ Mock everything to fake coverage
 - ❌ Work around by editing jest config
 
@@ -580,7 +576,6 @@ check_path() {
     # Check specific files - VERY LIMITED!
     OK_FILES=(
       "metadata.json"
-      "execution-output.md"
       "cdk.json"
       "Pulumi.yaml"
     )
@@ -706,10 +701,10 @@ can_modify:
   folders:
     - lib/                    # Source code
     - test/                   # Tests
+    - tests/                  # Tests (alternative directory)
 
   files:
     - metadata.json           # Task info
-    - execution-output.md     # Deploy logs
     - cdk.json                # CDK config
     - Pulumi.yaml             # Pulumi config
     # ⚠️ tsconfig.json - NOT EDITABLE!
@@ -2009,6 +2004,46 @@ echo " APPLYING BATCH FIXES"
 echo ""
 echo ""
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# CRITICAL: File Validation Function - PROTECTED FILES ARE NEVER TOUCHED
+# ═══════════════════════════════════════════════════════════════════════════════
+
+is_file_allowed() {
+  local file="$1"
+  
+  # ✅ ALLOWED FILES ONLY
+  if [[ "$file" =~ ^lib/ ]] || \
+     [[ "$file" =~ ^test/ ]] || \
+     [[ "$file" =~ ^tests/ ]] || \
+     [[ "$file" =~ ^bin/ ]] || \
+     [[ "$file" == "metadata.json" ]] || \
+     [[ "$file" == "cdk.json" ]] || \
+     [[ "$file" == "cdktf.json" ]] || \
+     [[ "$file" == "Pulumi.yaml" ]] || \
+     [[ "$file" == "tap.py" ]] || \
+     [[ "$file" == "tap.ts" ]] || \
+     [[ "$file" =~ \.(tf|tfvars)$ ]]; then
+    return 0  # ✅ ALLOWED
+  fi
+  
+  # ❌ PROTECTED - REJECT IMMEDIATELY
+  return 1  # ❌ NOT ALLOWED
+}
+
+# Function to validate file before modification
+validate_file_before_modify() {
+  local file="$1"
+  local context="$2"
+  
+  if ! is_file_allowed "$file"; then
+    echo "[SYNTH-AGENT] [PR #$PR_NUMBER] ❌ BLOCKED: Cannot modify protected file: $file"
+    echo "[SYNTH-AGENT] [PR #$PR_NUMBER]    Context: $context"
+    echo "[SYNTH-AGENT] [PR #$PR_NUMBER]    ⚠️ SKIPPING this modification"
+    return 1
+  fi
+  return 0
+}
+
 # Track applied fixes
 APPLIED_FIXES=()
 
@@ -3123,7 +3158,7 @@ git push --force origin "$PR_BRANCH"
 
 ### Step 13: Restore Missing Files from Archive
 
-When lib/, test/, or other required files are missing, restore from archive using poid:
+When lib/, test/, tests/, or other required files are missing, restore from archive using poid:
 
 ```bash
 cd "$WORKTREE_PATH"
@@ -3607,8 +3642,8 @@ When monitoring multiple PRs simultaneously, the agent uses a batch strategy:
 2. **Monitor Phase**: Check CI/CD status of all PRs simultaneously
 3. **Collect Phase**: When any PR fails, collect fixes but don't commit yet
 4. **Wait Phase**: Continue monitoring until all running PRs complete
-5. **Batch Commit Phase**: When all statuses known, prompt user for batch commit
-6. **User Selection**: User chooses which PRs to commit
+5. **Batch Commit Phase**: When all statuses known, automatically commit all fixes
+6. **Auto Commit**: All fixes are committed automatically without user input
 
 ### Status Display
 
@@ -3629,9 +3664,9 @@ PR #8545:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Batch Commit Prompt
+### Batch Commit (Automatic)
 
-When all PRs have completed (no more running), user is prompted:
+When all PRs have completed (no more running), automatically commit all fixes:
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -3640,25 +3675,15 @@ When all PRs have completed (no more running), user is prompted:
 ║  PR #8543: 5 file(s) changed                                                 ║
 ║  PR #8544: 3 file(s) changed                                                 ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
-║  [y/yes]  - Commit and push ALL PRs                                          ║
-║  [n/no]   - Skip all commits                                                 ║
-║  [8543]   - Only commit PR #8543                                             ║
-║  [8543,8544] - Commit selected PRs (comma separated)                         ║
+║  [SYNTH-AGENT] Committing all fixes automatically...                         ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
-### User Input Options
+**Note:** All fixes are committed automatically without user confirmation.
 
-| Input | Action |
-|-------|--------|
-| `y` / `yes` | Commit and push ALL failed PRs |
-| `n` / `no` | Skip all commits, continue monitoring |
-| `8543` | Only commit PR #8543 |
-| `8543,8544` | Commit multiple selected PRs |
+## Automatic Commit (No Confirmation Required)
 
-## User Confirmation Before Commit
-
-Before any commit, the agent shows all changes and asks for user confirmation:
+The agent automatically commits changes without asking for user confirmation. Changes are shown for informational purposes only:
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -3677,35 +3702,8 @@ Files changed: 5
   ✖ Deleted:   lib/old-file.ts
 ─────────────────────────────────────────────────────────────────────────────
 
-Diff Preview (first 40 lines):
-─────────────────────────────────────────────────────────────────────────────
-+ const isLocalStack = process.env.CDK_LOCAL === "true";
-- const oldCode = "removed";
-...
-─────────────────────────────────────────────────────────────────────────────
-
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         🤔 CONFIRM COMMIT & PUSH                             ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  [y/yes]  - Commit and push these changes                                    ║
-║  [n/no]   - Cancel and discard changes                                       ║
-║  [d/diff] - Show full diff                                                   ║
-║  [s/skip] - Skip this commit but continue monitoring                         ║
-║  [a/abort]- Abort the entire operation                                       ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-
-Your choice [y/n/d/s/a]: _
+[SYNTH-AGENT] [PR #8543] ✓ Committing changes automatically...
 ```
-
-### Confirmation Options
-
-| Input | Action |
-|-------|--------|
-| `y` / `yes` | Commit and push changes |
-| `n` / `no` | Cancel and discard all changes |
-| `d` / `diff` | Show full diff (scrollable) |
-| `s` / `skip` | Skip commit but continue monitoring |
-| `a` / `abort` | Stop all operations |
 
 ### Strategy Logic
 

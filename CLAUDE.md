@@ -19,7 +19,9 @@ Message should describe what changed, not who did it.
 
 ## Paths
 
-**Don't touch:**
+**CRITICAL: PROTECTED FILES ARE NEVER TOUCHED - ONLY ALLOWED FILES ARE FIXED**
+
+**Don't touch (PROTECTED - NEVER MODIFY):**
 - scripts/
 - .github/
 - .claude/
@@ -27,17 +29,28 @@ Message should describe what changed, not who did it.
 - node_modules/
 - dist/
 - .git/
-
-**Can modify (in worktree):**
-- lib/
-- test/
-- metadata.json
-- execution-output.md
-- package.json (deps only)
+- package.json, package-lock.json
 - tsconfig.json
-- cdk.json
-- Pulumi.yaml
-- jest.config.js (if coverage >= 80%)
+- requirements.txt, pyproject.toml
+- docker-compose.yml, Dockerfile
+- jest.config.js ❌ (NEVER modify - add tests in test/ instead)
+- All root config files
+
+**Can modify (ALLOWED FILES ONLY):**
+- lib/ ✅
+- test/ ✅ (add tests here to meet coverage requirements)
+- tests/ ✅ (add tests here to meet coverage requirements)
+- bin/ ✅
+- metadata.json ✅
+- cdk.json ✅
+- cdktf.json ✅
+- Pulumi.yaml ✅
+- tap.py ✅
+- tap.ts ✅
+
+**Coverage Rule:** If coverage is low, ADD tests in `test/` or `tests/` directory according to `lib/` code. NEVER modify `jest.config.js`.
+
+**BEFORE modifying ANY file, validate it's in the allowed list above.**
 
 ## Commands
 
