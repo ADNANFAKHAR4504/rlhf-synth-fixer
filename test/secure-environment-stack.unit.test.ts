@@ -324,22 +324,14 @@ describe('SecureEnvironmentStack', () => {
     });
 
     test('should configure EC2 instance with encrypted EBS volume', () => {
-      // EC2 Instance uses LaunchTemplate with encrypted EBS
+      // EC2 Instance should have encrypted EBS configuration directly
       const instances = template.findResources('AWS::EC2::Instance');
       expect(Object.keys(instances).length).toBeGreaterThan(0);
       const instance = Object.values(instances)[0];
       expect(instance).toBeDefined();
-      // LaunchTemplate should have encrypted EBS configuration
-      const launchTemplates = template.findResources(
-        'AWS::EC2::LaunchTemplate'
-      );
-      const launchTemplate = Object.values(launchTemplates)[0];
-      if (
-        launchTemplate &&
-        launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings
-      ) {
-        const blockDevice =
-          launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings[0];
+      // Check EC2 Instance has BlockDeviceMappings with encrypted EBS
+      if (instance.Properties.BlockDeviceMappings) {
+        const blockDevice = instance.Properties.BlockDeviceMappings[0];
         expect(blockDevice.DeviceName).toBe('/dev/xvda');
         expect(blockDevice.Ebs.Encrypted).toBe(true);
         expect(blockDevice.Ebs.VolumeSize).toBe(20);
@@ -348,11 +340,10 @@ describe('SecureEnvironmentStack', () => {
     });
 
     test('should enable IMDSv2 on EC2 instance', () => {
-      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-        LaunchTemplateData: Match.objectLike({
-          MetadataOptions: Match.objectLike({
-            HttpTokens: 'required',
-          }),
+      template.hasResourceProperties('AWS::EC2::Instance', {
+        MetadataOptions: Match.objectLike({
+          HttpTokens: 'required',
+          HttpEndpoint: 'enabled',
         }),
       });
     });

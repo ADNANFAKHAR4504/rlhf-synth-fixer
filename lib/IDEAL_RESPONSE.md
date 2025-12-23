@@ -6,8 +6,8 @@ I'll create a secure AWS environment using CDK TypeScript with all the requested
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 
@@ -46,7 +46,7 @@ export class SecureEnvironmentStack extends cdk.Stack {
       enableDnsSupport: true,
     });
 
-    // Create KMS key for encryption with deletion policy
+    // Create KMS key for encryption
     const encryptionKey = new kms.Key(this, 'OrgEncryptionKey', {
       description: `org-encryption-key-${environmentSuffix}`,
       enableKeyRotation: true,
@@ -114,9 +114,9 @@ export class SecureEnvironmentStack extends cdk.Stack {
       'Allow SSH from specific IP range'
     );
 
-    // Create EC2 Key Pair
+    // Create EC2 Key Pair with unique name to avoid replacement issues
     const keyPair = new ec2.CfnKeyPair(this, 'OrgKeyPair', {
-      keyName: `org-keypair-${environmentSuffix}`,
+      keyName: `org-keypair-${environmentSuffix}-${cdk.Aws.STACK_NAME}`,
     });
 
     // Store key pair name in SSM Parameter
@@ -126,34 +126,60 @@ export class SecureEnvironmentStack extends cdk.Stack {
       description: `EC2 Key Pair name for ${environmentSuffix} environment`,
     });
 
-    // Create EC2 instance in private subnet
-    const ec2Instance = new ec2.Instance(this, 'OrgSecureInstance', {
-      instanceName: `org-secure-instance-${environmentSuffix}`,
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-      vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroup: sshSecurityGroup,
-      role: ec2Role,
+    // Get Amazon Linux 2023 AMI
+    const ami = ec2.MachineImage.latestAmazonLinux2023();
+    const amiId = ami.getImage(this).imageId;
+
+    // Get private subnets for the instance
+    const privateSubnets = vpc.selectSubnets({
+      subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+    });
+
+    // Create instance profile for the EC2 instance
+    const instanceProfile = new iam.CfnInstanceProfile(
+      this,
+      'OrgSecureInstanceProfile',
+      {
+        instanceProfileName: `org-secure-instance-profile-${environmentSuffix}`,
+        roles: [ec2Role.roleName],
+      }
+    );
+
+    // Create EC2 instance using CfnInstance for LocalStack compatibility
+    // LocalStack doesn't support LaunchTemplate.LatestVersionNumber attribute
+    const ec2Instance = new ec2.CfnInstance(this, 'OrgSecureInstance', {
+      instanceType: 't3.micro',
+      imageId: amiId,
+      subnetId: privateSubnets.subnetIds[0],
+      securityGroupIds: [sshSecurityGroup.securityGroupId],
+      iamInstanceProfile: instanceProfile.instanceProfileName,
       keyName: keyPair.keyName,
-      blockDevices: [
+      blockDeviceMappings: [
         {
           deviceName: '/dev/xvda',
-          volume: ec2.BlockDeviceVolume.ebs(20, {
-            volumeType: ec2.EbsDeviceVolumeType.GP3,
+          ebs: {
+            volumeSize: 20,
+            volumeType: 'gp3',
             encrypted: true,
-            kmsKey: encryptionKey,
-          }),
+            kmsKeyId: encryptionKey.keyId,
+          },
         },
       ],
-      requireImdsv2: true,
-      detailedMonitoring: true,
+      monitoring: true,
+      metadataOptions: {
+        httpTokens: 'required',
+        httpEndpoint: 'enabled',
+      },
+      tags: [
+        {
+          key: 'Name',
+          value: `org-secure-instance-${environmentSuffix}`,
+        },
+      ],
     });
+
+    // Add dependency on instance profile
+    ec2Instance.addDependency(instanceProfile);
 
     // Create S3 bucket with encryption and versioning
     const secureS3Bucket = new s3.Bucket(this, 'OrgSecureS3Bucket', {
@@ -226,7 +252,7 @@ export class SecureEnvironmentStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'InstanceId', {
-      value: ec2Instance.instanceId,
+      value: ec2Instance.ref,
       description: 'EC2 Instance ID',
       exportName: `org-instance-id-${environmentSuffix}`,
     });
@@ -304,12 +330,12 @@ new TapStack(app, stackName, {
 ## Key Features
 
 1. **VPC Configuration**: Multi-AZ deployment with public and private subnets
-2. **Security**: 
+2. **Security**:
    - KMS encryption for all data at rest
    - IMDSv2 enforced on EC2
    - Security groups with least privilege
    - SSL enforcement on S3
-3. **Compliance**: 
+3. **Compliance**:
    - Security Hub compliant configurations
    - Detailed monitoring and logging
    - ABAC support through S3 Access Points
@@ -320,5 +346,9 @@ new TapStack(app, stackName, {
    - SSM Parameter Store for configuration
 5. **High Availability**: Resources deployed across multiple AZs
 6. **Latest AWS Features**: S3 Access Points with ABAC for fine-grained access control
+7. **LocalStack Compatibility**:
+   - Uses CfnInstance instead of high-level Instance construct
+   - Avoids LaunchTemplate.LatestVersionNumber attribute not supported by LocalStack
+   - Direct EC2 instance creation with explicit AMI and subnet references
 
-The solution is fully deployable with `cdk deploy` and passes all validation tests.
+The solution is fully deployable with `cdk deploy` and passes all validation tests, including LocalStack deployments.

@@ -121,34 +121,60 @@ export class SecureEnvironmentStack extends cdk.Stack {
       description: `EC2 Key Pair name for ${environmentSuffix} environment`,
     });
 
-    // Create EC2 instance in private subnet
-    const ec2Instance = new ec2.Instance(this, 'OrgSecureInstance', {
-      instanceName: `org-secure-instance-${environmentSuffix}`,
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-      vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroup: sshSecurityGroup,
-      role: ec2Role,
+    // Get Amazon Linux 2023 AMI
+    const ami = ec2.MachineImage.latestAmazonLinux2023();
+    const amiId = ami.getImage(this).imageId;
+
+    // Get private subnets for the instance
+    const privateSubnets = vpc.selectSubnets({
+      subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+    });
+
+    // Create instance profile for the EC2 instance
+    const instanceProfile = new iam.CfnInstanceProfile(
+      this,
+      'OrgSecureInstanceProfile',
+      {
+        instanceProfileName: `org-secure-instance-profile-${environmentSuffix}`,
+        roles: [ec2Role.roleName],
+      }
+    );
+
+    // Create EC2 instance using CfnInstance for LocalStack compatibility
+    // LocalStack doesn't support LaunchTemplate.LatestVersionNumber attribute
+    const ec2Instance = new ec2.CfnInstance(this, 'OrgSecureInstance', {
+      instanceType: 't3.micro',
+      imageId: amiId,
+      subnetId: privateSubnets.subnetIds[0],
+      securityGroupIds: [sshSecurityGroup.securityGroupId],
+      iamInstanceProfile: instanceProfile.instanceProfileName,
       keyName: keyPair.keyName,
-      blockDevices: [
+      blockDeviceMappings: [
         {
           deviceName: '/dev/xvda',
-          volume: ec2.BlockDeviceVolume.ebs(20, {
-            volumeType: ec2.EbsDeviceVolumeType.GP3,
+          ebs: {
+            volumeSize: 20,
+            volumeType: 'gp3',
             encrypted: true,
-            kmsKey: encryptionKey,
-          }),
+            kmsKeyId: encryptionKey.keyId,
+          },
         },
       ],
-      requireImdsv2: true,
-      detailedMonitoring: true,
+      monitoring: true,
+      metadataOptions: {
+        httpTokens: 'required',
+        httpEndpoint: 'enabled',
+      },
+      tags: [
+        {
+          key: 'Name',
+          value: `org-secure-instance-${environmentSuffix}`,
+        },
+      ],
     });
+
+    // Add dependency on instance profile
+    ec2Instance.addDependency(instanceProfile);
 
     // Create S3 bucket with encryption and versioning
     const secureS3Bucket = new s3.Bucket(this, 'OrgSecureS3Bucket', {
@@ -221,7 +247,7 @@ export class SecureEnvironmentStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'InstanceId', {
-      value: ec2Instance.instanceId,
+      value: ec2Instance.ref,
       description: 'EC2 Instance ID',
       exportName: `org-instance-id-${environmentSuffix}`,
     });
