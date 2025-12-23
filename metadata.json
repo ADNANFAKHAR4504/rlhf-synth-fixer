@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291721",
+  "team": "synth-2",
+  "startedAt": "2025-08-12T07:43:34.173Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "CloudFront",
+    "CloudWatch",
+    "DynamoDB",
+    "IAM",
+    "Lambda",
+    "S3",
+    "API Gateway",
+    "Kinesis",
+    "VPC",
+    "EC2",
+    "SNS"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291721",
+    "pr": "Pr942"
+  }
+}
