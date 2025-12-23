@@ -12,5 +12,9 @@
     "Security Configuration as Code"
   ],
   "aws_services": [],
-  "wave": "P1"
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291348",
+    "pr": "Pr494"
+  }
 }
