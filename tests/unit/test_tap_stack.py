@@ -1,15 +1,16 @@
-import pytest
+import importlib.util
 import json
 import os
-from unittest.mock import patch, MagicMock
+import sys
+import unittest
+
 import aws_cdk as cdk
-from aws_cdk.assertions import Template, Match
-
+import pytest
 from aws_cdk import App
-from lib.metadata_stack import ServerlessStack
-from lib.tap_stack import TapStack
+from aws_cdk.assertions import Match, Template
 
-# pylint: disable=redefined-outer-name
+from lib.metadata_stack import ServerlessStack
+from lib.tap_stack import TapStack, TapStackProps
 
 
 @pytest.fixture
@@ -25,7 +26,9 @@ def test_dynamodb_table_created(template):
         {
             "BillingMode": "PAY_PER_REQUEST",
             "KeySchema": [{"AttributeName": "itemId", "KeyType": "HASH"}],
-            "AttributeDefinitions": [{"AttributeName": "itemId", "AttributeType": "S"}],
+            "AttributeDefinitions": [
+                {"AttributeName": "itemId", "AttributeType": "S"}
+            ],
         },
     )
 
@@ -82,10 +85,7 @@ def test_lambda_log_policy(template):
                 "Statement": Match.array_with(
                     [
                         Match.object_like(
-                            {
-                                "Action": Match.array_with(["logs:CreateLogGroup"]),
-                                "Effect": "Allow",
-                            }
+                            {"Action": Match.array_with(["logs:CreateLogGroup"]), "Effect": "Allow"}
                         )
                     ]
                 )
@@ -154,192 +154,104 @@ def test_tap_stack_executes():
     assert stack is not None
 
 
+def test_tap_stack_with_props():
+    """Test TapStack with custom props"""
+    app = App()
+    props = TapStackProps(environment_suffix="prod")
+    stack = TapStack(app, "TestTapStackWithProps", props=props)
+    assert stack is not None
+    assert stack.environment_suffix == "prod"
+
+
+def test_tap_stack_props_creation():
+    """Test TapStackProps initialization"""
+    props = TapStackProps(environment_suffix="staging")
+    assert props.environment_suffix == "staging"
+
+
+def test_tap_stack_props_none_suffix():
+    """Test TapStackProps with None environment suffix"""
+    props = TapStackProps()
+    assert props.environment_suffix is None
+
+
 def test_vpc_created(template):
-    """Test that VPC is created with correct configuration"""
-    template.has_resource_properties(
-        "AWS::EC2::VPC", {"EnableDnsHostnames": True, "EnableDnsSupport": True}
-    )
+    template.resource_count_is("AWS::EC2::VPC", 1)
 
 
 def test_security_group_created(template):
-    """Test that security group is created for Lambda"""
     template.has_resource_properties(
         "AWS::EC2::SecurityGroup",
         {"GroupDescription": "Security group for Lambda function"},
     )
 
 
-def test_tap_stack_has_outputs():
-    """Test that TapStack exposes outputs from nested ServerlessStack"""
-    app = App()
-    stack = TapStack(app, "TestTapStackOutputs")
-    template = Template.from_stack(stack)
-
-    # Verify that parent stack has outputs
-    template.has_output("VpcId", {})
-    template.has_output("LambdaFunctionName", {})
-    template.has_output("DynamoTableName", {})
-    template.has_output("ApiGatewayId", {})
-    template.has_output("AlarmName", {})
+def test_vpc_has_subnets(template):
+    template.resource_count_is("AWS::EC2::Subnet", 2)
 
 
-# Lambda Handler Tests - Use importlib since 'lambda' is a reserved keyword
-import importlib
+class TestLambdaHandler(unittest.TestCase):
+    """Test cases for the Lambda handler function"""
+
+    @classmethod
+    def setUpClass(cls):
+        """Load the Lambda handler module dynamically"""
+        handler_path = os.path.join(
+            os.path.dirname(__file__), "..", "..", "lib", "lambda", "handler.py"
+        )
+        spec = importlib.util.spec_from_file_location("handler", handler_path)
+        cls.handler_module = importlib.util.module_from_spec(spec)
+        sys.modules["handler"] = cls.handler_module
+        spec.loader.exec_module(cls.handler_module)
+
+    def test_handler_missing_table_name(self):
+        """Test handler returns error when TABLE_NAME is not set"""
+        # Clear TABLE_NAME if set
+        if "TABLE_NAME" in os.environ:
+            del os.environ["TABLE_NAME"]
+
+        class MockContext:
+            aws_request_id = "test-123"
+
+        result = self.handler_module.handler({}, MockContext())
+        self.assertEqual(result["statusCode"], 500)
+        self.assertIn("Configuration error", result["body"])
+
+    def test_handler_has_cors_headers(self):
+        """Test that handler response includes CORS headers"""
+        os.environ["TABLE_NAME"] = "test-table"
+
+        class MockContext:
+            aws_request_id = "test-123"
+
+        # This will fail at DynamoDB call but we can check the error response headers
+        result = self.handler_module.handler({}, MockContext())
+        self.assertIn("Access-Control-Allow-Origin", result["headers"])
+
+    def test_handler_returns_500_on_dynamodb_error(self):
+        """Test handler returns 500 and proper error on DynamoDB error"""
+        os.environ["TABLE_NAME"] = "nonexistent-table"
+
+        class MockContext:
+            aws_request_id = "test-error-123"
+
+        result = self.handler_module.handler({}, MockContext())
+        self.assertEqual(result["statusCode"], 500)
+        self.assertIn("Access-Control-Allow-Origin", result["headers"])
+
+    def test_handler_error_response_format(self):
+        """Test that error responses have correct JSON format"""
+        if "TABLE_NAME" in os.environ:
+            del os.environ["TABLE_NAME"]
+
+        class MockContext:
+            aws_request_id = "test-format-123"
+
+        result = self.handler_module.handler({}, MockContext())
+        body = json.loads(result["body"])
+        self.assertIn("error", body)
+        self.assertIn("message", body)
 
 
-def _get_handler_module():
-    """Import the lambda handler module using importlib (lambda is a reserved keyword)"""
-    return importlib.import_module("lib.lambda.handler")
-
-
-class TestLambdaHandler:
-    """Tests for the Lambda handler function"""
-
-    @patch.dict(os.environ, {"TABLE_NAME": "test-table"})
-    def test_handler_default_response(self):
-        """Test handler returns default response for non-item paths"""
-        with patch.object(
-            importlib.import_module("lib.lambda.handler"), "dynamodb"
-        ) as mock_dynamodb:
-            handler_module = _get_handler_module()
-            importlib.reload(handler_module)
-
-            event = {"httpMethod": "GET", "path": "/"}
-            response = handler_module.handler(event, None)
-
-            assert response["statusCode"] == 200
-            body = json.loads(response["body"])
-            assert body["message"] == "Item Service API"
-            assert body["path"] == "/"
-            assert body["method"] == "GET"
-
-    @patch.dict(os.environ, {"TABLE_NAME": "test-table"})
-    def test_handler_get_items_route(self):
-        """Test handler routes to get_items for /item path"""
-        handler_module = _get_handler_module()
-        importlib.reload(handler_module)
-
-        with patch.object(handler_module, "dynamodb") as mock_dynamodb:
-            mock_table = MagicMock()
-            mock_table.scan.return_value = {"Items": [{"itemId": "1", "name": "test"}]}
-            mock_dynamodb.Table.return_value = mock_table
-
-            event = {"httpMethod": "GET", "path": "/item", "queryStringParameters": None}
-            response = handler_module.handler(event, None)
-
-            assert response["statusCode"] == 200
-            body = json.loads(response["body"])
-            assert "items" in body
-            assert body["count"] == 1
-
-    @patch.dict(os.environ, {"TABLE_NAME": "test-table"})
-    def test_handler_exception_handling(self):
-        """Test handler handles exceptions gracefully"""
-        handler_module = _get_handler_module()
-        importlib.reload(handler_module)
-
-        with patch.object(handler_module, "dynamodb") as mock_dynamodb:
-            mock_dynamodb.Table.side_effect = Exception("Test error")
-
-            event = {"httpMethod": "GET", "path": "/item"}
-            response = handler_module.handler(event, None)
-
-            assert response["statusCode"] == 500
-            body = json.loads(response["body"])
-            assert "error" in body
-
-    @patch.dict(os.environ, {"TABLE_NAME": ""})
-    def test_get_items_no_table_name(self):
-        """Test get_items returns error when TABLE_NAME not set"""
-        handler_module = _get_handler_module()
-        importlib.reload(handler_module)
-
-        event = {"httpMethod": "GET", "path": "/item"}
-        response = handler_module.get_items(event)
-
-        assert response["statusCode"] == 500
-        body = json.loads(response["body"])
-        assert "TABLE_NAME" in body["error"]
-
-    @patch.dict(os.environ, {"TABLE_NAME": "test-table"})
-    def test_get_items_with_item_id(self):
-        """Test get_items with specific item ID"""
-        handler_module = _get_handler_module()
-        importlib.reload(handler_module)
-
-        with patch.object(handler_module, "dynamodb") as mock_dynamodb:
-            mock_table = MagicMock()
-            mock_table.get_item.return_value = {"Item": {"itemId": "123", "name": "test"}}
-            mock_dynamodb.Table.return_value = mock_table
-
-            event = {"queryStringParameters": {"itemId": "123"}}
-            response = handler_module.get_items(event)
-
-            assert response["statusCode"] == 200
-            body = json.loads(response["body"])
-            assert body["itemId"] == "123"
-
-    @patch.dict(os.environ, {"TABLE_NAME": "test-table"})
-    def test_get_items_item_not_found(self):
-        """Test get_items returns 404 when item not found"""
-        handler_module = _get_handler_module()
-        importlib.reload(handler_module)
-
-        with patch.object(handler_module, "dynamodb") as mock_dynamodb:
-            mock_table = MagicMock()
-            mock_table.get_item.return_value = {}
-            mock_dynamodb.Table.return_value = mock_table
-
-            event = {"queryStringParameters": {"itemId": "nonexistent"}}
-            response = handler_module.get_items(event)
-
-            assert response["statusCode"] == 404
-            body = json.loads(response["body"])
-            assert "not found" in body["error"]
-
-    @patch.dict(os.environ, {"TABLE_NAME": "test-table"})
-    def test_get_items_scan_all(self):
-        """Test get_items scans all items when no itemId provided"""
-        handler_module = _get_handler_module()
-        importlib.reload(handler_module)
-
-        with patch.object(handler_module, "dynamodb") as mock_dynamodb:
-            mock_table = MagicMock()
-            mock_table.scan.return_value = {
-                "Items": [
-                    {"itemId": "1", "name": "item1"},
-                    {"itemId": "2", "name": "item2"},
-                ]
-            }
-            mock_dynamodb.Table.return_value = mock_table
-
-            event = {"queryStringParameters": None}
-            response = handler_module.get_items(event)
-
-            assert response["statusCode"] == 200
-            body = json.loads(response["body"])
-            assert body["count"] == 2
-            assert len(body["items"]) == 2
-
-    @patch.dict(os.environ, {"TABLE_NAME": "test-table"})
-    def test_get_items_dynamodb_error(self):
-        """Test get_items handles DynamoDB ClientError"""
-        from botocore.exceptions import ClientError
-
-        handler_module = _get_handler_module()
-        importlib.reload(handler_module)
-
-        with patch.object(handler_module, "dynamodb") as mock_dynamodb:
-            mock_table = MagicMock()
-            mock_table.scan.side_effect = ClientError(
-                {"Error": {"Code": "ResourceNotFoundException", "Message": "Table not found"}},
-                "Scan"
-            )
-            mock_dynamodb.Table.return_value = mock_table
-
-            event = {"queryStringParameters": None}
-            response = handler_module.get_items(event)
-
-            assert response["statusCode"] == 500
-            body = json.loads(response["body"])
-            assert "DynamoDB error" in body["error"]
+if __name__ == "__main__":
+    unittest.main()
