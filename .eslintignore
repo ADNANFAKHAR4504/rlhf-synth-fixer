@@ -1,3 +1,0 @@
-# Ignore template files
-.claude/templates/**/*.ts
-.claude/templates/**/*.js
