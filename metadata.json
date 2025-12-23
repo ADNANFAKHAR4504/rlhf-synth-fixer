@@ -6,11 +6,11 @@
   "po_id": "trainr30",
   "team": "synth-2",
   "startedAt": "2025-08-08T12:57:40-05:00",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "IaC Program Optimization",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "IaC Diagnosis/Edits"
   ],
-  "aws_services": [],
+  "aws_services": ["EC2", "VPC", "Auto Scaling", "ALB", "RDS", "S3", "CloudFront", "CloudWatch", "IAM", "KMS", "SNS"],
   "wave": "P1"
 }
