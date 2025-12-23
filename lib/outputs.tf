@@ -60,11 +60,11 @@ output "kms_key_arn" {
 
 output "cloudwatch_log_groups" {
   description = "CloudWatch Log Group names for all Lambda functions"
-  value = {
+  value = jsonencode({
     validator      = aws_cloudwatch_log_group.validator.name
     processor      = aws_cloudwatch_log_group.processor.name
     enricher       = aws_cloudwatch_log_group.enricher.name
     event_trigger  = aws_cloudwatch_log_group.event_trigger.name
     step_functions = aws_cloudwatch_log_group.step_functions.name
-  }
+  })
 }
