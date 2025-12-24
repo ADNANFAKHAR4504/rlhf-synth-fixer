@@ -409,14 +409,14 @@ Resources:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
+    # cfn-lint ignore W2501: Hardcoded password required for LocalStack Community compatibility
+    # In production AWS, use SSM parameter resolution instead: !Sub '{{resolve:ssm-secure:${DBPassword}}}'
     Properties:
       DBInstanceIdentifier: !Sub 'myapp-postgres-db-${Environment}'
       DBInstanceClass: db.t3.medium
       Engine: postgres
       EngineVersion: '16.6'
       MasterUsername: !Ref DBUsername
-      # For LocalStack: Use direct password instead of SSM resolution
-      # In production AWS, replace this with: !Sub '{{resolve:ssm-secure:${DBPassword}}}'
       MasterUserPassword: 'TestPassword123!'
       AllocatedStorage: 20
       StorageType: gp2
