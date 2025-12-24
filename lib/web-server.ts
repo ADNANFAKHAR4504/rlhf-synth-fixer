@@ -465,7 +465,7 @@ export class WebServerStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'ElasticIP', {
-      value: eip.ref,
+      value: eip.attrPublicIp,
       description: 'Elastic IP address of the instance',
     });
 

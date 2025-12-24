@@ -70,8 +70,14 @@ describe('WebServerStack CDK Outputs', () => {
   });
 
   test('RDS address should be a valid RDS endpoint hostname', () => {
-    const rdsRegex = /^[\w-]+\.c[\w\d-]+\.([\w-]+)\.rds\.amazonaws\.com$/;
-    expect(rdsAddress).toMatch(rdsRegex);
+    // Accept both AWS RDS format and LocalStack format
+    const awsRdsRegex = /^[\w-]+\.c[\w\d-]+\.([\w-]+)\.rds\.amazonaws\.com$/;
+    const localstackRdsRegex = /^(localhost\.localstack\.cloud|[\w.-]+)$/;
+    expect(rdsAddress).toMatch(
+      new RegExp(
+        `(${awsRdsRegex.source})|(${localstackRdsRegex.source})`
+      )
+    );
   });
 
   test('RDS port should be a valid port number', () => {

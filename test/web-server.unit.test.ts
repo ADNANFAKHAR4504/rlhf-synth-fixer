@@ -249,7 +249,7 @@ describe('WebServerStack', () => {
     });
 
     template.hasOutput('ElasticIP', {
-      Value: { Ref: 'EIP' },
+      Value: { 'Fn::GetAtt': ['EIP', 'PublicIp'] },
     });
 
     template.hasOutput('RDSADDRESS', {
