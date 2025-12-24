@@ -165,7 +165,7 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'ElastiCacheEndpoint', {
-      value: cacheCluster.attrRedisEndpointAddress || 'pending',
+      value: cacheCluster.attrRedisEndpointAddress,
       description: 'ElastiCache Redis Endpoint',
       exportName: `tap-cache-endpoint-${props.environmentSuffix}`,
     });
