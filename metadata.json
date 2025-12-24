@@ -19,7 +19,7 @@
     "security_groups",
     "subnets"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "291616",
     "pr": "Pr1790"
