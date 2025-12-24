@@ -30,19 +30,10 @@ describe('Data Backup System CloudFormation Template - LocalStack Compatible', (
       expect(template.Description).toContain('LocalStack Compatible');
     });
 
-    test('should have mappings section for environment configuration', () => {
-      expect(template.Mappings).toBeDefined();
-      expect(template.Mappings.EnvironmentConfig).toBeDefined();
-      expect(template.Mappings.EnvironmentConfig.dev.RetentionDays).toBe(7);
-      expect(template.Mappings.EnvironmentConfig.staging.RetentionDays).toBe(14);
-      expect(template.Mappings.EnvironmentConfig.prod.RetentionDays).toBe(30);
-    });
-
     test('should have all required sections', () => {
       expect(template.AWSTemplateFormatVersion).not.toBeNull();
       expect(template.Description).not.toBeNull();
       expect(template.Parameters).not.toBeNull();
-      expect(template.Mappings).not.toBeNull();
       expect(template.Resources).not.toBeNull();
       expect(template.Outputs).not.toBeNull();
     });
@@ -83,9 +74,19 @@ describe('Data Backup System CloudFormation Template - LocalStack Compatible', (
       expect(pattern.test('backup-')).toBe(false); // can't end with dash
     });
 
-    test('should have exactly 2 parameters', () => {
+    test('should have RetentionDays parameter', () => {
+      expect(template.Parameters.RetentionDays).toBeDefined();
+      const retentionParam = template.Parameters.RetentionDays;
+      expect(retentionParam.Type).toBe('Number');
+      expect(retentionParam.Default).toBe(30);
+      expect(retentionParam.MinValue).toBe(1);
+      expect(retentionParam.MaxValue).toBe(365);
+      expect(retentionParam.Description).toContain('days to retain backups');
+    });
+
+    test('should have exactly 3 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2);
+      expect(parameterCount).toBe(3);
     });
   });
 
@@ -126,12 +127,12 @@ describe('Data Backup System CloudFormation Template - LocalStack Compatible', (
       const lifecycleRules = bucket.Properties.LifecycleConfiguration.Rules;
       expect(lifecycleRules).toHaveLength(2);
 
-      // Deletion rule based on environment
+      // Deletion rule using RetentionDays parameter
       const deleteRule = lifecycleRules.find((r: any) => r.Id === 'DeleteOldBackups');
       expect(deleteRule).toBeDefined();
       expect(deleteRule.Status).toBe('Enabled');
       expect(deleteRule.ExpirationInDays).toEqual({
-        'Fn::FindInMap': ['EnvironmentConfig', { Ref: 'Environment' }, 'RetentionDays']
+        Ref: 'RetentionDays'
       });
 
       // Multipart upload cleanup
@@ -629,20 +630,13 @@ describe('Data Backup System CloudFormation Template - LocalStack Compatible', (
       });
     });
 
-    test('environment-based configurations should be consistent', () => {
-      const mappings = template.Mappings.EnvironmentConfig;
-      const environments = ['dev', 'staging', 'prod'];
-      
-      environments.forEach(env => {
-        expect(mappings[env]).toBeDefined();
-        expect(mappings[env].RetentionDays).toBeDefined();
-        expect(typeof mappings[env].RetentionDays).toBe('number');
-        expect(mappings[env].RetentionDays).toBeGreaterThan(0);
-      });
-
-      // Verify retention days are in ascending order
-      expect(mappings.dev.RetentionDays).toBeLessThan(mappings.staging.RetentionDays);
-      expect(mappings.staging.RetentionDays).toBeLessThan(mappings.prod.RetentionDays);
+    test('RetentionDays parameter should be configurable', () => {
+      const retentionParam = template.Parameters.RetentionDays;
+      expect(retentionParam).toBeDefined();
+      expect(retentionParam.Type).toBe('Number');
+      expect(retentionParam.Default).toBe(30);
+      expect(retentionParam.MinValue).toBe(1);
+      expect(retentionParam.MaxValue).toBe(365);
     });
   });
 });

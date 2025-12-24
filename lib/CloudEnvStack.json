@@ -17,19 +17,13 @@
             "ConstraintDescription": "Must be a valid S3 bucket name",
             "MinLength": 3,
             "MaxLength": 63
-        }
-    },
-    "Mappings": {
-        "EnvironmentConfig": {
-            "dev": {
-                "RetentionDays": 7
-            },
-            "staging": {
-                "RetentionDays": 14
-            },
-            "prod": {
-                "RetentionDays": 30
-            }
+        },
+        "RetentionDays": {
+            "Type": "Number",
+            "Description": "Number of days to retain backups",
+            "Default": 30,
+            "MinValue": 1,
+            "MaxValue": 365
         }
     },
     "Resources": {
@@ -57,13 +51,7 @@
                             "Id": "DeleteOldBackups",
                             "Status": "Enabled",
                             "ExpirationInDays": {
-                                "Fn::FindInMap": [
-                                    "EnvironmentConfig",
-                                    {
-                                        "Ref": "EnvironmentSuffix"
-                                    },
-                                    "RetentionDays"
-                                ]
+                                "Ref": "RetentionDays"
                             }
                         },
                         {
