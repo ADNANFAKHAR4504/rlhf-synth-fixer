@@ -9,9 +9,9 @@
   "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "CI/CD Pipeline",
-    "Infrastructure Analysis/Monitoring",
-    "General Infrastructure Tooling QA"
+    "Cloud Environment Setup",
+    "Serverless Infrastructure (Functions as Code)",
+    "CI/CD Pipeline"
   ],
   "wave": "P0",
   "training_quality": 9,
