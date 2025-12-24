@@ -65,7 +65,6 @@
     "OutputsDbSubnetGroupName",
     "OutputsPrivateSubnetIds"
   ],
-  "background": "Deploy a brand-new, self-contained Aurora MySQL environment in us-east-1 using a single TapStack.yml. The stack provisions a VPC with private subnets, interface VPC endpoints for Secrets Manager and CloudWatch Logs, tightly-scoped security groups, a KMS CMK and alias, and Secrets Manager with hosted rotation. It creates an Aurora MySQL cluster (one writer, two readers) with tuned parameter groups, backtrack and backups, Performance Insights, SNS notifications, and proactive CloudWatch alarms for CPU, connections, read/write latency, and replica lag. All names are suffixed with EnvironmentSuffix for safe multi-env deployments, and blue-green readiness is supported via snapshot-based policies and exported outputs.",
   "provider": "localstack",
   "wave": "P1"
 }
