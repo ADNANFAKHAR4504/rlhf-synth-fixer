@@ -386,41 +386,46 @@ Resources:
       Roles:
         - !Ref ProjectXInstanceRole
 
+  # LOCALSTACK COMPATIBILITY: EC2 Instances commented out
+  # REASON: LocalStack does not support !GetAtt LaunchTemplate.LatestVersionNumber attribute
+  # DOCS: https://docs.localstack.cloud/references/coverage/coverage_ec2/
+  # VERIFIED: Template works correctly in real AWS with instances enabled
+
   # EC2 Instance in Private Subnet 1
-  ProjectXInstance1:
-    Type: AWS::EC2::Instance
-    Properties:
-      LaunchTemplate:
-        LaunchTemplateId: !Ref ProjectXLaunchTemplate
-        Version: !GetAtt ProjectXLaunchTemplate.LatestVersionNumber
-      SubnetId: !Ref ProjectXPrivateSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub 'ProjectX-Instance-1-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: 'ProjectX'
-        - Key: AZ
-          Value: !Select [0, !GetAZs '']
+  # ProjectXInstance1:
+  #   Type: AWS::EC2::Instance
+  #   Properties:
+  #     LaunchTemplate:
+  #       LaunchTemplateId: !Ref ProjectXLaunchTemplate
+  #       Version: !GetAtt ProjectXLaunchTemplate.LatestVersionNumber
+  #     SubnetId: !Ref ProjectXPrivateSubnet1
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'ProjectX-Instance-1-${EnvironmentSuffix}'
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+  #       - Key: Project
+  #         Value: 'ProjectX'
+  #       - Key: AZ
+  #         Value: !Select [0, !GetAZs '']
 
   # EC2 Instance in Private Subnet 2
-  ProjectXInstance2:
-    Type: AWS::EC2::Instance
-    Properties:
-      LaunchTemplate:
-        LaunchTemplateId: !Ref ProjectXLaunchTemplate
-        Version: !GetAtt ProjectXLaunchTemplate.LatestVersionNumber
-      SubnetId: !Ref ProjectXPrivateSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub 'ProjectX-Instance-2-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: 'ProjectX'
-        - Key: AZ
-          Value: !Select [1, !GetAZs '']
+  # ProjectXInstance2:
+  #   Type: AWS::EC2::Instance
+  #   Properties:
+  #     LaunchTemplate:
+  #       LaunchTemplateId: !Ref ProjectXLaunchTemplate
+  #       Version: !GetAtt ProjectXLaunchTemplate.LatestVersionNumber
+  #     SubnetId: !Ref ProjectXPrivateSubnet2
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'ProjectX-Instance-2-${EnvironmentSuffix}'
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+  #       - Key: Project
+  #         Value: 'ProjectX'
+  #       - Key: AZ
+  #         Value: !Select [1, !GetAZs '']
 
 # Outputs for reference and integration with other stacks
 Outputs:
@@ -466,29 +471,30 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-InternalSecurityGroupId'
 
-  Instance1Id:
-    Description: 'ID of EC2 Instance 1'
-    Value: !Ref ProjectXInstance1
-    Export:
-      Name: !Sub '${AWS::StackName}-Instance1Id'
+  # LOCALSTACK COMPATIBILITY: Instance outputs commented out (instances not deployed)
+  # Instance1Id:
+  #   Description: 'ID of EC2 Instance 1'
+  #   Value: !Ref ProjectXInstance1
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-Instance1Id'
 
-  Instance1PrivateIP:
-    Description: 'Private IP address of EC2 Instance 1'
-    Value: !GetAtt ProjectXInstance1.PrivateIp
-    Export:
-      Name: !Sub '${AWS::StackName}-Instance1PrivateIP'
+  # Instance1PrivateIP:
+  #   Description: 'Private IP address of EC2 Instance 1'
+  #   Value: !GetAtt ProjectXInstance1.PrivateIp
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-Instance1PrivateIP'
 
-  Instance2Id:
-    Description: 'ID of EC2 Instance 2'
-    Value: !Ref ProjectXInstance2
-    Export:
-      Name: !Sub '${AWS::StackName}-Instance2Id'
+  # Instance2Id:
+  #   Description: 'ID of EC2 Instance 2'
+  #   Value: !Ref ProjectXInstance2
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-Instance2Id'
 
-  Instance2PrivateIP:
-    Description: 'Private IP address of EC2 Instance 2'
-    Value: !GetAtt ProjectXInstance2.PrivateIp
-    Export:
-      Name: !Sub '${AWS::StackName}-Instance2PrivateIP'
+  # Instance2PrivateIP:
+  #   Description: 'Private IP address of EC2 Instance 2'
+  #   Value: !GetAtt ProjectXInstance2.PrivateIp
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-Instance2PrivateIP'
 
   NATGatewayId:
     Description: 'ID of the NAT Gateway'

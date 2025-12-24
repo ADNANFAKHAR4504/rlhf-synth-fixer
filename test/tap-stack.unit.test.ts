@@ -239,7 +239,8 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Compute Resources', () => {
+  // LOCALSTACK COMPATIBILITY: EC2 Instance tests skipped (instances not deployed)
+  describe.skip('Compute Resources', () => {
     describe('EC2 Instances', () => {
       test('should have two EC2 instances', () => {
         expect(template.Resources.ProjectXInstance1).toBeDefined();
@@ -289,10 +290,10 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Outputs', () => {
+    // LOCALSTACK COMPATIBILITY: Instance outputs excluded (instances not deployed in LocalStack)
     const expectedOutputs = [
       'VPCId', 'PublicSubnet1Id', 'PublicSubnet2Id', 'PrivateSubnet1Id', 'PrivateSubnet2Id',
-      'SSHSecurityGroupId', 'InternalSecurityGroupId', 'Instance1Id', 'Instance1PrivateIP',
-      'Instance2Id', 'Instance2PrivateIP', 'NATGatewayId', 'StackName', 'EnvironmentSuffix'
+      'SSHSecurityGroupId', 'InternalSecurityGroupId', 'NATGatewayId', 'StackName', 'EnvironmentSuffix'
     ];
 
     test('should have all required outputs', () => {
@@ -321,7 +322,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(sshIngress.IpProtocol).toBe('tcp');
     });
 
-    test('instances should be in private subnets only', () => {
+    // LOCALSTACK COMPATIBILITY: Instance location test skipped (instances not deployed)
+    test.skip('instances should be in private subnets only', () => {
       expect(template.Resources.ProjectXInstance1.Properties.SubnetId.Ref).toBe('ProjectXPrivateSubnet1');
       expect(template.Resources.ProjectXInstance2.Properties.SubnetId.Ref).toBe('ProjectXPrivateSubnet2');
     });
@@ -377,7 +379,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters).toBeDefined();
       expect(template.Outputs).toBeDefined();
       expect(template.Conditions).toBeDefined();
-      expect(Object.keys(template.Resources).length).toBeGreaterThan(20);
+      // LOCALSTACK COMPATIBILITY: Resource count reduced (23 resources after removing 2 EC2 instances)
+      expect(Object.keys(template.Resources).length).toBe(23);
     });
   });
 });

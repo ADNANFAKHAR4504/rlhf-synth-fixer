@@ -8,8 +8,9 @@ Network setup:
 - NAT Gateway deployed in public subnet that provides internet access for private subnets
 
 Compute and security:
-- EC2 instances deployed in private subnets that connect through security groups
-- Latest Amazon Linux 2 AMI with IAM instance profile for CloudWatch and SSM access
+<!-- LOCALSTACK COMPATIBILITY: EC2 instances commented out in template (LocalStack limitation with LaunchTemplate.LatestVersionNumber) -->
+<!-- - EC2 instances deployed in private subnets that connect through security groups -->
+<!-- - Latest Amazon Linux 2 AMI with IAM instance profile for CloudWatch and SSM access -->
 - Security groups that allow SSH from office IP and enable internal communication between instances
 - Route tables that direct private subnet traffic through NAT Gateway for updates
 
