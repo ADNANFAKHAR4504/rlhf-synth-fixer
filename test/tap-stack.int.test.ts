@@ -7,7 +7,7 @@ const outputs = JSON.parse(
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 // LocalStack uses hardcoded 'development' environment instead of PR-specific suffixes
-const isLocalStack = process.env.LOCALSTACK_ENDPOINT !== undefined;
+const isLocalStack = process.env.PROVIDER === 'localstack';
 const expectedEnvironment = isLocalStack ? 'development' : environmentSuffix;
 
 describe('CloudFormation Template Integration Tests', () => {
