@@ -31,5 +31,12 @@
     "sns-failover-subscription",
     "alarm-replica-lag",
     "alarm-writer-cpu"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
 }
