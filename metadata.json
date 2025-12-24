@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-274677",
+  "team": "synth-2",
+  "startedAt": "2025-07-28T11:22:09.707Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "KMS",
+    "SecretsManager",
+    "IAM"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "274677",
+    "pr": "Pr248"
+  }
+}
