@@ -1,0 +1,22 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912392",
+  "team": "synth",
+  "startedAt": "2025-11-19T05:56:29.569705",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "SQS",
+    "KMS",
+    "IAM"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
