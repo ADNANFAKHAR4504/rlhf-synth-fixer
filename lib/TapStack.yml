@@ -489,7 +489,7 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0abcdef1234567890
+      ImageId: 'ami-0abcdef1234567890'
       InstanceType: !Ref InstanceType
       KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
       IamInstanceProfile: !Ref EC2InstanceProfile
