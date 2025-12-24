@@ -8,7 +8,16 @@ I've been working with the platform team on the requirements. They want a full-f
 
 ## What we need to build
 
-Create a multi-stage CI/CD pipeline using **CloudFormation with yaml** that handles secure deployments across multiple AWS accounts.
+Create a multi-stage CI/CD pipeline using **CloudFormation with yaml** that handles secure deployments across multiple AWS accounts with the following service integrations:
+
+- CodePipeline orchestrates the workflow and triggers CodeBuild projects for each stage
+- S3 bucket stores build artifacts encrypted by KMS, which CodePipeline reads from and writes to across stages
+- CodeBuild projects pull source code, execute builds, and upload encrypted artifacts back to S3
+- KMS key encrypts artifacts in S3 and grants cross-account decryption access to staging and production IAM roles
+- EventBridge captures CodePipeline state change events and routes them to notification endpoints
+- Cross-account IAM roles in staging and production accounts trust the pipeline's service role for deployments
+- CloudWatch receives logs from CodeBuild executions for debugging and monitoring
+- Manual approval actions in CodePipeline pause the workflow before production deployment
 
 ### Core Requirements
 
@@ -66,7 +75,7 @@ Create a multi-stage CI/CD pipeline using **CloudFormation with yaml** that hand
 - NO DeletionPolicy: Retain or UpdateReplacePolicy: Retain on any resources
 - All resources must be destroyable
 - Pipeline must be fully functional and deployable
-- IAM roles must follow least privilege principle
+- IAM roles must follow least privilege principle with specific actions and scoped resources
 - KMS key policies must allow proper cross-account access
 - All CodeBuild projects must have proper service roles
 
@@ -85,7 +94,7 @@ Create a multi-stage CI/CD pipeline using **CloudFormation with yaml** that hand
 - **Functionality**: Pipeline successfully deploys through all stages with proper approval gates
 - **Performance**: Build and test stages complete efficiently, artifact management is optimized
 - **Reliability**: Pipeline handles failures gracefully, state changes are properly tracked
-- **Security**: Artifacts are encrypted, cross-account access is properly scoped, IAM follows least privilege
+- **Security**: Artifacts are encrypted, cross-account access is properly scoped, IAM follows least privilege with specific actions
 - **Resource Naming**: All resources include environmentSuffix in their names
 - **Code Quality**: Clean yaml, well-structured, properly documented with deployment instructions
 
