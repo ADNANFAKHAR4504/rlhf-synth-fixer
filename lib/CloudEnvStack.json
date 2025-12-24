@@ -34,7 +34,7 @@
     "LatestAmiId": {
       "Type": "AWS::EC2::Image::Id",
       "Description": "Latest Amazon Linux 2 AMI ID",
-      "Default": "ami-0c02fb55b34c1e1a8"
+      "Default": "ami-03cf127a"
     }
   },
   "Conditions": {
