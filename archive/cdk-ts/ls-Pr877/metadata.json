@@ -1,0 +1,21 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291725",
+  "team": "synth-2",
+  "startedAt": "2025-08-11T14:46:02.659Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "enyachoke-turing",
+  "dockerS3Location": "",
+  "localstack": true,
+  "localstack_adaptations": {
+    "removed_features": ["EC2 instance", "Multi-AZ RDS", "RDS Performance Insights", "KMS key rotation", "Multi-region CloudTrail"],
+    "simplified_features": ["WAF (CLOUDFRONT→REGIONAL)", "Log retention (365d→7d)", "VPC AZs (3→2)"],
+    "compatibility": "community"
+  }
+}
