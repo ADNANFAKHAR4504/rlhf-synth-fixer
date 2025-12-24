@@ -25,7 +25,9 @@ describe('TapStack', () => {
     });
 
     test('should use provided environment suffix', () => {
-      const customStack = new TapStack(app, 'CustomStack', { environmentSuffix: 'prod' });
+      const customStack = new TapStack(app, 'CustomStack', {
+        environmentSuffix: 'prod',
+      });
       expect(customStack).toBeDefined();
     });
   });
@@ -292,7 +294,9 @@ describe('TapStack', () => {
       const rdsResources = template.findResources('AWS::RDS::DBInstance');
       const ecsResources = template.findResources('AWS::ECS::Cluster');
       const kmsResources = template.findResources('AWS::KMS::Key');
-      const cloudTrailResources = template.findResources('AWS::CloudTrail::Trail');
+      const cloudTrailResources = template.findResources(
+        'AWS::CloudTrail::Trail'
+      );
 
       expect(Object.keys(vpcResources).length).toBe(1);
       expect(Object.keys(s3Resources).length).toBe(2); // S3 bucket + CloudTrail bucket
@@ -326,7 +330,9 @@ describe('TapStack', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
       const bucket = buckets[Object.keys(buckets)[0]];
       expect(bucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
-      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+      expect(
+        bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls
+      ).toBe(true);
     });
   });
 
@@ -349,7 +355,7 @@ describe('TapStack', () => {
       // Check that resources have tags applied
       const vpcResources = template.findResources('AWS::EC2::VPC');
       const vpc = vpcResources[Object.keys(vpcResources)[0]];
-      
+
       // Note: CDK doesn't always apply tags directly to VPC, but to child resources
       // This test ensures the stack can be created with tagging capability
       expect(vpc).toBeDefined();
@@ -373,7 +379,7 @@ describe('TapStack', () => {
       const s3Resources = template.findResources('AWS::S3::Bucket');
       const rdsResources = template.findResources('AWS::RDS::DBInstance');
       const ecsResources = template.findResources('AWS::ECS::Cluster');
-      
+
       expect(Object.keys(vpcResources).length).toBeGreaterThan(0);
       expect(Object.keys(s3Resources).length).toBeGreaterThan(0);
       expect(Object.keys(rdsResources).length).toBeGreaterThan(0);
@@ -398,17 +404,19 @@ describe('TapStack', () => {
         if (!allowedTypes.includes(currentType)) {
           throw new Error(
             `RDS instance type ${currentType} is not allowed. ` +
-            `Only ${allowedTypes.join(' or ')} are permitted.`
+              `Only ${allowedTypes.join(' or ')} are permitted.`
           );
         }
-      }).toThrow('RDS instance type db.m5.small is not allowed. Only db.m5.large or db.m5.xlarge are permitted.');
+      }).toThrow(
+        'RDS instance type db.m5.small is not allowed. Only db.m5.large or db.m5.xlarge are permitted.'
+      );
     });
 
     test('should accept valid RDS instance types through context', () => {
       // Test with valid instance type through context
       const validApp = new cdk.App();
       validApp.node.setContext('rdsInstanceType', 'db.m5.xlarge'); // Valid type
-      
+
       expect(() => {
         new TapStack(validApp, 'ValidRDSStackWithContext');
       }).not.toThrow();
@@ -417,11 +425,11 @@ describe('TapStack', () => {
     test('should have proper RDS instance type validation logic', () => {
       // Test the validation logic directly
       const allowedTypes = ['db.m5.large', 'db.m5.xlarge'];
-      
+
       // Test valid types
       expect(allowedTypes.includes('db.m5.large')).toBe(true);
       expect(allowedTypes.includes('db.m5.xlarge')).toBe(true);
-      
+
       // Test invalid types
       expect(allowedTypes.includes('db.m5.small')).toBe(false);
       expect(allowedTypes.includes('db.r5.large')).toBe(false);
