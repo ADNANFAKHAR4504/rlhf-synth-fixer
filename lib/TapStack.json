@@ -1431,7 +1431,7 @@
                 "Description": {
                     "Fn::Sub": "PostgreSQL parameter group for ${Environment}-${EnvironmentSuffix}"
                 },
-                "Family": "postgres14",
+                "Family": "postgres16",
                 "Parameters": {
                     "log_statement": "all",
                     "log_duration": "on",
@@ -1515,7 +1515,7 @@
                     ]
                 },
                 "Engine": "postgres",
-                "EngineVersion": "14",
+                "EngineVersion": "16",
                 "MasterUsername": {
                     "Ref": "DBMasterUsername"
                 },
@@ -1966,12 +1966,7 @@
                     "LaunchTemplateId": {
                         "Ref": "LaunchTemplate"
                     },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "LaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
+                    "Version": "$Latest"
                 },
                 "MinSize": {
                     "Fn::FindInMap": [

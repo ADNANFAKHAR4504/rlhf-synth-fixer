@@ -780,7 +780,7 @@ Resources:
     Properties:
       DBParameterGroupName: !Sub '${Environment}-${EnvironmentSuffix}-pg-params'
       Description: !Sub 'PostgreSQL parameter group for ${Environment}-${EnvironmentSuffix}'
-      Family: postgres14
+      Family: postgres16
       Parameters:
         log_statement: 'all'
         log_duration: 'on'
@@ -823,7 +823,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${Environment}-${EnvironmentSuffix}-postgres-db'
       DBInstanceClass: !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
       Engine: postgres
-      EngineVersion: '14'
+      EngineVersion: '16'
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       AllocatedStorage: !FindInMap [EnvironmentConfig, !Ref Environment, DBAllocatedStorage]
@@ -1119,7 +1119,7 @@ Resources:
       AutoScalingGroupName: !Sub '${Environment}-${EnvironmentSuffix}-asg'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: !FindInMap [EnvironmentConfig, !Ref Environment, ASGMinSize]
       MaxSize: !FindInMap [EnvironmentConfig, !Ref Environment, ASGMaxSize]
       DesiredCapacity: !FindInMap [EnvironmentConfig, !Ref Environment, ASGDesiredCapacity]
