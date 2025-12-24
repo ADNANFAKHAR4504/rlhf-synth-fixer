@@ -361,8 +361,27 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(parameterCount).toBe(1);
     });
 
-    test('template should not have Outputs section for minimal design', () => {
-      expect(template.Outputs).toBeUndefined();
+    test('template should have Outputs section with required outputs', () => {
+      expect(template.Outputs).toBeDefined();
+      expect(template.Outputs.VpcId).toBeDefined();
+      expect(template.Outputs.InternetGatewayId).toBeDefined();
+      expect(template.Outputs.PublicSubnet1Id).toBeDefined();
+      expect(template.Outputs.PublicSubnet2Id).toBeDefined();
+      expect(template.Outputs.PrivateSubnet1Id).toBeDefined();
+      expect(template.Outputs.PrivateSubnet2Id).toBeDefined();
+      expect(template.Outputs.PublicRouteTableId).toBeDefined();
+    });
+
+    test('VpcId output should reference VPC resource', () => {
+      expect(template.Outputs.VpcId.Value.Ref).toBe('VPC');
+      expect(template.Outputs.VpcId.Description).toContain('VPC');
+    });
+
+    test('subnet outputs should reference correct resources', () => {
+      expect(template.Outputs.PublicSubnet1Id.Value.Ref).toBe('PublicSubnet1');
+      expect(template.Outputs.PublicSubnet2Id.Value.Ref).toBe('PublicSubnet2');
+      expect(template.Outputs.PrivateSubnet1Id.Value.Ref).toBe('PrivateSubnet1');
+      expect(template.Outputs.PrivateSubnet2Id.Value.Ref).toBe('PrivateSubnet2');
     });
   });
 });

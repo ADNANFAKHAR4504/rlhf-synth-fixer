@@ -226,6 +226,55 @@
         }
       }
     }
+  },
+  "Outputs": {
+    "VpcId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VpcId"
+        }
+      }
+    },
+    "InternetGatewayId": {
+      "Description": "Internet Gateway ID",
+      "Value": {
+        "Ref": "InternetGateway"
+      }
+    },
+    "PublicSubnet1Id": {
+      "Description": "Public Subnet 1 ID",
+      "Value": {
+        "Ref": "PublicSubnet1"
+      }
+    },
+    "PublicSubnet2Id": {
+      "Description": "Public Subnet 2 ID",
+      "Value": {
+        "Ref": "PublicSubnet2"
+      }
+    },
+    "PrivateSubnet1Id": {
+      "Description": "Private Subnet 1 ID",
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      }
+    },
+    "PrivateSubnet2Id": {
+      "Description": "Private Subnet 2 ID",
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      }
+    },
+    "PublicRouteTableId": {
+      "Description": "Public Route Table ID",
+      "Value": {
+        "Ref": "PublicRouteTable"
+      }
+    }
   }
 }
 ```
