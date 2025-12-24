@@ -29,13 +29,6 @@ Parameters:
     Default: 10000
     Description: Duration threshold in milliseconds for CloudWatch alarms
 
-  NotificationEmail:
-    Type: String
-    Description: Email address for CloudWatch alarm notifications
-    AllowedPattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
-    Default: 'example@example.com'
-    ConstraintDescription: Must be a valid email address
-
   EnvironmentSuffix:
     Type: String
     Description: Suffix for resource naming and API Gateway stage name
