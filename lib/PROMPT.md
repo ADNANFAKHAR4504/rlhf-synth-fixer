@@ -1,39 +1,21 @@
 Prompt
-You are an AWS Solutions Architect specializing in secure, production-ready infrastructure. Your objective is to design a foundational AWS cloud environment using CloudFormation, with a focus on security, scalability, and operational best practices.
+Design a foundational AWS cloud environment using CloudFormation that establishes secure network connectivity for production workloads.
 
-Instructions
-Review Requirements: Carefully read the specifications and constraints before writing any code.
+Requirements
+Create a VPC with CIDR block 10.0.0.0/16 that serves as the network foundation. The VPC connects to an Internet Gateway to enable public subnet internet access.
 
-CloudFormation Template: Author a single, minimal JSON CloudFormation template to provision the described resources.
+Provision two public subnets and two private subnets distributed across two availability zones in us-east-1 for high availability. Public subnets connect to the Internet Gateway through a public route table that routes 0.0.0.0/0 traffic to the gateway. Private subnets remain isolated with their own route table for internal-only communication.
 
-Security Standards: Ensure security best practices are followed—only expose public resources where necessary, and restrict network access as appropriate for public/private subnets.
+The Internet Gateway attaches to the VPC and enables outbound internet connectivity for resources in public subnets. Route table associations link each subnet to its appropriate route table to control traffic flow.
 
-Tagging: All resources must include the tag key Environment with the value Production.
+Security Standards
+Only expose public resources where necessary and restrict network access appropriately for public and private subnets. Public subnets enable automatic public IP assignment for launched instances.
 
-Availability Zones: Use at least two different availability zones within the us-east-1 region for high availability.
+Tagging
+All resources must include the tag key Environment with the value Production.
 
-Minimal Resources: Do not include additional components (e.g., NAT Gateways, EC2 instances) unless required for baseline connectivity.
-
-Compliance: Use only AWS services available in the us-east-1 region.
-
-Validation: The template must pass aws cloudformation validate-template and be suitable for deployment via AWS Console or CLI.
-
-Summary
-Design and output a production-ready CloudFormation JSON template that:
-
-Creates a VPC with CIDR block 10.0.0.0/16.
-
-Provisions two public and two private subnets across at least two availability zones in us-east-1.
-
-Applies the Environment: Production tag to all resources.
-
-Follows minimal, secure, and standard AWS design practices.
-
-Uses only services available in the us-east-1 region.
-
-Ensures resources are distributed for high availability.
+Compliance
+Use only AWS services available in the us-east-1 region. The template must pass aws cloudformation validate-template and be suitable for deployment.
 
 Output Format
-Provide a single AWS CloudFormation template in JSON format (formatted, valid, and ready for deployment).
-
-No additional text or explanations—output only the CloudFormation JSON template.
+Provide a single AWS CloudFormation template in JSON format that is formatted, valid, and ready for deployment.

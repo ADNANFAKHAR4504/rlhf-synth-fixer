@@ -14,5 +14,9 @@
   "aws_services": [
     "EC2"
   ],
-  "wave": "P1"
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "229187",
+    "pr": "Pr154"
+  }
 }
