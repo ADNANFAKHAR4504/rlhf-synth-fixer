@@ -1,0 +1,18 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291275",
+  "team": "synth-2",
+  "startedAt": "2025-08-12T17:44:31.971Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "enyachoke-turing",
+  "dockerS3Location": "",
+  "aws_services": ["VPC", "EC2", "S3", "KMS", "IAM", "SNS", "CloudWatch Logs"],
+  "localstack_compatible": true,
+  "localstack_notes": "CloudTrail disabled for Community Edition compatibility. All resources use RemovalPolicy.DESTROY for cleanup."
+}
