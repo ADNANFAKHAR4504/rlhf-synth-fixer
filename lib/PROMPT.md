@@ -6,11 +6,15 @@ Requirements:
 
 Deploy infrastructure across two AWS regions (us-east-1 as primary, us-west-2 as secondary) with failover capabilities to ensure high availability.
 
-Provision an Amazon RDS MySQL instance in each region, configured with Multi-AZ to support automatic failovers.
+Provision an Amazon RDS MySQL instance in each region, configured with Multi-AZ to support automatic failovers. RDS MySQL instances must be deployed in private subnets within each VPC, isolated from direct internet access. The RDS instances should use DB subnet groups that span multiple availability zones for high availability.
 
-Create a VPC in each region with public and private subnets, using the CIDR block 10.0.0.0/16.
+Create a VPC in each region with public and private subnets, using the CIDR block 10.0.0.0/16. Public subnets must have direct internet connectivity through an Internet Gateway, while private subnets should connect to the internet via NAT Gateways for outbound traffic (such as software updates and patches).
 
-Include necessary IAM roles and policies for the infrastructure to function securely.
+Implement security groups to control RDS access, allowing MySQL traffic on port 3306 only from within the VPC CIDR block. This ensures that database connections are restricted to resources within the same VPC.
+
+Include necessary IAM roles and policies for the infrastructure to function securely. The IAM role for RDS Enhanced Monitoring should be attached to RDS instances to enable sending performance metrics to CloudWatch.
+
+Store database credentials securely in AWS Secrets Manager with automatic cross-region replication from us-east-1 to us-west-2, ensuring credentials are available in both regions for failover scenarios.
 
 Constraints:
 
