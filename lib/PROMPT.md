@@ -10,23 +10,35 @@ The existing stack has been running for six months and powers our three-tier web
 
 Create an optimized CloudFormation template using **CloudFormation with JSON** that refactors the poorly-structured baseline template for a three-tier web application while fixing all architectural issues and reducing complexity.
 
+### Architecture Overview
+
+The application follows a three-tier architecture with clear service connectivity:
+
+**Web Tier**: Application Load Balancer distributes incoming HTTPS traffic to EC2 instances in the Auto Scaling Group across multiple availability zones. The ALB performs health checks on backend instances and routes traffic only to healthy targets.
+
+**Application Tier**: EC2 instances in the Auto Scaling Group run the application code and connect to both the database and cache layers. Instances communicate with RDS Aurora through the database cluster endpoint and access ElastiCache Redis through the cache cluster endpoint. Security groups control which ports and protocols can flow between tiers.
+
+**Data Tier**: RDS Aurora MySQL cluster stores persistent data with automatic failover between primary and read replica instances. ElastiCache Redis cluster provides session storage and caching, reducing database load. Both data services sit in private subnets accessible only from the application tier.
+
+**Network Flow**: Internet traffic flows through the Internet Gateway to the ALB in public subnets. The ALB forwards requests to application instances in private subnets. Application instances query the database and cache in isolated data subnets. NAT Gateways in public subnets allow outbound internet access from private resources for updates and external API calls.
+
 ### Core Requirements
 
 1. **Template Optimization**
    - Create a well-structured, maintainable template
    - Preserve all existing functionality completely
    - Maintain backward compatibility with current deployment
-   - Support multi-environment deployments (dev/staging/prod)
+   - Support multi-environment deployments for dev, staging, and prod
 
-2. **Parameter Extraction**
-   - Extract all hardcoded values (AMI IDs, instance types, CIDR blocks)
+2. **Extract Hardcoded Parameters**
+   - Pull out all hardcoded values like AMI IDs, instance types, and CIDR blocks
    - Add AllowedValues constraints for validation
    - Create proper parameter descriptions and defaults
-   - Use parameter types appropriately (AWS::EC2::Image::Id, etc.)
+   - Use parameter types appropriately like String or Number types
 
 3. **Mappings Section**
-   - Create environment-specific configurations (dev/staging/prod)
-   - Map instance types, RDS sizes, cache node counts by environment
+   - Create environment-specific configurations for dev, staging, and prod
+   - Map instance types, RDS sizes, and cache node counts by environment
    - Include region-specific AMI mappings
    - Consolidate duplicate configuration values
 
@@ -44,13 +56,13 @@ Create an optimized CloudFormation template using **CloudFormation with JSON** t
 
 6. **Intrinsic Function Modernization**
    - Replace all Fn::Join usage with Fn::Sub
-   - Use exclamation mark syntax (!Sub, !Ref, !GetAtt)
+   - Use exclamation mark shorthand syntax
    - Improve readability with cleaner syntax
    - Maintain exact functionality
 
-7. **Conditional Resource Creation**
+7. **Add Conditional Logic**
    - Implement Conditions based on Environment parameter
-   - Control creation of dev/staging/prod specific resources
+   - Control creation of environment-specific resources
    - Use conditions for cost optimization in non-prod
    - Apply conditions consistently
 
@@ -61,9 +73,9 @@ Create an optimized CloudFormation template using **CloudFormation with JSON** t
    - Protect critical data resources
 
 9. **Pseudo Parameters**
-   - Replace hardcoded region values with AWS::Region
-   - Replace hardcoded account IDs with AWS::AccountId
-   - Use AWS::StackName and AWS::StackId where applicable
+   - Replace hardcoded region values with dynamic region references
+   - Replace hardcoded account IDs with account ID references
+   - Use stack name and stack ID references where applicable
    - Eliminate region-specific hardcoding
 
 10. **IMDSv2 Configuration**
@@ -73,7 +85,7 @@ Create an optimized CloudFormation template using **CloudFormation with JSON** t
     - Meet security compliance requirements
 
 11. **CloudFormation Designer Metadata**
-    - Add Metadata sections with AWS::CloudFormation::Designer information
+    - Add Metadata sections with Designer information
     - Include layout coordinates for visual representation
     - Support CloudFormation Designer compatibility
     - Maintain template readability
@@ -92,7 +104,7 @@ Create an optimized CloudFormation template using **CloudFormation with JSON** t
 - Use **Auto Scaling Group** with EC2 instances for application tier
 - Use **RDS Aurora MySQL** cluster for database
 - Use **ElastiCache Redis** cluster for caching
-- Resource names must include **environmentSuffix** for uniqueness
+- All names must include **environmentSuffix** for uniqueness
 - Follow naming convention: resource-type-environment-suffix
 - Deploy to **us-east-1** region
 - Support deployment from AWS CLI 2.x with CloudFormation permissions
@@ -102,7 +114,7 @@ Create an optimized CloudFormation template using **CloudFormation with JSON** t
 - No breaking changes to existing infrastructure
 - Must support rolling updates without downtime
 - Maintain all current security configurations
-- All resources must be destroyable (use appropriate DeletionPolicy)
+- All resources must be destroyable by using appropriate DeletionPolicy
 - Include proper error handling and validation
 - Support multi-AZ deployment across 3 availability zones
 - Meet financial services security compliance requirements
@@ -115,29 +127,29 @@ Create an optimized CloudFormation template using **CloudFormation with JSON** t
 - **Security**: IMDSv2 enabled, security groups consolidated
 - **Maintainability**: Clear parameter structure, proper mappings
 - **Multi-environment**: Single template supports dev/staging/prod
-- **Resource Naming**: All resources include environmentSuffix parameter
+- **Naming Convention**: All resources include environmentSuffix parameter
 - **Code Quality**: Clean JSON syntax, well-documented, follows CloudFormation best practices
 
-## Deployment Requirements (CRITICAL)
+## Deployment Requirements - CRITICAL
 
 - All resources MUST include environmentSuffix parameter in their names
 - Use appropriate DeletionPolicy to allow clean teardown
-- RDS resources: DeletionPolicy Snapshot (can be changed to Delete for testing)
-- S3 buckets: DeletionPolicy Retain (protect data)
-- Other resources: DeletionPolicy Delete (allow cleanup)
+- RDS resources: DeletionPolicy Snapshot, can be changed to Delete for testing
+- S3 buckets: DeletionPolicy Retain to protect data
+- Other resources: DeletionPolicy Delete to allow cleanup
 - No hardcoded region or account values - use pseudo parameters
-- All EC2 instances must enforce IMDSv2 (MetadataOptions configuration)
+- All EC2 instances must enforce IMDSv2 via MetadataOptions configuration
 
 ## What to deliver
 
 - Complete CloudFormation JSON implementation
-- Optimized template (TapStack.json)
+- Optimized template TapStack.json
 - VPC with multi-AZ networking
 - Application Load Balancer configuration
 - Auto Scaling Group with launch configuration
 - RDS Aurora MySQL cluster
 - ElastiCache Redis cluster
-- Consolidated security groups (3 groups)
+- Consolidated security groups with 3 groups total
 - Parameters section with all extracted values
 - Mappings section for environment configurations
 - Conditions section for environment-specific resources
