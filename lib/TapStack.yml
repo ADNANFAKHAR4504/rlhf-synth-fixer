@@ -111,10 +111,6 @@ Parameters:
     MaxValue: 100
     ConstraintDescription: Must be between 50 and 100
   
-  LatestAmiId:
-    Type: AWS::EC2::Image::Id
-    Default: ami-0abcdef1234567890
-    Description: Amazon Linux 2 AMI ID for LocalStack deployment
 
 # ==========================================
 # CONDITIONS
