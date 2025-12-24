@@ -588,6 +588,7 @@ Resources:
   # ========== RDS Database ==========
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    DependsOn: DatabasePasswordParameter
     Properties:
       DBSubnetGroupName: !Sub '${AWS::StackName}-db-subnet-group'
       DBSubnetGroupDescription: Subnet group for RDS database
@@ -600,6 +601,7 @@ Resources:
   
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn: DatabasePasswordParameter
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:

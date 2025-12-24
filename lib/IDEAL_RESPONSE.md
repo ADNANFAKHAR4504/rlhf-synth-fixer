@@ -601,6 +601,7 @@ Resources:
   
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn: DatabasePasswordParameter
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
