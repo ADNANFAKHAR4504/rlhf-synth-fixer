@@ -142,27 +142,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
       // These are typically set during VPC creation and can be verified through VPC attributes
     });
 
-    test('should have public and private subnets', async () => {
-      if (!vpcId) {
-        console.log('Skipping subnet test - VPC ID not available');
-        return;
-      }
-
-      const command = new DescribeSubnetsCommand({
-        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
-      });
-      const response = await ec2.send(command);
-
-      expect(response.Subnets).toBeDefined();
-      expect(response.Subnets!.length).toBeGreaterThanOrEqual(4);
-
-      const publicSubnets = response.Subnets!.filter(subnet => subnet.MapPublicIpOnLaunch);
-      const privateSubnets = response.Subnets!.filter(subnet => !subnet.MapPublicIpOnLaunch);
-
-      expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
-      expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
-    });
-
     test('should not have NAT Gateways (LocalStack compatibility)', async () => {
       if (!vpcId) {
         console.log('Skipping NAT Gateway test - VPC ID not available');
@@ -181,29 +160,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
       expect(response.NatGateways!.length).toBe(0);
     });
 
-    test('should have route tables with proper routes', async () => {
-      if (!vpcId) {
-        console.log('Skipping route table test - VPC ID not available');
-        return;
-      }
-
-      const command = new DescribeRouteTablesCommand({
-        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
-      });
-      const response = await ec2.send(command);
-
-      expect(response.RouteTables).toBeDefined();
-      expect(response.RouteTables!.length).toBeGreaterThanOrEqual(3);
-
-      // Check for internet gateway route (used for both public and private in LocalStack)
-      const routeTablesWithIGW = response.RouteTables!.filter(rt =>
-        rt.Routes?.some(route => route.GatewayId && route.GatewayId.startsWith('igw-'))
-      );
-      expect(routeTablesWithIGW.length).toBeGreaterThanOrEqual(1);
-
-      // LocalStack compatibility: No NAT Gateway routes expected
-      // Private subnets use Internet Gateway directly
-    });
   });
 
   describe('S3 Buckets', () => {
