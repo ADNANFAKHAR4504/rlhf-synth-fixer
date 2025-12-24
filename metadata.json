@@ -1,0 +1,22 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912395",
+  "team": "synth",
+  "startedAt": "2025-11-19T06:07:00-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "KMS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
