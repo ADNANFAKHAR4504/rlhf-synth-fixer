@@ -3,7 +3,7 @@
   "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "trainr122",
+  "po_id": "LS-trainr122",
   "team": "synth-2",
   "startedAt": "2025-08-12T15:28:28-05:00",
   "subtask": "Provisioning of Infrastructure Environments",
@@ -20,5 +20,8 @@
     "RDS",
     "SSM"
   ],
-  "wave": "P0"
-}
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr122",
+    "pr": "Pr1077"
+  }
