@@ -31,17 +31,27 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
+// LocalStack endpoint configuration
+const isLocalStack = process.env.PROVIDER === 'localstack';
+const localStackEndpoint = 'http://localhost:4566';
+const awsConfig = isLocalStack
+  ? { region: process.env.AWS_REGION || 'us-east-1', endpoint: localStackEndpoint }
+  : { region: process.env.AWS_REGION || 'us-east-1' };
+const sdkV3Config = isLocalStack
+  ? { region: process.env.AWS_REGION || 'us-east-1', endpoint: localStackEndpoint, forcePathStyle: true }
+  : { region: process.env.AWS_REGION || 'us-east-1' };
+
 // Initialize AWS SDK clients
-const emrClient = new AWS.EMR({ region: process.env.AWS_REGION });
-const s3Client = new S3Client({ region: process.env.AWS_REGION });
-const sfnClient = new SFNClient({ region: process.env.AWS_REGION });
-const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION });
-const cloudWatchLogsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION });
-const ec2Client = new AWS.EC2({ region: process.env.AWS_REGION });
-const iamClient = new AWS.IAM({ region: process.env.AWS_REGION });
-const lambdaClient = new AWS.Lambda({ region: process.env.AWS_REGION });
-const snsClient = new AWS.SNS({ region: process.env.AWS_REGION });
-const kmsClient = new AWS.KMS({ region: process.env.AWS_REGION });
+const emrClient = new AWS.EMR(awsConfig);
+const s3Client = new S3Client(sdkV3Config);
+const sfnClient = new SFNClient(sdkV3Config);
+const cloudWatchClient = new CloudWatchClient(sdkV3Config);
+const cloudWatchLogsClient = new CloudWatchLogsClient(sdkV3Config);
+const ec2Client = new AWS.EC2(awsConfig);
+const iamClient = new AWS.IAM(awsConfig);
+const lambdaClient = new AWS.Lambda(awsConfig);
+const snsClient = new AWS.SNS(awsConfig);
+const kmsClient = new AWS.KMS(awsConfig);
 
 // Helper function to create test transaction data
 const createTestTransactionData = (): Buffer => {
