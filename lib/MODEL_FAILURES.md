@@ -62,7 +62,7 @@ The complete DynamoDB implementation is preserved in the template for reference.
 1. **LocalStack Pro**: Upgrade to Pro license (supports DynamoDB)
 2. **AWS Deployment**: Change provider to `aws` in metadata.json
 
-See **LOCALSTACK_MIGRATION.md** for detailed migration instructions including:
+See **lib/LOCALSTACK_MIGRATION.md** for detailed migration instructions including:
 - Step-by-step restoration process
 - Complete DynamoDB resource definitions
 - Test updates required

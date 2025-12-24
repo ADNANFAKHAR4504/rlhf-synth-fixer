@@ -2,7 +2,7 @@
 # LocalStack Compatibility Note:
 # This template includes DynamoDB resources for the complete AWS solution.
 # For LocalStack Community deployment, DynamoDB resources are excluded (not available in Community edition).
-# See LOCALSTACK_MIGRATION.md for migration path to LocalStack Pro or full AWS deployment.
+# See lib/LOCALSTACK_MIGRATION.md for migration path to LocalStack Pro or full AWS deployment.
 
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Multi-environment web application infrastructure with S3, DynamoDB, IAM, CloudWatch, and SSM Parameter Store'
