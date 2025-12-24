@@ -1,114 +1,160 @@
-# Multi-Region High-Availability Web Application Deployment
+# Multi-Region High-Availability Web Application Deployment (LocalStack Single-Region)
 
-This solution deploys a highly available web application across two AWS regions (us-east-1 and us-west-2) with automatic failover using Route 53, EC2 instances, and VPC networking.
+This solution demonstrates a web application infrastructure designed for multi-region deployment, currently configured for single-region LocalStack testing. The architecture can be expanded to full multi-region AWS deployment by uncommenting the secondary region code.
 
 ## Architecture Overview
 
-The infrastructure creates:
-- VPC with public subnets across 2 availability zones per region
-- EC2 instances (2 per region) running Apache web server
-- Route 53 hosted zone for DNS management and failover
+The infrastructure creates (in us-east-1):
+- VPC with public subnets across 2 availability zones
+- EC2 instances (2 per AZ) running Apache web server
 - Security groups allowing HTTP/HTTPS traffic
 - IAM roles for EC2 instances with SSM and CloudWatch permissions
+- TapStack for deployment validation and output aggregation
+
+Additional components available (commented out for LocalStack):
+- Secondary region deployment in us-west-2 (identical infrastructure)
+- Route 53 hosted zone for DNS management and failover
 
 ## LocalStack Compatibility Notes
 
 This implementation is optimized for LocalStack Community Edition:
+- Single-region deployment (us-east-1) - LocalStack Community runs in a single endpoint
+- Secondary region (us-west-2) is commented out but can be enabled for AWS deployment
 - Uses standalone EC2 instances instead of AutoScaling Groups (not supported in LocalStack Community)
 - Deploys instances in public subnets to avoid NAT Gateway requirements
-- Simplified Route 53 configuration with manual CNAME records
+- Route 53 stack commented out to avoid cross-region token issues
 - All resources have RemovalPolicy.DESTROY for easy cleanup
 
 ## Implementation Files
 
 ### bin/tap.ts
 
-The entry point that creates the multi-region deployment:
+The entry point that creates the deployment with LocalStack-compatible single-region setup:
 
 ```typescript
 #!/usr/bin/env node
-import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
+import { Tags } from 'aws-cdk-lib';
 import { NetworkStack } from '../lib/network-stack';
+// LocalStack: Use simplified webapp stack without AutoScaling/ELB
 import { WebAppStack } from '../lib/webapp-stack-localstack';
-import { SimpleRoute53Stack } from '../lib/simple-route53-stack';
 import { TapStack } from '../lib/tap-stack';
+// import { SimpleRoute53Stack } from '../lib/simple-route53-stack';
 
 const app = new cdk.App();
 
-const environmentSuffix =
-  app.node.tryGetContext('environmentSuffix') ||
-  process.env.ENVIRONMENT_SUFFIX ||
-  'dev';
+// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 
-// Primary Region: us-east-1
+const repositoryName = process.env.REPOSITORY || 'iac-test-automations';
+const commitAuthor = process.env.COMMIT_AUTHOR || 'localstack-migration';
+const account = process.env.CDK_DEFAULT_ACCOUNT || '000000000000';
+
+// Apply tags to all stacks in this app
+Tags.of(app).add('Environment', environmentSuffix);
+Tags.of(app).add('Repository', repositoryName);
+Tags.of(app).add('Author', commitAuthor);
+Tags.of(app).add('LocalStackMigration', 'Pr921');
+
+// Primary region (us-east-1) infrastructure
 const primaryNetworkStack = new NetworkStack(
   app,
-  `NetworkStack-useast1-${environmentSuffix}`,
+  `PrimaryNetworkStack${environmentSuffix}`,
   {
-    env: { region: 'us-east-1' },
-    environmentSuffix: environmentSuffix,
-    regionName: 'us-east-1',
+    stackName: `Primary-Network-${environmentSuffix}`,
+    environmentSuffix,
+    regionName: 'primary',
+    env: {
+      account,
+      region: 'us-east-1',
+    },
   }
 );
 
 const primaryWebAppStack = new WebAppStack(
   app,
-  `WebAppStack-useast1-${environmentSuffix}`,
+  `PrimaryWebAppStack${environmentSuffix}`,
   {
-    env: { region: 'us-east-1' },
-    environmentSuffix: environmentSuffix,
+    stackName: `Primary-WebApp-${environmentSuffix}`,
+    environmentSuffix,
     vpc: primaryNetworkStack.vpc,
-    regionName: 'us-east-1',
+    regionName: 'primary',
+    env: {
+      account,
+      region: 'us-east-1',
+    },
   }
 );
-primaryWebAppStack.addDependency(primaryNetworkStack);
 
-// Secondary Region: us-west-2
+// LocalStack: Secondary region (us-west-2) infrastructure commented out for testing
+// LocalStack Community runs in a single endpoint, multi-region deployment is complex
+// Uncomment below for actual AWS deployment
+/*
 const secondaryNetworkStack = new NetworkStack(
   app,
-  `NetworkStack-uswest2-${environmentSuffix}`,
+  `SecondaryNetworkStack${environmentSuffix}`,
   {
-    env: { region: 'us-west-2' },
-    environmentSuffix: environmentSuffix,
-    regionName: 'us-west-2',
+    stackName: `Secondary-Network-${environmentSuffix}`,
+    environmentSuffix,
+    regionName: 'secondary',
+    env: {
+      account,
+      region: 'us-west-2',
+    },
   }
 );
 
 const secondaryWebAppStack = new WebAppStack(
   app,
-  `WebAppStack-uswest2-${environmentSuffix}`,
+  `SecondaryWebAppStack${environmentSuffix}`,
   {
-    env: { region: 'us-west-2' },
-    environmentSuffix: environmentSuffix,
+    stackName: `Secondary-WebApp-${environmentSuffix}`,
+    environmentSuffix,
     vpc: secondaryNetworkStack.vpc,
-    regionName: 'us-west-2',
+    regionName: 'secondary',
+    env: {
+      account,
+      region: 'us-west-2',
+    },
   }
 );
-secondaryWebAppStack.addDependency(secondaryNetworkStack);
+*/
 
-// Route53 Stack (Global)
-const route53Stack = new SimpleRoute53Stack(
-  app,
-  `Route53Stack-${environmentSuffix}`,
-  {
-    env: { region: 'us-east-1' },
-    environmentSuffix: environmentSuffix,
-  }
-);
+// Global Route 53 DNS management (deployed to us-east-1)
+// Note: Route53 stack commented out for initial deployment to avoid cross-region token issues
+// Deploy infrastructure first, then manually configure Route53 or use a separate stack
+// new SimpleRoute53Stack(app, `Route53Stack${environmentSuffix}`, {
+//   stackName: `Route53-${environmentSuffix}`,
+//   environmentSuffix,
+//   env: {
+//     account,
+//     region: 'us-east-1',
+//   },
+// });
 
-// TapStack to aggregate outputs
-const tapStack = new TapStack(app, `TapStack-${environmentSuffix}`, {
-  env: { region: 'us-east-1' },
-  environmentSuffix: environmentSuffix,
+// Set dependencies to ensure proper deployment order
+primaryWebAppStack.addDependency(primaryNetworkStack);
+// LocalStack: Secondary stack commented out
+// secondaryWebAppStack.addDependency(secondaryNetworkStack);
+
+// Create TapStack to aggregate outputs for deployment validation
+// The deployment script looks for stacks with "TapStack" in their name
+const tapStack = new TapStack(app, `TapStack${environmentSuffix}`, {
+  stackName: `TapStack-${environmentSuffix}`,
+  environmentSuffix,
   outputs: {
-    PrimaryRegionDns: primaryWebAppStack.instanceDnsName,
-    SecondaryRegionDns: secondaryWebAppStack.instanceDnsName,
+    PrimaryInstanceDns: primaryWebAppStack.instanceDnsName,
+    DeploymentRegion: 'us-east-1',
+    StackType: 'LocalStack-Compatible',
+  },
+  env: {
+    account,
+    region: 'us-east-1',
   },
 });
+
+// TapStack depends on WebAppStack to ensure outputs are available
 tapStack.addDependency(primaryWebAppStack);
-tapStack.addDependency(secondaryWebAppStack);
-tapStack.addDependency(route53Stack);
 ```
 
 ### lib/network-stack.ts
@@ -483,36 +529,41 @@ npm test
 ```
 
 The tests verify:
-- VPC creation in both regions
-- EC2 instance deployment
+- VPC creation in the primary region (us-east-1)
+- EC2 instance deployment and availability
 - Security group configuration
-- Route 53 hosted zone setup
-- CloudFormation outputs
+- CloudFormation outputs and TapStack validation
+- Infrastructure is ready for LocalStack deployment
 
 ## Key Features
 
-1. Multi-Region Deployment: Infrastructure in us-east-1 and us-west-2
-2. High Availability: 2 EC2 instances per region across multiple AZs
-3. DNS Management: Route 53 hosted zone with CNAME records
+1. Single-Region Deployment (for LocalStack): Infrastructure in us-east-1 only
+2. Multi-Region Ready: Secondary region code available (commented out) for AWS deployment
+3. High Availability: 2 EC2 instances across multiple AZs in primary region
 4. Security: Security groups restricting traffic to HTTP/HTTPS only
 5. Monitoring: IAM roles enable CloudWatch metrics and SSM access
 6. LocalStack Compatible: Uses services available in LocalStack Community Edition
 7. Easy Cleanup: All resources have RemovalPolicy.DESTROY
+8. Deployment Validation: TapStack aggregates outputs for automated testing
 
 ## Trade-offs for LocalStack Compatibility
 
 This LocalStack-compatible version makes these simplifications:
 
-1. EC2 instances instead of AutoScaling Groups (not supported in LocalStack Community)
-2. No Application Load Balancers (not fully supported in LocalStack Community)
-3. Public subnets only to avoid NAT Gateway dependencies
-4. Manual CNAME records instead of dynamic failover routing
-5. Simplified Route 53 configuration without health checks
+1. Single-region deployment (us-east-1 only) - LocalStack Community runs in a single endpoint
+2. Secondary region (us-west-2) commented out but available for AWS deployment
+3. EC2 instances instead of AutoScaling Groups (not supported in LocalStack Community)
+4. No Application Load Balancers (not fully supported in LocalStack Community)
+5. Public subnets only to avoid NAT Gateway dependencies
+6. Route 53 stack commented out to avoid cross-region token issues
+7. Simplified DNS configuration without health checks or failover
 
-For production AWS deployment, you would add:
-- AutoScaling Groups with target tracking policies
-- Application Load Balancers in each region
-- Private subnets with NAT Gateways
-- Route 53 health checks and failover policies
-- CloudWatch alarms for monitoring
-- VPC Flow Logs for network analysis
+For production multi-region AWS deployment, you would:
+- Uncomment the secondary region code in bin/tap.ts
+- Uncomment the Route53 stack for DNS management
+- Add AutoScaling Groups with target tracking policies
+- Add Application Load Balancers in each region
+- Add private subnets with NAT Gateways
+- Configure Route 53 health checks and failover policies
+- Add CloudWatch alarms for monitoring
+- Add VPC Flow Logs for network analysis
