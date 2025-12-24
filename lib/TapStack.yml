@@ -325,6 +325,20 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-TableDetails"
 
+  # Placeholder outputs for post-deployment fix script (no VPC resources in this template)
+  VPC:
+    Description: "VPC ID (not applicable - no VPC resources)"
+    Value: ""
+  SecurityGroup:
+    Description: "Security Group ID (not applicable - no VPC resources)"
+    Value: ""
+  InternetGateway:
+    Description: "Internet Gateway ID (not applicable - no VPC resources)"
+    Value: ""
+  NATGateway:
+    Description: "NAT Gateway ID (not applicable - no VPC resources)"
+    Value: ""
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
