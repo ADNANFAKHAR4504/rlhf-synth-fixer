@@ -6,10 +6,10 @@
   "po_id": "LS-291415",
   "team": "synth-2",
   "startedAt": "2025-08-05T16:09:53.106Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "DynamoDB",
