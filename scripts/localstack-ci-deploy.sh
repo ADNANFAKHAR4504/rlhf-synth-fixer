@@ -352,7 +352,7 @@ deploy_cdk() {
 
     # Bootstrap CDK for LocalStack
     print_status $YELLOW "🔧 Bootstrapping CDK..."
-    cdklocal bootstrap -c environmentSuffix="$env_suffix" || true
+    cdklocal bootstrap -c environmentSuffix="$env_suffix"
 
     # Deploy based on language
     print_status $YELLOW "🚀 Deploying stacks..."
