@@ -693,11 +693,16 @@ describe('TapStack Serverless Application Integration Tests', () => {
       }
 
       expect(apiUrl).toContain('execute-api');
-      expect(apiUrl).toContain(region);
 
       // Extract API ID from URL
-      const apiId = apiUrl.split('//')[1].split('.')[0];
-      
+      // For AWS: https://{api-id}.execute-api.{region}.amazonaws.com/{stage}
+      // For LocalStack: https://{api-id}.execute-api.localhost.localstack.cloud:4566/{stage}
+      const urlParts = apiUrl.split('//')[1]?.split('.') || [];
+      const apiId = urlParts[0];
+
+      expect(apiId).toBeDefined();
+      expect(apiId).not.toBe('');
+
       try {
         const response = await apigateway.send(new GetRestApiCommand({
           restApiId: apiId
