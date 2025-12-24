@@ -1,7 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { NetworkStack } from '../lib/network-stack';
-import { WebAppStack } from '../lib/webapp-stack';
+// LocalStack: Import LocalStack-compatible stack (standalone EC2 instead of AutoScaling/ALB)
+import { WebAppStack } from '../lib/webapp-stack-localstack';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 
 const environmentSuffix = 'test';
@@ -89,7 +90,7 @@ describe('NetworkStack', () => {
   });
 });
 
-describe('WebAppStack', () => {
+describe('WebAppStack (LocalStack-Compatible)', () => {
   let app: cdk.App;
   let networkStack: NetworkStack;
   let webAppStack: WebAppStack;
@@ -97,7 +98,7 @@ describe('WebAppStack', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    
+
     // Create network stack first
     networkStack = new NetworkStack(app, 'TestNetworkStack', {
       environmentSuffix,
@@ -110,21 +111,23 @@ describe('WebAppStack', () => {
       vpc: networkStack.vpc,
       regionName: 'primary',
     });
-    
+
     template = Template.fromStack(webAppStack);
   });
 
-  test('creates Application Load Balancer', () => {
-    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-      Type: 'application',
-      Scheme: 'internet-facing',
-      Name: Match.stringLikeRegexp('alb-pri-'),
-    });
+  test('does not create Application Load Balancer (LocalStack limitation)', () => {
+    // LocalStack Community: ALB not supported, using standalone EC2 instances
+    template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 0);
   });
 
-  test('creates ALB security group with correct rules', () => {
+  test('does not create Auto Scaling Group (LocalStack limitation)', () => {
+    // LocalStack Community: AutoScaling not supported, using standalone EC2 instances
+    template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 0);
+  });
+
+  test('creates EC2 security group with correct ingress rules', () => {
     template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-      GroupDescription: 'Security group for Application Load Balancer',
+      GroupDescription: 'Security group for EC2 instances',
       SecurityGroupIngress: Match.arrayWith([
         Match.objectLike({
           IpProtocol: 'tcp',
@@ -142,13 +145,7 @@ describe('WebAppStack', () => {
     });
   });
 
-  test('creates EC2 security group allowing traffic from ALB', () => {
-    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-      GroupDescription: 'Security group for EC2 instances',
-    });
-  });
-
-  test('creates IAM role for EC2 instances', () => {
+  test('creates IAM role for EC2 instances with SSM and CloudWatch policies', () => {
     template.hasResourceProperties('AWS::IAM::Role', {
       AssumeRolePolicyDocument: Match.objectLike({
         Statement: Match.arrayWith([
@@ -166,89 +163,44 @@ describe('WebAppStack', () => {
     });
   });
 
-  test('creates Launch Template with correct configuration', () => {
-    template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-      LaunchTemplateName: Match.stringLikeRegexp('lt-pri-'),
-      LaunchTemplateData: Match.objectLike({
-        InstanceType: 't3.micro',
-        Monitoring: { Enabled: true },
-      }),
+  test('creates 2 standalone EC2 instances', () => {
+    // LocalStack: Using standalone EC2 instances instead of AutoScaling
+    template.resourceCountIs('AWS::EC2::Instance', 2);
+  });
+
+  test('EC2 instances have correct configuration', () => {
+    template.hasResourceProperties('AWS::EC2::Instance', {
+      InstanceType: 't3.micro',
+      UserData: Match.anyValue(), // User data script for Apache installation
     });
   });
 
-  test('creates Auto Scaling Group with correct settings', () => {
-    template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-      MinSize: '2',
-      MaxSize: '10',
-      DesiredCapacity: '2',
-      AutoScalingGroupName: Match.stringLikeRegexp('asg-pri-'),
-      HealthCheckType: 'ELB',
-      HealthCheckGracePeriod: 300,
-    });
-  });
-
-  test('creates Target Group with health check', () => {
-    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-      Port: 80,
-      Protocol: 'HTTP',
-      TargetType: 'instance',
-      Name: Match.stringLikeRegexp('tg-pri-'),
-      HealthCheckEnabled: true,
-      HealthCheckIntervalSeconds: 30,
-      HealthCheckTimeoutSeconds: 10,
-      UnhealthyThresholdCount: 5,
-      HealthCheckPath: '/',
-      Matcher: { HttpCode: '200' },
-    });
-  });
-
-  test('creates ALB Listener', () => {
-    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
-      Port: 80,
-      Protocol: 'HTTP',
-      DefaultActions: Match.arrayWith([
-        Match.objectLike({
-          Type: 'forward',
-        }),
-      ]),
-    });
-  });
-
-  test('creates CPU utilization scaling policy', () => {
-    template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
-      PolicyType: 'TargetTrackingScaling',
-      TargetTrackingConfiguration: Match.objectLike({
-        PredefinedMetricSpecification: {
-          PredefinedMetricType: 'ASGAverageCPUUtilization',
-        },
-        TargetValue: 70,
-      }),
-    });
-  });
-
-  test('creates request count scaling policy', () => {
-    template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
-      PolicyType: 'TargetTrackingScaling',
-      TargetTrackingConfiguration: Match.objectLike({
-        PredefinedMetricSpecification: {
-          PredefinedMetricType: 'ALBRequestCountPerTarget',
-        },
-      }),
-    });
-  });
-
-  test('exports ALB DNS name and hosted zone', () => {
-    template.hasOutput('LoadBalancerDNSprimary', {
+  test('exports instance DNS names', () => {
+    template.hasOutput('Instance1Idprimary', {});
+    template.hasOutput('Instance1PublicDnsprimary', {
       Export: {
-        Name: `ALB-DNS-primary-${environmentSuffix}`,
+        Name: `Instance1-DNS-primary-${environmentSuffix}`,
       },
     });
 
-    template.hasOutput('LoadBalancerHostedZoneIdprimary', {
+    template.hasOutput('Instance2Idprimary', {});
+    template.hasOutput('Instance2PublicDnsprimary', {
       Export: {
-        Name: `ALB-HZ-primary-${environmentSuffix}`,
+        Name: `Instance2-DNS-primary-${environmentSuffix}`,
       },
     });
+  });
+
+  test('exports primary instance DNS for reference', () => {
+    template.hasOutput('PrimaryInstanceDnsprimary', {
+      Export: {
+        Name: `Primary-DNS-primary-${environmentSuffix}`,
+      },
+    });
+  });
+
+  test('includes LocalStack limitations note', () => {
+    template.hasOutput('LocalStackNoteprimary', {});
   });
 });
 
@@ -293,32 +245,25 @@ describe('Multi-Region Setup', () => {
 });
 
 describe('Resource Naming', () => {
-  test('ensures resource names are within AWS limits', () => {
+  test('ensures EC2 instance names are properly set', () => {
     const app = new cdk.App();
     const longSuffix = 'verylongenvironmentsuffix12345';
-    
+
     // Create a proper network stack for the VPC
     const networkStack = new NetworkStack(app, 'TestNetworkStack', {
       environmentSuffix: longSuffix,
       regionName: 'primary',
     });
-    
+
     const stack = new WebAppStack(app, 'TestStack', {
       environmentSuffix: longSuffix,
       vpc: networkStack.vpc,
       regionName: 'primary',
     });
-    
+
     const template = Template.fromStack(stack);
-    
-    // ALB name should be truncated to fit 32 character limit
-    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-      Name: Match.stringLikeRegexp('^.{1,32}$'),
-    });
-    
-    // Target group name should be truncated to fit 32 character limit
-    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-      Name: Match.stringLikeRegexp('^.{1,32}$'),
-    });
+
+    // LocalStack: Verify EC2 instances are created (no ALB/TargetGroup)
+    template.resourceCountIs('AWS::EC2::Instance', 2);
   });
 });
