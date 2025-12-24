@@ -64,4 +64,4 @@ Template must be compliant with AWS CloudFormation Linter.
 Output Format
 Output a single CloudFormation JSON file.
 
-Do not include extra explanations or text—just the JSON template, fully formatted and ready for validation and deployment.
+Do not include extra explanations or text - just the JSON template, fully formatted and ready for validation and deployment.
