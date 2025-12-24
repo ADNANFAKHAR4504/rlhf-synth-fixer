@@ -72,20 +72,19 @@ describe('Route53 Failover CloudFormation Template', () => {
     });
   });
 
-  describe('Mappings', () => {
-    test('should have RegionMap with AMI mappings', () => {
-      expect(template.Mappings.RegionMap).toBeDefined();
-      expect(template.Mappings.RegionMap['us-east-1']).toBeDefined();
-      expect(template.Mappings.RegionMap['us-east-1'].AMI).toBeDefined();
+  describe('AMI Configuration', () => {
+    test('should have LatestAmiId parameter for SSM resolution', () => {
+      expect(template.Parameters.LatestAmiId).toBeDefined();
+      const param = template.Parameters.LatestAmiId;
+      expect(param.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(param.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
     });
 
-    test('should have multiple regions in AMI mappings', () => {
-      const regionMap = template.Mappings.RegionMap;
-      const regions = Object.keys(regionMap);
-      expect(regions.length).toBeGreaterThan(5);
-      expect(regions).toContain('us-east-1');
-      expect(regions).toContain('us-west-2');
-      expect(regions).toContain('eu-west-1');
+    test('should reference LatestAmiId in EC2 instances', () => {
+      const primaryInstance = template.Resources.PrimaryEC2Instance;
+      const standbyInstance = template.Resources.StandbyEC2Instance;
+      expect(primaryInstance.Properties.ImageId).toEqual({ Ref: 'LatestAmiId' });
+      expect(standbyInstance.Properties.ImageId).toEqual({ Ref: 'LatestAmiId' });
     });
   });
 
@@ -312,7 +311,7 @@ describe('Route53 Failover CloudFormation Template', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5);
+      expect(parameterCount).toBe(6); // Updated: added LatestAmiId parameter
     });
 
     test('should have expected number of outputs', () => {
