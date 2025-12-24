@@ -6,7 +6,7 @@
   "po_id": "LS-291170",
   "team": "synth-2",
   "startedAt": "2025-12-24T10:30:00Z",
-  "subtask": "Security and Compliance Implementation",
+  "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
     "Security Configuration as Code"
