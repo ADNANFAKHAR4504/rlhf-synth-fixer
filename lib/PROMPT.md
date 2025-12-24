@@ -1,35 +1,71 @@
-** Prompt for Claude Sonnet (or similar advanced LLM)**
+# Multi-Environment CloudFormation Setup
 
-> You are a senior cloud infrastructure architect specializing in Infrastructure as Code (IaC) using AWS CloudFormation in YAML format. Your mission is to create **modular, reusable templates** that enable consistent deployment across multiple environments: `development`, `testing`, `staging`, and `production`.
->
-> ** Objective:**
->
-> * Design CloudFormation templates that deploy identical AWS resources across all environments with minimal duplication.
-> * Ensure **environment-specific configuration** (like instance types, CIDR blocks, tags, scaling policies, AMI IDs) is handled **dynamically** via **CloudFormation `Parameters` and `Mappings`**, not by duplicating template logic.
->
-> ** Requirements:**
->
-> 1. Use **CloudFormation parameters and mappings** to abstract configuration values per environment.
-> 2. Ensure the templates are **modular**, using nested stacks or separate templates for networking, compute, and security components.
-> 3. Apply **resource tagging** to clearly identify the environment for each resource.
-> 4. Provide an example for all environments (`dev`, `test`, `stage`, `prod`) showcasing how the same template adapts with input parameter changes.
-> 5. Output should include:
->
->    * One or more YAML-based CloudFormation templates.
->    * Sample `Parameter` and `Mapping` sections for switching environments.
->    * Optional helper instructions on how to deploy using `aws cloudformation deploy` with parameters for different environments.
->
-> ** Best Practices to Follow:**
->
-> * Use logical resource naming that includes the environment (e.g., `AppServer-Dev`, `AppServer-Prod`).
-> * Keep networking components (VPC, subnets) modular and environment-scoped.
-> * Follow AWS tagging best practices: at minimum include `Environment`, `Owner`, `Project`, and `CostCenter`.
-> * Use Outputs for cross-stack references or debugging.
->
-> ** Acceptance Criteria:**
->
-> * Templates must be valid and pass `cfn-lint`.
-> * Each environment (when passed as a parameter) should result in a consistent but environment-specific deployment.
-> * Resources should be organized clearly, and configuration changes should require editing only mappings or parameter inputs—not core logic.
->
-> Return only the YAML code in a single file  with all the infrastructure in it and brief comments in-line where appropriate. Avoid long explanations unless embedded as YAML comments. Including
+Need a CloudFormation template that can deploy the same infrastructure to dev, test, staging, and prod without copying the whole template for each environment.
+
+## What I Need
+
+Single CFN template in YAML that:
+- Deploys VPC + EC2 instances connected via security groups
+- Uses Parameters and Mappings to handle environment differences
+- Different configs per environment like instance types, CIDR ranges, tags
+- Can deploy to any environment by just changing parameter values
+
+## Requirements
+
+The template should handle these environment-specific things via parameters and mappings:
+- Instance types: t2.micro for dev, larger for prod
+- VPC CIDR blocks: different ranges per environment
+- AMI IDs if needed
+- Resource tags with Environment showing dev/test/stage/prod
+- Any scaling or capacity differences
+
+Don't duplicate the template logic - just use one template with Parameters and Mappings sections that change based on environment input.
+
+## Infrastructure Components and How They Connect
+
+Need these resources with proper connectivity:
+- VPC with public and private subnets in multiple AZs
+- Internet Gateway attached to VPC, providing public subnet internet access
+- NAT Gateway deployed in public subnet to provide private subnet outbound traffic
+- Route tables: public subnets route to IGW, private subnets route to NAT Gateway
+- EC2 web servers deployed in public subnets
+- EC2 app servers deployed in private subnets
+- Security groups:
+  - Web SG: allows inbound HTTP/HTTPS from internet, connects to App SG for backend communication
+  - App SG: receives traffic from Web SG only, communicates with internet via NAT for updates
+
+The traffic flow: Internet traffic connects to IGW, which routes to Web tier EC2 instances in public subnet. Web tier EC2 instances communicate with App tier EC2 in private subnet through security group rules. App tier accesses internet via NAT Gateway for outbound traffic only.
+
+Security groups enforce this connectivity: web tier receives traffic from internet on ports 80/443, app tier only receives traffic from web tier security group, with no direct internet access to app tier.
+
+## Tagging
+
+All resources need these tags at minimum:
+- Environment
+- Owner
+- Project
+- CostCenter
+
+## Outputs
+
+Include outputs for:
+- VPC ID
+- Public Subnet IDs
+- Private Subnet IDs
+- Web tier security group ID
+- App tier security group ID
+- Instance IPs
+
+## Deployment
+
+Should work like:
+```
+aws cloudformation deploy --template-file template.yml --parameter-overrides Environment=dev
+```
+
+Then deploy to prod with:
+```
+aws cloudformation deploy --template-file template.yml --parameter-overrides Environment=prod
+```
+
+Same template, different environments. Keep it straightforward - this is for setting up consistent infrastructure across our deployment pipeline.
