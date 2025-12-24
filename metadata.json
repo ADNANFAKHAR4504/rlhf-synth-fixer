@@ -9,8 +9,9 @@
   "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "Application Hosting/Compute",
-    "Cloud Environment Setup"
+    "Cloud Environment Setup",
+    "Serverless Infrastructure (Functions as Code)",
+    "CI/CD Pipeline"
   ],
   "wave": "P0",
   "training_quality": 9,
