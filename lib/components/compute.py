@@ -270,8 +270,7 @@ class ComputeComponent(pulumi.ComponentResource):
         # In production AWS, this would use aws.ec2.get_ami() to find the latest Ubuntu AMI
         # For LocalStack testing, we use a LocalStack-specific AMI ID
         if is_localstack:
-            # LocalStack accepts this generic AMI ID
-            ubuntu_ami_id = "ami-ff0fea8310f3"
+            ubuntu_ami_id = os.getenv("LOCALSTACK_EC2_AMI_ID", "ami-df5de72bdb3b")
         else:
             # AWS AMI ID for Ubuntu (us-east-1)
             ubuntu_ami_id = "ami-0c55b159cbfafe1f0"

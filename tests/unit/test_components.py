@@ -1,7 +1,9 @@
 import os
 import sys
+import tempfile
+import zipfile
 import unittest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, mock_open
 
 # Set environment variable for Pulumi testing
 os.environ["PULUMI_TEST_MODE"] = "true"
@@ -88,6 +90,50 @@ class TestComponents(unittest.TestCase):
         for module in modules_to_clear:
             if module in sys.modules:
                 del sys.modules[module]
+
+    def _setup_compute_mocks(self):
+        mock_vpc = Mock()
+        mock_vpc.id = "vpc-123"
+
+        mock_igw = Mock()
+
+        mock_subnet = Mock()
+        mock_subnet.id = "subnet-123"
+
+        mock_eip = Mock()
+        mock_nat = Mock()
+
+        mock_route_table = Mock()
+        mock_route_table.id = "rtb-123"
+
+        mock_sg = Mock()
+        mock_sg.id = "sg-123"
+
+        mock_instance = Mock()
+        mock_instance.id = "i-123"
+
+        mock_tg = Mock()
+        mock_tg.arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/test/123"
+
+        mock_alb = Mock()
+        mock_alb.dns_name = "test-alb.us-east-1.elb.amazonaws.com"
+        mock_alb.arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/test/123"
+
+        self.mock_aws.ec2.Vpc = Mock(return_value=mock_vpc)
+        self.mock_aws.ec2.InternetGateway = Mock(return_value=mock_igw)
+        self.mock_aws.ec2.Subnet = Mock(return_value=mock_subnet)
+        self.mock_aws.ec2.Eip = Mock(return_value=mock_eip)
+        self.mock_aws.ec2.NatGateway = Mock(return_value=mock_nat)
+        self.mock_aws.ec2.RouteTable = Mock(return_value=mock_route_table)
+        self.mock_aws.ec2.Route = Mock()
+        self.mock_aws.ec2.RouteTableAssociation = Mock()
+        self.mock_aws.ec2.SecurityGroup = Mock(return_value=mock_sg)
+        self.mock_aws.ec2.SecurityGroupRule = Mock()
+        self.mock_aws.ec2.Instance = Mock(return_value=mock_instance)
+        self.mock_aws.lb.TargetGroup = Mock(return_value=mock_tg)
+        self.mock_aws.lb.TargetGroupAttachment = Mock()
+        self.mock_aws.lb.LoadBalancer = Mock(return_value=mock_alb)
+        self.mock_aws.lb.Listener = Mock()
 
     # ===== IAM Component Tests =====
     def test_iam_component_initialization(self):
@@ -198,6 +244,46 @@ class TestComponents(unittest.TestCase):
         # Verify log.info was called for LocalStack message
         self.mock_pulumi.log.info.assert_called()
 
+    @patch.dict(os.environ, {"PROVIDER": ""})
+    @patch('builtins.open', new_callable=mock_open, read_data='{"provider": "aws"}')
+    @patch('os.path.exists')
+    def test_database_component_reads_metadata_file(self, mock_exists, mock_file):
+        from lib.components.database import DatabaseComponent
+
+        mock_exists.return_value = True
+
+        mock_table = Mock()
+        mock_table.name = "test-table"
+
+        self.mock_aws.dynamodb.Table = Mock(return_value=mock_table)
+        self.mock_aws.dynamodb.TableAttributeArgs = Mock
+        self.mock_aws.dynamodb.TableGlobalSecondaryIndexArgs = Mock
+        self.mock_aws.dynamodb.TablePointInTimeRecoveryArgs = Mock
+
+        DatabaseComponent("test-db", environment="dev", tags={"Environment": "dev"})
+
+        _, kwargs = self.mock_aws.dynamodb.Table.call_args
+        self.assertIn("point_in_time_recovery", kwargs)
+
+    @patch.dict(os.environ, {"PROVIDER": "localstack"})
+    @patch('builtins.open', side_effect=OSError("boom"))
+    @patch('os.path.exists')
+    def test_database_component_metadata_read_error_falls_back_to_env(self, mock_exists, mock_file):
+        from lib.components.database import DatabaseComponent
+
+        mock_exists.return_value = True
+
+        mock_table = Mock()
+        mock_table.name = "test-table"
+
+        self.mock_aws.dynamodb.Table = Mock(return_value=mock_table)
+        self.mock_aws.dynamodb.TableAttributeArgs = Mock
+        self.mock_aws.dynamodb.TableGlobalSecondaryIndexArgs = Mock
+        self.mock_aws.dynamodb.TableGlobalSecondaryIndexArgs = Mock
+
+        DatabaseComponent("test-db", environment="dev", tags={"Environment": "dev"})
+        self.mock_pulumi.log.info.assert_called()
+
     # ===== Serverless Component Tests =====
     def test_serverless_component_creates_lambda(self):
         """Test serverless component creates Lambda function"""
@@ -218,6 +304,40 @@ class TestComponents(unittest.TestCase):
 
         self.assertIsNotNone(component.lambda_function)
         self.assertEqual(component.lambda_function.name, "test-lambda")
+
+    def test_zip_directory_contents_skips_hidden_files(self):
+        from lib.components.serverless import zip_directory_contents
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            src = os.path.join(tmpdir, "src")
+            os.makedirs(src, exist_ok=True)
+            with open(os.path.join(src, ".hidden"), "w", encoding="utf-8") as f:
+                f.write("secret")
+            with open(os.path.join(src, "visible.txt"), "w", encoding="utf-8") as f:
+                f.write("ok")
+
+            out_zip = os.path.join(tmpdir, "out.zip")
+            zip_directory_contents(src, out_zip)
+
+            with zipfile.ZipFile(out_zip, "r") as zf:
+                names = set(zf.namelist())
+            self.assertIn("visible.txt", names)
+            self.assertNotIn(".hidden", names)
+
+    @patch('lib.components.serverless.zip_directory_contents')
+    @patch('os.path.exists', return_value=False)
+    def test_serverless_component_raises_when_zip_missing(self, mock_exists, mock_zip):
+        from lib.components.serverless import ServerlessComponent
+
+        self.mock_aws.lambda_.Function = Mock()
+
+        with self.assertRaises(FileNotFoundError):
+            ServerlessComponent(
+                "test-serverless",
+                environment="dev",
+                tags={"Environment": "dev"},
+                lambda_role_arn="arn:aws:iam::123456789012:role/test-role",
+            )
 
     # ===== Monitoring Component Tests =====
     @patch.dict(os.environ, {"PROVIDER": ""})
@@ -289,6 +409,69 @@ class TestComponents(unittest.TestCase):
         # Verify log.info was called for LocalStack message
         self.mock_pulumi.log.info.assert_called()
 
+    @patch.dict(os.environ, {"PROVIDER": ""})
+    @patch('builtins.open', new_callable=mock_open, read_data='{"provider": "aws"}')
+    @patch('os.path.exists')
+    def test_monitoring_component_reads_metadata_file(self, mock_exists, mock_file):
+        from lib.components.monitoring import MonitoringComponent
+
+        mock_exists.return_value = True
+
+        mock_topic = Mock()
+        mock_topic.arn = "arn:aws:sns:us-east-1:123456789012:test-topic"
+
+        mock_subscription = Mock()
+        mock_alarm = Mock()
+        mock_alarm.name = "test-alarm"
+
+        self.mock_aws.sns.Topic = Mock(return_value=mock_topic)
+        self.mock_aws.sns.TopicSubscription = Mock(return_value=mock_subscription)
+        self.mock_aws.cloudwatch.MetricAlarm = Mock(return_value=mock_alarm)
+
+        mock_instance = Mock()
+        mock_instance._name = "test-instance"
+        mock_instance.id = "i-12345678"
+
+        component = MonitoringComponent(
+            "test-monitoring",
+            instances=[mock_instance],
+            tags={"Environment": "dev"},
+            notification_email="test@example.com",
+        )
+
+        self.assertIsNotNone(component.sns_subscription)
+
+    @patch.dict(os.environ, {"PROVIDER": "localstack"})
+    @patch('builtins.open', side_effect=OSError("boom"))
+    @patch('os.path.exists')
+    def test_monitoring_component_metadata_read_error_falls_back_to_env(self, mock_exists, mock_file):
+        from lib.components.monitoring import MonitoringComponent
+
+        mock_exists.return_value = True
+
+        mock_topic = Mock()
+        mock_topic.arn = "arn:aws:sns:us-east-1:123456789012:test-topic"
+
+        mock_alarm = Mock()
+        mock_alarm.name = "test-alarm"
+
+        self.mock_aws.sns.Topic = Mock(return_value=mock_topic)
+        self.mock_aws.cloudwatch.MetricAlarm = Mock(return_value=mock_alarm)
+
+        mock_instance = Mock()
+        mock_instance._name = "test-instance"
+        mock_instance.id = "i-12345678"
+
+        component = MonitoringComponent(
+            "test-monitoring",
+            instances=[mock_instance],
+            tags={"Environment": "dev"},
+            notification_email="test@example.com",
+        )
+
+        self.assertIsNone(component.sns_subscription)
+        self.mock_pulumi.log.info.assert_called()
+
     # ===== Compute Component Tests =====
     @patch('os.path.exists')
     def test_compute_component_creates_vpc_and_resources(self, mock_exists):
@@ -297,6 +480,67 @@ class TestComponents(unittest.TestCase):
 
         # Mock metadata.json doesn't exist, so it falls back to env var
         mock_exists.return_value = False
+
+        # Mock all required resources
+        self._setup_compute_mocks()
+
+        component = ComputeComponent(
+            "test-compute",
+            environment="dev",
+            tags={"Environment": "dev"},
+            instance_profile="test-profile",
+        )
+
+        self.assertIsNotNone(component.vpc)
+        self.assertEqual(component.vpc.id, "vpc-123")
+        self.assertTrue(len(component.public_subnets) > 0)
+        self.assertTrue(len(component.ec2_instances) > 0)
+        self.assertIsNotNone(component.alb)
+
+    @patch('os.path.exists')
+    def test_compute_component_vpc_cidr_by_environment(self, mock_exists):
+        from lib.components.compute import ComputeComponent
+
+        mock_exists.return_value = False
+        self._setup_compute_mocks()
+
+        for env in ["prod", "test", "staging", "unknown"]:
+            component = ComputeComponent(
+                f"test-compute-{env}",
+                environment=env,
+                tags={"Environment": env},
+                instance_profile="test-profile",
+            )
+            self.assertIsNotNone(component.vpc)
+
+    @patch.dict(os.environ, {"PROVIDER": "localstack"})
+    @patch('builtins.open', side_effect=OSError("boom"))
+    @patch('os.path.exists')
+    def test_compute_component_metadata_read_error_falls_back_to_env(self, mock_exists, mock_file):
+        from lib.components.compute import ComputeComponent
+
+        mock_exists.return_value = True
+        self._setup_compute_mocks()
+        self.mock_aws.ec2.Instance = Mock()
+
+        component = ComputeComponent(
+            "test-compute",
+            environment="dev",
+            tags={"Environment": "dev"},
+            instance_profile="test-profile",
+        )
+
+        self.assertTrue(len(component.ec2_instances) > 0)
+        self.assertEqual(self.mock_aws.ec2.Instance.call_count, len(component.public_subnets))
+
+    @patch.dict(os.environ, {"PROVIDER": ""})
+    @patch('builtins.open', new_callable=mock_open, read_data='{"provider": "localstack"}')
+    @patch('os.path.exists')
+    def test_compute_component_localstack_creates_instances(self, mock_exists, mock_file):
+        """Test compute component creates EC2 instances when running in LocalStack"""
+        from lib.components.compute import ComputeComponent
+
+        mock_exists.return_value = True
 
         # Mock all required resources
         mock_vpc = Mock()
@@ -313,9 +557,6 @@ class TestComponents(unittest.TestCase):
 
         mock_sg = Mock()
         mock_sg.id = "sg-123"
-
-        mock_instance = Mock()
-        mock_instance.id = "i-123"
 
         mock_tg = Mock()
         mock_tg.arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/test/123"
@@ -335,7 +576,7 @@ class TestComponents(unittest.TestCase):
         self.mock_aws.ec2.RouteTableAssociation = Mock()
         self.mock_aws.ec2.SecurityGroup = Mock(return_value=mock_sg)
         self.mock_aws.ec2.SecurityGroupRule = Mock()
-        self.mock_aws.ec2.Instance = Mock(return_value=mock_instance)
+        self.mock_aws.ec2.Instance = Mock()
         self.mock_aws.lb.TargetGroup = Mock(return_value=mock_tg)
         self.mock_aws.lb.TargetGroupAttachment = Mock()
         self.mock_aws.lb.LoadBalancer = Mock(return_value=mock_alb)
@@ -353,6 +594,7 @@ class TestComponents(unittest.TestCase):
         self.assertTrue(len(component.public_subnets) > 0)
         self.assertTrue(len(component.ec2_instances) > 0)
         self.assertIsNotNone(component.alb)
+        self.assertEqual(self.mock_aws.ec2.Instance.call_count, len(component.public_subnets))
 
 
 if __name__ == "__main__":
