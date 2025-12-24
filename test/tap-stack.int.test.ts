@@ -47,17 +47,24 @@ try {
   };
 }
 
-// For LocalStack, construct the API Gateway URL from the REST API ID
+// For LocalStack, the API Gateway URL should already be in LocalStack format
+// But if it's still in AWS format, we need to handle it
 if (isLocalStack && outputs.ApiGatewayUrl) {
-  // Extract API ID from the URL if it's in AWS format
-  const apiIdMatch = outputs.ApiGatewayUrl.match(/https:\/\/([a-z0-9]+)\.execute-api/);
-  if (apiIdMatch) {
-    const apiId = apiIdMatch[1];
-    outputs.ApiGatewayUrl = `${endpoint}/restapis/${apiId}/${environmentSuffix}/_user_request_`;
-  } else {
-    // Fallback: use generic path if we can't extract API ID
-    outputs.ApiGatewayUrl = `${endpoint}/restapis/default/${environmentSuffix}/_user_request_`;
+  // If the URL contains execute-api (AWS format), it needs to be converted
+  if (outputs.ApiGatewayUrl.includes('execute-api')) {
+    // Extract API ID from the URL
+    const apiIdMatch = outputs.ApiGatewayUrl.match(/https?:\/\/([a-z0-9]+)\.execute-api/);
+    if (apiIdMatch) {
+      const apiId = apiIdMatch[1];
+      // LocalStack API Gateway URL format: http://localhost:4566/restapis/{api-id}/{stage}/_user_request_
+      outputs.ApiGatewayUrl = `${endpoint}/restapis/${apiId}/${environmentSuffix}/_user_request_`;
+    }
+  } else if (!outputs.ApiGatewayUrl.includes('localhost') && !outputs.ApiGatewayUrl.includes('4566')) {
+    // If URL doesn't contain LocalStack endpoint, it needs to be fixed
+    console.log(`Warning: API Gateway URL doesn't appear to be LocalStack format: ${outputs.ApiGatewayUrl}`);
   }
+
+  console.log(`Using LocalStack API Gateway URL: ${outputs.ApiGatewayUrl}`);
 }
 
 describe('Serverless Application Integration Tests', () => {
