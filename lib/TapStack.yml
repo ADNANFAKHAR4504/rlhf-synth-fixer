@@ -113,7 +113,7 @@ Parameters:
   
   LatestAmiId:
     Type: String
-    Default: 'ami-0abcdef1234567890'
+    Default: ami-0abcdef1234567890
     Description: Amazon Linux 2 AMI ID for LocalStack deployment
 
 # ==========================================
