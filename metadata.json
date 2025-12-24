@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912535",
+  "team": "synth",
+  "startedAt": "2025-11-20T11:37:04+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudWatch"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
