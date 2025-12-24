@@ -28,9 +28,9 @@
     "EFS",
     "EventBridge"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
-    "po_id": "LS-291757",
+    "po_id": "291757",
     "pr": "Pr380"
   }
 }
