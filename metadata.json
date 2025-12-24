@@ -13,15 +13,16 @@
   ],
   "aws_services": [
     "EC2",
-    "RDS",
     "VPC",
     "ALB",
-    "Secrets Manager",
-    "IAM"
+    "IAM",
+    "Auto Scaling",
+    "CloudWatch"
   ],
   "wave": "P0",
   "migrated_from": {
     "po_id": "291724",
     "pr": "Pr1093"
-  }
+  },
+  "training_quality": 9
 }
