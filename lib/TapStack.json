@@ -27,6 +27,11 @@
             "Type": "String",
             "Default": "Engineering",
             "Description": "Cost center for billing allocation"
+        },
+        "LatestAmiId": {
+            "Type": "String",
+            "Default": "ami-0ff8a91507f77f867",
+            "Description": "Latest Amazon Linux 2 AMI ID"
         }
     },
     "Mappings": {
@@ -969,7 +974,7 @@
                     ]
                 },
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
+                "EngineVersion": "8.0.40",
                 "AllocatedStorage": {
                     "Fn::FindInMap": [
                         "EnvironmentConfig",

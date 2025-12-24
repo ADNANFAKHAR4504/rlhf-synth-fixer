@@ -236,7 +236,7 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: 'ami-0ff8a91507f77f867'
+      ImageId: ami-0ff8a91507f77f867
       InstanceType: !FindInMap [EnvironmentConfig, !Ref Environment, InstanceType]
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
