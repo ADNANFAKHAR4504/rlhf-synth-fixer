@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912228",
+  "team": "synth",
+  "startedAt": "2025-11-18T09:41:50.711Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "aurora-cluster",
+    "aurora-cluster-parameter-group",
+    "db-subnet-group",
+    "db-security-group",
+    "aurora-writer-instance",
+    "aurora-reader-a-instance",
+    "aurora-reader-b-instance",
+    "aurora-autoscaling-scalable-target",
+    "aurora-autoscaling-scaling-policy",
+    "kinesis-das-stream",
+    "kinesis-das-stream-policy",
+    "kinesis-das-stream-role",
+    "enhanced-monitoring-role",
+    "enhanced-monitoring-policy",
+    "sns-failover-topic",
+    "sns-failover-subscription",
+    "alarm-replica-lag",
+    "alarm-writer-cpu"
+  ],
+  "background": "Provision a production-grade Aurora MySQL 8.0 cluster across three AZs with automatic failover, encrypted storage, 72-hour backtrack, and enhanced monitoring. Configure reader auto-scaling using Application Auto Scaling, CloudWatch alarms for replica lag and writer CPU, and SNS notifications. Enable Database Activity Streams with a dedicated KMS CMK and Kinesis stream via a Lambda-backed custom resource, using least-privilege IAM roles, secure networking (VPC subnets and security groups), and exported endpoints for application integration.",
+  "provider": "localstack",
+  "wave": "P1"
+}
