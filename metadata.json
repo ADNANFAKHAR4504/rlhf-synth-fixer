@@ -14,7 +14,7 @@
     "S3",
     "VPC"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
     "Failure Recovery Automation"
