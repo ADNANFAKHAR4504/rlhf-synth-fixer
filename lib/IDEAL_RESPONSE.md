@@ -1,6 +1,6 @@
 # Optimized CloudFormation Template - Complete Implementation
 
-This is the corrected and complete implementation addressing all 12 optimization requirements for the three-tier financial services application.
+This is the corrected and complete implementation addressing all 12 optimization requirements for the three-tier financial services application. 
 
 ## File: lib/TapStack.json
 
