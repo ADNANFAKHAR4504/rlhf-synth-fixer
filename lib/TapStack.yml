@@ -605,7 +605,8 @@ Resources:
       DBName:
         Fn::Sub: ${ProjectName}${Environment}
       MasterUsername: admin
-      MasterUserPassword: TestPassword123!
+      MasterUserPassword:
+        Fn::Sub: '{{resolve:secretsmanager:${ProjectName}/database/${Environment}:SecretString:password}}'
       VPCSecurityGroups:
       - Ref: DatabaseSecurityGroup
       DBSubnetGroupName:
