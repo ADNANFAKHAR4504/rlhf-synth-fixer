@@ -6,7 +6,7 @@
   "po_id": "LS-291426",
   "team": "synth-2",
   "startedAt": "2025-08-08T12:51:04.773Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup"
