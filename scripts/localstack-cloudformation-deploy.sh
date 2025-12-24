@@ -70,10 +70,22 @@ echo -e "${GREEN}✅ Template uploaded to LocalStack S3${NC}"
 # Set stack name and parameters
 STACK_NAME="tap-stack-localstack"
 ENVIRONMENT_SUFFIX="${ENVIRONMENT_SUFFIX:-dev}"
+KEY_PAIR_NAME="${KEY_PAIR_NAME:-localstack-key}"
+
+# Create key pair if it doesn't exist
+echo -e "${YELLOW}🔑 Checking for EC2 key pair...${NC}"
+if ! awslocal ec2 describe-key-pairs --key-names $KEY_PAIR_NAME > /dev/null 2>&1; then
+    echo -e "${BLUE}  📝 Creating key pair: $KEY_PAIR_NAME${NC}"
+    awslocal ec2 create-key-pair --key-name $KEY_PAIR_NAME --output json > /dev/null
+    echo -e "${GREEN}✅ Key pair created: $KEY_PAIR_NAME${NC}"
+else
+    echo -e "${GREEN}✅ Key pair already exists: $KEY_PAIR_NAME${NC}"
+fi
 
 echo -e "${CYAN}🔧 Deploying CloudFormation stack:${NC}"
 echo -e "${BLUE}  • Stack Name: $STACK_NAME${NC}"
 echo -e "${BLUE}  • Environment: $ENVIRONMENT_SUFFIX${NC}"
+echo -e "${BLUE}  • Key Pair: $KEY_PAIR_NAME${NC}"
 echo -e "${BLUE}  • Template: $TEMPLATE_FILE${NC}"
 
 # Check if stack exists and clean it up
@@ -127,7 +139,10 @@ echo -e "${YELLOW}📦 Creating CloudFormation stack...${NC}"
 CREATE_RESULT=$(awslocal cloudformation create-stack \
     --stack-name $STACK_NAME \
     --template-body file://$TEMPLATE_FILE \
-    --parameters ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX \
+    --parameters \
+        ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX \
+        ParameterKey=KeyPairName,ParameterValue=$KEY_PAIR_NAME \
+        ParameterKey=UseLocalStack,ParameterValue=true \
     --capabilities CAPABILITY_IAM \
     --output json)
 

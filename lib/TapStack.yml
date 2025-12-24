@@ -42,16 +42,33 @@ Parameters:
     ConstraintDescription: Must be a valid CIDR block (e.g., 203.0.113.0/24)
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access to instances
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair
-    Default: iac-rlhf-aws-trainer-instance
+    Type: String
+    Description: EC2 Key Pair for SSH access to instances (leave default for LocalStack)
+    Default: localstack-key
+
+  UseLocalStack:
+    Type: String
+    Description: Set to 'true' when deploying to LocalStack
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  IsLocalStack: !Equals [!Ref UseLocalStack, 'true']
 
 Mappings:
   AZConfig:
     us-east-1:
       AZ1: [us-east-1a]
       AZ2: [us-east-1b]
+
+  AMIConfig:
+    us-east-1:
+      # LocalStack uses a dummy AMI ID
+      LocalStack: ami-ff0fea8310f3
+      # AWS uses Amazon Linux 2 AMI (update this periodically for real AWS deployments)
+      AWS: ami-0c02fb55b2485eb75
 
 Resources:
   # VPC Configuration
@@ -338,7 +355,10 @@ Resources:
         MetadataOptions:
           HttpEndpoint: enabled
           HttpTokens: required
-        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        ImageId: !If
+          - IsLocalStack
+          - !FindInMap [AMIConfig, us-east-1, LocalStack]
+          - !FindInMap [AMIConfig, us-east-1, AWS]
         InstanceType: t3.micro
         KeyName: !Ref KeyPairName
         SecurityGroupIds:

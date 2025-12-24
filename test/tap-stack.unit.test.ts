@@ -52,9 +52,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.AllowedSSHCidr.AllowedPattern).toBeDefined();
 
       expect(template.Parameters.KeyPairName).toBeDefined();
-      expect(template.Parameters.KeyPairName.Type).toBe(
-        'AWS::EC2::KeyPair::KeyName'
-      );
+      expect(template.Parameters.KeyPairName.Type).toBe('String');
+      expect(template.Parameters.KeyPairName.Default).toBe('localstack-key');
+
+      expect(template.Parameters.UseLocalStack).toBeDefined();
+      expect(template.Parameters.UseLocalStack.Type).toBe('String');
+      expect(template.Parameters.UseLocalStack.Default).toBe('true');
     });
 
     it('all parameter types are correct', () => {
@@ -65,9 +68,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.Owner.Type).toBe('String');
       expect(template.Parameters.CostCenter.Type).toBe('String');
       expect(template.Parameters.AllowedSSHCidr.Type).toBe('String');
-      expect(template.Parameters.KeyPairName.Type).toBe(
-        'AWS::EC2::KeyPair::KeyName'
-      );
+      expect(template.Parameters.KeyPairName.Type).toBe('String');
+      expect(template.Parameters.UseLocalStack.Type).toBe('String');
     });
 
     it('does not allow extra parameters', () => {
@@ -80,6 +82,7 @@ describe('TapStack CloudFormation Template', () => {
         'CostCenter',
         'AllowedSSHCidr',
         'KeyPairName',
+        'UseLocalStack',
       ];
       Object.keys(template.Parameters).forEach(key => {
         expect(allowed).toContain(key);
@@ -122,6 +125,17 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  describe('Conditions', () => {
+    it('defines IsLocalStack condition', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.IsLocalStack).toBeDefined();
+      expect(template.Conditions.IsLocalStack['Fn::Equals']).toEqual([
+        { Ref: 'UseLocalStack' },
+        'true',
+      ]);
+    });
+  });
+
   describe('Mappings', () => {
     it('defines AZ mapping for us-east-1', () => {
       expect(template.Mappings.AZConfig).toBeDefined();
@@ -132,6 +146,21 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Mappings.AZConfig['us-east-1'].AZ2).toEqual([
         'us-east-1b',
       ]);
+    });
+
+    it('defines AMI mapping for us-east-1 with LocalStack and AWS options', () => {
+      expect(template.Mappings.AMIConfig).toBeDefined();
+      expect(template.Mappings.AMIConfig['us-east-1']).toBeDefined();
+      expect(template.Mappings.AMIConfig['us-east-1'].LocalStack).toBeDefined();
+      expect(template.Mappings.AMIConfig['us-east-1'].AWS).toBeDefined();
+      // Verify LocalStack AMI format
+      expect(template.Mappings.AMIConfig['us-east-1'].LocalStack).toMatch(
+        /^ami-[a-f0-9]+$/
+      );
+      // Verify AWS AMI format
+      expect(template.Mappings.AMIConfig['us-east-1'].AWS).toMatch(
+        /^ami-[a-f0-9]+$/
+      );
     });
   });
 
@@ -335,10 +364,19 @@ describe('TapStack CloudFormation Template', () => {
 
       const ltData = lt.Properties.LaunchTemplateData;
 
-      // Verify SSM parameter usage for AMI instead of hardcoded mappings
-      expect(ltData.ImageId).toBe(
-        '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
-      );
+      // Verify conditional AMI selection (LocalStack vs AWS)
+      expect(ltData.ImageId['Fn::If']).toBeDefined();
+      expect(ltData.ImageId['Fn::If'][0]).toBe('IsLocalStack');
+      expect(ltData.ImageId['Fn::If'][1]['Fn::FindInMap']).toEqual([
+        'AMIConfig',
+        'us-east-1',
+        'LocalStack',
+      ]);
+      expect(ltData.ImageId['Fn::If'][2]['Fn::FindInMap']).toEqual([
+        'AMIConfig',
+        'us-east-1',
+        'AWS',
+      ]);
 
       expect(ltData.InstanceType).toBe('t3.micro');
       expect(ltData.KeyName.Ref).toBe('KeyPairName');

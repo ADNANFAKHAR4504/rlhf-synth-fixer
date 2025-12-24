@@ -298,8 +298,8 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
       expect(lt.LaunchTemplateName).toContain('launch-template');
       expect(lt.LatestVersionNumber).toBeGreaterThan(0);
 
-      // Verify the launch template is using SSM parameter for AMI (not hardcoded)
-      // The actual ImageId is resolved at deployment time from SSM parameter store
+      // Verify the launch template uses conditional AMI selection (LocalStack vs AWS)
+      // The actual ImageId is determined at deployment time based on UseLocalStack parameter
       expect(lt.LaunchTemplateId).toBe(ltId);
     });
 
@@ -870,8 +870,8 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('SSM Parameter Store Integration', () => {
-    test('Launch Template uses SSM parameter for AMI', async () => {
+  describe('AMI Selection and Launch Template', () => {
+    test('Launch Template uses conditional AMI selection', async () => {
       const ltId = outputs.LaunchTemplateId;
 
       const { LaunchTemplates } = await ec2.send(
@@ -884,12 +884,12 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
       expect(lt.LaunchTemplateName).toContain('launch-template');
       expect(lt.LaunchTemplateId).toBe(ltId);
 
-      // The AMI is resolved via SSM parameter, so we can't directly check the ImageId
-      // But we can verify the launch template is functional and instances are running
+      // The AMI is determined by UseLocalStack parameter (LocalStack vs AWS AMI)
+      // Verify the launch template is functional and instances are running
       expect(lt.LatestVersionNumber).toBeGreaterThan(0);
     });
 
-    test('EC2 instances are launched with valid AMI from SSM parameter', async () => {
+    test('EC2 instances are launched with valid AMI', async () => {
       const asgName = outputs.AutoScalingGroupName;
 
       const { AutoScalingGroups } = await autoScaling.send(
@@ -914,14 +914,14 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
         expect(instance.ImageId).toBeDefined();
         expect(instance.ImageId!.length).toBeGreaterThan(0);
 
-        // Verify it's an Amazon Linux 2 AMI (should start with 'ami-')
+        // Verify the AMI ID follows AWS format
         expect(instance.ImageId).toMatch(/^ami-[a-f0-9]{8,17}$/);
       });
     });
 
-    test('No hardcoded AMI mappings in template', () => {
-      // This test verifies that we're not using hardcoded AMI mappings
-      // The template should use SSM parameter store instead
+    test('AMI selection uses conditional mappings', () => {
+      // This test verifies that we use conditional AMI selection (LocalStack vs AWS)
+      // The template uses AMIConfig mappings with conditional logic
       expect(outputs).not.toHaveProperty('AmiId');
       expect(outputs).not.toHaveProperty('LatestAmiId');
       expect(outputs).not.toHaveProperty('ImageId');
@@ -930,7 +930,8 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
 
   describe('Key Pair Validation', () => {
     test('Key pair exists and is accessible', async () => {
-      const keyPairName = 'iac-rlhf-aws-trainer-instance'; // Default from template
+      const keyPairName =
+        process.env.KEY_PAIR_NAME || 'localstack-key'; // Default from template
 
       const { KeyPairs } = await ec2.send(
         new DescribeKeyPairsCommand({ KeyNames: [keyPairName] })
@@ -945,7 +946,7 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
 
     test('Launch Template uses the correct key pair', async () => {
       const ltId = outputs.LaunchTemplateId;
-      const keyPairName = 'iac-rlhf-aws-trainer-instance';
+      const keyPairName = process.env.KEY_PAIR_NAME || 'localstack-key';
 
       const { LaunchTemplates } = await ec2.send(
         new DescribeLaunchTemplatesCommand({ LaunchTemplateIds: [ltId] })
@@ -961,7 +962,7 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
 
     test('EC2 instances are launched with the correct key pair', async () => {
       const asgName = outputs.AutoScalingGroupName;
-      const keyPairName = 'iac-rlhf-aws-trainer-instance';
+      const keyPairName = process.env.KEY_PAIR_NAME || 'localstack-key';
 
       const { AutoScalingGroups } = await autoScaling.send(
         new DescribeAutoScalingGroupsCommand({
@@ -985,7 +986,7 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
     });
 
     test('Key pair is valid for SSH access', async () => {
-      const keyPairName = 'iac-rlhf-aws-trainer-instance';
+      const keyPairName = process.env.KEY_PAIR_NAME || 'localstack-key';
 
       const { KeyPairs } = await ec2.send(
         new DescribeKeyPairsCommand({ KeyNames: [keyPairName] })

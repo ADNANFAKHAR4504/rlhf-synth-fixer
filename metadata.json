@@ -6,11 +6,11 @@
   "po_id": "LS-274786",
   "team": "synth-2",
   "startedAt": "2025-07-28T17:45:08.109Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Cloud Environment Setup"
   ],
-  "aws_services": [],
+  "aws_services": ["VPC", "EC2", "Auto Scaling"],
   "wave": "P1"
 }
