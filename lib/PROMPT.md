@@ -1,47 +1,15 @@
-# Serverless Infrastructure with CloudFormation
+I need to build a serverless data processing pipeline using CloudFormation YAML. Here's what I'm trying to set up:
 
-Create a serverless infrastructure using AWS CloudFormation with the following requirements:
+I want an S3 bucket that triggers a Lambda function whenever someone uploads a file. The Lambda needs to process the uploaded file and store metadata into DynamoDB. I also need an API Gateway REST endpoint that connects to the same Lambda so users can query the processed data.
 
-## Core Infrastructure Components
+For the S3 bucket, make sure versioning is enabled and block all public access. When objects are created, they should automatically trigger the Lambda function to start processing.
 
-1. **S3 Bucket Configuration**
-   - Enable versioning on the S3 bucket
-   - Configure Lambda triggers on object creation events
-   - Implement proper security with public access blocked
+The Lambda function should be the central piece - it needs to handle both S3 event notifications and API Gateway requests. Set it up with an execution role that gives it read access to S3 and full read/write access to the DynamoDB table. Pass the DynamoDB table name as an environment variable so the Lambda can connect to it. Make sure it has proper error handling and can serialize responses as JSON for the API Gateway.
 
-2. **Lambda Function**
-   - Process S3 events and perform DynamoDB operations
-   - Handle API Gateway requests with proper error handling
-   - Include environment variables for DynamoDB table name
+For API Gateway, create a REST API with regional endpoints that forwards GET and POST requests to the Lambda. Also add OPTIONS method support for CORS so browsers can call it. The API should integrate directly with the Lambda function.
 
-3. **API Gateway Setup**
-   - REST API that forwards requests to Lambda function
-   - Support GET, POST, and OPTIONS methods for CORS
-   - Regional endpoint configuration
+The DynamoDB table needs a composite key - use a partition key and a sort key, both as strings. Enable DynamoDB Streams so we can track changes later, and turn on point-in-time recovery for backups. Use on-demand billing instead of provisioned capacity.
 
-4. **DynamoDB Table**
-   - Composite primary key with partition key and sort key (both string type)
-   - Pay-per-request billing mode
-   - Point-in-time recovery enabled
-   - DynamoDB streams enabled
+Keep security tight with least-privilege IAM policies. The Lambda execution role should only have access to the specific S3 bucket and DynamoDB table it needs, nothing more.
 
-5. **IAM Security**
-   - Least-privilege IAM roles and policies
-   - Lambda execution role with specific resource access
-   - Proper S3 and DynamoDB permissions only
-
-## Deployment Requirements
-
-- Deploy all resources in us-west-2 region
-- Tag all resources with 'Environment: Production'
-- Use single CloudFormation stack for all resources
-- Follow AWS security best practices
-- Ensure production-ready configuration
-
-## Technical Constraints
-
-- Must use AWS CloudFormation (YAML format)
-- No circular dependencies in resource creation
-- Proper error handling and JSON serialization
-- Custom resource pattern for S3 notifications if needed
-- All resources must be properly tagged and secured
+Deploy everything to us-west-2 and tag all resources with Environment: Production. Use a single CloudFormation stack to manage the entire setup. If you run into issues with S3 event notifications creating circular dependencies, use a custom resource pattern to configure them after the bucket and Lambda are created.
