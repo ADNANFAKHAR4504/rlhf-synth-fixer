@@ -172,19 +172,19 @@ describe('TapStack CloudFormation Template', () => {
 
     test('DevSecurityGroup should have correct properties', () => {
       const sg = template.Resources.DevSecurityGroup;
-      expect(sg.Properties.GroupDescription).toBe('Allow SSH access from anywhere');
+      expect(sg.Properties.GroupDescription).toBe('Allow SSH access from office IP range');
       expect(sg.Properties.VpcId).toEqual({ Ref: 'MyVPC' });
     });
 
-    test('DevSecurityGroup should allow SSH access from anywhere', () => {
+    test('DevSecurityGroup should allow SSH access from office IP range', () => {
       const sg = template.Resources.DevSecurityGroup;
       const ingressRules = sg.Properties.SecurityGroupIngress;
-      
+
       expect(ingressRules).toHaveLength(1);
       expect(ingressRules[0].IpProtocol).toBe('tcp');
       expect(ingressRules[0].FromPort).toBe(22);
       expect(ingressRules[0].ToPort).toBe(22);
-      expect(ingressRules[0].CidrIp).toBe('0.0.0.0/0');
+      expect(ingressRules[0].CidrIp).toBe('203.0.113.0/24');
     });
 
     test('DevSecurityGroup should have correct tags', () => {
