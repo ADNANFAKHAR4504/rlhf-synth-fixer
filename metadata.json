@@ -1,0 +1,25 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291170",
+  "team": "synth-2",
+  "startedAt": "2025-12-24T10:30:00Z",
+  "subtask": "Security and Compliance Implementation",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "VPC",
+    "EC2",
+    "CloudWatch"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291170",
+    "pr": "Pr555"
+  }
+}
