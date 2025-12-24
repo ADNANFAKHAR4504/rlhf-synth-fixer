@@ -553,6 +553,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-WebSecurityGroupId'
 
+  InternetGatewayId:
+    Description: 'Internet Gateway ID'
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGatewayId'
+
   SecurityLogsBucketName:
     Description: 'Security Logs S3 Bucket Name'
     Value: !Ref SecurityLogsBucket
