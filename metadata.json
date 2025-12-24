@@ -6,7 +6,7 @@
   "po_id": "LS-291729",
   "team": "synth-2",
   "startedAt": "2025-08-06T07:53:15.977Z",
-  "subtask": "Serverless Data Pipeline",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
     "General Infrastructure Tooling QA"
@@ -22,5 +22,5 @@
     "CloudWatch",
     "SNS"
   ],
-  "wave": "P1"
+  "wave": "P0"
 }
