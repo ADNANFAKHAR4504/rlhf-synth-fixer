@@ -775,24 +775,24 @@ Let me verify if this CloudFormation template meets all the requirements:
 1. **Region**: We're specifying the us-east-1 region as required.
 
 2. **Pipeline Stages**:
-   - Source: Using CodeCommit repository named payment-service ✓
-   - Build: Using CodeBuild with security scans in an isolated VPC ✓
-   - Test: Using CodeBuild for integration tests, also in a VPC ✓
-   - Deploy: Using CodeDeploy for blue-green deployment to ECS Fargate ✓
+   - Source: Using CodeCommit repository named payment-service 
+   - Build: Using CodeBuild with security scans in an isolated VPC 
+   - Test: Using CodeBuild for integration tests, also in a VPC 
+   - Deploy: Using CodeDeploy for blue-green deployment to ECS Fargate 
 
 3. **Security Requirements**:
-   - IAM roles with least privilege ✓
-   - Explicit deny statements for sensitive production resources ✓
-   - S3 bucket with KMS encryption for artifacts ✓
-   - Lifecycle policies for data retention (set to 90 days with transition to Glacier after 30 days) ✓
+   - IAM roles with least privilege 
+   - Explicit deny statements for sensitive production resources 
+   - S3 bucket with KMS encryption for artifacts 
+   - Lifecycle policies for data retention (set to 90 days with transition to Glacier after 30 days) 
 
 4. **Monitoring**:
-   - CloudWatch Logs with 30-day retention ✓
-   - EventBridge rules for pipeline state changes ✓
-   - Slack notifications for failures ✓
+   - CloudWatch Logs with 30-day retention 
+   - EventBridge rules for pipeline state changes 
+   - Slack notifications for failures 
 
 5. **Tagging**:
-   - Environment, Team, and CostCenter tags applied to all resources ✓
+   - Environment, Team, and CostCenter tags applied to all resources 
 
 I've also implemented the 15-minute traffic shifting strategy using a canary deployment with 5-minute intervals and 10% initial traffic shift.
 
@@ -956,19 +956,19 @@ With these changes, the CloudFormation template would fully meet the requirement
 
 To make sure we're not missing anything, let's double-check against the specific requirements:
 
-1. **Region**: us-east-1 ✓ (implicit in CloudFormation when deployed)
-2. **Pipeline Stages**: Source, Build, Test, Deploy ✓
-3. **Source Stage**: CodeCommit repository named payment-service ✓
-4. **Build Stage**: CodeBuild with security scans in isolated VPC ✓ (with the VPC Endpoints)
-5. **Test Stage**: CodeBuild for integration tests with staging DB ✓ (needs same VPC as the staging DB)
-6. **Deploy Stage**: CodeDeploy for blue-green deployment to ECS Fargate ✓
-7. **Traffic Shifting**: 15-minute traffic shifting ✓ (with the updated TrafficRoutingConfig)
-8. **IAM Roles**: Least privilege permissions with explicit deny ✓
-9. **S3 Bucket**: KMS encryption and lifecycle policies ✓
-10. **CloudWatch Logs**: 30-day retention ✓
-11. **EventBridge Rules**: Monitor pipeline state changes ✓
-12. **Slack Notifications**: For failures ✓
-13. **Tagging**: Environment, Team, and CostCenter ✓
+1. **Region**: us-east-1  (implicit in CloudFormation when deployed)
+2. **Pipeline Stages**: Source, Build, Test, Deploy 
+3. **Source Stage**: CodeCommit repository named payment-service 
+4. **Build Stage**: CodeBuild with security scans in isolated VPC  (with the VPC Endpoints)
+5. **Test Stage**: CodeBuild for integration tests with staging DB  (needs same VPC as the staging DB)
+6. **Deploy Stage**: CodeDeploy for blue-green deployment to ECS Fargate 
+7. **Traffic Shifting**: 15-minute traffic shifting  (with the updated TrafficRoutingConfig)
+8. **IAM Roles**: Least privilege permissions with explicit deny 
+9. **S3 Bucket**: KMS encryption and lifecycle policies 
+10. **CloudWatch Logs**: 30-day retention 
+11. **EventBridge Rules**: Monitor pipeline state changes 
+12. **Slack Notifications**: For failures 
+13. **Tagging**: Environment, Team, and CostCenter 
 
 All requirements are met with the template, including the updates described above.
 
