@@ -292,9 +292,9 @@ class TestTapStack(unittest.TestCase):
 
         # The stack uses abbreviated naming to avoid AWS 64-char limit for IAM roles
         # Format: {project_abbrev}-{environment}-{region_abbrev}
-        # TestProject (2 words) -> tp (first letter of each word)
-        # us-west-2 -> usw2
-        expected_prefix = "tp-test-usw2"
+        # TestProject (1 word, no separators) -> tes (first 3 letters)
+        # region is overridden by mocked aws.get_region() which returns us-east-1 -> use1
+        expected_prefix = "tes-test-use1"
         self.assertEqual(stack.resource_prefix, expected_prefix)
 
     @pulumi.runtime.test
