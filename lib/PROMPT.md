@@ -10,7 +10,7 @@ Set up security groups with least privilege access - HTTPS/HTTP from internet (0
 
 Deploy an RDS MySQL database in the private subnet that's only accessible from the web security group. The database needs encryption at rest and should NOT be publicly accessible. Set up automated backups with 7-day retention.
 
-Create IAM roles for EC2 instances that can write logs to CloudWatch. The roles need CloudWatch agent permissions plus basic log streaming. Make an instance profile that EC2 can use.
+Create IAM roles for EC2 instances that can write logs to CloudWatch. The roles need CloudWatch agent access plus basic log streaming. Make an instance profile that EC2 can use.
 
 Enable AWS Config with a configuration recorder that tracks all resource changes. Config needs an S3 bucket to store snapshots and a delivery channel to ship data there. Add a Config rule that checks if MFA is enabled for IAM console access.
 
@@ -22,11 +22,11 @@ Add AWS WAF with managed rule sets - use the Common Rule Set and Known Bad Input
 
 ## Technical Requirements
 
-All S3 buckets need encryption enabled and must block public access completely. Use bucket policies that grant write permissions only to the specific AWS services that need them.
+Every S3 bucket needs encryption enabled and must block public access completely. Set up bucket policies that grant write access only to the specific AWS services that need them.
 
 The RDS database needs a subnet group with at least 2 subnets. Use db.t3.micro instance class with encrypted storage.
 
-IAM roles should follow least privilege - only grant what's absolutely needed. The Config role needs permissions to put objects in S3 and describe configurations.
+IAM roles should follow least privilege - only grant what's absolutely needed. The Config role needs access to put objects in S3 and describe configurations.
 
 Tag everything with Environment parameter so we can track resources easily.
 
