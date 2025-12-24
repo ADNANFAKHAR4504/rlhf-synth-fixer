@@ -1,7 +1,3 @@
-# Security-Hardened Infrastructure for Payment Processing APIs
-
-Hey team,
-
 We've been tasked with building out a secure infrastructure for a financial services company that needs to handle payment processing APIs. This is a high-stakes project where security isn't optional, it's everything. The business needs infrastructure that passes PCI-DSS compliance and implements defense-in-depth principles from the ground up.
 
 The challenge here is that we're dealing with sensitive payment data, which means encryption everywhere, strict access controls, and audit trails for every action. We can't afford any shortcuts on security. The infrastructure needs to enforce SSL/TLS for all connections, use customer-managed KMS keys for encryption at rest, and ensure all traffic flows through private networks only.
