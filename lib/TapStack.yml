@@ -875,7 +875,7 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI (us-east-1)
+      ImageId: ami-ff0fea8310f3  # LocalStack uses generic AMI IDs
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
