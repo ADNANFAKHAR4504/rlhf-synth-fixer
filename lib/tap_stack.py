@@ -96,17 +96,20 @@ class TapStack(TerraformStack):
                 default_tags=[default_tags],
             )
 
-        # Configure S3 Backend with native state locking
-        S3Backend(
-            self,
-            bucket=state_bucket,
-            key=f"{environment_suffix}/{construct_id}.tfstate",
-            region=state_bucket_region,
-            encrypt=True,
-        )
-
-        # Add S3 state locking using escape hatch
-        self.add_override("terraform.backend.s3.use_lockfile", True)
+        # Configure backend based on environment
+        # For LocalStack, use local backend to avoid S3 bucket dependency
+        # For AWS, use S3 backend with state locking
+        if not is_localstack:
+            S3Backend(
+                self,
+                bucket=state_bucket,
+                key=f"{environment_suffix}/{construct_id}.tfstate",
+                region=state_bucket_region,
+                encrypt=True,
+            )
+            # Add S3 state locking using escape hatch
+            self.add_override("terraform.backend.s3.use_lockfile", True)
+        # LocalStack uses local backend by default (no configuration needed)
 
         # Create S3 bucket for demonstration
         S3Bucket(
