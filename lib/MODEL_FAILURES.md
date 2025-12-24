@@ -46,7 +46,7 @@
 
 ## 9. LocalStack Community Compatibility
 
-### DynamoDB Removal
+### DynamoDB Removal and Migration Strategy
 
 For **LocalStack Community Edition** deployment, the following changes were made:
 
