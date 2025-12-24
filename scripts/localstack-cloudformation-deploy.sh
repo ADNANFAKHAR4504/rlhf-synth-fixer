@@ -45,6 +45,23 @@ fi
 # Reset LocalStack state
 curl -X POST http://localhost:4566/_localstack/state/reset 2>/dev/null && echo -e "${GREEN}✅ LocalStack state reset${NC}" || echo -e "${YELLOW}⚠️  State reset not available${NC}"
 
+# Setup SSM parameters required by CloudFormation template
+echo -e "${CYAN}🔧 Setting up required SSM parameters...${NC}"
+SCRIPT_DIR="$(dirname "$0")"
+if [ -f "$SCRIPT_DIR/setup-localstack-ssm.sh" ]; then
+    bash "$SCRIPT_DIR/setup-localstack-ssm.sh"
+else
+    echo -e "${YELLOW}⚠️  SSM setup script not found, creating parameter manually...${NC}"
+    awslocal ssm put-parameter \
+        --name "/myapp/database/password" \
+        --value "TestPassword123!" \
+        --type "SecureString" \
+        --description "Database password for LocalStack testing" \
+        --overwrite \
+        --region "${AWS_DEFAULT_REGION}" \
+        2>/dev/null && echo -e "${GREEN}✅ SSM parameter created${NC}" || echo -e "${YELLOW}⚠️  SSM parameter may already exist${NC}"
+fi
+
 # Change to lib directory
 cd "$(dirname "$0")/../lib"
 echo -e "${YELLOW}📁 Working directory: $(pwd)${NC}"

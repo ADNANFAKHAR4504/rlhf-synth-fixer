@@ -25,6 +25,7 @@
     "esModuleInterop": true,
     "outDir": "dist"
   },
+  "include": ["test/**/*"],
   "exclude": [
     "node_modules",
     "cdk.out",
@@ -33,8 +34,6 @@
     "archive-localstack",
     "subcategory-references",
     "worktree",
-    "test",
-    "tests",
     "cli",
     "**/*.d.ts"
   ]

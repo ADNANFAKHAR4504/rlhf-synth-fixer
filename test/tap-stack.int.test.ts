@@ -7,16 +7,23 @@ import { GetBucketEncryptionCommand, GetBucketLoggingCommand, GetBucketTaggingCo
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import fs from 'fs';
 import path from 'path';
+import { setupSSMParameters } from './setup-localstack';
 
 // AWS SDK v3 configuration
 const region = process.env.AWS_REGION || 'us-west-2';
-const cloudformation = new CloudFormationClient({ region });
-const ec2 = new EC2Client({ region });
-const s3 = new S3Client({ region });
-const lambda = new LambdaClient({ region });
-const rds = new RDSClient({ region });
-const iam = new IAMClient({ region });
-const ssm = new SSMClient({ region });
+const endpoint = process.env.AWS_ENDPOINT_URL;
+
+const clientConfig = endpoint
+  ? { region, endpoint, credentials: { accessKeyId: 'test', secretAccessKey: 'test' } }
+  : { region };
+
+const cloudformation = new CloudFormationClient(clientConfig);
+const ec2 = new EC2Client(clientConfig);
+const s3 = new S3Client(clientConfig);
+const lambda = new LambdaClient(clientConfig);
+const rds = new RDSClient(clientConfig);
+const iam = new IAMClient(clientConfig);
+const ssm = new SSMClient(clientConfig);
 
 // Test configuration
 const STACK_NAME = process.env.STACK_NAME || 'TapStack';
@@ -43,6 +50,16 @@ describe('TapStack CloudFormation Integration Tests', () => {
   let lambdaRoleName: string;
 
   beforeAll(async () => {
+    // Setup LocalStack prerequisites (SSM parameters) if using LocalStack
+    if (process.env.AWS_ENDPOINT_URL) {
+      try {
+        await setupSSMParameters();
+        console.log('✅ LocalStack SSM parameters created');
+      } catch (error) {
+        console.log('⚠️ Failed to create SSM parameters, tests may fail:', error);
+      }
+    }
+
     // Get stack outputs if not loaded from file
     if (Object.keys(stackOutputs).length === 0) {
       try {
