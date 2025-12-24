@@ -49,7 +49,7 @@ describe('TapStack CloudFormation Template', () => {
         'DBUser',
         'KeyPairName',
         'EnableRDS',
-        'EC2ImageId'
+        'UseLocalStack'
       ];
 
       expectedParameters.forEach(paramName => {
@@ -88,10 +88,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(enableRDSParam.AllowedValues).toContain('false');
     });
 
-    test('EC2ImageId parameter should have correct properties', () => {
-      const amiParam = template.Parameters.EC2ImageId;
-      expect(amiParam.Type).toBe('AWS::EC2::Image::Id');
-      expect(amiParam.Default).toBe('ami-0c55b159cbfafe1f0');
+    test('UseLocalStack parameter should have correct properties', () => {
+      const localStackParam = template.Parameters.UseLocalStack;
+      expect(localStackParam.Type).toBe('String');
+      expect(localStackParam.Default).toBe('false');
+      expect(localStackParam.AllowedValues).toContain('true');
+      expect(localStackParam.AllowedValues).toContain('false');
     });
   });
 
@@ -104,6 +106,11 @@ describe('TapStack CloudFormation Template', () => {
     test('should have CreateRDS condition', () => {
       expect(template.Conditions.CreateRDS).toBeDefined();
       expect(template.Conditions.CreateRDS['Fn::Equals']).toBeDefined();
+    });
+
+    test('should have IsLocalStack condition', () => {
+      expect(template.Conditions.IsLocalStack).toBeDefined();
+      expect(template.Conditions.IsLocalStack['Fn::Equals']).toBeDefined();
     });
   });
 
@@ -266,8 +273,8 @@ describe('TapStack CloudFormation Template', () => {
       const props = ec2.Properties;
       expect(props.InstanceType).toBe('t3.micro');
       expect(props.Monitoring).toBe(true);
-      // ImageId uses Ref to EC2ImageId parameter
-      expect(props.ImageId.Ref).toBe('EC2ImageId');
+      // ImageId is hardcoded for LocalStack compatibility
+      expect(props.ImageId).toBe('ami-0c55b159cbfafe1f0');
     });
 
     test('should have conditional key pair assignment', () => {
