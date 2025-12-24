@@ -180,8 +180,9 @@ describe('TAP Stack - EKS Cluster Infrastructure Unit Tests', () => {
       expect(eksContent).toMatch(/resource\s+"aws_iam_openid_connect_provider"\s+"eks"/);
     });
 
-    test('should configure TLS certificate data source', () => {
-      expect(eksContent).toMatch(/data\s+"tls_certificate"\s+"eks"/);
+    test('should configure OIDC provider with static thumbprint for LocalStack', () => {
+      expect(eksContent).toMatch(/resource\s+"aws_iam_openid_connect_provider"\s+"eks"/);
+      expect(eksContent).toContain('thumbprint_list');
     });
   });
 
@@ -310,8 +311,8 @@ describe('TAP Stack - EKS Cluster Infrastructure Unit Tests', () => {
       expect(nodeGroupsContent).toMatch(/taint\s*\{/);
     });
 
-    test('spot node group should use SPOT capacity', () => {
-      expect(nodeGroupsContent).toMatch(/capacity_type\s*=\s*"SPOT"/);
+    test('spot node group should have capacity type configured for LocalStack', () => {
+      expect(nodeGroupsContent).toMatch(/capacity_type\s*=\s*"ON_DEMAND"/);
     });
   });
 
