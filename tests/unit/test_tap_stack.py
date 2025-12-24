@@ -196,7 +196,7 @@ class TestTapStackArgs(unittest.TestCase):
         self.assertEqual(args.kinesis_shard_count, 1)
         self.assertEqual(args.s3_lifecycle_days, 30)
         self.assertEqual(args.cloudwatch_retention_days, 14)
-        self.assertTrue(args.enable_xray_tracing)
+        self.assertFalse(args.enable_xray_tracing)  # Disabled for LocalStack compatibility
         self.assertEqual(args.custom_tags, {})
 
     def test_tap_stack_args_custom_values(self):
@@ -289,10 +289,12 @@ class TestTapStack(unittest.TestCase):
             project_name="TestProject"
         )
         stack = TapStack("test-stack", args)
-        
-        # The stack will use the mocked AWS provider region (us-east-1) 
-        # instead of args.region when aws.get_region() succeeds
-        expected_prefix = "testproject-test-us-east-1"
+
+        # The stack uses abbreviated naming to avoid AWS 64-char limit for IAM roles
+        # Format: {project_abbrev}-{environment}-{region_abbrev}
+        # TestProject (2 words) -> tp (first letter of each word)
+        # us-west-2 -> usw2
+        expected_prefix = "tp-test-usw2"
         self.assertEqual(stack.resource_prefix, expected_prefix)
 
     @pulumi.runtime.test

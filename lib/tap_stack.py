@@ -75,8 +75,13 @@ class TapStack(ComponentResource):
         
         # Resource naming convention
         # Shortened to avoid AWS 64-char limit for IAM roles
-        project_abbrev = "nmb"  # NovaModelBreaking abbreviated
-        region_abbrev = self.region.replace("us-east-1", "use1").replace("us-west-2", "usw2")
+        # Take first 3 letters of each word in project name, lowercase
+        project_words = args.project_name.replace('-', ' ').replace('_', ' ').split()
+        if len(project_words) == 1:
+            project_abbrev = project_words[0][:3].lower()
+        else:
+            project_abbrev = ''.join(word[0].lower() for word in project_words)
+        region_abbrev = self.region.replace("us-east-1", "use1").replace("us-west-2", "usw2").replace("us-west-1", "usw1").replace("us-east-2", "use2")
         self.resource_prefix = f"{project_abbrev}-{args.environment}-{region_abbrev}"
         
         # Initialize resource containers
