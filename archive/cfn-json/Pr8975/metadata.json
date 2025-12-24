@@ -14,12 +14,19 @@
   "aws_services": [
     "EC2",
     "VPC",
-    "CloudWatch Logs",
+    "CloudWatch",
     "IAM"
   ],
   "wave": "P1",
   "migrated_from": {
     "po_id": "291187",
     "pr": "Pr380"
-  }
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
