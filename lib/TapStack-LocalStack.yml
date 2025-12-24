@@ -53,12 +53,58 @@ Description: >
   - Comprehensive resource tagging for governance and cost tracking
   - Environment-specific configurations (development/staging/production)
 
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Environment Configuration
+        Parameters:
+          - Environment
+          - EnvironmentParameter
+          - ProjectName
+      - Label:
+          default: Network Configuration
+        Parameters:
+          - AllowedCIDR
+      - Label:
+          default: Security Configuration
+        Parameters:
+          - SSMParameterPrefix
+    ParameterLabels:
+      Environment:
+        default: Deployment Environment
+      EnvironmentParameter:
+        default: Resource Tagging Environment
+      ProjectName:
+        default: Project Identifier
+      AllowedCIDR:
+        default: Allowed IP Range
+      SSMParameterPrefix:
+        default: SSM Parameter Prefix
+
+  StackProtection:
+    Description: Stack includes deletion protection for production resources
+    Resources:
+      - RDS: DeletionProtection enabled for production environments
+      - S3: Lifecycle policies prevent accidental deletion with versioning
+      - KMS: Key deletion window configured with 7-day minimum
+      - CloudWatch: Log retention policies ensure audit trail preservation
+
 Parameters:
   Environment:
     Type: String
     Default: production
     Description: Environment name
     AllowedValues: [development, staging, production]
+
+  EnvironmentParameter:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name for resource tagging and configuration
 
   ProjectName:
     Type: String
@@ -133,8 +179,13 @@ Resources:
               - kms:DescribeKey
             Resource: '*'
       Tags:
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Encryption }
+        - { Key: Compliance, Value: Required }
 
   ApplicationKMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -151,18 +202,25 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-vpc' }
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
         - { Key: ManagedBy, Value: CloudFormation }
         - { Key: Service, Value: Networking }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Compliance, Value: Required }
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-igw' }
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Networking }
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -179,8 +237,12 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-public-subnet-1' }
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Networking }
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -191,8 +253,12 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-public-subnet-2' }
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Networking }
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -202,8 +268,12 @@ Resources:
       CidrBlock: 10.0.11.0/24
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-private-subnet-1' }
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Networking }
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -213,8 +283,12 @@ Resources:
       CidrBlock: 10.0.12.0/24
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-private-subnet-2' }
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Networking }
 
   # NOTE: NAT Gateway removed - not essential for LocalStack testing
   # Private subnets will use Internet Gateway for outbound access
@@ -225,8 +299,12 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-public-routes' }
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Networking }
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -274,8 +352,12 @@ Resources:
         - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-alb-sg' }
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Security }
 
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -289,8 +371,12 @@ Resources:
         - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-ec2-sg' }
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Security }
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -301,8 +387,12 @@ Resources:
         - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-lambda-sg' }
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Security }
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -316,8 +406,12 @@ Resources:
         - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-rds-sg' }
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Security }
 
   # -------------------- SSM Parameters --------------------
   DBPasswordParameter:
@@ -364,11 +458,14 @@ Resources:
                 TransitionInDays: 90
             NoncurrentVersionExpirationInDays: 365
       Tags:
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
         - { Key: ManagedBy, Value: CloudFormation }
         - { Key: Service, Value: Storage }
         - { Key: DataClassification, Value: Confidential }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Compliance, Value: Required }
 
   ApplicationBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -415,11 +512,14 @@ Resources:
               - StorageClass: GLACIER
                 TransitionInDays: !If [IsProduction, 90, 30]
       Tags:
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
         - { Key: ManagedBy, Value: CloudFormation }
         - { Key: Service, Value: Logging }
         - { Key: DataClassification, Value: Internal }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Compliance, Value: Required }
 
   LogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -466,8 +566,12 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Database }
 
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
@@ -486,9 +590,10 @@ Resources:
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       PubliclyAccessible: false
-      BackupRetentionPeriod: !If [IsProduction, 7, 1]
+      BackupRetentionPeriod: 7
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      DeleteAutomatedBackups: false
       EnableCloudwatchLogsExports:
         - error
         - general
@@ -497,11 +602,14 @@ Resources:
       CopyTagsToSnapshot: true
       EnableIAMDatabaseAuthentication: false
       Tags:
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
         - { Key: ManagedBy, Value: CloudFormation }
         - { Key: Service, Value: Database }
         - { Key: BackupSchedule, Value: Daily }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Compliance, Value: Required }
 
   # -------------------- REMOVED SERVICES --------------------
   # The following services are NOT available in LocalStack Community Edition:
@@ -595,8 +703,12 @@ Resources:
                   - logs:PutLogEvents
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-process-file-${Environment}:*'
       Tags:
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Compute }
 
   ProcessFileFunction:
     Type: AWS::Lambda::Function
@@ -658,10 +770,13 @@ Resources:
       MemorySize: 256
       ReservedConcurrentExecutions: !If [IsProduction, 10, 5]
       Tags:
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
         - { Key: ManagedBy, Value: CloudFormation }
         - { Key: Service, Value: FileProcessing }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Compliance, Value: Required }
 
   AuthLambdaRole:
     Type: AWS::IAM::Role
@@ -696,8 +811,12 @@ Resources:
                   - logs:PutLogEvents
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-auth-${Environment}:*'
       Tags:
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Compute }
 
   AuthFunction:
     Type: AWS::Lambda::Function
@@ -740,10 +859,13 @@ Resources:
       MemorySize: 128
       ReservedConcurrentExecutions: !If [IsProduction, 20, 10]
       Tags:
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
         - { Key: ManagedBy, Value: CloudFormation }
         - { Key: Service, Value: Authentication }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Compliance, Value: Required }
 
   # Maintain backward compatibility with original role name
   LambdaExecutionRole:
@@ -774,8 +896,12 @@ Resources:
                   - kms:GenerateDataKey
                 Resource: !GetAtt ApplicationKMSKey.Arn
       Tags:
-        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: CostCenter, Value: Engineering }
+        - { Key: Owner, Value: DevOps }
+        - { Key: Service, Value: Compute }
 
 Outputs:
   VPCId:
