@@ -726,7 +726,6 @@ Resources:
         GenerateStringKey: 'password'
         PasswordLength: 32
         ExcludeCharacters: '"@/\'
-      KmsKeyId: !Ref RDSKMSKey
       Tags:
         - Key: env
           Value: !Ref Environment
@@ -830,7 +829,7 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
-  # RDS Instance with encryption
+  # RDS Instance (simplified for LocalStack compatibility)
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
@@ -839,24 +838,18 @@ Resources:
       DBInstanceIdentifier: !Sub '${ProjectName}-db-${Environment}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.43'
+      EngineVersion: '8.0'
       AllocatedStorage: 20
-      StorageType: gp2   
-      StorageEncrypted: true
-      KmsKeyId: !Ref RDSKMSKey
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      StorageType: gp2
+      StorageEncrypted: false
+      MasterUsername: admin
+      MasterUserPassword: TempPassword123!
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
-      BackupRetentionPeriod: 7
+      BackupRetentionPeriod: 0
       MultiAZ: false
       PubliclyAccessible: false
-      EnableCloudwatchLogsExports:
-        - error
-        - general
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
       Tags:
         - Key: env
           Value: !Ref Environment
