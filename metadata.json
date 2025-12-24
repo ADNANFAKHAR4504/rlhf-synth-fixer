@@ -9,7 +9,7 @@
   "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
   "subject_labels": [
-    "Multi-Region Setup"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "EC2",
