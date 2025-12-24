@@ -932,7 +932,14 @@
                                         "logs:DescribeLogGroups",
                                         "logs:DescribeLogStreams"
                                     ],
-                                    "Resource": "*"
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/flowlogs-${EnvironmentSuffix}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/flowlogs-${EnvironmentSuffix}:*"
+                                        }
+                                    ]
                                 }
                             ]
                         }
