@@ -18,6 +18,39 @@ Parameters:
     ConstraintDescription: 'Must contain only alphanumeric characters'
 
 Resources:
+  # VPC for LocalStack deployment requirements
+  VPC:
+    Type: AWS::EC2::VPC
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'webhook-vpc-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Security Group for VPC resources
+  VPCSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      GroupDescription: !Sub 'Security group for webhook system - ${EnvironmentSuffix}'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTPS access'
+      Tags:
+        - Key: Name
+          Value: !Sub 'webhook-sg-${EnvironmentSuffix}'
+
   # KMS Key for Lambda Environment Variable Encryption
   LambdaEncryptionKey:
     Type: AWS::KMS::Key
@@ -427,6 +460,18 @@ Resources:
       UsagePlanId: !Ref ApiUsagePlan
 
 Outputs:
+  VPCId:
+    Description: 'VPC ID for the infrastructure'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  SecurityGroupId:
+    Description: 'Security Group ID'
+    Value: !Ref VPCSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'
+
   ApiEndpointUrl:
     Description: 'API Gateway endpoint URL'
     Value: !Sub 'https://${WebhookRestApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStage}/webhooks/{currency}'
