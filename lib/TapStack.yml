@@ -25,9 +25,9 @@ Parameters:
     Description: 'EC2 instance type'
 
   LatestAmiId:
-    Type: String
-    Default: 'ami-0abcdef1234567890'
-    Description: 'AMI ID for EC2 instances (LocalStack compatible)'
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: 'AMI ID for EC2 instances via SSM Parameter Store'
 
   CreateTrail:
     Type: String
