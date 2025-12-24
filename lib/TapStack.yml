@@ -400,7 +400,7 @@ Resources:
       AutoScalingGroupName: !Sub ${EnvironmentSuffix}-${Name}-asg-${Team}
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: 2
       MaxSize: 2
       DesiredCapacity: 2

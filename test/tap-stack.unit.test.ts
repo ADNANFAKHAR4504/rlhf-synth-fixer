@@ -403,10 +403,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(asg.Properties.LaunchTemplate.LaunchTemplateId.Ref).toBe(
         'LaunchTemplate'
       );
-      expect(asg.Properties.LaunchTemplate.Version['Fn::GetAtt']).toEqual([
-        'LaunchTemplate',
-        'LatestVersionNumber',
-      ]);
+      // Version should be $Latest for LocalStack compatibility
+      expect(asg.Properties.LaunchTemplate.Version).toBe('$Latest');
 
       // Check VPC Zone Identifier (should be public subnets)
       const zones = asg.Properties.VPCZoneIdentifier;
