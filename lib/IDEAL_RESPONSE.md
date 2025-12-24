@@ -1,4 +1,4 @@
-```
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Scalable Web Application Infrastructure with ALB, Auto Scaling, S3, and CloudWatch Monitoring'
 
