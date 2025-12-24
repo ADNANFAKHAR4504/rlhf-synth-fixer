@@ -26,9 +26,9 @@ Launch an RDS PostgreSQL instance. Must be Multi-AZ for failover protection. Acc
 
 Use IAM roles for everything - no IAM users. The Lambda role needs CloudWatch Logs write access. Database connections should use IAM database authentication if possible.
 
-**Resource Tagging**
+**Tagging Strategy**
 
-Tag all resources with Environment: Production so we can track costs and manage them properly.
+Apply Environment: Production tag to every resource so we can track costs and manage them properly.
 
 **Deletion Protection**
 
@@ -38,4 +38,4 @@ Set DeletionPolicy: Retain on the S3 buckets and RDS instance. These are critica
 
 Export the S3 bucket names and the RDS endpoint URL. We'll need these for our application config and connecting other services.
 
-The key thing is making sure all the services connect correctly - Lambda triggers from S3, database stays isolated in VPC, and everything has proper IAM permissions. Want the template to be production-ready and deployable without manual configuration.
+The key thing is making sure the services connect correctly - Lambda triggers from S3, database stays isolated in VPC, and each service has appropriate IAM roles. Want the template to be production-ready and deployable without manual configuration.
