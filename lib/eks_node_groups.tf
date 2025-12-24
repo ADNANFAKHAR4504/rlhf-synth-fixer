@@ -1,3 +1,7 @@
+# =============================================================================
+# EKS NODE GROUPS
+# =============================================================================
+
 # IAM Role for EKS Node Groups
 resource "aws_iam_role" "eks_node_group" {
   name = "eks-node-group-role-${var.environment_suffix}"

@@ -1,3 +1,7 @@
+# =============================================================================
+# EKS CLUSTER
+# =============================================================================
+
 # EKS Cluster IAM Role
 resource "aws_iam_role" "eks_cluster" {
   name = "eks-cluster-role-${var.environment_suffix}"

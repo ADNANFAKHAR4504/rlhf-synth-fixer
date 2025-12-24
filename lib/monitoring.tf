@@ -1,3 +1,7 @@
+# =============================================================================
+# MONITORING
+# =============================================================================
+
 # CloudWatch Log Group for Container Insights
 resource "aws_cloudwatch_log_group" "container_insights" {
   name              = "/aws/containerinsights/${var.cluster_name}-${var.environment_suffix}/performance"

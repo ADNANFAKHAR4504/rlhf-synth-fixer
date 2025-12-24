@@ -1,3 +1,7 @@
+# =============================================================================
+# EKS FARGATE
+# =============================================================================
+
 # IAM Role for Fargate Pod Execution
 resource "aws_iam_role" "fargate_pod_execution" {
   name = "eks-fargate-pod-execution-role-${var.environment_suffix}"

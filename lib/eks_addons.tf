@@ -1,3 +1,7 @@
+# =============================================================================
+# EKS ADDONS
+# =============================================================================
+
 # Data source to fetch latest addon versions
 data "aws_eks_addon_version" "vpc_cni" {
   addon_name         = "vpc-cni"

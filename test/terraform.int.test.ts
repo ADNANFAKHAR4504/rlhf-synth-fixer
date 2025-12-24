@@ -1,3 +1,33 @@
+/**
+ * =============================================================================
+ * EKS Production Cluster - Integration Test Suite
+ * =============================================================================
+ *
+ * Comprehensive integration tests for production-ready EKS cluster deployment.
+ * These tests validate infrastructure deployment, configuration, and compliance
+ * with AWS best practices.
+ *
+ * Test Coverage:
+ * - Deployment validation: Outputs exist and contain valid data
+ * - Cluster configuration: EKS version, endpoint access, certificates
+ * - OIDC and IRSA: Identity provider setup for pod-level IAM permissions
+ * - Networking: VPC, subnets, security groups across multiple AZs
+ * - Node groups and Fargate: Worker node configuration and serverless pods
+ * - Monitoring: CloudWatch integration for metrics and logs
+ * - Security: ECR, Secrets Manager, IAM roles and policies
+ *
+ * Prerequisites:
+ * - Terraform apply must have completed successfully
+ * - cfn-outputs/flat-outputs.json must exist with deployment outputs
+ * - AWS credentials configured for the target account/region
+ *
+ * Usage:
+ *   npm test                    # Run all tests
+ *   npm test -- --verbose       # Run with verbose output
+ *
+ * =============================================================================
+ */
+
 import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeNatGatewaysCommand, DescribeRouteTablesCommand, DescribeNetworkAclsCommand, DescribeInternetGatewaysCommand } from "@aws-sdk/client-ec2";
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
 import { IAMClient, GetRoleCommand, GetRolePolicyCommand } from "@aws-sdk/client-iam";

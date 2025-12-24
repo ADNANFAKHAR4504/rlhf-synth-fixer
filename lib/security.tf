@@ -1,3 +1,7 @@
+# =============================================================================
+# SECURITY
+# =============================================================================
+
 # ECR Repository for container images with vulnerability scanning
 resource "aws_ecr_repository" "microservices" {
   name                 = "microservices-${var.environment_suffix}"

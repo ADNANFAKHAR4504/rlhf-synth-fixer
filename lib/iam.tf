@@ -1,3 +1,7 @@
+# =============================================================================
+# IAM
+# =============================================================================
+
 # IAM Role for AWS Load Balancer Controller (IRSA)
 resource "aws_iam_role" "alb_controller" {
   name = "eks-alb-controller-role-${var.environment_suffix}"

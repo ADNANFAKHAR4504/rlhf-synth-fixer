@@ -1,4 +1,24 @@
-provider "aws" {
+# =============================================================================
+# Production-Ready EKS Cluster - Main Network Infrastructure
+# =============================================================================
+#
+# This file defines the core networking infrastructure for a production EKS cluster
+# designed for containerized microservices workloads.
+#
+# Architecture Overview:
+# - Multi-AZ deployment across 3 availability zones for high availability
+# - Public subnets: Host load balancers and NAT gateways for internet-facing traffic
+# - Private subnets: Host EKS worker nodes and Fargate pods for security
+# - NAT Gateways: One per AZ for redundancy and high availability
+# - VPC Endpoints: Reduce NAT Gateway costs and improve security by keeping traffic within AWS network
+#
+# =============================================================================
+
+# =============================================================================
+# AWS Provider Configuration
+# =============================================================================
+# =============================================================================# Data Sources - Discover AWS infrastructure information# =============================================================================# Fetch available AZs in the current region to ensure multi-AZ deployment
+
   region = var.aws_region
 
   default_tags {
@@ -7,6 +27,7 @@ provider "aws" {
       {
         EnvironmentSuffix = var.environment_suffix
       }
+# =============================================================================# VPC Configuration - Foundation for all networking# =============================================================================# Create a dedicated VPC for EKS cluster isolation.# DNS hostnames and support are required for EKS to function properly.# The kubernetes.io/cluster tag allows EKS to identify VPC resources.
     )
   }
 }
@@ -27,6 +48,7 @@ resource "aws_vpc" "main" {
     "kubernetes.io/cluster/${var.cluster_name}-${var.environment_suffix}" = "shared"
   }
 }
+# =============================================================================# Internet Gateway - Enables outbound internet access for public subnets# =============================================================================
 
 # Internet Gateway for public subnets
 resource "aws_internet_gateway" "main" {
@@ -40,6 +62,7 @@ resource "aws_internet_gateway" "main" {
 # Public subnets for load balancers (3 AZs)
 resource "aws_subnet" "public" {
   count = 3
+# =============================================================================# Public Subnets - For load balancers and NAT gateways# =============================================================================# Create 3 public subnets across different AZs for high availability.# These subnets host ALBs and NAT Gateways, providing internet access.# The kubernetes.io/role/elb tag allows ALB Ingress Controller to discover subnets.
 
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
