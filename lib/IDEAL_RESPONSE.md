@@ -1,10 +1,10 @@
 # Cloud Environment Setup - CloudFormation YAML Solution
 
-Based on the task requirements for trainr938, here is the complete CloudFormation YAML template that sets up a comprehensive cloud environment with S3, EC2, and DynamoDB resources, including proper security configurations, monitoring, and all required constraints.
+Here's the complete CloudFormation template. It sets up S3, EC2, and DynamoDB with proper security, monitoring, and all the constraints mentioned in the requirements.
 
 ## CloudFormation Template
 
-The complete CloudFormation YAML template for `lib/TapStack.yml`:
+Full template for `lib/TapStack.yml`:
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -377,27 +377,27 @@ Outputs:
       Name: !Sub '${AWS::StackName}-SubnetId'
 ```
 
-This CloudFormation template creates a comprehensive cloud environment setup that meets all the specified requirements:
+What this template does:
 
-1. **VPC and Networking**: Self-contained VPC with public subnet, internet gateway, and routing for complete network isolation
-2. **S3 Bucket**: Versioning enabled, encryption, and public access blocked for security
-3. **EC2 Instance**: Deployed in the created VPC/subnet with monitoring enabled
-4. **IAM Role**: Attached to EC2 with s3:ListBucket permission for the created bucket
-5. **Security Group**: Allowing SSH access only from the specified IP address
-6. **CloudWatch Alarm**: Monitoring CPU utilization with a 70% threshold
-7. **DynamoDB Table**: Configurable primary key and read capacity set to 5
+1. **VPC and Networking**: Creates its own VPC with public subnet, internet gateway, and routing - no external dependencies
+2. **S3 Bucket**: Versioning on, encrypted, public access blocked
+3. **EC2 Instance**: Runs in the VPC/subnet with monitoring enabled
+4. **IAM Role**: EC2 gets s3:ListBucket permission (just what it needs)
+5. **Security Group**: SSH access only from the specified IP
+6. **CloudWatch Alarm**: Monitors CPU, triggers at 70%
+7. **DynamoDB Table**: Configurable primary key, read capacity = 5
 8. **SNS Topic**: For alarm notifications
-9. **Proper tagging**: 'Project: CloudSetup' on all resources
-10. **Parameterized configuration**: For flexibility and reusability
-11. **Comprehensive outputs**: For integration and monitoring
-12. **Self-sufficient deployment**: No external dependencies, creates all required resources
+9. **Tagging**: 'Project: CloudSetup' on everything
+10. **Parameters**: Flexible configuration for different environments
+11. **Outputs**: All the IDs/ARNs you'll need
+12. **Self-contained**: Creates everything it needs, no external resources required
 
-The template uses best practices including:
-- Parameter validation with allowed patterns
-- Resource encryption where applicable
-- Proper IAM policies with least privilege
-- CloudWatch monitoring and alerting
-- Consistent tagging strategy
-- Export values for stack integration
-- Environment suffix for resource isolation
-- No retention policies to ensure clean teardown
+Key features:
+- Parameter validation (no bad inputs)
+- Encryption where it matters (S3, DynamoDB)
+- Least-privilege IAM
+- CloudWatch monitoring
+- Consistent tagging
+- Exports for cross-stack refs
+- Environment suffix prevents naming conflicts
+- Clean teardown (no retention policies)
