@@ -130,11 +130,6 @@
             "MaxValue": 100,
             "ConstraintDescription": "Must be between 50 and 100"
         },
-        "LatestAmiId": {
-            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
-            "Description": "Latest Amazon Linux 2 AMI ID from SSM Parameter Store"
-        }
     },
     "Conditions": {
         "HasKeyPair": {
@@ -847,9 +842,7 @@
         "WebServerInstance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "ImageId": {
-                    "Ref": "LatestAmiId"
-                },
+                "ImageId": "ami-0abcdef1234567890",
                 "InstanceType": {
                     "Ref": "InstanceType"
                 },
