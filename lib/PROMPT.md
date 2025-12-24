@@ -1,5 +1,3 @@
-Hey team,
-
 We need to build an automated transaction reconciliation pipeline for our financial services operations. The finance team processes CSV files daily from multiple payment providers, and they need a system that can automatically validate transactions, check for discrepancies, and notify them when something doesn't match up. Right now they're doing this manually and it's taking way too long.
 
 The business wants this implemented as a serverless workflow that can handle up to 100,000 transactions per day. Files get uploaded to S3, and from there we need to orchestrate the entire reconciliation process including parsing, validation, and report generation.
