@@ -19,9 +19,6 @@ The architecture needs internet-facing ALBs that forward traffic to EC2 instance
 Modular Structure:
 Create separate reusable modules for compute, database, and networking components. Eliminate code duplication across environments. Use module outputs for cross-module references.
 
-State Management:
-Implement S3 backend configuration with encryption. Add state locking using DynamoDB table named terraform-state-lock. Prevent concurrent modifications that have been causing issues.
-
 Compute Optimization:
 Replace 12 m5.xlarge EC2 instances with t3.large instances. Maintain the same 12-instance count. Deploy across 3 availability zones in us-east-1.
 
@@ -66,7 +63,6 @@ Cost Optimization: Use t3.large instead of m5.xlarge to achieve 40% cost reducti
 Functionality: All existing functionality maintained with new optimized resources.
 Performance: Infrastructure supports same load with smaller instance types.
 Cost Reduction: 40% reduction in monthly AWS costs from baseline.
-State Management: S3 backend with DynamoDB locking prevents conflicts.
 Modularity: Reusable modules eliminate code duplication.
 Security: IAM policies use policy documents with explicit deny statements.
 Resource Naming: All resources include environmentSuffix for uniqueness.
@@ -75,4 +71,4 @@ Best Practices: DRY principles, for_each usage, lifecycle rules, proper dependen
 
 ## What to deliver
 
-Complete Terraform HCL implementation with modular structure. Backend configuration for S3 state storage with DynamoDB locking. Modules for compute with EC2 and ALB, database with RDS Aurora, and networking with VPC and subnets. Data sources for existing VPC and subnet lookups. IAM policy documents with security best practices. Variable definitions with validation blocks. terraform.tfvars with environment-specific defaults. Locals block with standardized tagging. Documentation showing how the refactoring achieves 40% cost reduction.
+Complete Terraform HCL implementation with modular structure. Modules for compute with EC2 and ALB, database with RDS Aurora, and networking with VPC and subnets. Data sources for existing VPC and subnet lookups. IAM policy documents with security best practices. Variable definitions with validation blocks. terraform.tfvars with environment-specific defaults. Locals block with standardized tagging. Documentation showing how the refactoring achieves 40% cost reduction.
