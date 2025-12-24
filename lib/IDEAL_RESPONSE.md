@@ -27,7 +27,7 @@
 
 ## Deliverable:
 
-* A single, production-ready **`TapStack.yml`** that:
+* A single, production-ready **`CloudEnvStack.yml`** that:
 
   * Declares all **Parameters** with sensible **Defaults** (e.g., `EnvironmentSuffix=prod-us`, `AlarmEmail` placeholder), strict **regex constraints**, and no hardcoded environment enumerations.
   * Builds **every required module** (VPC, subnets, security groups, DB subnet group, KMS key & alias, Secrets, rotation, parameter groups, Aurora cluster & instances, endpoints, alarms, SNS).
@@ -71,7 +71,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::SecretsManager-2024-09-16
 Description: >
-  TapStack — Aurora MySQL (writer+2 readers) with tuned params, backtrack, Secrets Manager rotation,
+  CloudEnvStack — Aurora MySQL (writer+2 readers) with tuned params, backtrack, Secrets Manager rotation,
   proactive CloudWatch alarms, and full VPC isolation. All names are suffixed with EnvironmentSuffix.
 
 Metadata:

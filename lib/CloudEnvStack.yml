@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  TapStack — Aurora MySQL (writer+2 readers) with tuned params, backtrack, RDS-managed
+  CloudEnvStack — Aurora MySQL (writer+2 readers) with tuned params, backtrack, RDS-managed
   Secrets Manager password/rotation (no macro), proactive CloudWatch alarms, and full VPC isolation.
   All names are suffixed with EnvironmentSuffix.
 

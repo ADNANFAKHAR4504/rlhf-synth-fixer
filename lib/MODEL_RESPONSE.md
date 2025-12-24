@@ -2,7 +2,7 @@
 
 ## Overview
 
-This response provides a single-file **CloudFormation YAML** (`TapStack.yml`) that creates a new, optimized **Aurora MySQL** deployment in **us-east-1** with one writer and two readers across three AZs, proactive monitoring, and secrets rotation. All resources are created new; nothing points to pre-existing infrastructure. Every resource name incorporates **`EnvironmentSuffix`** to prevent cross-environment collisions, with a **kebab-case regex** constraint instead of hardcoded AllowedValues.
+This response provides a single-file **CloudFormation YAML** (`CloudEnvStack.yml`) that creates a new, optimized **Aurora MySQL** deployment in **us-east-1** with one writer and two readers across three AZs, proactive monitoring, and secrets rotation. All resources are created new; nothing points to pre-existing infrastructure. Every resource name incorporates **`EnvironmentSuffix`** to prevent cross-environment collisions, with a **kebab-case regex** constraint instead of hardcoded AllowedValues.
 
 ## What the template includes
 
