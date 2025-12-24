@@ -21,5 +21,12 @@
     "po_id": "291245",
     "pr": "Pr816"
   },
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
