@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Multi-environment web application infrastructure with S3, DynamoDB, IAM, CloudWatch, and SSM Parameter Store'
 
@@ -431,3 +432,4 @@ Outputs:
   InstanceProfileArn:
     Description: Instance profile ARN for EC2 instances
     Value: !GetAtt ApplicationInstanceProfile.Arn
+```
