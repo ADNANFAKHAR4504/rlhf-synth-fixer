@@ -6,16 +6,10 @@
   "po_id": "trainr926",
   "team": "synth-2",
   "startedAt": "2025-08-22T00:00:00.000Z",
-  "subtask": "General Infrastructure Provisioning",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Network Configuration",
-    "Web Application Deployment",
-    "Database Management",
-    "Security Configuration",
-    "Performance Optimization",
-    "Access Control",
-    "Monitoring Setup"
+    "Environment Migration",
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "EC2",
