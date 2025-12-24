@@ -762,7 +762,7 @@ output "launch_template_id" {
 }
 ```
 
-## 🌍 Environment Configurations
+## Environment Configurations
 
 ### Env Module
 

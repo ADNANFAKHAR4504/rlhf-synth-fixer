@@ -2,7 +2,7 @@
 
 I'll create a complete Terraform infrastructure solution that meets all your requirements. This solution follows AWS best practices and implements a modular, scalable architecture.
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 terraform-infrastructure/
@@ -48,7 +48,7 @@ terraform-infrastructure/
 └── README.md
 ```
 
-## 🏗️ Terraform Modules
+## Terraform Modules
 
 ### 1. VPC Module
 
@@ -888,7 +888,7 @@ output "launch_template_id" {
 }
 ```
 
-## 🌍 Environment Configurations
+## Environment Configurations
 
 ### Staging Environment
 
