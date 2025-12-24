@@ -1,0 +1,25 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912945",
+  "team": "synth",
+  "startedAt": "2025-12-01T00:00:00.000Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "RDS",
+    "ElastiCache",
+    "S3",
+    "IAM"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
