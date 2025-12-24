@@ -1422,12 +1422,7 @@
                             "LaunchTemplateId": {
                                 "Ref": "LTApp"
                             },
-                            "Version": {
-                                "Fn::GetAtt": [
-                                    "LTApp",
-                                    "LatestVersionNumber"
-                                ]
-                            }
+                            "Version": "$Latest"
                         }
                     }
                 },

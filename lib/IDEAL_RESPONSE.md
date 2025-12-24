@@ -526,7 +526,7 @@ Resources:
         LaunchTemplate:
           LaunchTemplateSpecification:
             LaunchTemplateId: !Ref LTApp
-            Version: !GetAtt LTApp.LatestVersionNumber
+            Version: $Latest
       TargetGroupARNs: [!Ref TG]
       Tags:
         - Key: Name
