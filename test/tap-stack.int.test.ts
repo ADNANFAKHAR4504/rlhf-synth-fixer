@@ -387,7 +387,10 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
       
       expect(apiId).toBeDefined();
       expect(apiUrl).toBeDefined();
-      expect(apiUrl).toMatch(/^https:\/\/.*\.execute-api\..+\.amazonaws\.com\/.+\/serverless$/);
+      // Support both AWS and LocalStack URL patterns
+      // AWS: https://*.execute-api.REGION.amazonaws.com/STAGE/serverless
+      // LocalStack: https://*.execute-api.amazonaws.com:4566/STAGE/serverless
+      expect(apiUrl).toMatch(/^https:\/\/.*\.execute-api\..*\.?amazonaws\.com(:\d+)?\/.+\/serverless$/);
 
       const response = await apigateway.send(new GetRestApiCommand({
         restApiId: apiId
