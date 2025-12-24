@@ -1,0 +1,30 @@
+{
+  "po_id": "101912757",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-27T07:24:07.229267Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "RDS",
+    "DMS",
+    "ALB",
+    "Route53",
+    "VPC",
+    "DataSync",
+    "Systems Manager",
+    "KMS",
+    "CloudWatch",
+    "AWS Config",
+    "Lambda",
+    "SQS",
+    "AWS Backup"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
