@@ -86,7 +86,7 @@ class TapStack(TerraformStack):
                     "s3": "http://s3.localhost.localstack.cloud:4566",
                     "sts": "http://localhost:4566",
                 }],
-                default_tags=[default_tags],
+                # Skip default_tags for LocalStack to avoid S3 Control API issues
             )
         else:
             AwsProvider(
