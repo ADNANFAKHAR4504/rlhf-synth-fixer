@@ -18,11 +18,10 @@
     "KMS",
     "EBS"
   ],
-  "reviewer": "adnan-turing",
   "provider": "localstack",
   "wave": "P0",
   "migrated_from": {
-    "po_id": "barun-turing",
+    "po_id": "291951",
     "pr": "Pr446"
   }
 }
