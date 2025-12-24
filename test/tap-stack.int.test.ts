@@ -30,11 +30,13 @@ import {
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr176';
 const region = process.env.AWS_REGION || 'us-east-1';
-const stackName = `TapStack${environmentSuffix}`;
 
 // LocalStack endpoint configuration
 const localstackEndpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
 const isLocalStack = process.env.AWS_ENDPOINT_URL !== undefined || process.env.LOCALSTACK === 'true';
+
+// LocalStack deployment uses a different stack name pattern
+const stackName = isLocalStack ? `localstack-stack-${environmentSuffix}` : `TapStack${environmentSuffix}`;
 
 // AWS SDK client configuration for LocalStack
 const clientConfig = isLocalStack ? {
