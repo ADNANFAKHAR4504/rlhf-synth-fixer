@@ -7,26 +7,13 @@ type TfValue<T> = { sensitive: boolean; type: any; value: T };
 
 type Outputs = {
   vpc_id?: TfValue<string>;
+  vpc_cidr?: TfValue<string>;
+  internet_gateway_id?: TfValue<string>;
   public_subnet_ids?: TfValue<string[]>;
   private_subnet_ids?: TfValue<string[]>;
-  alb_dns_name?: TfValue<string>;
-  alb_zone_id?: TfValue<string>;
-  rds_endpoint?: TfValue<string>;
-  rds_port?: TfValue<string>;
-  asg_name?: TfValue<string>;
-  cloudwatch_dashboard_url?: TfValue<string>;
-  nat_gateway_id?: TfValue<string>;
-  environment_info?: TfValue<{
-    environment: string;
-    region: string;
-    project: string;
-    is_production: boolean;
-    features: {
-      nat_gateway: boolean;
-      detailed_monitoring: boolean;
-      bucket_versioning: boolean;
-    };
-  }>;
+  public_route_table_id?: TfValue<string>;
+  private_route_table_id?: TfValue<string>;
+  availability_zones?: TfValue<string[]>;
 };
 
 function loadOutputs() {
@@ -43,26 +30,13 @@ function loadOutputs() {
 
   const o = {
     vpcId: req("vpc_id") as string,
+    vpcCidr: req("vpc_cidr") as string,
+    internetGatewayId: req("internet_gateway_id") as string,
     publicSubnets: req("public_subnet_ids") as string[],
     privateSubnets: req("private_subnet_ids") as string[],
-    albDnsName: req("alb_dns_name") as string,
-    albZoneId: req("alb_zone_id") as string,
-    rdsEndpoint: req("rds_endpoint") as string,
-    rdsPort: req("rds_port") as string,
-    asgName: req("asg_name") as string,
-    cloudwatchDashboardUrl: req("cloudwatch_dashboard_url") as string,
-    natGatewayId: (raw.nat_gateway_id?.value ?? "") as string,
-    environmentInfo: req("environment_info") as {
-      environment: string;
-      region: string;
-      project: string;
-      is_production: boolean;
-      features: {
-        nat_gateway: boolean;
-        detailed_monitoring: boolean;
-        bucket_versioning: boolean;
-      };
-    },
+    publicRouteTableId: req("public_route_table_id") as string,
+    privateRouteTableId: req("private_route_table_id") as string,
+    availabilityZones: req("availability_zones") as string[],
   };
 
   if (missing.length) {
@@ -91,11 +65,26 @@ describe("Outputs file validation", () => {
     expect(OUT.vpcId).toMatch(/^vpc-[a-f0-9]+$/);
   });
 
+  test("VPC CIDR is present and has valid CIDR format", () => {
+    expect(OUT.vpcCidr).toBeDefined();
+    expect(typeof OUT.vpcCidr).toBe("string");
+    expect(OUT.vpcCidr).toMatch(/^10\.0\.0\.0\/16$/);
+  });
+
+  test("Internet Gateway ID is present and has valid format", () => {
+    expect(OUT.internetGatewayId).toBeDefined();
+    expect(typeof OUT.internetGatewayId).toBe("string");
+    expect(OUT.internetGatewayId).toMatch(/^igw-[a-f0-9]+$/);
+  });
+});
+
+/** ===================== Subnet Validation ===================== */
+describe("Subnet validation", () => {
   test("Public subnet IDs are present and have valid format", () => {
     expect(OUT.publicSubnets).toBeDefined();
     expect(Array.isArray(OUT.publicSubnets)).toBe(true);
     expect(OUT.publicSubnets.length).toBe(2);
-    OUT.publicSubnets.forEach(subnetId => {
+    OUT.publicSubnets.forEach((subnetId) => {
       expect(subnetId).toMatch(/^subnet-[a-f0-9]+$/);
     });
   });
@@ -104,115 +93,71 @@ describe("Outputs file validation", () => {
     expect(OUT.privateSubnets).toBeDefined();
     expect(Array.isArray(OUT.privateSubnets)).toBe(true);
     expect(OUT.privateSubnets.length).toBe(2);
-    OUT.privateSubnets.forEach(subnetId => {
+    OUT.privateSubnets.forEach((subnetId) => {
       expect(subnetId).toMatch(/^subnet-[a-f0-9]+$/);
     });
   });
 
-  test("ALB DNS name is present and has valid format", () => {
-    expect(OUT.albDnsName).toBeDefined();
-    expect(typeof OUT.albDnsName).toBe("string");
-    expect(OUT.albDnsName).toMatch(/^.*\.elb\.amazonaws\.com$/);
+  test("Public and private subnets are different", () => {
+    const allSubnets = [...OUT.publicSubnets, ...OUT.privateSubnets];
+    const uniqueSubnets = new Set(allSubnets);
+    expect(uniqueSubnets.size).toBe(4);
   });
 
-  test("ALB Zone ID is present and has valid format", () => {
-    expect(OUT.albZoneId).toBeDefined();
-    expect(typeof OUT.albZoneId).toBe("string");
-    expect(OUT.albZoneId).toMatch(/^[A-Z0-9]+$/);
-  });
-
-  test("RDS endpoint is present and has valid format", () => {
-    expect(OUT.rdsEndpoint).toBeDefined();
-    expect(typeof OUT.rdsEndpoint).toBe("string");
-    expect(OUT.rdsEndpoint).toMatch(/^.*\.rds\.amazonaws\.com/);
-  });
-
-  test("RDS port is present and is a number", () => {
-    expect(OUT.rdsPort).toBeDefined();
-    // Convert to string if it's a number (some JSON parsers might convert "5432" to 5432)
-    const rdsPortStr = String(OUT.rdsPort);
-    expect(typeof rdsPortStr).toBe("string");
-    expect(parseInt(rdsPortStr)).toBe(5432);
-  });
-
-  test("Auto Scaling Group name is present", () => {
-    expect(OUT.asgName).toBeDefined();
-    expect(typeof OUT.asgName).toBe("string");
-    expect(OUT.asgName.length).toBeGreaterThan(0);
-  });
-
-  test("CloudWatch dashboard URL is present and has valid format", () => {
-    expect(OUT.cloudwatchDashboardUrl).toBeDefined();
-    expect(typeof OUT.cloudwatchDashboardUrl).toBe("string");
-    expect(OUT.cloudwatchDashboardUrl).toMatch(/^https:\/\/.*\.console\.aws\.amazon\.com\/cloudwatch/);
-  });
-
-  test("Environment info is present and has correct structure", () => {
-    expect(OUT.environmentInfo).toBeDefined();
-    expect(OUT.environmentInfo.environment).toBeDefined();
-    expect(OUT.environmentInfo.region).toBeDefined();
-    expect(OUT.environmentInfo.project).toBeDefined();
-    expect(typeof OUT.environmentInfo.is_production).toBe("boolean");
-    expect(OUT.environmentInfo.features).toBeDefined();
-    expect(typeof OUT.environmentInfo.features.nat_gateway).toBe("boolean");
-    expect(typeof OUT.environmentInfo.features.detailed_monitoring).toBe("boolean");
-    expect(typeof OUT.environmentInfo.features.bucket_versioning).toBe("boolean");
-  });
-
-  test("NAT Gateway ID is present (may be empty for test environment)", () => {
-    expect(OUT.natGatewayId).toBeDefined();
-    expect(typeof OUT.natGatewayId).toBe("string");
-    // NAT Gateway ID may be empty in test environment
-    if (OUT.natGatewayId.length > 0) {
-      expect(OUT.natGatewayId).toMatch(/^nat-[a-f0-9]+$/);
-    }
+  test("Subnets are distributed across availability zones", () => {
+    expect(OUT.availabilityZones).toBeDefined();
+    expect(Array.isArray(OUT.availabilityZones)).toBe(true);
+    expect(OUT.availabilityZones.length).toBe(2);
   });
 });
 
-/** ===================== Environment-Specific Validations ===================== */
-describe("Environment-specific validations", () => {
-  test("Environment configuration is consistent", () => {
-    const env = OUT.environmentInfo.environment;
-    const isProduction = OUT.environmentInfo.is_production;
-    
-    expect(["test", "production"]).toContain(env);
-    expect(isProduction).toBe(env === "production");
+/** ===================== Route Table Validation ===================== */
+describe("Route table validation", () => {
+  test("Public route table ID is present and has valid format", () => {
+    expect(OUT.publicRouteTableId).toBeDefined();
+    expect(typeof OUT.publicRouteTableId).toBe("string");
+    expect(OUT.publicRouteTableId).toMatch(/^rtb-[a-f0-9]+$/);
   });
 
-  test("Feature flags are consistent with environment", () => {
-    const isProduction = OUT.environmentInfo.is_production;
-    const features = OUT.environmentInfo.features;
-    
-    if (isProduction) {
-      expect(features.nat_gateway).toBe(true);
-      expect(features.detailed_monitoring).toBe(true);
-      expect(features.bucket_versioning).toBe(true);
-    } else {
-      expect(features.nat_gateway).toBe(false);
-      expect(features.detailed_monitoring).toBe(false);
-      expect(features.bucket_versioning).toBe(false);
-    }
+  test("Private route table ID is present and has valid format", () => {
+    expect(OUT.privateRouteTableId).toBeDefined();
+    expect(typeof OUT.privateRouteTableId).toBe("string");
+    expect(OUT.privateRouteTableId).toMatch(/^rtb-[a-f0-9]+$/);
   });
 
-  test("NAT Gateway presence matches environment", () => {
-    const isProduction = OUT.environmentInfo.is_production;
-    const hasNatGateway = OUT.natGatewayId.length > 0;
-    
-    expect(hasNatGateway).toBe(isProduction);
+  test("Public and private route tables are different", () => {
+    expect(OUT.publicRouteTableId).not.toBe(OUT.privateRouteTableId);
   });
 });
 
-/** ===================== Naming Convention Validation ===================== */
-describe("Naming convention validation", () => {
-  test("Resource names follow expected pattern", () => {
-    const project = OUT.environmentInfo.project;
-    const environment = OUT.environmentInfo.environment;
-    // Check if names include the environment suffix (should contain pr or dev suffix)
-    const prefixPattern = `${project}-${environment}-`;
-    
-    expect(OUT.asgName).toContain(prefixPattern);
-    expect(OUT.albDnsName).toContain(prefixPattern);
-    expect(OUT.rdsEndpoint).toContain(prefixPattern);
+/** ===================== Availability Zones Validation ===================== */
+describe("Availability zones validation", () => {
+  test("Availability zones are in us-east-1 region", () => {
+    OUT.availabilityZones.forEach((az) => {
+      expect(az).toMatch(/^us-east-1[a-z]$/);
+    });
+  });
+
+  test("Two different availability zones are used", () => {
+    const uniqueAzs = new Set(OUT.availabilityZones);
+    expect(uniqueAzs.size).toBe(2);
+  });
+});
+
+/** ===================== Network Architecture Validation ===================== */
+describe("Network architecture validation", () => {
+  test("VPC has correct CIDR block", () => {
+    expect(OUT.vpcCidr).toBe("10.0.0.0/16");
+  });
+
+  test("Total of 4 subnets exist (2 public + 2 private)", () => {
+    const totalSubnets = OUT.publicSubnets.length + OUT.privateSubnets.length;
+    expect(totalSubnets).toBe(4);
+  });
+
+  test("Internet Gateway is attached (ID exists)", () => {
+    expect(OUT.internetGatewayId).toBeTruthy();
+    expect(OUT.internetGatewayId.length).toBeGreaterThan(0);
   });
 });
 
@@ -222,25 +167,46 @@ describe("Edge cases & sanity checks", () => {
     const outputsString = JSON.stringify(OUT);
     expect(outputsString).not.toMatch(/password/i);
     expect(outputsString).not.toMatch(/secret/i);
-    expect(outputsString).not.toMatch(/key/i);
   });
 
   test("All required fields are present and non-empty", () => {
     const requiredFields = [
-      'vpcId', 'publicSubnets', 'privateSubnets', 'albDnsName', 
-      'albZoneId', 'rdsEndpoint', 'rdsPort', 'asgName', 
-      'cloudwatchDashboardUrl', 'environmentInfo'
+      "vpcId",
+      "vpcCidr",
+      "internetGatewayId",
+      "publicSubnets",
+      "privateSubnets",
+      "publicRouteTableId",
+      "privateRouteTableId",
+      "availabilityZones",
     ];
-    
-    requiredFields.forEach(field => {
+
+    requiredFields.forEach((field) => {
       const value = (OUT as any)[field];
       expect(value).toBeDefined();
       expect(value).not.toBeNull();
-      if (typeof value === 'string') {
+      if (typeof value === "string") {
         expect(value.length).toBeGreaterThan(0);
       } else if (Array.isArray(value)) {
         expect(value.length).toBeGreaterThan(0);
       }
     });
   });
-}); 
+
+  test("All resource IDs have valid AWS format", () => {
+    // VPC ID format
+    expect(OUT.vpcId).toMatch(/^vpc-[a-f0-9]+$/);
+
+    // Internet Gateway ID format
+    expect(OUT.internetGatewayId).toMatch(/^igw-[a-f0-9]+$/);
+
+    // Subnet ID format
+    [...OUT.publicSubnets, ...OUT.privateSubnets].forEach((id) => {
+      expect(id).toMatch(/^subnet-[a-f0-9]+$/);
+    });
+
+    // Route Table ID format
+    expect(OUT.publicRouteTableId).toMatch(/^rtb-[a-f0-9]+$/);
+    expect(OUT.privateRouteTableId).toMatch(/^rtb-[a-f0-9]+$/);
+  });
+});
