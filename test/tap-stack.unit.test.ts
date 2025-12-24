@@ -285,8 +285,8 @@ describe('Route53 Failover CloudFormation Template', () => {
       expect(healthCheckOutput.Value).toEqual({ Ref: 'PrimaryHealthCheck' });
     });
 
-    test('should have InstanceSecurityGroup output', () => {
-      const sgOutput = template.Outputs.InstanceSecurityGroup;
+    test('should have SecurityGroupId output', () => {
+      const sgOutput = template.Outputs.SecurityGroupId;
       expect(sgOutput).toBeDefined();
       expect(sgOutput.Description).toBe('Web Server Security Group ID');
       expect(sgOutput.Value).toEqual({ Ref: 'WebServerSecurityGroup' });

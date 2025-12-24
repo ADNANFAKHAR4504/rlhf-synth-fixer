@@ -749,14 +749,14 @@
         }
       }
     },
-    "InstanceSecurityGroup": {
+    "SecurityGroupId": {
       "Description": "Web Server Security Group ID",
       "Value": {
         "Ref": "WebServerSecurityGroup"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-Instance-SG"
+          "Fn::Sub": "${AWS::StackName}-SG-Id"
         }
       }
     },

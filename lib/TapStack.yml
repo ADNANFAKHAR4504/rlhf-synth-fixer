@@ -584,11 +584,11 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-WebServer-SG-Id'
 
-  InstanceSecurityGroup:
+  SecurityGroupId:
     Description: Web Server Security Group ID
     Value: !Ref WebServerSecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-Instance-SG'
+      Name: !Sub '${AWS::StackName}-SG-Id'
 
   PrimaryAvailabilityZone:
     Description: Availability Zone of the primary instance
