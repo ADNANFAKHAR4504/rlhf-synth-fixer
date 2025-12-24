@@ -108,6 +108,10 @@ Resources:
   # =====================================================
   # DYNAMODB TABLES
   # =====================================================
+  # NOTE: DynamoDB is included in this complete template but is not available in LocalStack Community Edition.
+  # For LocalStack Community deployment, these resources are excluded automatically.
+  # MIGRATION PATH: See lib/LOCALSTACK_MIGRATION.md for complete migration instructions
+  # to restore DynamoDB functionality using LocalStack Pro or AWS deployment.
   EnvironmentDynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
