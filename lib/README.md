@@ -38,17 +38,17 @@ This infrastructure code provisions a highly available, scalable, and secure EKS
 ### Node Groups
 
 1. Frontend Node Group
-   - Instance Type: t3.large
+   - Instance Size: t3.large
    - Scaling: Min 2, Max 10, Desired 2
    - Purpose: Frontend microservices
 
 2. Backend Node Group
-   - Instance Type: m5.xlarge
+   - Instance Size: m5.xlarge
    - Scaling: Min 2, Max 10, Desired 2
    - Purpose: Backend API services
 
 3. Data Processing Node Group
-   - Instance Type: c5.2xlarge
+   - Instance Size: c5.2xlarge
    - Scaling: Min 2, Max 10, Desired 2
    - Purpose: Data-intensive workloads
 
@@ -230,7 +230,7 @@ spec:
     - http:
         paths:
           - path: /
-            pathType: Prefix
+            pathKind: Prefix
             backend:
               service:
                 name: sample-app
@@ -252,7 +252,7 @@ spec:
   parameters:
     objects: |
       - objectName: "eks-app-secrets-<suffix>"
-        objectType: "secretsmanager"
+        objectKind: "secretsmanager"
 ```
 
 2. Mount in pod:
