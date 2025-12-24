@@ -1,0 +1,604 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  TapStack.yml - Dual-mode deployment (AWS + LocalStack).
+  AWS mode: Aurora MySQL cluster across 3 AZs with failover, reader autoscaling, alarms, and optional DAS.
+  LocalStack mode: Single MySQL DBInstance (Aurora/DAS/autoscaling/alarms disabled automatically).
+
+Metadata:
+  TemplateAuthor: TapStack
+  Version: v3.2.1
+  Notes:
+    - Pure YAML (no anchors/aliases; no flow-style maps/sequences)
+    - VPC, subnets, SGs created in-stack (no external params)
+    - Best-practice: passwords generated in Secrets Manager and consumed via dynamic references
+
+Parameters:
+  DeploymentTarget:
+    Type: String
+    Default: aws
+    AllowedValues:
+      - aws
+      - localstack
+    Description: Set to aws for real AWS. Set to localstack for LocalStack-safe mode.
+
+  EnvironmentSuffix:
+    Type: String
+    Default: prod-us
+    Description: Suffix added to all resource names to avoid collisions.
+    AllowedPattern: '^[a-z0-9-]{3,20}$'
+    ConstraintDescription: Must be 3-20 characters of lowercase letters, digits, and dashes.
+
+  DatabaseName:
+    Type: String
+    Default: appdb
+    AllowedPattern: '^[A-Za-z0-9_]+$'
+    Description: Initial database name.
+
+  DBInstanceClass:
+    Type: String
+    Default: db.r6g.large
+    AllowedPattern: '^[a-z0-9.-]+$'
+    Description: Instance class for Aurora instances (AWS mode).
+
+  LocalDbPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Default: LocalStackPass123!
+    Description: Password used for LocalStack DBInstance only.
+
+
+  LocalDbInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    AllowedPattern: '^[a-z0-9.-]+$'
+    Description: Instance class for MySQL instance (LocalStack mode).
+
+  DBEngineVersion:
+    Type: String
+    Default: ''
+    AllowedPattern: '^[0-9A-Za-z._-]*$'
+    Description: Optional Aurora MySQL 8 engine version (Aurora MySQL 3.x). Blank uses default.
+
+  LocalMySqlEngineVersion:
+    Type: String
+    Default: '8.0'
+    AllowedPattern: '^[0-9A-Za-z._-]+$'
+    Description: MySQL engine version for LocalStack mode.
+
+  MasterUsername:
+    Type: String
+    Default: admin
+    AllowedPattern: '^[A-Za-z0-9_]+$'
+    MinLength: 1
+    MaxLength: 16
+    Description: Master username.
+
+  MonitoringIntervalSeconds:
+    Type: Number
+    Default: 10
+    AllowedValues:
+      - 1
+      - 5
+      - 10
+      - 15
+      - 30
+      - 60
+    Description: Enhanced Monitoring interval in seconds (AWS mode only).
+
+  PerformanceInsightsEnabled:
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+    Description: Enable Performance Insights (AWS mode only).
+
+  PerformanceInsightsRetention:
+    Type: Number
+    Default: 7
+    AllowedValues:
+      - 7
+      - 731
+    Description: Performance Insights retention in days (AWS mode only).
+
+  BackupRetentionDays:
+    Type: Number
+    Default: 35
+    MinValue: 1
+    MaxValue: 35
+    Description: Backup retention in days (AWS mode only).
+
+  PreferredBackupWindowUTC:
+    Type: String
+    Default: '03:00-04:00'
+    AllowedPattern: '^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$'
+    Description: Preferred backup window in UTC (AWS mode only).
+
+  KmsKeyId:
+    Type: String
+    Default: ''
+    Description: Optional KMS Key ARN for Aurora storage encryption (AWS mode only).
+
+Conditions:
+  IsLocalStack: !Or
+    - !Equals [!Ref DeploymentTarget, 'localstack']
+    - !Equals [!Ref 'AWS::AccountId', '000000000000']
+
+  IsAws: !Not [!Condition IsLocalStack]
+
+  UseCustomerKms: !And
+    - !Condition IsAws
+    - !Not
+      - !Equals
+        - !Ref KmsKeyId
+        - ''
+
+  EnablePI: !And
+    - !Condition IsAws
+    - !Equals
+      - !Ref PerformanceInsightsEnabled
+      - 'true'
+
+  HasEngineVersion: !And
+    - !Condition IsAws
+    - !Not
+      - !Equals
+        - !Ref DBEngineVersion
+        - ''
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.20.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub vpc-${EnvironmentSuffix}
+
+  RouteTablePrivateA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub rt-private-a-${EnvironmentSuffix}
+
+  RouteTablePrivateB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub rt-private-b-${EnvironmentSuffix}
+
+  RouteTablePrivateC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub rt-private-c-${EnvironmentSuffix}
+
+  SubnetPrivateA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      CidrBlock: 10.20.10.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub subnet-private-a-${EnvironmentSuffix}
+
+  SubnetPrivateB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      CidrBlock: 10.20.20.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub subnet-private-b-${EnvironmentSuffix}
+
+  SubnetPrivateC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select
+        - 2
+        - !GetAZs ''
+      CidrBlock: 10.20.30.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub subnet-private-c-${EnvironmentSuffix}
+
+  SubnetRouteAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetPrivateA
+      RouteTableId: !Ref RouteTablePrivateA
+
+  SubnetRouteAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetPrivateB
+      RouteTableId: !Ref RouteTablePrivateB
+
+  SubnetRouteAssocC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetPrivateC
+      RouteTableId: !Ref RouteTablePrivateC
+
+  AppTierSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub App tier SG (${EnvironmentSuffix}) allowed to reach DB
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 10.20.0.0/16
+      Tags:
+        - Key: Name
+          Value: !Sub app-sg-${EnvironmentSuffix}
+
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub DB SG restrict to app tier only (${EnvironmentSuffix})
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref AppTierSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub db-sg-${EnvironmentSuffix}
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub DB Subnet Group (${EnvironmentSuffix})
+      DBSubnetGroupName: !Sub db-subnet-group-${EnvironmentSuffix}
+      SubnetIds:
+        - !Ref SubnetPrivateA
+        - !Ref SubnetPrivateB
+        - !Ref SubnetPrivateC
+      Tags:
+        - Key: Name
+          Value: !Sub db-subnet-group-${EnvironmentSuffix}
+
+  ClusterParameterGroup:
+    Condition: IsAws
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: !Sub Cluster parameter group with binlog enabled (${EnvironmentSuffix})
+      Family: aurora-mysql8.0
+      Parameters:
+        binlog_format: ROW
+        binlog_row_image: FULL
+      Tags:
+        - Key: Name
+          Value: !Sub aurora-cluster-parameter-group-${EnvironmentSuffix}
+
+  EnhancedMonitoringRole:
+    Condition: IsAws
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub enhanced-monitoring-role-${EnvironmentSuffix}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Tags:
+        - Key: Name
+          Value: !Sub enhanced-monitoring-role-${EnvironmentSuffix}
+
+  MasterSecret:
+    Condition: IsAws
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub aurora-master-secret-${EnvironmentSuffix}
+      Description: !Sub Master password for Aurora cluster (${EnvironmentSuffix})
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${MasterUsername}"}'
+        GenerateStringKey: password
+        ExcludeCharacters: '"@/\'
+        PasswordLength: 32
+      Tags:
+        - Key: Name
+          Value: !Sub aurora-master-secret-${EnvironmentSuffix}
+
+  LocalMasterSecret:
+    Condition: IsLocalStack
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub mysql-local-master-secret-${EnvironmentSuffix}
+      Description: !Sub Master password for LocalStack MySQL (${EnvironmentSuffix})
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${MasterUsername}"}'
+        GenerateStringKey: password
+        ExcludeCharacters: '"@/\'
+        PasswordLength: 24
+      Tags:
+        - Key: Name
+          Value: !Sub mysql-local-master-secret-${EnvironmentSuffix}
+
+  AuroraDBCluster:
+    Condition: IsAws
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBClusterIdentifier: !Sub aurora-cluster-${EnvironmentSuffix}
+      Engine: aurora-mysql
+      EngineVersion: !If
+        - HasEngineVersion
+        - !Ref DBEngineVersion
+        - !Ref AWS::NoValue
+      DatabaseName: !Ref DatabaseName
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DbSecurityGroup
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${MasterSecret}:SecretString:password}}'
+      BackupRetentionPeriod: !Ref BackupRetentionDays
+      PreferredBackupWindow: !Ref PreferredBackupWindowUTC
+      StorageEncrypted: true
+      KmsKeyId: !If
+        - UseCustomerKms
+        - !Ref KmsKeyId
+        - !Ref AWS::NoValue
+      DeletionProtection: true
+      BacktrackWindow: 259200
+      DBClusterParameterGroupName: !Ref ClusterParameterGroup
+      PreferredMaintenanceWindow: sun:04:00-sun:05:00
+      EnableCloudwatchLogsExports:
+        - audit
+        - error
+        - general
+        - slowquery
+      Tags:
+        - Key: Name
+          Value: !Sub aurora-cluster-${EnvironmentSuffix}
+
+  AuroraWriterInstance:
+    Condition: IsAws
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub aurora-writer-instance-${EnvironmentSuffix}
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      Engine: aurora-mysql
+      DBInstanceClass: !Ref DBInstanceClass
+      PromotionTier: 0
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      MonitoringInterval: !Ref MonitoringIntervalSeconds
+      MonitoringRoleArn: !GetAtt EnhancedMonitoringRole.Arn
+      EnablePerformanceInsights: !If
+        - EnablePI
+        - true
+        - false
+      PerformanceInsightsRetentionPeriod: !If
+        - EnablePI
+        - !Ref PerformanceInsightsRetention
+        - !Ref AWS::NoValue
+      PubliclyAccessible: false
+      AutoMinorVersionUpgrade: true
+      Tags:
+        - Key: Name
+          Value: !Sub aurora-writer-instance-${EnvironmentSuffix}
+
+  AuroraReaderAInstance:
+    Condition: IsAws
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub aurora-reader-a-instance-${EnvironmentSuffix}
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      Engine: aurora-mysql
+      DBInstanceClass: !Ref DBInstanceClass
+      PromotionTier: 1
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      MonitoringInterval: !Ref MonitoringIntervalSeconds
+      MonitoringRoleArn: !GetAtt EnhancedMonitoringRole.Arn
+      EnablePerformanceInsights: !If
+        - EnablePI
+        - true
+        - false
+      PerformanceInsightsRetentionPeriod: !If
+        - EnablePI
+        - !Ref PerformanceInsightsRetention
+        - !Ref AWS::NoValue
+      PubliclyAccessible: false
+      AutoMinorVersionUpgrade: true
+      Tags:
+        - Key: Name
+          Value: !Sub aurora-reader-a-instance-${EnvironmentSuffix}
+
+  AuroraReaderBInstance:
+    Condition: IsAws
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub aurora-reader-b-instance-${EnvironmentSuffix}
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      Engine: aurora-mysql
+      DBInstanceClass: !Ref DBInstanceClass
+      PromotionTier: 2
+      AvailabilityZone: !Select
+        - 2
+        - !GetAZs ''
+      MonitoringInterval: !Ref MonitoringIntervalSeconds
+      MonitoringRoleArn: !GetAtt EnhancedMonitoringRole.Arn
+      EnablePerformanceInsights: !If
+        - EnablePI
+        - true
+        - false
+      PerformanceInsightsRetentionPeriod: !If
+        - EnablePI
+        - !Ref PerformanceInsightsRetention
+        - !Ref AWS::NoValue
+      PubliclyAccessible: false
+      AutoMinorVersionUpgrade: true
+      Tags:
+        - Key: Name
+          Value: !Sub aurora-reader-b-instance-${EnvironmentSuffix}
+
+  AuroraReadReplicaScalableTarget:
+    Condition: IsAws
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn:
+      - AuroraWriterInstance
+      - AuroraReaderAInstance
+      - AuroraReaderBInstance
+    Properties:
+      MaxCapacity: 5
+      MinCapacity: 2
+      ResourceId: !Sub cluster:${AuroraDBCluster}
+      ScalableDimension: rds:cluster:ReadReplicaCount
+      ServiceNamespace: rds
+
+  AuroraReadReplicaScalingPolicy:
+    Condition: IsAws
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub aurora-autoscaling-scaling-policy-${EnvironmentSuffix}
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AuroraReadReplicaScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70
+        PredefinedMetricSpecification:
+          PredefinedMetricType: RDSReaderAverageCPUUtilization
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 300
+
+  FailoverSnsTopic:
+    Condition: IsAws
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub sns-failover-topic-${EnvironmentSuffix}
+      Tags:
+        - Key: Name
+          Value: !Sub sns-failover-topic-${EnvironmentSuffix}
+
+  ReplicaLagAlarm:
+    Condition: IsAws
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub alarm-replica-lag-${EnvironmentSuffix}
+      AlarmDescription: Alarm when Aurora replica lag (max across readers) exceeds 1 second.
+      Namespace: AWS/RDS
+      MetricName: AuroraReplicaLagMaximum
+      Dimensions:
+        - Name: DBClusterIdentifier
+          Value: !Ref AuroraDBCluster
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      Unit: Seconds
+      AlarmActions:
+        - !Ref FailoverSnsTopic
+      OKActions:
+        - !Ref FailoverSnsTopic
+
+  WriterCpuAlarm:
+    Condition: IsAws
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub alarm-writer-cpu-${EnvironmentSuffix}
+      AlarmDescription: Alarm when writer CPU exceeds 80 percent.
+      Namespace: AWS/RDS
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref AuroraWriterInstance
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 3
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      Unit: Percent
+      AlarmActions:
+        - !Ref FailoverSnsTopic
+      OKActions:
+        - !Ref FailoverSnsTopic
+
+  # LocalStack mode MySQL instance
+  LocalMysqlInstance:
+    Condition: IsLocalStack
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1011
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub mysql-local-${EnvironmentSuffix}
+      Engine: mysql
+      EngineVersion: !Ref LocalMySqlEngineVersion
+      DBName: !Ref DatabaseName
+      DBInstanceClass: !Ref LocalDbInstanceClass
+      AllocatedStorage: 20
+      StorageType: gp2
+      PubliclyAccessible: false
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DbSecurityGroup
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Ref LocalDbPassword
+      AutoMinorVersionUpgrade: true
+      MultiAZ: false
+      Tags:
+        - Key: Name
+          Value: !Sub mysql-local-${EnvironmentSuffix}
+
+
+
+Outputs:
+  # Keep keys stable across AWS and LocalStack so scripts/tests do not break.
+  ClusterEndpoint:
+    Description: Writer endpoint (AWS) or MySQL endpoint (LocalStack).
+    Value: !If
+      - IsAws
+      - !GetAtt AuroraDBCluster.Endpoint.Address
+      - !GetAtt LocalMysqlInstance.Endpoint.Address
+    Export:
+      Name: !Sub cluster-endpoint-${EnvironmentSuffix}
+
+  ReaderEndpoint:
+    Description: Reader endpoint (AWS) or MySQL endpoint (LocalStack).
+    Value: !If
+      - IsAws
+      - !GetAtt AuroraDBCluster.ReadEndpoint.Address
+      - !GetAtt LocalMysqlInstance.Endpoint.Address
+    Export:
+      Name: !Sub reader-endpoint-${EnvironmentSuffix}
+
+  AppTierSecurityGroupId:
+    Description: Security Group ID applications should use to reach the DB (3306).
+    Value: !Ref AppTierSecurityGroup
+    Export:
+      Name: !Sub app-sg-${EnvironmentSuffix}

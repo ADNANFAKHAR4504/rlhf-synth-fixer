@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292056",
+  "team": "5",
+  "startedAt": "2025-08-12T13:10:06.181Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "provider": "localstack",
+  "aws_services": [
+    "API Gateway",
+    "CloudWatch",
+    "EC2",
+    "IAM",
+    "S3",
+    "WAF"
+  ],
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

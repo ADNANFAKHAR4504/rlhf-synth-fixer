@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291744_ls",
+  "team": "2",
+  "startedAt": "2025-12-23T08:37:44.454Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "wave": "P0",
+  "aws_services": [
+    "VPC",
+    "S3 Bucket",
+    "IAM Role",
+    "Security Group",
+    "Application Load Balancer",
+    "Auto Scaling Group",
+    "Launch Configuration",
+    "Route53 Health Check",
+    "Route53 Record Set"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

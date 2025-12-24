@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-ls-291429",
+  "team": "synth-2",
+  "startedAt": "2025-08-11T13:18:32.694Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "KMS",
+    "SSM"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "ls-291429",
+    "pr": "Pr874"
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
+}

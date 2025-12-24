@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292040",
+  "team": "5",
+  "startedAt": "2025-08-21T06:53:32.242Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "IAM",
+    "EC2",
+    "VPC",
+    "S3",
+    "CloudTrail",
+    "KMS",
+    "SNS",
+    "CloudWatch",
+    "Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}
