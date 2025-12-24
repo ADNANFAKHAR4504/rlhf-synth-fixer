@@ -33,5 +33,12 @@
     "ConfigurationRecorder",
     "DeliveryChannel"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
 }
