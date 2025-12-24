@@ -873,3 +873,40 @@ Outputs:
     Value: !Ref MFAAdminRole
     Export:
       Name: !Sub "${AWS::StackName}-MFAAdminRoleName"
+
+  # Additional outputs required by LocalStack post-deployment fix script
+  VPCId:
+    Description: The ID of the VPC
+    Value: !Ref MainVPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCId"
+
+  SecurityGroupId:
+    Description: The ID of the ALB Security Group
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-SecurityGroupId"
+
+  InternetGatewayId:
+    Description: The ID of the Internet Gateway
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-InternetGatewayId"
+
+  NATGatewayId:
+    Description: The ID of the first NAT Gateway
+    Value: !Ref NatGateway1
+    Export:
+      Name: !Sub "${AWS::StackName}-NATGatewayId"
+
+  PublicSubnet1Id:
+    Description: The ID of the first public subnet
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet1Id"
+
+  PrivateSubnet1Id:
+    Description: The ID of the first private app subnet
+    Value: !Ref PrivateAppSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet1Id"
