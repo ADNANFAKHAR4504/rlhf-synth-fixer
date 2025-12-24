@@ -3,18 +3,27 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "284210",
+  "po_id": "LS-284210",
   "team": "synth-2",
   "startedAt": "2025-08-04T15:05:34.736Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "UsamaIftikhar12",
-  "dockerS3Location": "",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "S3",
+    "SecretsManager",
+    "CloudWatch",
+    "IAM",
+    "EC2",
+    "Logs"
+  ],
   "wave": "P1",
-  "subtask": "Provisioning",
-  "subject_labels": ["Lambda", "S3", "CloudWatch", "IAM"],
-  "aws_services": ["Lambda", "S3", "SecretsManager", "CloudWatch", "IAM", "EC2", "Logs"],
-  "provider": "aws"
+  "migrated_from": {
+    "po_id": "284210",
+    "pr": "Pr533"
+  }
 }
