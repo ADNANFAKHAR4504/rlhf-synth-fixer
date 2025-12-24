@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291832",
+  "team": "synth-2",
+  "startedAt": "2025-08-07T09:45:22.557Z",
+  "provider": "localstack",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "AWS Config",
+    "S3"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
+}
