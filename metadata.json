@@ -9,6 +9,6 @@
   "aws_services": ["VPC", "EC2", "ELB", "AutoScaling", "RDS", "IAM", "SecretsManager"],
   "wave": "P0",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Cloud Environment Setup", "Web Application Deployment"],
+  "subject_labels": ["Cloud Environment Setup"],
   "provider": "localstack"
 }
