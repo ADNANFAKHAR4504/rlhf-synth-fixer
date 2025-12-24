@@ -65,7 +65,10 @@ export class TapStack extends cdk.Stack {
 
     // Enable CloudTrail for API logging (skipped in LocalStack Community Edition - Pro only)
     // CloudTrail is a Pro feature in LocalStack, disabled by default for Community Edition compatibility
-    if (props.enableCloudTrail === true && process.env.AWS_ENDPOINT_URL === undefined) {
+    if (
+      props.enableCloudTrail === true &&
+      process.env.AWS_ENDPOINT_URL === undefined
+    ) {
       this.createCloudTrail(cloudTrailLogGroup);
     }
 
