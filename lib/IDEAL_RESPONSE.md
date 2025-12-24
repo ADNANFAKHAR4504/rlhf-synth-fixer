@@ -9,7 +9,7 @@ I have created a comprehensive CloudFormation YAML template that provisions a se
 - **VPC**: Created with CIDR block `10.0.0.0/16` with DNS support and hostnames enabled
 - **Two Public Subnets**: `10.0.1.0/24` and `10.0.2.0/24` in different availability zones
 - **Internet Gateway**: Attached to VPC with proper routing for internet access
-- **Security Group**: Allows SSH access (port 22) from any IPv4 address
+- **Security Group**: Allows SSH access (port 22) from office IP range 203.0.113.0/24
 - **Dynamic Availability Zones**: Uses CloudFormation intrinsic functions for flexible deployment
 - **Comprehensive Outputs**: Exposes all key resource IDs for integration
 
@@ -108,13 +108,13 @@ Resources:
   DevSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow SSH access from anywhere
+      GroupDescription: Allow SSH access from office IP range
       VpcId: !Ref MyVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          CidrIp: 203.0.113.0/24
       Tags:
         - Key: Name
           Value: DevSecurityGroup
