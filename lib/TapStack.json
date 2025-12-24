@@ -796,12 +796,7 @@
           "LaunchTemplateId": {
             "Ref": "LaunchTemplate"
           },
-          "Version": {
-            "Fn::GetAtt": [
-              "LaunchTemplate",
-              "LatestVersionNumber"
-            ]
-          }
+          "Version": "$Latest"
         },
         "MinSize": {
           "Fn::FindInMap": [
@@ -958,8 +953,9 @@
     },
     "Database": {
       "Type": "AWS::RDS::DBInstance",
-      "DeletionPolicy": "Snapshot",
-      "UpdateReplacePolicy": "Snapshot",
+      "DependsOn": "DatabaseSecret",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
       "Properties": {
         "DBInstanceIdentifier": {
           "Fn::Sub": "${ProjectName}-db-${Environment}"
@@ -1000,29 +996,9 @@
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
         },
-        "MultiAZ": {
-          "Fn::FindInMap": [
-            "EnvironmentConfig",
-            {
-              "Ref": "Environment"
-            },
-            "MultiAZ"
-          ]
-        },
-        "BackupRetentionPeriod": {
-          "Fn::If": [
-            "IsProductionLike",
-            7,
-            1
-          ]
-        },
-        "DeletionProtection": {
-          "Fn::If": [
-            "IsProductionLike",
-            true,
-            false
-          ]
-        },
+        "MultiAZ": false,
+        "BackupRetentionPeriod": 0,
+        "DeletionProtection": false,
         "Tags": [
           {
             "Key": "Name",

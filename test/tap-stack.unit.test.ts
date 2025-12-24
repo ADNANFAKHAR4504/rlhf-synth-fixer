@@ -293,8 +293,8 @@ describe('TapStack CloudFormation Template', () => {
       const db = template.Resources.Database;
       expect(db).toBeDefined();
       expect(db.Type).toBe('AWS::RDS::DBInstance');
-      expect(db.DeletionPolicy).toBe('Snapshot');
-      expect(db.UpdateReplacePolicy).toBe('Snapshot');
+      expect(db.DeletionPolicy).toBe('Delete');
+      expect(db.UpdateReplacePolicy).toBe('Delete');
       expect(db.Properties.Engine).toBe('mysql');
       expect(db.Properties.EngineVersion).toBe('8.0.40');
       expect(db.Properties.MasterUsername).toBe('admin');
