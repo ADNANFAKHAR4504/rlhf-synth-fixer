@@ -7,7 +7,7 @@ You are an expert AWS Solutions Architect. Your task is to generate a comprehens
     * An S3 bucket to store Lambda deployment packages. The bucket name should be unique and environment-specific.
     * An AWS Lambda function with a Node.js runtime. Its code should be sourced from the S3 bucket defined above.
     * An API Gateway REST API with a single `/hello` path. This path should be configured with a proxy integration that forwards all requests to the Lambda function.
-    * All necessary IAM roles and policies to grant the Lambda function permissions to be invoked by API Gateway and log to CloudWatch.
+    * IAM roles and policies that allow API Gateway to invoke the Lambda function and enable CloudWatch logging.
 
 2.  **Multi-Environment Configuration:**
     * Use the `Parameters` section to accept an `EnvironmentName` parameter with allowed values of `dev`, `staging`, and `prod`. Also, accept an `ArtifactBucketName` parameter to specify the bucket for Lambda code.
