@@ -15,7 +15,7 @@ terraform {
   }
 
   # Partial backend config: values are injected at `terraform init` time
-  # backend "s3" {}  # Commented out for LocalStack testing - using local state
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
@@ -27,15 +27,4 @@ provider "aws" {
   skip_metadata_api_check     = true
   skip_requesting_account_id  = true
 
-  endpoints {
-    ec2            = "http://localhost:4566"
-    elb            = "http://localhost:4566"
-    elbv2          = "http://localhost:4566"
-    rds            = "http://localhost:4566"
-    iam            = "http://localhost:4566"
-    secretsmanager = "http://localhost:4566"
-    cloudwatch     = "http://localhost:4566"
-    autoscaling    = "http://localhost:4566"
-    logs           = "http://localhost:4566"
-  }
 }

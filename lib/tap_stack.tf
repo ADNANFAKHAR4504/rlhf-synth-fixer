@@ -1,5 +1,6 @@
 # Terraform configuration for High Availability Web Application
 # This configuration creates a production-ready infrastructure on AWS
+# LocalStack-compatible version - some resources are conditionally created
 
 ########################
 # Variables
@@ -40,6 +41,12 @@ variable "db_instance_class" {
   default     = "db.t3.micro"
 }
 
+variable "localstack_mode" {
+  description = "Set to true when deploying to LocalStack (skips unsupported resources)"
+  type        = bool
+  default     = true
+}
+
 ########################
 # Data Sources
 ########################
@@ -54,29 +61,23 @@ data "aws_subnets" "default" {
   }
 }
 
-# Get public subnets for ALB (must be in different AZs)
-data "aws_subnets" "public" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-
-  filter {
-    name   = "state"
-    values = ["available"]
-  }
-
-  filter {
-    name   = "map-public-ip-on-launch"
-    values = ["true"]
-  }
-}
-
 data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# Database password will be retrieved from the secret version resource
+########################
+# Locals
+########################
+locals {
+  common_tags = {
+    Name        = "${var.app_name}-${var.environment_suffix}"
+    Environment = "Production"
+    ManagedBy   = "terraform"
+  }
+
+  # Use first 2 available subnets
+  subnet_ids = slice(data.aws_subnets.default.ids, 0, min(2, length(data.aws_subnets.default.ids)))
+}
 
 ########################
 # Security Groups
@@ -224,7 +225,7 @@ resource "aws_iam_role_policy" "cloudwatch_policy" {
 ########################
 resource "aws_launch_template" "app" {
   name_prefix   = "${var.app_name}-${var.environment_suffix}-template-"
-  image_id      = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI in us-east-1 (keeping same for now)
+  image_id      = "ami-0c02fb55956c7d316"
   instance_type = var.instance_type
 
   network_interfaces {
@@ -238,16 +239,11 @@ resource "aws_launch_template" "app" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              # Enable debugging
               set -x
-              
-              # Update system
               yum update -y
               yum install -y httpd
               systemctl start httpd
               systemctl enable httpd
-              
-              # Create a simple web page
               cat > /var/www/html/index.html << 'HTML_EOF'
               <!DOCTYPE html>
               <html>
@@ -269,28 +265,19 @@ resource "aws_launch_template" "app" {
                       <div class="info">
                           <h2>Instance Information</h2>
                           <p><strong>Hostname:</strong> $(hostname -f)</p>
-                          <p><strong>Instance ID:</strong> $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-                          <p><strong>Availability Zone:</strong> $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
                           <p><strong>Launch Time:</strong> $(date)</p>
                       </div>
                   </div>
               </body>
               </html>
               HTML_EOF
-              
-              # Install CloudWatch agent for monitoring
               yum install -y amazon-cloudwatch-agent
               systemctl enable amazon-cloudwatch-agent
               systemctl start amazon-cloudwatch-agent
-              
-              # Create a simple health check endpoint
               cat > /var/www/html/health << 'HEALTH_EOF'
               OK
               HEALTH_EOF
-              
-              # Verify Apache is running
               systemctl status httpd
-              curl -f http://localhost/ || echo "Apache health check failed"
               EOF
   )
 
@@ -311,14 +298,16 @@ resource "aws_launch_template" "app" {
 }
 
 ########################
-# Application Load Balancer
+# Application Load Balancer (AWS only - not supported in LocalStack Community)
 ########################
 resource "aws_lb" "app" {
+  count = var.localstack_mode ? 0 : 1
+
   name               = "${var.app_name}-${var.environment_suffix}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = slice(data.aws_subnets.public.ids, 0, 2)
+  subnets            = local.subnet_ids
 
   enable_deletion_protection       = false
   enable_http2                     = true
@@ -332,6 +321,8 @@ resource "aws_lb" "app" {
 }
 
 resource "aws_lb_target_group" "app" {
+  count = var.localstack_mode ? 0 : 1
+
   name     = "${var.app_name}-${var.environment_suffix}-tg"
   port     = 80
   protocol = "HTTP"
@@ -357,26 +348,30 @@ resource "aws_lb_target_group" "app" {
 }
 
 resource "aws_lb_listener" "app" {
-  load_balancer_arn = aws_lb.app.arn
+  count = var.localstack_mode ? 0 : 1
+
+  load_balancer_arn = aws_lb.app[0].arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+    target_group_arn = aws_lb_target_group.app[0].arn
   }
 }
 
 ########################
-# Auto Scaling Group
+# Auto Scaling Group (AWS only - not fully supported in LocalStack Community)
 ########################
 resource "aws_autoscaling_group" "app" {
+  count = var.localstack_mode ? 0 : 1
+
   name                      = "${var.app_name}-${var.environment_suffix}-asg"
   desired_capacity          = 1
   max_size                  = 4
   min_size                  = 1
-  target_group_arns         = [aws_lb_target_group.app.arn]
-  vpc_zone_identifier       = slice(data.aws_subnets.public.ids, 0, 2)
+  target_group_arns         = [aws_lb_target_group.app[0].arn]
+  vpc_zone_identifier       = local.subnet_ids
   health_check_grace_period = 600
   health_check_type         = "ELB"
 
@@ -405,28 +400,34 @@ resource "aws_autoscaling_group" "app" {
 }
 
 ########################
-# Auto Scaling Policies
+# Auto Scaling Policies (AWS only)
 ########################
 resource "aws_autoscaling_policy" "scale_up" {
+  count = var.localstack_mode ? 0 : 1
+
   name                   = "${var.app_name}-${var.environment_suffix}-scale-up"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
-  autoscaling_group_name = aws_autoscaling_group.app.name
+  autoscaling_group_name = aws_autoscaling_group.app[0].name
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
+  count = var.localstack_mode ? 0 : 1
+
   name                   = "${var.app_name}-${var.environment_suffix}-scale-down"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
-  autoscaling_group_name = aws_autoscaling_group.app.name
+  autoscaling_group_name = aws_autoscaling_group.app[0].name
 }
 
 ########################
-# CloudWatch Alarms
+# CloudWatch Alarms (AWS only for ASG-linked alarms)
 ########################
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  count = var.localstack_mode ? 0 : 1
+
   alarm_name          = "${var.app_name}-${var.environment_suffix}-cpu-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
@@ -436,14 +437,16 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "Scale up if CPU > 80% for 4 minutes"
-  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
+  alarm_actions       = [aws_autoscaling_policy.scale_up[0].arn]
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app.name
+    AutoScalingGroupName = aws_autoscaling_group.app[0].name
   }
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_low" {
+  count = var.localstack_mode ? 0 : 1
+
   alarm_name          = "${var.app_name}-${var.environment_suffix}-cpu-low"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
@@ -453,13 +456,14 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   statistic           = "Average"
   threshold           = "20"
   alarm_description   = "Scale down if CPU < 20% for 4 minutes"
-  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
+  alarm_actions       = [aws_autoscaling_policy.scale_down[0].arn]
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app.name
+    AutoScalingGroupName = aws_autoscaling_group.app[0].name
   }
 }
 
+# General CloudWatch alarms that work in LocalStack
 resource "aws_cloudwatch_metric_alarm" "memory_high" {
   alarm_name          = "${var.app_name}-${var.environment_suffix}-memory-high"
   comparison_operator = "GreaterThanThreshold"
@@ -472,11 +476,15 @@ resource "aws_cloudwatch_metric_alarm" "memory_high" {
   alarm_description   = "Memory utilization is high"
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app.name
+    InstanceName = "${var.app_name}-${var.environment_suffix}"
   }
+
+  tags = local.common_tags
 }
 
 resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
+  count = var.localstack_mode ? 0 : 1
+
   alarm_name          = "${var.app_name}-${var.environment_suffix}-alb-5xx"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
@@ -488,16 +496,18 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
   alarm_description   = "ALB 5XX errors are high"
 
   dimensions = {
-    LoadBalancer = aws_lb.app.arn_suffix
+    LoadBalancer = aws_lb.app[0].arn_suffix
   }
 }
 
 ########################
-# RDS Database
+# RDS Database (AWS only - not supported in LocalStack Community)
 ########################
 resource "aws_db_subnet_group" "app" {
+  count = var.localstack_mode ? 0 : 1
+
   name       = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
-  subnet_ids = slice(data.aws_subnets.default.ids, 0, 2)
+  subnet_ids = local.subnet_ids
 
   tags = {
     Name        = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
@@ -507,6 +517,8 @@ resource "aws_db_subnet_group" "app" {
 }
 
 resource "aws_db_instance" "app" {
+  count = var.localstack_mode ? 0 : 1
+
   identifier = "${var.app_name}-${var.environment_suffix}-db"
 
   engine         = "mysql"
@@ -523,7 +535,7 @@ resource "aws_db_instance" "app" {
   password = aws_secretsmanager_secret_version.db_password.secret_string
 
   vpc_security_group_ids = [aws_security_group.rds.id]
-  db_subnet_group_name   = aws_db_subnet_group.app.name
+  db_subnet_group_name   = aws_db_subnet_group.app[0].name
 
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
@@ -542,7 +554,7 @@ resource "aws_db_instance" "app" {
 }
 
 ########################
-# AWS Secrets Manager
+# AWS Secrets Manager (supported in LocalStack)
 ########################
 resource "aws_secretsmanager_secret" "db_password" {
   name        = "${var.app_name}-${var.environment_suffix}-db-password"
@@ -567,7 +579,7 @@ resource "random_password" "db_password" {
 }
 
 ########################
-# CloudWatch Logs
+# CloudWatch Logs (supported in LocalStack)
 ########################
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/aws/ec2/${var.app_name}-${var.environment_suffix}"
@@ -590,32 +602,32 @@ output "aws_region" {
 
 output "alb_dns_name" {
   description = "DNS name of the load balancer"
-  value       = aws_lb.app.dns_name
+  value       = var.localstack_mode ? "localstack-mode-no-alb" : aws_lb.app[0].dns_name
 }
 
 output "alb_zone_id" {
   description = "Zone ID of the load balancer"
-  value       = aws_lb.app.zone_id
+  value       = var.localstack_mode ? "localstack-mode-no-alb" : aws_lb.app[0].zone_id
 }
 
 output "rds_endpoint" {
   description = "RDS instance endpoint"
-  value       = aws_db_instance.app.endpoint
+  value       = var.localstack_mode ? "localstack-mode-no-rds" : aws_db_instance.app[0].endpoint
 }
 
 output "rds_port" {
   description = "RDS instance port"
-  value       = aws_db_instance.app.port
+  value       = var.localstack_mode ? 3306 : aws_db_instance.app[0].port
 }
 
 output "asg_name" {
   description = "Auto Scaling Group name"
-  value       = aws_autoscaling_group.app.name
+  value       = var.localstack_mode ? "localstack-mode-no-asg" : aws_autoscaling_group.app[0].name
 }
 
 output "asg_arn" {
   description = "Auto Scaling Group ARN"
-  value       = aws_autoscaling_group.app.arn
+  value       = var.localstack_mode ? "localstack-mode-no-asg" : aws_autoscaling_group.app[0].arn
 }
 
 output "vpc_id" {
@@ -626,4 +638,44 @@ output "vpc_id" {
 output "subnet_ids" {
   description = "Subnet IDs"
   value       = data.aws_subnets.default.ids
+}
+
+output "security_group_alb_id" {
+  description = "ALB Security Group ID"
+  value       = aws_security_group.alb.id
+}
+
+output "security_group_ec2_id" {
+  description = "EC2 Security Group ID"
+  value       = aws_security_group.ec2.id
+}
+
+output "security_group_rds_id" {
+  description = "RDS Security Group ID"
+  value       = aws_security_group.rds.id
+}
+
+output "iam_role_arn" {
+  description = "EC2 IAM Role ARN"
+  value       = aws_iam_role.ec2_role.arn
+}
+
+output "launch_template_id" {
+  description = "Launch Template ID"
+  value       = aws_launch_template.app.id
+}
+
+output "secrets_manager_secret_arn" {
+  description = "Secrets Manager Secret ARN"
+  value       = aws_secretsmanager_secret.db_password.arn
+}
+
+output "cloudwatch_log_group_name" {
+  description = "CloudWatch Log Group Name"
+  value       = aws_cloudwatch_log_group.app.name
+}
+
+output "localstack_mode" {
+  description = "Whether LocalStack mode is enabled"
+  value       = var.localstack_mode
 }

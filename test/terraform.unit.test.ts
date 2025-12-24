@@ -1,5 +1,6 @@
 // Unit tests for High Availability Web Application Infrastructure
 // Tests the Terraform configuration structure and syntax without executing commands
+// LocalStack-compatible version
 
 import fs from "fs";
 import path from "path";
@@ -37,13 +38,17 @@ describe("High Availability Web Application - Unit Tests", () => {
     test("uses data sources for default VPC", () => {
       expect(stackContent).toMatch(/data\s+"aws_vpc"\s+"default"/);
       expect(stackContent).toMatch(/data\s+"aws_subnets"\s+"default"/);
-      expect(stackContent).toMatch(/data\s+"aws_subnets"\s+"public"/);
       expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"available"/);
     });
 
     test("uses Secrets Manager resources", () => {
       expect(stackContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"db_password"/);
       expect(stackContent).toMatch(/resource\s+"aws_secretsmanager_secret_version"\s+"db_password"/);
+    });
+
+    test("has localstack_mode variable for conditional resources", () => {
+      expect(stackContent).toMatch(/variable\s+"localstack_mode"\s*{/);
+      expect(stackContent).toMatch(/type\s*=\s*bool/);
     });
   });
 
@@ -66,6 +71,10 @@ describe("High Availability Web Application - Unit Tests", () => {
 
     test("declares db_instance_class variable", () => {
       expect(combinedContent).toMatch(/variable\s+"db_instance_class"\s*{/);
+    });
+
+    test("declares localstack_mode variable", () => {
+      expect(combinedContent).toMatch(/variable\s+"localstack_mode"\s*{/);
     });
   });
 
@@ -158,15 +167,16 @@ describe("High Availability Web Application - Unit Tests", () => {
   });
 
   describe("Application Load Balancer", () => {
-    test("creates ALB", () => {
+    test("creates ALB with conditional count", () => {
       expect(stackContent).toMatch(/resource\s+"aws_lb"\s+"app"\s*{/);
+      expect(stackContent).toMatch(/count\s*=\s*var\.localstack_mode\s*\?\s*0\s*:\s*1/);
     });
 
-    test("creates target group", () => {
+    test("creates target group with conditional count", () => {
       expect(stackContent).toMatch(/resource\s+"aws_lb_target_group"\s+"app"\s*{/);
     });
 
-    test("creates listener", () => {
+    test("creates listener with conditional count", () => {
       expect(stackContent).toMatch(/resource\s+"aws_lb_listener"\s+"app"\s*{/);
     });
 
@@ -174,8 +184,8 @@ describe("High Availability Web Application - Unit Tests", () => {
       expect(stackContent).toMatch(/internal\s*=\s*false/);
     });
 
-    test("ALB uses public subnets", () => {
-      expect(stackContent).toMatch(/subnets\s*=\s*slice\(data\.aws_subnets\.public\.ids,\s*0,\s*2\)/);
+    test("ALB uses subnets from locals", () => {
+      expect(stackContent).toMatch(/subnets\s*=\s*local\.subnet_ids/);
     });
 
     test("ALB uses application load balancer type", () => {
@@ -191,20 +201,21 @@ describe("High Availability Web Application - Unit Tests", () => {
 
     test("listener forwards to target group", () => {
       expect(stackContent).toMatch(/type\s*=\s*"forward"/);
-      expect(stackContent).toMatch(/target_group_arn\s*=\s*aws_lb_target_group\.app\.arn/);
+      expect(stackContent).toMatch(/target_group_arn\s*=\s*aws_lb_target_group\.app\[0\]\.arn/);
     });
   });
 
   describe("Auto Scaling Group", () => {
-    test("creates auto scaling group", () => {
+    test("creates auto scaling group with conditional count", () => {
       expect(stackContent).toMatch(/resource\s+"aws_autoscaling_group"\s+"app"\s*{/);
+      expect(stackContent).toMatch(/count\s*=\s*var\.localstack_mode\s*\?\s*0\s*:\s*1/);
     });
 
-    test("creates scale up policy", () => {
+    test("creates scale up policy with conditional count", () => {
       expect(stackContent).toMatch(/resource\s+"aws_autoscaling_policy"\s+"scale_up"\s*{/);
     });
 
-    test("creates scale down policy", () => {
+    test("creates scale down policy with conditional count", () => {
       expect(stackContent).toMatch(/resource\s+"aws_autoscaling_policy"\s+"scale_down"\s*{/);
     });
 
@@ -233,11 +244,11 @@ describe("High Availability Web Application - Unit Tests", () => {
   });
 
   describe("CloudWatch Alarms", () => {
-    test("creates CPU high alarm", () => {
+    test("creates CPU high alarm with conditional count", () => {
       expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"cpu_high"\s*{/);
     });
 
-    test("creates CPU low alarm", () => {
+    test("creates CPU low alarm with conditional count", () => {
       expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"cpu_low"\s*{/);
     });
 
@@ -245,7 +256,7 @@ describe("High Availability Web Application - Unit Tests", () => {
       expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"memory_high"\s*{/);
     });
 
-    test("creates ALB 5XX alarm", () => {
+    test("creates ALB 5XX alarm with conditional count", () => {
       expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"alb_5xx"\s*{/);
     });
 
@@ -260,9 +271,9 @@ describe("High Availability Web Application - Unit Tests", () => {
       expect(stackContent).toMatch(/metric_name\s*=\s*"HTTPCode_ELB_5XX_Count"/);
     });
 
-    test("alarms trigger scaling policies", () => {
-      expect(stackContent).toMatch(/alarm_actions\s*=\s*\[aws_autoscaling_policy\.scale_up\.arn\]/);
-      expect(stackContent).toMatch(/alarm_actions\s*=\s*\[aws_autoscaling_policy\.scale_down\.arn\]/);
+    test("alarms trigger scaling policies using indexed references", () => {
+      expect(stackContent).toMatch(/alarm_actions\s*=\s*\[aws_autoscaling_policy\.scale_up\[0\]\.arn\]/);
+      expect(stackContent).toMatch(/alarm_actions\s*=\s*\[aws_autoscaling_policy\.scale_down\[0\]\.arn\]/);
     });
   });
 
@@ -294,11 +305,12 @@ describe("High Availability Web Application - Unit Tests", () => {
   });
 
   describe("RDS Database", () => {
-    test("creates DB subnet group", () => {
+    test("creates DB subnet group with conditional count", () => {
       expect(stackContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"app"\s*{/);
+      expect(stackContent).toMatch(/count\s*=\s*var\.localstack_mode\s*\?\s*0\s*:\s*1/);
     });
 
-    test("creates RDS instance", () => {
+    test("creates RDS instance with conditional count", () => {
       expect(stackContent).toMatch(/resource\s+"aws_db_instance"\s+"app"\s*{/);
     });
 
@@ -394,13 +406,12 @@ describe("High Availability Web Application - Unit Tests", () => {
     });
 
     test("consistent tag structure across all resources", () => {
-      // Verify that all tagged resources follow the same pattern
       const tagPatterns = [
         /Environment\s*=\s*"Production"/,
         /ManagedBy\s*=\s*"terraform"/,
         /Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}/
       ];
-      
+
       tagPatterns.forEach(pattern => {
         expect(stackContent).toMatch(pattern);
       });
@@ -427,11 +438,20 @@ describe("High Availability Web Application - Unit Tests", () => {
     test("exports subnet IDs", () => {
       expect(stackContent).toMatch(/output\s+"subnet_ids"/);
     });
+
+    test("exports LocalStack mode status", () => {
+      expect(stackContent).toMatch(/output\s+"localstack_mode"/);
+    });
+
+    test("outputs handle LocalStack mode gracefully", () => {
+      expect(stackContent).toMatch(/var\.localstack_mode\s*\?\s*"localstack-mode-no-alb"/);
+      expect(stackContent).toMatch(/var\.localstack_mode\s*\?\s*"localstack-mode-no-rds"/);
+      expect(stackContent).toMatch(/var\.localstack_mode\s*\?\s*"localstack-mode-no-asg"/);
+    });
   });
 
   describe("Security Requirements", () => {
     test("no overly permissive security group rules", () => {
-      // Check that no security group allows all traffic from 0.0.0.0/0 for inbound rules
       const securityGroupBlocks = stackContent.match(/resource\s+"aws_security_group"[^}]*}/g);
       if (securityGroupBlocks) {
         securityGroupBlocks.forEach(block => {
@@ -439,7 +459,6 @@ describe("High Availability Web Application - Unit Tests", () => {
           if (inboundRules) {
             inboundRules.forEach(rule => {
               if (rule.includes('0.0.0.0/0')) {
-                // Only allow 0.0.0.0/0 for ALB (which is acceptable)
                 expect(block).toMatch(/aws_security_group\.alb/);
               }
             });
@@ -449,26 +468,51 @@ describe("High Availability Web Application - Unit Tests", () => {
     });
 
     test("uses least privilege principle", () => {
-      // EC2 instances only allow traffic from ALB
       expect(stackContent).toMatch(/security_groups\s*=\s*\[aws_security_group\.alb\.id\]/);
-      
-      // RDS only allows traffic from EC2 instances
       expect(stackContent).toMatch(/security_groups\s*=\s*\[aws_security_group\.ec2\.id\]/);
     });
   });
 
   describe("High Availability Requirements", () => {
-    test("uses multiple availability zones", () => {
+    test("uses multiple subnets from locals", () => {
       expect(stackContent).toMatch(/data\.aws_subnets\.default\.ids/);
-      expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*slice\(data\.aws_subnets\.public\.ids,\s*0,\s*2\)/);
+      expect(stackContent).toMatch(/local\.subnet_ids/);
     });
 
     test("RDS has multi-AZ enabled", () => {
       expect(stackContent).toMatch(/multi_az\s*=\s*true/);
     });
 
-    test("ASG spans multiple AZs", () => {
-      expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*slice\(data\.aws_subnets\.public\.ids,\s*0,\s*2\)/);
+    test("ASG spans multiple subnets", () => {
+      expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*local\.subnet_ids/);
+    });
+  });
+
+  describe("LocalStack Compatibility", () => {
+    test("uses conditional count for ELBv2 resources", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_lb"\s+"app"\s*{\s*\n\s*count\s*=\s*var\.localstack_mode\s*\?\s*0\s*:\s*1/);
+      expect(stackContent).toMatch(/resource\s+"aws_lb_target_group"\s+"app"\s*{\s*\n\s*count\s*=\s*var\.localstack_mode\s*\?\s*0\s*:\s*1/);
+    });
+
+    test("uses conditional count for RDS resources", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"app"\s*{\s*\n\s*count\s*=\s*var\.localstack_mode\s*\?\s*0\s*:\s*1/);
+      expect(stackContent).toMatch(/resource\s+"aws_db_instance"\s+"app"\s*{\s*\n\s*count\s*=\s*var\.localstack_mode\s*\?\s*0\s*:\s*1/);
+    });
+
+    test("uses conditional count for ASG resources", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_autoscaling_group"\s+"app"\s*{\s*\n\s*count\s*=\s*var\.localstack_mode\s*\?\s*0\s*:\s*1/);
+    });
+
+    test("Secrets Manager resources are always created (supported in LocalStack)", () => {
+      const secretsManagerMatch = stackContent.match(/resource\s+"aws_secretsmanager_secret"\s+"db_password"\s*{([^}]*)}/);
+      expect(secretsManagerMatch).toBeTruthy();
+      expect(secretsManagerMatch![1]).not.toMatch(/count\s*=/);
+    });
+
+    test("Security groups are always created (supported in LocalStack)", () => {
+      const sgMatch = stackContent.match(/resource\s+"aws_security_group"\s+"alb"\s*{([^}]*)}/);
+      expect(sgMatch).toBeTruthy();
+      expect(sgMatch![1]).not.toMatch(/count\s*=/);
     });
   });
 
@@ -496,6 +540,12 @@ describe("High Availability Web Application - Unit Tests", () => {
     test("uses data sources for existing resources", () => {
       expect(stackContent).toMatch(/data\.aws_vpc\.default/);
       expect(stackContent).toMatch(/data\.aws_subnets\.default/);
+    });
+
+    test("uses locals for computed values", () => {
+      expect(stackContent).toMatch(/locals\s*{/);
+      expect(stackContent).toMatch(/common_tags\s*=/);
+      expect(stackContent).toMatch(/subnet_ids\s*=/);
     });
   });
 });

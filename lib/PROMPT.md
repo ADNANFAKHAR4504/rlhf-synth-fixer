@@ -1,41 +1,11 @@
-# Build a Production Web App Infrastructure with Terraform
+Build me a production-ready web application infrastructure on AWS using Terraform.
 
-## The Challenge
-You need to set up a web application infrastructure on AWS that can handle real traffic. The app processes user data and needs to stay up 24/7. Use Terraform to build this in us-east-1.
+I need an Application Load Balancer that receives HTTP and HTTPS traffic from the internet and routes requests to an Auto Scaling group of EC2 instances running in multiple availability zones. The ALB security group allows inbound traffic on ports 80 and 443, and the EC2 security group accepts traffic only from the ALB security group.
 
-## What You Need to Build
+The EC2 instances connect to an RDS MySQL database through a database security group that allows port 3306 only from the web server security group. The RDS instance runs in multi-AZ mode for high availability and has automated backups enabled with 7-day retention.
 
-### High Availability
-- Deploy across 2+ availability zones for redundancy
-- Use the default VPC to keep things simple
+Create IAM roles attached to the EC2 instances that follow least privilege principles and grant only the permissions needed for the application. The Auto Scaling group scales instances up and down based on CPU utilization thresholds.
 
-### Load Balancing
-- Put an Application Load Balancer in front of your app
-- Handle both HTTP and HTTPS traffic
-- Set up health checks to remove bad instances
+CloudWatch collects logs and metrics from the EC2 instances and RDS database. Set up CloudWatch alarms that monitor CPU utilization, memory usage, and database connections.
 
-### Auto Scaling
-- Make your app instances scale up/down based on CPU usage
-- Set reasonable min/max instance limits
-
-### Database
-- Use RDS with multi-AZ enabled
-- Turn on automatic backups (keep for 7 days)
-- Lock down database access with security groups
-
-### Security
-- Create IAM roles that follow least privilege
-- Use security groups to control network access
-- Tag everything with "Environment: Production"
-
-### Monitoring
-- Set up CloudWatch for logs and metrics
-- Create alarms for CPU, memory, and other key metrics
-
-## Success Check
-- Everything deploys without errors
-- Load balancer distributes traffic
-- Auto-scaling works when CPU changes
-- Database is accessible from app instances
-- Monitoring is working
-- All resources are properly tagged
+Deploy everything in us-east-1 using the default VPC. Tag all resources with Environment set to Production. Output the load balancer DNS name and database endpoint.
