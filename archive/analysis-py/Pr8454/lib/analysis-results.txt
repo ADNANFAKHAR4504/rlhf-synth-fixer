@@ -1,0 +1,99 @@
+2025-12-22 10:17:46,313 - INFO - Found credentials in environment variables.
+2025-12-22 10:17:46,417 - INFO - Found 4 RDS instances to analyze
+2025-12-22 10:17:46,417 - INFO - Analyzing db-underutilized-e2e...
+2025-12-22 10:17:46,438 - INFO - Analyzing db-no-backups-e2e...
+2025-12-22 10:17:46,457 - INFO - Analyzing db-prod-single-az...
+2025-12-22 10:17:46,475 - INFO - Analyzing db-sensitive-plain...
+2025-12-22 10:17:46,495 - INFO - JSON report saved to rds_performance_report.json
+2025-12-22 10:17:46,495 - INFO - Audit results saved to aws_audit_results.json
+2025-12-22 10:17:46,572 - INFO - Rightsizing CSV saved to rds_rightsizing.csv
+2025-12-22 10:17:46,572 - WARNING - matplotlib not available; generating performance chart via stub implementation
+2025-12-22 10:17:46,572 - INFO - Performance distribution chart saved to performance_distribution.png
+2025-12-22 10:17:46,572 - INFO - Analysis complete!
+
+========================================================================================================================
+RDS PERFORMANCE ANALYSIS REPORT
+========================================================================================================================
+
+INSTANCE OVERVIEW
++----------------------+----------+------------------+---------+-----------+------------+----------+--------------+
+| DB Identifier        | Engine   | Instance Class   | Score   | Avg CPU   |   Avg Conn |   Issues | Savings/Mo   |
++======================+==========+==================+=========+===========+============+==========+==============+
+| db-underutilized-e2e | postgres | db.m5.2xlarge    | 75/100  | 10.0%     |          5 |        3 | $249.66      |
++----------------------+----------+------------------+---------+-----------+------------+----------+--------------+
+| db-no-backups-e2e    | postgres | db.m5.large      | 50/100  | 0.0%      |          0 |        4 | $0.00        |
++----------------------+----------+------------------+---------+-----------+------------+----------+--------------+
+| db-prod-single-az    | postgres | db.m5.large      | 50/100  | 0.0%      |          0 |        5 | $0.00        |
++----------------------+----------+------------------+---------+-----------+------------+----------+--------------+
+| db-sensitive-plain   | postgres | db.m5.large      | 50/100  | 0.0%      |          0 |        4 | $0.00        |
++----------------------+----------+------------------+---------+-----------+------------+----------+--------------+
+
+
+ISSUES BY SEVERITY
+
+[CRITICAL] CRITICAL (Immediate Action Required)
++--------------------+----------------------+-----------------+------------------------------------------------+
+| DB Identifier      | Issue Type           | Current Value   | Recommendation                                 |
++====================+======================+=================+================================================+
+| db-no-backups-e2e  | no_automated_backups | 0 days          | Enable automated backups with 7+ day retention |
++--------------------+----------------------+-----------------+------------------------------------------------+
+| db-sensitive-plain | no_encryption        | Not encrypted   | Enable encryption at rest immediately          |
++--------------------+----------------------+-----------------+------------------------------------------------+
+
+[HIGH] HIGH PRIORITY
++-------------------+------------------+-----------------+---------------------------------------+
+| DB Identifier     | Issue Type       | Current Value   | Recommendation                        |
++===================+==================+=================+=======================================+
+| db-prod-single-az | missing_multi_az | Disabled        | Enable Multi-AZ for high availability |
++-------------------+------------------+-----------------+---------------------------------------+
+
+[MEDIUM] MEDIUM PRIORITY
++----------------------+-------------------------+----------------------------+---------------------------------------------------------------+
+| DB Identifier        | Issue Type              | Current Value              | Recommendation                                                |
++======================+=========================+============================+===============================================================+
+| db-underutilized-e2e | underutilized           | CPU: 10.0%, Connections: 5 | Consider downsizing instance class or consolidating workloads |
++----------------------+-------------------------+----------------------------+---------------------------------------------------------------+
+| db-underutilized-e2e | no_iam_auth             | Disabled                   | Enable IAM database authentication                            |
++----------------------+-------------------------+----------------------------+---------------------------------------------------------------+
+| db-no-backups-e2e    | underutilized           | CPU: 0.0%, Connections: 0  | Consider downsizing instance class or consolidating workloads |
++----------------------+-------------------------+----------------------------+---------------------------------------------------------------+
+| db-no-backups-e2e    | no_iam_auth             | Disabled                   | Enable IAM database authentication                            |
++----------------------+-------------------------+----------------------------+---------------------------------------------------------------+
+| db-prod-single-az    | underutilized           | CPU: 0.0%, Connections: 0  | Consider downsizing instance class or consolidating workloads |
++----------------------+-------------------------+----------------------------+---------------------------------------------------------------+
+| db-prod-single-az    | no_performance_insights | Disabled                   | Enable Performance Insights for query analysis                |
++----------------------+-------------------------+----------------------------+---------------------------------------------------------------+
+| db-prod-single-az    | no_iam_auth             | Disabled                   | Enable IAM database authentication                            |
++----------------------+-------------------------+----------------------------+---------------------------------------------------------------+
+| db-sensitive-plain   | underutilized           | CPU: 0.0%, Connections: 0  | Consider downsizing instance class or consolidating workloads |
++----------------------+-------------------------+----------------------------+---------------------------------------------------------------+
+| db-sensitive-plain   | no_iam_auth             | Disabled                   | Enable IAM database authentication                            |
++----------------------+-------------------------+----------------------------+---------------------------------------------------------------+
+
+
+COST OPTIMIZATION RECOMMENDATIONS
++----------------------+-----------------+---------------------+----------------+------------------+--------------+
+| DB Identifier        | Current Class   | Recommended Class   | Current Cost   | Optimized Cost   | Savings/Mo   |
++======================+=================+=====================+================+==================+==============+
+| db-underutilized-e2e | db.m5.2xlarge   | db.m5.xlarge        | $499.32        | $249.66          | $249.66      |
++----------------------+-----------------+---------------------+----------------+------------------+--------------+
+
+
+SUMMARY
++---------------------------------+----------+
+| Total Instances Analyzed        | 4        |
++---------------------------------+----------+
+| Total Issues Found              | 16       |
++---------------------------------+----------+
+| Critical Issues                 | 2        |
++---------------------------------+----------+
+| High Priority Issues            | 1        |
++---------------------------------+----------+
+| Medium Priority Issues          | 9        |
++---------------------------------+----------+
+| Average Performance Score       | 56.2/100 |
++---------------------------------+----------+
+| Total Potential Monthly Savings | $249.66  |
++---------------------------------+----------+
+
+========================================================================================================================

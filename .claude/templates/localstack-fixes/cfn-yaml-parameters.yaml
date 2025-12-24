@@ -1,0 +1,59 @@
+# LocalStack Parameters for CloudFormation YAML
+# Template: cfn-yaml-parameters
+#
+# Usage: Include these parameters in your CloudFormation template
+# for LocalStack compatibility
+
+Parameters:
+  # LocalStack toggle
+  IsLocalStack:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Set to true when deploying to LocalStack
+
+  # Environment configuration
+  Environment:
+    Type: String
+    Default: localstack
+    AllowedValues:
+      - localstack
+      - development
+      - staging
+      - production
+    Description: Deployment environment
+
+  # AWS Region (LocalStack uses us-east-1 by default)
+  AWSRegion:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+Conditions:
+  # Condition for LocalStack-specific resources
+  IsLocalStackEnv: !Equals [!Ref IsLocalStack, "true"]
+  IsProductionEnv: !Equals [!Ref Environment, "production"]
+
+# Example S3 Bucket with LocalStack compatibility
+# Resources:
+#   MyBucket:
+#     Type: AWS::S3::Bucket
+#     DeletionPolicy: !If [IsLocalStackEnv, Delete, Retain]
+#     Properties:
+#       BucketName: !If 
+#         - IsLocalStackEnv
+#         - !Sub "my-bucket-${AWS::AccountId}"
+#         - !Ref AWS::NoValue
+#       Tags:
+#         - Key: Environment
+#           Value: !Ref Environment
+
+Outputs:
+  IsLocalStack:
+    Description: Whether this is a LocalStack deployment
+    Value: !Ref IsLocalStack
+    Export:
+      Name: !Sub "${AWS::StackName}-IsLocalStack"
+
