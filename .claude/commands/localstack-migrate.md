@@ -42,8 +42,111 @@ This command uses modular shell scripts in `.claude/scripts/` for better maintai
 | `localstack-dashboard.sh`         | **NEW**: Real-time migration dashboard                                |
 | `localstack-rollback.sh`          | **NEW**: Rollback failed migrations                                   |
 | `localstack-enhance-tests.sh`     | **NEW**: Auto-enhance tests for LocalStack                            |
+| `localstack-ci-simulate.sh`       | **NEW**: Run full CI/CD pipeline locally before pushing               |
 
 All scripts use `set -euo pipefail` for strict error handling and trap handlers for cleanup.
+
+## 🚀 LOCAL-FIRST WORKFLOW (DEFAULT!)
+
+**Local-first is the DEFAULT** - Do all heavy lifting locally, then auto-push to CI for final validation.
+
+### Task Completion Criteria
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TASK IS COMPLETE WHEN: archive-folders job passes in CI/CD                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ❌ Local validation passed       → NOT COMPLETE (just local)               │
+│  ❌ PR created                    → NOT COMPLETE (PR exists)                │
+│  ❌ deploy job passed             → NOT COMPLETE (partial CI)               │
+│  ✅ archive-folders job passed    → COMPLETE! (production ready)            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Why Local-First?
+
+| Old Workflow (CI-heavy) | New Workflow (Local-first) |
+|------------------------|---------------------------|
+| ❌ Push → Wait 15-30min → Fix → Push → Repeat | ✅ Fix locally → Push once → Usually passes |
+| ❌ 5-10 CI iterations common | ✅ 1-2 CI iterations max |
+| ❌ Hard to debug CI failures | ✅ Full local debugging |
+| ❌ Consumes CI credits on every push | ✅ CI only runs once (or twice) |
+
+### Local CI Simulation
+
+The `localstack-ci-simulate.sh` script runs ALL CI/CD jobs locally:
+
+```bash
+# Run full CI simulation on your work directory
+.claude/scripts/localstack-ci-simulate.sh ./worktree/localstack-Pr7179
+
+# Run specific job only
+.claude/scripts/localstack-ci-simulate.sh --job build ./worktree/localstack-Pr7179
+
+# Run from a specific job onwards
+.claude/scripts/localstack-ci-simulate.sh --from deploy ./worktree/localstack-Pr7179
+
+# Auto-fix issues while running
+.claude/scripts/localstack-ci-simulate.sh --fix ./worktree/localstack-Pr7179
+```
+
+### Jobs Simulated Locally
+
+| Job | Local Simulation | Notes |
+|-----|-----------------|-------|
+| detect-metadata | ✅ Full | Validates metadata.json, file locations, emojis |
+| claude-review-prompt-quality | ✅ Basic | Checks PROMPT.md exists and has content |
+| validate-commit-message | ✅ Full | Conventional commits validation |
+| validate-jest-config | ✅ Full | Jest roots configuration |
+| build | ✅ Full | npm install, npm build |
+| synth | ✅ Full | CDK/CDKTF synthesis |
+| deploy | ✅ Full | Deploys to local LocalStack |
+| lint | ✅ Full | ESLint/Ruff checks |
+| unit-tests | ✅ Full | Jest/Pytest tests |
+| integration-tests-live | ✅ Full | Against LocalStack |
+| claude-code-action | ⏭️ Skip | Only in CI (Claude review) |
+| cleanup | ✅ Full | Destroys LocalStack resources |
+| claude-review-ideal-response | ✅ Basic | Validates IDEAL_RESPONSE.md |
+| archive-folders | ⏭️ Skip | Only in CI |
+
+### Usage
+
+```bash
+# Full workflow: local work → auto push → monitor CI until complete
+/localstack-migrate Pr7179
+
+# With auto-fix enabled (recommended)
+/localstack-migrate --fix Pr7179
+```
+
+### Default End-to-End Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  DEFAULT WORKFLOW: Local First → Auto Push → CI Complete                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PHASE 1: LOCAL WORK (Saves CI iterations!)                                 │
+│  ──────────────────────────────────────────                                 │
+│  Step 1: Copy files to worktree                                             │
+│  Step 2: Run localstack-ci-simulate.sh (ALL 14 jobs locally)                │
+│  Step 3: If fails → Apply fixes with localstack-fixer                       │
+│  Step 4: Iterate until local CI simulation passes                           │
+│                                                                             │
+│  PHASE 2: AUTO PUSH TO CI (When local passes)                               │
+│  ─────────────────────────────────────────────                              │
+│  Step 5: Create PR automatically                                            │
+│  Step 6: Push to branch → CI pipeline starts                                │
+│                                                                             │
+│  PHASE 3: MONITOR CI UNTIL COMPLETE                                         │
+│  ────────────────────────────────────                                       │
+│  Step 7: Monitor CI/CD pipeline                                             │
+│  Step 8: If CI fails → Auto-invoke localstack-fixer → Push fix              │
+│  Step 9: Iterate until archive-folders job passes                           │
+│  Step 10: ✅ TASK COMPLETE!                                                 │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ## Enhanced Features
 
@@ -157,12 +260,35 @@ Fixes are automatically ordered based on error analysis. See `intelligent_fixes`
 
 ## Usage
 
+**DEFAULT: Local-first, then auto-push to CI** - All work happens locally first, then automatically pushes to CI for final validation. Task is complete when CI passes.
+
 ```bash
+# ═══════════════════════════════════════════════════════════════════════════════
+# 🚀 DEFAULT WORKFLOW: Local First → Auto Push to CI → Complete when CI Passes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Full migration workflow (local work → auto CI push → monitor until complete)
+/localstack-migrate Pr7179
+
+# With explicit auto-fix enabled
+/localstack-migrate --fix Pr7179
+
 # Migrate a specific task by path
 /localstack-migrate ./archive/cdk-ts/Pr7179
 
-# Migrate by PR number (auto-detects platform, fetches from GitHub if not in archive)
-/localstack-migrate Pr7179
+# ═══════════════════════════════════════════════════════════════════════════════
+# 🔧 LOCAL-ONLY MODE (For debugging/testing - does NOT complete the task)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Run only local validation, don't push to CI (task NOT complete)
+/localstack-migrate --local-only Pr7179
+
+# Run local CI simulation on existing worktree
+/localstack-migrate --simulate ./worktree/localstack-Pr7179
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OTHER OPTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
 
 # Migrate by PR number with explicit GitHub fetch
 /localstack-migrate --github Pr2077
@@ -185,21 +311,16 @@ Fixes are automatically ordered based on error analysis. See `intelligent_fixes`
 # PARALLEL EXECUTION: Skip LocalStack reset (for running multiple agents)
 /localstack-migrate --no-reset Pr7179
 
-# PARALLEL EXECUTION: Multiple agents on different PRs
-# Terminal 1: /localstack-migrate --no-reset Pr7179
-# Terminal 2: /localstack-migrate --no-reset Pr7180
-# Terminal 3: /localstack-migrate --no-reset Pr7181
-
-# NEW: Pre-migration compatibility check
+# Pre-migration compatibility check
 /localstack-migrate --check Pr7179
 
-# NEW: Show real-time dashboard
+# Show real-time dashboard
 /localstack-migrate --dashboard
 
-# NEW: Enhance tests for LocalStack
+# Enhance tests for LocalStack
 /localstack-migrate --enhance-tests Pr7179
 
-# NEW: Rollback a failed migration
+# Rollback a failed migration
 /localstack-migrate --rollback Pr7179
 ```
 
