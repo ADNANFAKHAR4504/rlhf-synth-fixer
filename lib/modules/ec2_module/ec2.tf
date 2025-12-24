@@ -1,7 +1,27 @@
-# LocalStack doesn't have real AMI data, using a static AMI ID
-# In real AWS, you would use a data source to get the latest Ubuntu AMI
+# Data source to find an available AMI (works with LocalStack and real AWS)
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon", "self", "aws-marketplace"]
+
+  filter {
+    name   = "name"
+    values = ["amzn-ami-*", "amzn2-ami-*", "ubuntu*", "Amazon*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
 locals {
-  ami_id = "ami-0c55b159cbfafe1f0" # Mock AMI ID for LocalStack
+  # Use the dynamically found AMI ID
+  ami_id = data.aws_ami.amazon_linux.id
 }
 
 
