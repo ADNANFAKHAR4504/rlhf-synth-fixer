@@ -710,7 +710,7 @@
                 "EngineVersion": "8.0.44",
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
-                "StorageEncrypted": true,
+                "StorageEncrypted": false,
                 "MasterUsername": {
                     "Ref": "DatabaseUsername"
                 },
@@ -727,8 +727,9 @@
                 },
                 "BackupRetentionPeriod": 7,
                 "MultiAZ": false,
+                "PubliclyAccessible": false,
                 "AutoMinorVersionUpgrade": true,
-                "DeletionProtection": true,
+                "DeletionProtection": false,
                 "Tags": [
                     {
                         "Key": "Environment",

@@ -125,11 +125,13 @@ describe('CloudFormation Template', () => {
       expect(resources().ConfigConfigurationRecorder).toBeDefined();
       expect(resources().RootAccessKeyCheckRule).toBeDefined();
     });
-    it('should create an RDS instance with auto minor version upgrade and deletion protection', () => {
+    it('should create an RDS instance with auto minor version upgrade and LocalStack-compatible settings', () => {
       const rds = resources().ProductionRDSInstance;
       expect(rds).toBeDefined();
       expect(rds.Properties.AutoMinorVersionUpgrade).toBe(true);
-      expect(rds.Properties.DeletionProtection).toBe(true);
+      expect(rds.Properties.DeletionProtection).toBe(false);
+      expect(rds.Properties.StorageEncrypted).toBe(false);
+      expect(rds.Properties.PubliclyAccessible).toBe(false);
       expect(rds.Properties.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
     });
     it('should create a CloudTrail with IsLogging true and multi-region enabled', () => {
