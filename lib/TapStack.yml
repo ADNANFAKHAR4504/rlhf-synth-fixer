@@ -587,7 +587,7 @@ Resources:
       DBInstanceClass: db.t3.medium
       AllocatedStorage: 5
       Engine: postgres
-      EngineVersion: '15.7'
+      EngineVersion: '17.2'
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:username}}']]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:password}}']]
       StorageEncrypted: true
