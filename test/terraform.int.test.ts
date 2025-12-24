@@ -39,7 +39,17 @@ function loadOutputs() {
     throw new Error(`Outputs file not found. Tried: ${possiblePaths.join(", ")}`);
   }
 
-  const raw = JSON.parse(fs.readFileSync(file, "utf8")) as OutputsFile;
+  const rawData = JSON.parse(fs.readFileSync(file, "utf8"));
+
+  // Handle both Terraform output format (with .value) and flat format (direct values)
+  const raw: OutputsFile = {} as OutputsFile;
+  for (const key of Object.keys(rawData)) {
+    const val = rawData[key];
+    // If it has a .value property, it's Terraform format, otherwise it's flat
+    raw[key as keyof OutputsFile] = typeof val === 'object' && 'value' in val
+      ? val
+      : { value: val, sensitive: false, type: typeof val };
+  }
 
   const req = <K extends keyof OutputsFile>(k: K) => {
     const v = raw[k]?.value as any;
