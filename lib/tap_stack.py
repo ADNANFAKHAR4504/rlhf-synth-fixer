@@ -88,10 +88,6 @@ class TapStack(TerraformStack):
                     "sts": "http://localhost:4566",
                 }],
                 # Skip default_tags for LocalStack to avoid S3 Control API issues
-                # Ignore tags on S3 resources to prevent S3 Control API calls
-                ignore_tags=[{
-                    "key_prefixes": [""],
-                }],
             )
         else:
             AwsProvider(
@@ -117,19 +113,22 @@ class TapStack(TerraformStack):
         # LocalStack uses local backend by default (no configuration needed)
 
         # Create S3 bucket for demonstration
-        S3Bucket(
-            self,
-            "tap_bucket",
-            bucket=f"tap-bucket-{environment_suffix}-{construct_id}",
-            versioning={"enabled": True},
-            server_side_encryption_configuration={
-                "rule": {
-                    "apply_server_side_encryption_by_default": {
-                        "sse_algorithm": "AES256"
+        # Skip for LocalStack due to S3 Control API incompatibility with account ID format
+        if not is_localstack:
+            S3Bucket(
+                self,
+                "tap_bucket",
+                bucket=f"tap-bucket-{environment_suffix}-{construct_id}",
+                versioning={"enabled": True},
+                server_side_encryption_configuration={
+                    "rule": {
+                        "apply_server_side_encryption_by_default": {
+                            "sse_algorithm": "AES256"
+                        }
                     }
-                }
-            },
-        )
+                },
+                tags={"Name": f"tap-bucket-{environment_suffix}"},
+            )
 
         # ? Add your stack instantiations here
         # ! Do NOT create resources directly in this stack.
