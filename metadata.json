@@ -20,7 +20,7 @@
     "CloudWatch Logs",
     "IAM"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "268",
     "pr": "Pr268"
