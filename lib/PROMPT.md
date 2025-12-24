@@ -60,11 +60,11 @@ Create a multi-stage CI/CD pipeline using **CloudFormation with yaml** that hand
 - Implement **Lambda** function for custom security gate with flexible validation logic
 - Configure **SNS** topics for failure notifications to improve incident response time
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements
 
 - All resources MUST include environmentSuffix parameter in their names
 - NO DeletionPolicy: Retain or UpdateReplacePolicy: Retain on any resources
-- All resources must be destroyable (use DeletionPolicy: Delete where needed)
+- All resources must be destroyable
 - Pipeline must be fully functional and deployable
 - IAM roles must follow least privilege principle
 - KMS key policies must allow proper cross-account access
