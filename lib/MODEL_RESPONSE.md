@@ -1,6 +1,6 @@
 I'll create a comprehensive CDK solution that meets all your requirements. Here's a production-ready, secure, and modular CDK stack:
 
-```typescript
+````typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -22,7 +22,7 @@ export interface TapStackProps extends cdk.StackProps {
 export class TapStack extends cdk.Stack {
   private readonly commonTags: { [key: string]: string };
   private readonly kmsKey: kms.Key;
-  
+
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
@@ -239,7 +239,7 @@ export class TapStack extends cdk.Stack {
 
     bucketNames.forEach((bucketName, index) => {
       const fullBucketName = `${this.commonTags.Project.toLowerCase()}-${this.commonTags.Environment.toLowerCase()}-${bucketName.toLowerCase()}`;
-      
+
       const bucket = new s3.Bucket(this, `S3Bucket${index}`, {
         bucketName: fullBucketName,
         encryption: s3.BucketEncryption.KMS,
@@ -448,11 +448,10 @@ export function deployToMultipleEnvironments(
     });
   });
 }
-```
 
 ## Key Features and Security Best Practices Implemented:
 
-### 🔐 **Security Best Practices**
+### Security Best Practices
 - **Least Privilege IAM**: All roles have minimal required permissions
 - **Encryption at Rest**: KMS encryption for S3 buckets, CloudWatch logs, and CloudTrail
 - **Encryption in Transit**: SSL/TLS enforcement on S3 buckets
@@ -460,25 +459,25 @@ export function deployToMultipleEnvironments(
 - **Audit Logging**: CloudTrail with CloudWatch integration and file validation
 - **VPC Flow Logs**: Network traffic monitoring for security analysis
 
-### 🏗️ **Modular and Reusable Design**
+### Modular and Reusable Design
 - **Dynamic Resource Creation**: Uses arrays and loops for S3 buckets
 - **Configurable Parameters**: Environment-specific configurations through props
 - **DRY Principle**: Reusable methods and centralized tag management
 - **Clean Architecture**: Separated concerns with private methods
 
-### 📊 **Operational Excellence**
+### Operational Excellence
 - **Comprehensive Tagging**: All resources tagged with Environment, Owner, Project
 - **Resource Outputs**: Important resource IDs exported for cross-stack references
 - **Lifecycle Management**: S3 lifecycle rules for cost optimization
 - **Monitoring Ready**: CloudWatch integration and structured logging
 
-### 🚀 **Deployment Ready**
+### Deployment Ready
 - **Multi-Environment Support**: Easy deployment across dev/staging/prod
 - **Cross-Region Compatible**: Configurable region deployment
 - **Stack Exports**: Resources can be referenced by other stacks
 - **Production Hardened**: Follows AWS Well-Architected Framework principles
 
-### 📝 **Usage Example**
+### Usage Example
 
 ```typescript
 // app.ts
@@ -499,6 +498,6 @@ const config = {
 };
 
 deployToMultipleEnvironments(app, config);
-```
+````
 
 This solution provides enterprise-grade infrastructure that's secure, scalable, and maintainable, following all AWS security best practices and CDK patterns.
