@@ -1,7 +1,5 @@
-// Gradle settings for CDKTF Python project
-// This file is required for Gradle dependency submission workflow
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
 
 rootProject.name = 'iac-test-automations'
-
-// No subprojects - this is a Python CDKTF project
-// Gradle is used only for dependency tracking
