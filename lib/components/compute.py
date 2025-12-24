@@ -3,6 +3,7 @@ VPC, EC2, LB Component - Creates isolated networking infrastructure
 """
 
 import os
+import json
 import ipaddress
 import pulumi
 import pulumi_aws as aws
@@ -250,8 +251,20 @@ class ComputeComponent(pulumi.ComponentResource):
         # Create instsances
         self.ec2_instances = []
 
-        # Check if running in LocalStack
-        is_localstack = os.getenv('PROVIDER', '').lower() == 'localstack'
+        # Check if running in LocalStack by reading metadata.json
+        is_localstack = False
+        try:
+            metadata_path = os.path.join(os.getcwd(), 'metadata.json')
+            if os.path.exists(metadata_path):
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                    is_localstack = metadata.get('provider', '').lower() == 'localstack'
+            else:
+                # If metadata.json doesn't exist, check environment variable
+                is_localstack = os.getenv('PROVIDER', '').lower() == 'localstack'
+        except Exception:
+            # If we can't read metadata, check environment variable as fallback
+            is_localstack = os.getenv('PROVIDER', '').lower() == 'localstack'
 
         # LocalStack-compatible: Use static AMI ID instead of dynamic lookup
         # In production AWS, this would use aws.ec2.get_ami() to find the latest Ubuntu AMI

@@ -3,6 +3,7 @@ Database Component - Creates DynamoDB tables with PITR and backup configurations
 """
 
 import os
+import json
 import pulumi
 import pulumi_aws as aws
 
@@ -11,8 +12,20 @@ class DatabaseComponent(pulumi.ComponentResource):
     def __init__(self, name: str, environment: str, tags: dict, opts=None):
         super().__init__("custom:aws:Database", name, None, opts)
 
-        # Check if running in LocalStack
-        is_localstack = os.getenv('PROVIDER', '').lower() == 'localstack'
+        # Check if running in LocalStack by reading metadata.json
+        is_localstack = False
+        try:
+            metadata_path = os.path.join(os.getcwd(), 'metadata.json')
+            if os.path.exists(metadata_path):
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                    is_localstack = metadata.get('provider', '').lower() == 'localstack'
+            else:
+                # If metadata.json doesn't exist, check environment variable
+                is_localstack = os.getenv('PROVIDER', '').lower() == 'localstack'
+        except Exception:
+            # If we can't read metadata, check environment variable as fallback
+            is_localstack = os.getenv('PROVIDER', '').lower() == 'localstack'
 
         # Determine capacity based on environment
         read_capacity = 5 if environment in ["dev", "test"] else 20

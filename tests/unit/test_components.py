@@ -150,9 +150,13 @@ class TestComponents(unittest.TestCase):
 
     # ===== Database Component Tests =====
     @patch.dict(os.environ, {"PROVIDER": ""})
-    def test_database_component_with_pitr(self):
+    @patch('os.path.exists')
+    def test_database_component_with_pitr(self, mock_exists):
         """Test database component creates DynamoDB table with PITR"""
         from lib.components.database import DatabaseComponent
+
+        # Mock metadata.json doesn't exist, so it falls back to env var
+        mock_exists.return_value = False
 
         mock_table = Mock()
         mock_table.name = "test-table"
@@ -171,9 +175,13 @@ class TestComponents(unittest.TestCase):
         self.assertEqual(component.table.name, "test-table")
 
     @patch.dict(os.environ, {"PROVIDER": "localstack"})
-    def test_database_component_localstack_skips_pitr(self):
+    @patch('os.path.exists')
+    def test_database_component_localstack_skips_pitr(self, mock_exists):
         """Test database component skips PITR in LocalStack"""
         from lib.components.database import DatabaseComponent
+
+        # Mock metadata.json doesn't exist, so it falls back to env var
+        mock_exists.return_value = False
 
         mock_table = Mock()
         mock_table.name = "test-table"
@@ -213,9 +221,13 @@ class TestComponents(unittest.TestCase):
 
     # ===== Monitoring Component Tests =====
     @patch.dict(os.environ, {"PROVIDER": ""})
-    def test_monitoring_component_with_email_subscription(self):
+    @patch('os.path.exists')
+    def test_monitoring_component_with_email_subscription(self, mock_exists):
         """Test monitoring component creates SNS with email subscription"""
         from lib.components.monitoring import MonitoringComponent
+
+        # Mock metadata.json doesn't exist, so it falls back to env var
+        mock_exists.return_value = False
 
         mock_topic = Mock()
         mock_topic.arn = "arn:aws:sns:us-east-1:123456789012:test-topic"
@@ -244,9 +256,13 @@ class TestComponents(unittest.TestCase):
         self.assertTrue(len(component.alarms) > 0)
 
     @patch.dict(os.environ, {"PROVIDER": "localstack"})
-    def test_monitoring_component_localstack_skips_email(self):
+    @patch('os.path.exists')
+    def test_monitoring_component_localstack_skips_email(self, mock_exists):
         """Test monitoring component skips email subscription in LocalStack"""
         from lib.components.monitoring import MonitoringComponent
+
+        # Mock metadata.json doesn't exist, so it falls back to env var
+        mock_exists.return_value = False
 
         mock_topic = Mock()
         mock_topic.arn = "arn:aws:sns:us-east-1:123456789012:test-topic"
@@ -274,9 +290,13 @@ class TestComponents(unittest.TestCase):
         self.mock_pulumi.log.info.assert_called()
 
     # ===== Compute Component Tests =====
-    def test_compute_component_creates_vpc_and_resources(self):
+    @patch('os.path.exists')
+    def test_compute_component_creates_vpc_and_resources(self, mock_exists):
         """Test compute component creates VPC, subnets, and EC2 instances"""
         from lib.components.compute import ComputeComponent
+
+        # Mock metadata.json doesn't exist, so it falls back to env var
+        mock_exists.return_value = False
 
         # Mock all required resources
         mock_vpc = Mock()
