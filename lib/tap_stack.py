@@ -34,10 +34,10 @@ class TapStackArgs:
     """
 
     def __init__(self, region: Optional[str] = None, environment_suffix: Optional[str] = None,
-           tags: Optional[dict] = None):
-    self.environment_suffix = environment_suffix or 'dev'
-    self.region = region or 'us-east-1'  # Default region, can be overridden used in or for safety
-    self.tags = tags
+                 tags: Optional[dict] = None):
+        self.environment_suffix = environment_suffix or 'dev'
+        self.region = region or 'us-east-1'  # Default region, can be overridden used in or for safety
+        self.tags = tags
 
 
 class TapStack(pulumi.ComponentResource):
@@ -58,11 +58,11 @@ class TapStack(pulumi.ComponentResource):
     """
 
     def __init__(self, name: str, args: TapStackArgs,
-           opts: Optional[ResourceOptions] = None):
-    super().__init__('tap:stack:TapStack', name, None, opts)
-    self.environment_suffix = args.environment_suffix
-    self.region = args.region
-    self.tags = args.tags
+                 opts: Optional[ResourceOptions] = None):
+        super().__init__('tap:stack:TapStack', name, None, opts)
+        self.environment_suffix = args.environment_suffix
+        self.region = args.region
+        self.tags = args.tags
 
     # Example usage of suffix and tags
     # You would replace this with instantiation of imported components like DynamoDBStack
