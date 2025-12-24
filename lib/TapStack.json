@@ -1,0 +1,1594 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Enterprise-ready foundational infrastructure for modern application deployment with comprehensive monitoring and security controls",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentName",
+                        "EnvironmentType"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VPCCIDR",
+                        "AllowedSSHIP"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Compute Configuration"
+                    },
+                    "Parameters": [
+                        "KeyPairName",
+                        "InstanceType",
+                        "EnableDetailedMonitoring"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Alerting Configuration"
+                    },
+                    "Parameters": [
+                        "AlertEmail",
+                        "CPUAlarmThreshold"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "EnvironmentName": {
+                    "default": "Environment Name"
+                },
+                "AllowedSSHIP": {
+                    "default": "Allowed SSH Source IP CIDR"
+                }
+            }
+        }
+    },
+    "Parameters": {
+        "EnvironmentName": {
+            "Description": "An environment name that is prefixed to resource names",
+            "Type": "String",
+            "Default": "production",
+            "AllowedValues": [
+                "development",
+                "staging",
+                "production"
+            ],
+            "AllowedPattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+            "ConstraintDescription": "Must be lowercase alphanumeric with hyphens"
+        },
+        "EnvironmentType": {
+            "Description": "Environment type for resource sizing and configuration",
+            "Type": "String",
+            "Default": "production",
+            "AllowedValues": [
+                "development",
+                "staging",
+                "production"
+            ]
+        },
+        "KeyPairName": {
+            "Description": "EC2 Key Pair for SSH access (leave empty to skip SSH key configuration)",
+            "Type": "String",
+            "Default": ""
+        },
+        "InstanceType": {
+            "Description": "EC2 instance type for the web server",
+            "Type": "String",
+            "Default": "t3.micro",
+            "AllowedValues": [
+                "t3.micro",
+                "t3.small",
+                "t3.medium",
+                "t3.large"
+            ],
+            "ConstraintDescription": "Must be a valid EC2 instance type"
+        },
+        "VPCCIDR": {
+            "Description": "CIDR block for the VPC",
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/16$",
+            "ConstraintDescription": "Must be a valid /16 CIDR block"
+        },
+        "AllowedSSHIP": {
+            "Description": "IP address range that can SSH to the EC2 instances (use your IP/32 for production)",
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/(3[0-2]|[1-2][0-9]|[0-9])$",
+            "ConstraintDescription": "Must be a valid IP CIDR range of the form x.x.x.x/x"
+        },
+        "AlertEmail": {
+            "Description": "Email address for CloudWatch alarm notifications",
+            "Type": "String",
+            "Default": "alerts@example.com",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+            "ConstraintDescription": "Must be a valid email address"
+        },
+        "EnableDetailedMonitoring": {
+            "Description": "Enable detailed CloudWatch monitoring for EC2 instance",
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        },
+        "CPUAlarmThreshold": {
+            "Description": "CPU utilization threshold for CloudWatch alarm (percentage)",
+            "Type": "Number",
+            "Default": 80,
+            "MinValue": 50,
+            "MaxValue": 100,
+            "ConstraintDescription": "Must be between 50 and 100"
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+            "Description": "Latest Amazon Linux 2 AMI ID from SSM Parameter Store"
+        }
+    },
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "IsProduction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnvironmentType"
+                },
+                "production"
+            ]
+        },
+        "EnableMonitoring": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableDetailedMonitoring"
+                },
+                "true"
+            ]
+        }
+    },
+    "Mappings": {
+        "SubnetConfig": {
+            "VPC": {
+                "CIDR": "10.0.0.0/16"
+            },
+            "PublicSubnet1": {
+                "CIDR": "10.0.1.0/24"
+            },
+            "PublicSubnet2": {
+                "CIDR": "10.0.2.0/24"
+            }
+        },
+        "EnvironmentConfig": {
+            "development": {
+                "InstanceType": "t3.micro",
+                "EBSVolumeSize": 10,
+                "LogRetention": 7
+            },
+            "staging": {
+                "InstanceType": "t3.small",
+                "EBSVolumeSize": 20,
+                "LogRetention": 14
+            },
+            "production": {
+                "InstanceType": "t3.medium",
+                "EBSVolumeSize": 30,
+                "LogRetention": 30
+            }
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VPCCIDR"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-VPC"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-IGW"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "InternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicSubnet1",
+                        "CIDR"
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Subnet-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicSubnet2",
+                        "CIDR"
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Subnet-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Routes"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DefaultPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                }
+            }
+        },
+        "WebServerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentName}-WebServer-SG"
+                },
+                "GroupDescription": "Security group for web server with HTTP and controlled SSH access",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTP traffic from anywhere"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTPS traffic from anywhere"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "AllowedSSHIP"
+                        },
+                        "Description": {
+                            "Fn::Sub": "Allow SSH traffic from ${AllowedSSHIP}"
+                        }
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "-1",
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-WebServer-SG"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentName}-${AWS::Region}-EC2-S3-Role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3AccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject",
+                                        "s3:ListBucket",
+                                        "s3:GetBucketLocation",
+                                        "s3:GetBucketVersioning"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "GeneralPurposeBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${GeneralPurposeBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "LoggingBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${LoggingBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CloudWatchLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${EnvironmentName}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-EC2-Role"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "${EnvironmentName}-${AWS::Region}-EC2-Instance-Profile"
+                },
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "GeneralPurposeBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${EnvironmentName}-general-purpose-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": {
+                                "Fn::If": [
+                                    "IsProduction",
+                                    90,
+                                    30
+                                ]
+                            }
+                        },
+                        {
+                            "Id": "TransitionToIA",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": {
+                                        "Fn::If": [
+                                            "IsProduction",
+                                            60,
+                                            30
+                                        ]
+                                    },
+                                    "StorageClass": "STANDARD_IA"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-General-Purpose-Bucket"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Storage"
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "General"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LoggingBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${EnvironmentName}-logging-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": {
+                                "Fn::FindInMap": [
+                                    "EnvironmentConfig",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    "LogRetention"
+                                ]
+                            }
+                        },
+                        {
+                            "Id": "TransitionOldLogs",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 7,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Logging-Bucket"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Storage"
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Logging"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LoggingBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "LoggingBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowSSLRequestsOnly",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "LoggingBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${LoggingBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowCloudWatchLogs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logs.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:GetBucketAcl",
+                                "s3:PutObject"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "LoggingBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${LoggingBucket.Arn}/*"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "WebServerInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Fn::If": [
+                        "HasKeyPair",
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "WebServerSecurityGroup"
+                    }
+                ],
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "VolumeSize": {
+                                "Fn::FindInMap": [
+                                    "EnvironmentConfig",
+                                    {
+                                        "Ref": "EnvironmentType"
+                                    },
+                                    "EBSVolumeSize"
+                                ]
+                            },
+                            "VolumeType": "gp3",
+                            "Encrypted": true,
+                            "DeleteOnTermination": true,
+                            "Iops": 3000
+                        }
+                    }
+                ],
+                "Monitoring": {
+                    "Fn::If": [
+                        "EnableMonitoring",
+                        true,
+                        false
+                    ]
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": [
+                            "#!/bin/bash\n# Update and install basic packages\nyum update -y\nyum install -y httpd aws-cfn-bootstrap\n\n# Start and enable httpd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create basic web page\ncat > /var/www/html/index.html << EOF\n<!DOCTYPE html>\n<html>\n<head><title>${EnvironmentName} Infrastructure</title></head>\n<body>\n  <h1>Enterprise Application Server - ${EnvironmentName}</h1>\n  <p>Region: ${AWS::Region}</p>\n  <p>Instance ID: $(ec2-metadata --instance-id | cut -d \" \" -f 2)</p>\n  <p>Availability Zone: $(ec2-metadata --availability-zone | cut -d \" \" -f 2)</p>\n</body>\n</html>\nEOF\n\n# Install and configure CloudWatch agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n\n# Create CloudWatch agent configuration\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF\n{\n  \"metrics\": {\n    \"namespace\": \"${EnvironmentName}/Application\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [{\"name\": \"cpu_usage_idle\", \"rename\": \"CPU_IDLE\", \"unit\": \"Percent\"}],\n        \"totalcpu\": false,\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [{\"name\": \"used_percent\", \"rename\": \"DISK_USED\", \"unit\": \"Percent\"}],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"/\"]\n      },\n      \"mem\": {\n        \"measurement\": [{\"name\": \"mem_used_percent\", \"rename\": \"MEM_USED\", \"unit\": \"Percent\"}],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"/aws/ec2/${EnvironmentName}/httpd\",\n            \"log_stream_name\": \"{instance_id}/access_log\",\n            \"retention_in_days\": ${LogRetentionDays}\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"/aws/ec2/${EnvironmentName}/httpd\",\n            \"log_stream_name\": \"{instance_id}/error_log\",\n            \"retention_in_days\": ${LogRetentionDays}\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -s \\\n  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json\n\n# Signal CloudFormation that the instance is ready\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \\\n  --resource WebServerInstance --region ${AWS::Region}\n",
+                            {
+                                "LogRetentionDays": {
+                                    "Fn::FindInMap": [
+                                        "EnvironmentConfig",
+                                        {
+                                            "Ref": "EnvironmentType"
+                                        },
+                                        "LogRetention"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-WebServer"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Compute"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "WebServer"
+                    },
+                    {
+                        "Key": "Backup",
+                        "Value": {
+                            "Fn::If": [
+                                "IsProduction",
+                                "Required",
+                                "Optional"
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "ElasticIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "InstanceId": {
+                    "Ref": "WebServerInstance"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-WebServer-EIP"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Network"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "AlarmNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${EnvironmentName}-Alarms"
+                },
+                "DisplayName": {
+                    "Fn::Sub": "${EnvironmentName} Infrastructure Alarms"
+                },
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "AlertEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Alarm-Topic"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "HighCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-WebServer-HighCPU"
+                },
+                "AlarmDescription": {
+                    "Fn::Sub": "Alert when CPU utilization exceeds ${CPUAlarmThreshold}%"
+                },
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": {
+                    "Ref": "CPUAlarmThreshold"
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "InstanceId",
+                        "Value": {
+                            "Ref": "WebServerInstance"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlarmNotificationTopic"
+                    }
+                ],
+                "OKActions": [
+                    {
+                        "Ref": "AlarmNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "HighMemoryAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "EnableMonitoring",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-WebServer-HighMemory"
+                },
+                "AlarmDescription": "Alert when memory utilization exceeds 90%",
+                "MetricName": "MEM_USED",
+                "Namespace": {
+                    "Fn::Sub": "${EnvironmentName}/Application"
+                },
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 90,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "InstanceId",
+                        "Value": {
+                            "Ref": "WebServerInstance"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlarmNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "HighDiskUsageAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "EnableMonitoring",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-WebServer-HighDiskUsage"
+                },
+                "AlarmDescription": "Alert when disk utilization exceeds 85%",
+                "MetricName": "DISK_USED",
+                "Namespace": {
+                    "Fn::Sub": "${EnvironmentName}/Application"
+                },
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 85,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "InstanceId",
+                        "Value": {
+                            "Ref": "WebServerInstance"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlarmNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ApplicationLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ec2/${EnvironmentName}/application"
+                },
+                "RetentionInDays": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "EnvironmentType"
+                        },
+                        "LogRetention"
+                    ]
+                }
+            }
+        },
+        "HTTPLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ec2/${EnvironmentName}/httpd"
+                },
+                "RetentionInDays": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "EnvironmentType"
+                        },
+                        "LogRetention"
+                    ]
+                }
+            }
+        },
+        "LogsToS3DeliveryStream": {
+            "Type": "AWS::KinesisFirehose::DeliveryStream",
+            "Properties": {
+                "DeliveryStreamType": "DirectPut",
+                "ExtendedS3DestinationConfiguration": {
+                    "BucketARN": {
+                        "Fn::GetAtt": [
+                            "LoggingBucket",
+                            "Arn"
+                        ]
+                    },
+                    "Prefix": "cloudwatch-logs/",
+                    "CompressionFormat": "GZIP",
+                    "RoleARN": {
+                        "Fn::GetAtt": [
+                            "FirehoseDeliveryRole",
+                            "Arn"
+                        ]
+                    }
+                }
+            }
+        },
+        "LogsToS3ExportTask": {
+            "Type": "AWS::Logs::SubscriptionFilter",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "HTTPLogGroup"
+                },
+                "FilterPattern": "",
+                "DestinationArn": {
+                    "Fn::GetAtt": [
+                        "LogsToS3DeliveryStream",
+                        "Arn"
+                    ]
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "LogsRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "LogsRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "LogsToFirehosePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "firehose:PutRecord",
+                                        "firehose:PutRecordBatch"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "LogsToS3DeliveryStream",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "FirehoseDeliveryRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "firehose.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "FirehoseS3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:AbortMultipartUpload",
+                                        "s3:GetBucketLocation",
+                                        "s3:GetObject",
+                                        "s3:ListBucket",
+                                        "s3:ListBucketMultipartUploads",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "LoggingBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${LoggingBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID for the enterprise infrastructure",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                }
+            }
+        },
+        "VPCCIDR": {
+            "Description": "VPC CIDR block",
+            "Value": {
+                "Ref": "VPCCIDR"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-CIDR"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID in first Availability Zone",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet1-ID"
+                }
+            }
+        },
+        "PublicSubnet1AZ": {
+            "Description": "Availability Zone of Public Subnet 1",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PublicSubnet1",
+                    "AvailabilityZone"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet1-AZ"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID in second Availability Zone",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet2-ID"
+                }
+            }
+        },
+        "PublicSubnet2AZ": {
+            "Description": "Availability Zone of Public Subnet 2",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PublicSubnet2",
+                    "AvailabilityZone"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet2-AZ"
+                }
+            }
+        },
+        "EC2InstanceId": {
+            "Description": "EC2 Instance ID of the web server",
+            "Value": {
+                "Ref": "WebServerInstance"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2Instance-ID"
+                }
+            }
+        },
+        "EC2InstancePrivateIP": {
+            "Description": "Private IP address of the EC2 instance",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebServerInstance",
+                    "PrivateIp"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2Instance-PrivateIP"
+                }
+            }
+        },
+        "ElasticIPAddress": {
+            "Description": "Elastic IP address of the web server",
+            "Value": {
+                "Ref": "ElasticIP"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ElasticIP"
+                }
+            }
+        },
+        "WebServerURL": {
+            "Description": "URL to access the web server",
+            "Value": {
+                "Fn::Sub": "http://${ElasticIP}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebServerURL"
+                }
+            }
+        },
+        "SSHCommand": {
+            "Description": "SSH command to connect to the instance",
+            "Value": {
+                "Fn::If": [
+                    "HasKeyPair",
+                    {
+                        "Fn::Sub": "ssh -i ${KeyPairName}.pem ec2-user@${ElasticIP}"
+                    },
+                    "SSH key not configured - use Session Manager"
+                ]
+            }
+        },
+        "GeneralPurposeBucketName": {
+            "Description": "Name of the general purpose S3 bucket",
+            "Value": {
+                "Ref": "GeneralPurposeBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-GeneralPurposeBucket"
+                }
+            }
+        },
+        "GeneralPurposeBucketArn": {
+            "Description": "ARN of the general purpose S3 bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "GeneralPurposeBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-GeneralPurposeBucket-ARN"
+                }
+            }
+        },
+        "LoggingBucketName": {
+            "Description": "Name of the logging S3 bucket",
+            "Value": {
+                "Ref": "LoggingBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LoggingBucket"
+                }
+            }
+        },
+        "LoggingBucketArn": {
+            "Description": "ARN of the logging S3 bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LoggingBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LoggingBucket-ARN"
+                }
+            }
+        },
+        "SecurityGroupId": {
+            "Description": "Security Group ID for the web server",
+            "Value": {
+                "Ref": "WebServerSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecurityGroup-ID"
+                }
+            }
+        },
+        "IAMRoleArn": {
+            "Description": "ARN of the IAM role for EC2 instances",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2Role",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2Role-ARN"
+                }
+            }
+        },
+        "IAMRoleName": {
+            "Description": "Name of the IAM role for EC2 instances",
+            "Value": {
+                "Ref": "EC2Role"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2Role-Name"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "ARN of the SNS topic for alarms",
+            "Value": {
+                "Ref": "AlarmNotificationTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SNSTopic-ARN"
+                }
+            }
+        },
+        "ApplicationLogGroupName": {
+            "Description": "CloudWatch Log Group for application logs",
+            "Value": {
+                "Ref": "ApplicationLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppLogGroup"
+                }
+            }
+        },
+        "HTTPLogGroupName": {
+            "Description": "CloudWatch Log Group for HTTP logs",
+            "Value": {
+                "Ref": "HTTPLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HTTPLogGroup"
+                }
+            }
+        },
+        "StackRegion": {
+            "Description": "AWS Region where the stack is deployed",
+            "Value": {
+                "Ref": "AWS::Region"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Region"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            }
+        },
+        "AccountId": {
+            "Description": "AWS Account ID",
+            "Value": {
+                "Ref": "AWS::AccountId"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AccountId"
+                }
+            }
+        }
+    }
+}

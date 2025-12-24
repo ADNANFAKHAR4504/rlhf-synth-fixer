@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350064",
+  "team": "synth",
+  "startedAt": "2025-11-26T09:27:15.774Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "VPC",
+    "EC2",
+    "IAM",
+    "S3 Bucket",
+    "CloudWatch Alarm",
+    "CloudWatch LogGroup",
+    "SNS Topic",
+    "Kinesis Firehose"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
