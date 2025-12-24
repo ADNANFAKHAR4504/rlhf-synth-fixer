@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912183",
+  "team": "synth",
+  "startedAt": "2025-11-07T13:31:59.436Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Systems Manager Parameter Store",
+    "KMS"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
