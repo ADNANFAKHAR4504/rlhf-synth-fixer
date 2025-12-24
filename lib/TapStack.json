@@ -132,11 +132,6 @@
       "MinLength": "1",
       "MaxLength": "16",
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
-    },
-    "LatestAmiId": {
-      "Type": "String",
-      "Default": "ami-12345678",
-      "Description": "Amazon Linux 2 AMI ID (LocalStack compatible)"
     }
   },
   "Conditions": {
@@ -627,7 +622,10 @@
         },
         "Description": "Database credentials for RDS MySQL instance",
         "GenerateSecretString": {
-          "SecretStringTemplate": "{\"username\": \"dbadmin\", \"password\": \"TempPassword123!\"}"
+          "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
         },
         "Tags": [
           {
@@ -760,11 +758,13 @@
           "Ref": "DBInstanceClass"
         },
         "Engine": "mysql",
-        "EngineVersion": "8.0.35",
+        "EngineVersion": "8.0.40",
         "MasterUsername": {
           "Ref": "DBUsername"
         },
-        "MasterUserPassword": "TempPassword123!",
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+        },
         "AllocatedStorage": "20",
         "StorageType": "gp2",
         "StorageEncrypted": false,
@@ -901,7 +901,10 @@
     "EC2PublicIP": {
       "Description": "Web Server Public IP",
       "Value": {
-        "Ref": "WebServerEIP"
+        "Fn::GetAtt": [
+          "WebServerInstance",
+          "PublicIp"
+        ]
       },
       "Export": {
         "Name": {
@@ -912,7 +915,7 @@
     "WebServerURL": {
       "Description": "Web Server URL",
       "Value": {
-        "Fn::Sub": "http://${WebServerEIP}"
+        "Fn::Sub": "http://${WebServerInstance.PublicIp}"
       },
       "Export": {
         "Name": {
@@ -951,17 +954,6 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-Database-Secret-ARN"
-        }
-      }
-    },
-    "S3BucketName": {
-      "Description": "S3 Bucket for VPC Flow Logs",
-      "Value": {
-        "Ref": "VPCFlowLogsS3Bucket"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-VPCFlowLogs-Bucket"
         }
       }
     }
