@@ -469,9 +469,14 @@ describe('TAP Stack - EKS Cluster Infrastructure Unit Tests', () => {
       expect(networkingContent).toMatch(/count\s*=\s*3/);
     });
 
-    test('should have multiple NAT gateways', () => {
-      const natGatewayMatch = networkingContent.match(/resource\s+"aws_nat_gateway"\s+"main"[\s\S]*?count\s*=\s*3/);
-      expect(natGatewayMatch).not.toBeNull();
+    test('should have single NAT gateway for cost optimization', () => {
+      expect(networkingContent).toMatch(/resource\s+"aws_nat_gateway"\s+"main"/);
+      // Single NAT Gateway should not have count parameter
+      const natGatewayMatch = networkingContent.match(/resource\s+"aws_nat_gateway"\s+"main"\s*{[^}]*}/s);
+      expect(natGatewayMatch).toBeTruthy();
+      if (natGatewayMatch) {
+        expect(natGatewayMatch[0]).not.toMatch(/count\s*=/);
+      }
     });
   });
 });

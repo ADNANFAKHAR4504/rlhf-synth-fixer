@@ -409,8 +409,12 @@ describe('Terraform EKS Cluster Infrastructure Unit Tests', () => {
       expect(networkingContent).toMatch(/data\.aws_availability_zones\.available\.names/);
     });
 
-    test('should have multiple NAT gateways', () => {
-      expect(networkingContent).toMatch(/resource\s+"aws_nat_gateway"\s+"main"[\s\S]*?count\s*=\s*3/);
+    test('should have single NAT gateway for cost optimization', () => {
+      expect(networkingContent).toMatch(/resource\s+"aws_nat_gateway"\s+"main"/);
+      // Verify it's a single NAT Gateway (no count parameter means single resource)
+      const natGatewayMatch = networkingContent.match(/resource\s+"aws_nat_gateway"\s+"main"\s*{[^}]*}/s);
+      expect(natGatewayMatch).toBeTruthy();
+      expect(natGatewayMatch![0]).not.toMatch(/count\s*=/);
     });
   });
 });
