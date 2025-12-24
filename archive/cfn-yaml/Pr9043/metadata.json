@@ -20,5 +20,12 @@
     "AWS IAM"
   ],
   "provider": "localstack",
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
