@@ -988,6 +988,18 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-${Environment}-DB-PORT'
 
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-IGW'
+
+  SecurityGroupId:
+    Description: EC2 Security Group ID (main security group)
+    Value: !Ref EC2SecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-SG'
+
   EC2SecurityGroupId:
     Description: EC2 Security Group ID
     Value: !Ref EC2SecurityGroup
