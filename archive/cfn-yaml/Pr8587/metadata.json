@@ -20,5 +20,11 @@
     "KMS",
     "S3"
   ],
-  "startedAt": "2025-08-08T16:38:51.045Z"
+  "startedAt": "2025-08-08T16:38:51.045Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
