@@ -10,18 +10,6 @@
       "MaxLength": 16,
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
     },
-    "DBPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Default": "/myapp/database/password",
-      "Description": "SSM Parameter Store parameter name containing the database password"
-    },
-    "DBPasswordParameterName": {
-      "Type": "String",
-      "Default": "/myapp/database/password",
-      "Description": "Name of the SSM Parameter Store parameter containing the database password",
-      "AllowedPattern": "^[a-zA-Z0-9/_-]+$"
-    },
     "AZ1": {
       "Type": "String",
       "Default": "us-west-2a",
@@ -670,9 +658,7 @@
         "MasterUsername": {
           "Ref": "DBUsername"
         },
-        "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:ssm-secure:${DBPassword}}}"
-        },
+        "MasterUserPassword": "TestPassword123!",
         "AllocatedStorage": 20,
         "StorageType": "gp2",
         "StorageEncrypted": true,
