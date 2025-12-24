@@ -90,15 +90,15 @@ resource "aws_db_instance" "postgres" {
 
 # RDS instance in secondary region (read replica for cross-region replication)
 resource "aws_db_instance" "postgres_secondary" {
-  provider               = aws.secondary
-  count                  = local.is_primary ? 1 : 0
-  identifier             = "${local.resource_prefix}-postgres-${local.other_region}"
-  replicate_source_db    = aws_db_instance.postgres.arn
-  instance_class         = "db.t3.medium"
-  storage_encrypted      = true
-  kms_key_id             = aws_kms_key.rds_secondary.arn
-  publicly_accessible    = false
-  skip_final_snapshot    = true
+  provider                = aws.secondary
+  count                   = local.is_primary ? 1 : 0
+  identifier              = "${local.resource_prefix}-postgres-${local.other_region}"
+  replicate_source_db     = aws_db_instance.postgres.arn
+  instance_class          = "db.t3.medium"
+  storage_encrypted       = true
+  kms_key_id              = aws_kms_key.rds_secondary.arn
+  publicly_accessible     = false
+  skip_final_snapshot     = true
   backup_retention_period = 7
 
   tags = merge(
