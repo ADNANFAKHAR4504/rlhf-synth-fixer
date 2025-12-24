@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-292029",
+  "team": "5",
+  "startedAt": "2025-08-19T14:21:19.840Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "292029",
+    "pr": "Pr1663"
+  },
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::NatGateway",
+    "AWS::EC2::EIP",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::SecurityGroup",
+    "AWS::EC2::FlowLog",
+    "AWS::S3::Bucket",
+    "AWS::S3::BucketPolicy",
+    "AWS::IAM::Role",
+    "AWS::Logs::LogGroup",
+    "AWS::CloudWatch::Alarm"
+  ]
+}
