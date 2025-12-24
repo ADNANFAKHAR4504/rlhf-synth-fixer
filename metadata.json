@@ -1,0 +1,25 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-20T12:14:58.063710Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "IAM",
+    "KMS",
+    "Lambda",
+    "Logs",
+    "RDS",
+    "S3",
+    "SecretsManager"
+  ],
+  "po_id": "101912522",
+  "provider": "localstack",
+  "wave": "P1"
+}
