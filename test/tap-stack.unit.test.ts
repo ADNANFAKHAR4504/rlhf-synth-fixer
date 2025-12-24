@@ -164,8 +164,9 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
 
       expect(subnet1.Properties.CidrBlock).toBeDefined();
       expect(subnet2.Properties.CidrBlock).toBeDefined();
-      expect(subnet1.Properties.CidrBlock['Fn::Select']).toBeDefined();
-      expect(subnet2.Properties.CidrBlock['Fn::Select']).toBeDefined();
+      // LocalStack compatibility: Using hardcoded CIDR blocks instead of Fn::Select/Fn::Cidr
+      expect(subnet1.Properties.CidrBlock).toBe('10.0.1.0/24');
+      expect(subnet2.Properties.CidrBlock).toBe('10.0.2.0/24');
     });
 
     test('should tag subnets appropriately', () => {
