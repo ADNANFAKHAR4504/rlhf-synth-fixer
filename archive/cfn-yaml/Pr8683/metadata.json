@@ -17,5 +17,12 @@
     "CloudTrail",
     "KMS",
     "EC2"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "govardhan-turing",
+  "dockerS3Location": ""
 }
