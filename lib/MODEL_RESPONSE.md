@@ -229,7 +229,7 @@ pulumi.export("health_check_url", Output.concat(...))
 - **Deployable**: Code will successfully deploy all resources
 - **Functional**: All components will work as intended
 - **Secure**: Implements AWS security best practices
-- ⚠️ **Maintainable**: Component architecture needs restructuring
+- **Maintainable**: Component architecture needs restructuring
 
 ## Summary
 
