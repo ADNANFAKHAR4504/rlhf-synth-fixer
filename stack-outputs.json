@@ -1,0 +1,197 @@
+[
+    {
+        "OutputKey": "AccountId",
+        "OutputValue": "000000000000",
+        "ExportName": "localstack-stack-dev-AccountId"
+    },
+    {
+        "OutputKey": "ApplicationTierSecurityGroupId",
+        "OutputValue": "sg-c339210805eee109e",
+        "ExportName": "localstack-stack-dev-ApplicationTier-SG-ID"
+    },
+    {
+        "OutputKey": "AvailabilityZones",
+        "OutputValue": "us-east-1a,us-east-1b,us-east-1c",
+        "ExportName": "localstack-stack-dev-AvailabilityZones"
+    },
+    {
+        "OutputKey": "DatabaseTierSecurityGroupId",
+        "OutputValue": "sg-0ca054d45bbf06507",
+        "ExportName": "localstack-stack-dev-DatabaseTier-SG-ID"
+    },
+    {
+        "OutputKey": "DynamoDBEndpointId",
+        "OutputValue": "vpce-2e6573ced0e423d30",
+        "ExportName": "localstack-stack-dev-DynamoDBEndpoint-ID"
+    },
+    {
+        "OutputKey": "InternetGatewayId",
+        "OutputValue": "igw-4aad11e3581521488",
+        "ExportName": "localstack-stack-dev-IGW-ID"
+    },
+    {
+        "OutputKey": "NatGateway1EIPAddress",
+        "OutputValue": "127.240.142.222-eipalloc-3cc8cfea34f147ae8",
+        "ExportName": "localstack-stack-dev-NATGateway1-EIP"
+    },
+    {
+        "OutputKey": "NatGateway1Id",
+        "OutputValue": "nat-8ca00b3f4ffa25521",
+        "ExportName": "localstack-stack-dev-NATGateway1-ID"
+    },
+    {
+        "OutputKey": "NatGateway2EIPAddress",
+        "OutputValue": "127.87.151.14-eipalloc-34a7557d7c6439173",
+        "ExportName": "localstack-stack-dev-NATGateway2-EIP"
+    },
+    {
+        "OutputKey": "NatGateway2Id",
+        "OutputValue": "nat-77e626fa59df0a14c",
+        "ExportName": "localstack-stack-dev-NATGateway2-ID"
+    },
+    {
+        "OutputKey": "NatGateway3EIPAddress",
+        "OutputValue": "127.192.199.161-eipalloc-b7d1fe68317717932",
+        "ExportName": "localstack-stack-dev-NATGateway3-EIP"
+    },
+    {
+        "OutputKey": "NatGateway3Id",
+        "OutputValue": "nat-e5ee13eb6dfae1843",
+        "ExportName": "localstack-stack-dev-NATGateway3-ID"
+    },
+    {
+        "OutputKey": "PrivateNetworkAclId",
+        "OutputValue": "acl-629e24b6e53238e84",
+        "ExportName": "localstack-stack-dev-PrivateNACL-ID"
+    },
+    {
+        "OutputKey": "PrivateRouteTable1Id",
+        "OutputValue": "rtb-7cb7bf5bbea8bf8b7",
+        "ExportName": "localstack-stack-dev-PrivateRouteTable1-ID"
+    },
+    {
+        "OutputKey": "PrivateRouteTable2Id",
+        "OutputValue": "rtb-4f1830f64d8d6f9de",
+        "ExportName": "localstack-stack-dev-PrivateRouteTable2-ID"
+    },
+    {
+        "OutputKey": "PrivateRouteTable3Id",
+        "OutputValue": "rtb-f4ac92cd30f3c633d",
+        "ExportName": "localstack-stack-dev-PrivateRouteTable3-ID"
+    },
+    {
+        "OutputKey": "PrivateSubnet1AZ",
+        "OutputValue": "us-east-1a",
+        "ExportName": "localstack-stack-dev-PrivateSubnet1-AZ"
+    },
+    {
+        "OutputKey": "PrivateSubnet1Id",
+        "OutputValue": "subnet-87fde9dcc6265b869",
+        "ExportName": "localstack-stack-dev-PrivateSubnet1-ID"
+    },
+    {
+        "OutputKey": "PrivateSubnet2AZ",
+        "OutputValue": "us-east-1b",
+        "ExportName": "localstack-stack-dev-PrivateSubnet2-AZ"
+    },
+    {
+        "OutputKey": "PrivateSubnet2Id",
+        "OutputValue": "subnet-bc66fb9b4afcbb0c2",
+        "ExportName": "localstack-stack-dev-PrivateSubnet2-ID"
+    },
+    {
+        "OutputKey": "PrivateSubnet3AZ",
+        "OutputValue": "us-east-1c",
+        "ExportName": "localstack-stack-dev-PrivateSubnet3-AZ"
+    },
+    {
+        "OutputKey": "PrivateSubnet3Id",
+        "OutputValue": "subnet-6d9f56624598b4f25",
+        "ExportName": "localstack-stack-dev-PrivateSubnet3-ID"
+    },
+    {
+        "OutputKey": "PrivateSubnets",
+        "OutputValue": "subnet-87fde9dcc6265b869,subnet-bc66fb9b4afcbb0c2,subnet-6d9f56624598b4f25",
+        "ExportName": "localstack-stack-dev-PrivateSubnets"
+    },
+    {
+        "OutputKey": "PublicNetworkAclId",
+        "OutputValue": "acl-0f10c24917274d9d3",
+        "ExportName": "localstack-stack-dev-PublicNACL-ID"
+    },
+    {
+        "OutputKey": "PublicRouteTableId",
+        "OutputValue": "rtb-ce685de74d164b6f5",
+        "ExportName": "localstack-stack-dev-PublicRouteTable-ID"
+    },
+    {
+        "OutputKey": "PublicSubnet1AZ",
+        "OutputValue": "us-east-1a",
+        "ExportName": "localstack-stack-dev-PublicSubnet1-AZ"
+    },
+    {
+        "OutputKey": "PublicSubnet1Id",
+        "OutputValue": "subnet-5719bb9eb993ee648",
+        "ExportName": "localstack-stack-dev-PublicSubnet1-ID"
+    },
+    {
+        "OutputKey": "PublicSubnet2AZ",
+        "OutputValue": "us-east-1b",
+        "ExportName": "localstack-stack-dev-PublicSubnet2-AZ"
+    },
+    {
+        "OutputKey": "PublicSubnet2Id",
+        "OutputValue": "subnet-62a8d51ad1fa9b2a2",
+        "ExportName": "localstack-stack-dev-PublicSubnet2-ID"
+    },
+    {
+        "OutputKey": "PublicSubnet3AZ",
+        "OutputValue": "us-east-1c",
+        "ExportName": "localstack-stack-dev-PublicSubnet3-AZ"
+    },
+    {
+        "OutputKey": "PublicSubnet3Id",
+        "OutputValue": "subnet-32f66ef14a6ad54dd",
+        "ExportName": "localstack-stack-dev-PublicSubnet3-ID"
+    },
+    {
+        "OutputKey": "PublicSubnets",
+        "OutputValue": "subnet-5719bb9eb993ee648,subnet-62a8d51ad1fa9b2a2,subnet-32f66ef14a6ad54dd",
+        "ExportName": "localstack-stack-dev-PublicSubnets"
+    },
+    {
+        "OutputKey": "Region",
+        "OutputValue": "us-east-1",
+        "ExportName": "localstack-stack-dev-Region"
+    },
+    {
+        "OutputKey": "S3EndpointId",
+        "OutputValue": "vpce-13707b76197d0c027",
+        "ExportName": "localstack-stack-dev-S3Endpoint-ID"
+    },
+    {
+        "OutputKey": "StackName",
+        "OutputValue": "localstack-stack-dev",
+        "ExportName": "localstack-stack-dev-StackName"
+    },
+    {
+        "OutputKey": "VPCCidr",
+        "OutputValue": "10.0.0.0/16",
+        "ExportName": "localstack-stack-dev-VPC-CIDR"
+    },
+    {
+        "OutputKey": "VPCDefaultSecurityGroup",
+        "OutputValue": "sg-830a0cfd54be361c8",
+        "ExportName": "localstack-stack-dev-VPC-DefaultSG"
+    },
+    {
+        "OutputKey": "VPCId",
+        "OutputValue": "vpc-60242f8e4e942e0aa",
+        "ExportName": "localstack-stack-dev-VPC-ID"
+    },
+    {
+        "OutputKey": "WebTierSecurityGroupId",
+        "OutputValue": "sg-e860b0632c1d42ff5",
+        "ExportName": "localstack-stack-dev-WebTier-SG-ID"
+    }
+]
