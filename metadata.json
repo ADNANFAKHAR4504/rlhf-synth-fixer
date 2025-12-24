@@ -6,7 +6,7 @@
   "po_id": "LS-291757",
   "team": "synth-2",
   "startedAt": "2025-08-20T12:37:46.425Z",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup",
