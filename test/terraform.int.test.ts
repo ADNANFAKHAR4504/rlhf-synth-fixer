@@ -1,26 +1,38 @@
+/**
+ * Terraform Infrastructure Integration Tests
+ *
+ * These tests validate infrastructure outputs from Terraform deployment.
+ */
+
 import * as fs from "fs";
 import * as path from "path";
 
-/** ===================== Types & IO ===================== */
+/** ===================== Types ===================== */
 
+// Terraform nested format: {"key": {"value": "actual_value", "type": "string", "sensitive": false}}
 type TfValue<T> = { sensitive: boolean; type: any; value: T };
 
-type Outputs = {
-  vpc_id?: TfValue<string>;
-  vpc_cidr?: TfValue<string>;
-  internet_gateway_id?: TfValue<string>;
-  public_subnet_ids?: TfValue<string[]>;
-  private_subnet_ids?: TfValue<string[]>;
-  public_route_table_id?: TfValue<string>;
-  private_route_table_id?: TfValue<string>;
-  availability_zones?: TfValue<string[]>;
+// Flat format: {"key": "actual_value"} or {"key": ["val1", "val2"]}
+type FlatOutputs = {
+  vpc_id?: string;
+  vpc_cidr?: string;
+  internet_gateway_id?: string;
+  public_subnet_ids?: string[];
+  private_subnet_ids?: string[];
+  public_route_table_id?: string;
+  private_route_table_id?: string;
+  availability_zones?: string[];
 };
+
+// Global outputs variable
+let OUT: any = {};
 
 function loadOutputs() {
   // Try multiple possible output file locations
   const possiblePaths = [
-    path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"),
+    path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json"),
     path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json"),
+    path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"),
   ];
 
   let p: string | undefined;
@@ -35,38 +47,75 @@ function loadOutputs() {
     throw new Error(`Outputs file not found. Tried: ${possiblePaths.join(", ")}`);
   }
 
-  const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Outputs;
+  console.log(`Loading outputs from: ${p}`);
 
-  const missing: string[] = [];
-  const req = <K extends keyof Outputs>(k: K) => {
-    const v = raw[k]?.value as any;
-    if (v === undefined || v === null) missing.push(String(k));
-    return v;
-  };
+  try {
+    const raw = JSON.parse(fs.readFileSync(p, "utf8"));
 
-  const o = {
-    vpcId: req("vpc_id") as string,
-    vpcCidr: req("vpc_cidr") as string,
-    internetGatewayId: req("internet_gateway_id") as string,
-    publicSubnets: req("public_subnet_ids") as string[],
-    privateSubnets: req("private_subnet_ids") as string[],
-    publicRouteTableId: req("public_route_table_id") as string,
-    privateRouteTableId: req("private_route_table_id") as string,
-    availabilityZones: req("availability_zones") as string[],
-  };
+    // Helper to extract value - handles both flat and nested (Terraform) formats
+    const getValue = <T>(key: string): T | undefined => {
+      const val = raw[key];
+      if (val === undefined || val === null) {
+        return undefined;
+      }
+      // If it's an object with 'value' property (Terraform format), unwrap it
+      if (val && typeof val === "object" && "value" in val) {
+        return val.value as T;
+      }
+      // Otherwise use the value directly (flat format)
+      return val as T;
+    };
 
-  if (missing.length) {
-    throw new Error(
-      `Missing required outputs in cfn-outputs/all-outputs.json: ${missing.join(", ")}`
-    );
+    // Extract all outputs
+    const vpc_id = getValue<string>("vpc_id");
+    const vpc_cidr = getValue<string>("vpc_cidr");
+    const internet_gateway_id = getValue<string>("internet_gateway_id");
+    const public_subnet_ids = getValue<string[]>("public_subnet_ids");
+    const private_subnet_ids = getValue<string[]>("private_subnet_ids");
+    const public_route_table_id = getValue<string>("public_route_table_id");
+    const private_route_table_id = getValue<string>("private_route_table_id");
+    const availability_zones = getValue<string[]>("availability_zones");
+
+    // Validate required outputs
+    const missing: string[] = [];
+    if (!vpc_id) missing.push("vpc_id");
+    if (!vpc_cidr) missing.push("vpc_cidr");
+    if (!internet_gateway_id) missing.push("internet_gateway_id");
+    if (!public_subnet_ids) missing.push("public_subnet_ids");
+    if (!private_subnet_ids) missing.push("private_subnet_ids");
+    if (!public_route_table_id) missing.push("public_route_table_id");
+    if (!private_route_table_id) missing.push("private_route_table_id");
+    if (!availability_zones) missing.push("availability_zones");
+
+    if (missing.length > 0) {
+      throw new Error(`Missing required outputs: ${missing.join(", ")}`);
+    }
+
+    return {
+      vpcId: vpc_id,
+      vpcCidr: vpc_cidr,
+      internetGatewayId: internet_gateway_id,
+      publicSubnets: public_subnet_ids,
+      privateSubnets: private_subnet_ids,
+      publicRouteTableId: public_route_table_id,
+      privateRouteTableId: private_route_table_id,
+      availabilityZones: availability_zones,
+    };
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Error reading outputs file: ${error.message}`);
+    }
+    throw new Error("Error reading outputs file");
   }
-  return o;
 }
-
-const OUT = loadOutputs();
 
 /** ===================== Jest Config ===================== */
 jest.setTimeout(30_000);
+
+/** ===================== Test Setup ===================== */
+beforeAll(() => {
+  OUT = loadOutputs();
+});
 
 /** ===================== Outputs File Validation ===================== */
 describe("Outputs file validation", () => {
@@ -100,7 +149,7 @@ describe("Subnet validation", () => {
     expect(OUT.publicSubnets).toBeDefined();
     expect(Array.isArray(OUT.publicSubnets)).toBe(true);
     expect(OUT.publicSubnets.length).toBe(2);
-    OUT.publicSubnets.forEach((subnetId) => {
+    OUT.publicSubnets.forEach((subnetId: string) => {
       expect(subnetId).toMatch(/^subnet-[a-f0-9]+$/);
     });
   });
@@ -109,7 +158,7 @@ describe("Subnet validation", () => {
     expect(OUT.privateSubnets).toBeDefined();
     expect(Array.isArray(OUT.privateSubnets)).toBe(true);
     expect(OUT.privateSubnets.length).toBe(2);
-    OUT.privateSubnets.forEach((subnetId) => {
+    OUT.privateSubnets.forEach((subnetId: string) => {
       expect(subnetId).toMatch(/^subnet-[a-f0-9]+$/);
     });
   });
@@ -149,7 +198,7 @@ describe("Route table validation", () => {
 /** ===================== Availability Zones Validation ===================== */
 describe("Availability zones validation", () => {
   test("Availability zones are in us-east-1 region", () => {
-    OUT.availabilityZones.forEach((az) => {
+    OUT.availabilityZones.forEach((az: string) => {
       expect(az).toMatch(/^us-east-1[a-z]$/);
     });
   });
@@ -217,7 +266,7 @@ describe("Edge cases & sanity checks", () => {
     expect(OUT.internetGatewayId).toMatch(/^igw-[a-f0-9]+$/);
 
     // Subnet ID format
-    [...OUT.publicSubnets, ...OUT.privateSubnets].forEach((id) => {
+    [...OUT.publicSubnets, ...OUT.privateSubnets].forEach((id: string) => {
       expect(id).toMatch(/^subnet-[a-f0-9]+$/);
     });
 
