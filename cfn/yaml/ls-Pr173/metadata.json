@@ -1,0 +1,16 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-TAP-326",
+  "team": "synth-2",
+  "startedAt": "2025-07-25T23:13:18.857Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [],
+  "wave": "P0"
+}
