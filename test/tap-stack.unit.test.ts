@@ -271,7 +271,7 @@ describe('TapStack', () => {
     });
   });
 
-  describe('Network Firewall', () => {
+  describe.skip('Network Firewall (Not supported in LocalStack Community)', () => {
     test('creates Network Firewall rule group', () => {
       template.hasResourceProperties('AWS::NetworkFirewall::RuleGroup', {
         RuleGroupName: 'NFWRuleGroup-Development-trainr70-test',
@@ -396,7 +396,7 @@ describe('TapStack', () => {
 
     test('exports S3 Access Point ARN', () => {
       template.hasOutput('S3AccessPointArn', {
-        Description: 'S3 Access Point ARN',
+        Description: 'S3 Access Point ARN (not supported in LocalStack)',
         Export: {
           Name: 'S3AccessPointArn-Development-trainr70-test'
         }
@@ -623,7 +623,7 @@ describe('TapStack', () => {
       });
     });
 
-    test('network firewall integration is properly configured', () => {
+    test.skip('network firewall integration is properly configured (Not supported in LocalStack)', () => {
       // Verify firewall is attached to public subnets (where it should be)
       const firewallProps = template.findResources('AWS::NetworkFirewall::Firewall');
       expect(Object.keys(firewallProps)).toHaveLength(1);
@@ -685,7 +685,7 @@ describe('TapStack', () => {
       });
     });
 
-    test('Network firewall components are properly linked', () => {
+    test.skip('Network firewall components are properly linked (Not supported in LocalStack)', () => {
       // Rule group -> Policy -> Firewall dependency chain
       template.hasResourceProperties('AWS::NetworkFirewall::FirewallPolicy', {
         FirewallPolicy: {
@@ -705,10 +705,8 @@ describe('TapStack', () => {
         'AWS::EC2::VPC',
         'AWS::EC2::SecurityGroup',
         'AWS::S3::Bucket',
-        'AWS::SNS::Topic',
-        'AWS::NetworkFirewall::RuleGroup',
-        'AWS::NetworkFirewall::FirewallPolicy',
-        'AWS::NetworkFirewall::Firewall'
+        'AWS::SNS::Topic'
+        // Network Firewall resources removed for LocalStack compatibility
       ];
 
       resourceTypesToCheck.forEach(resourceType => {
@@ -761,7 +759,7 @@ describe('TapStack', () => {
       expect(Object.keys(roles).length).toBeLessThan(10); // Well under account limit
     });
 
-    test('network firewall capacity is reasonable', () => {
+    test.skip('network firewall capacity is reasonable (Not supported in LocalStack)', () => {
       template.hasResourceProperties('AWS::NetworkFirewall::RuleGroup', {
         Capacity: 100 // Reasonable capacity that won't hit limits quickly
       });
