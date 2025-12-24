@@ -10,7 +10,7 @@
   "provider": "localstack",
   "subject_labels": ["Cloud Environment Setup"],
   "aws_services": ["CloudFormation", "VPC", "EC2", "RDS", "ELB", "S3", "IAM", "SNS", "CloudWatch", "AutoScaling"],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "291422",
     "pr": "Pr626"
