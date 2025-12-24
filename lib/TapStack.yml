@@ -584,7 +584,7 @@ Resources:
     DependsOn:
     - FinancialServicesVPC
     Properties:
-      DBInstanceClass: db.t3.micro
+      DBInstanceClass: db.t3.medium
       AllocatedStorage: 5
       Engine: postgres
       EngineVersion: '13.9'
