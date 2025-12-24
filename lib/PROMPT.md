@@ -1,43 +1,19 @@
-# Prompt: Secure Multi-Region AWS CloudFormation Template
-**Task:**
-Create a **CloudFormation YAML** file named `secure-architecture.yaml` that provisions a secure **AWS infrastructure** designed to handle sensitive financial data. The architecture must be deployed across three `AWS regions`:
+need cloudformation yaml for secure multi-region financial data infrastructure
 
-`us-east-1`
+deploying to us-east-1, us-west-2, and eu-central-1 regions
 
-`us-west-2` 
+setup kms keys for encryption and have s3 buckets use server-side encryption by default - financial data bucket sends access logs to a dedicated logging bucket, cloudtrail writes audit logs to cloudwatch logs encrypted with kms
 
-`eu-central-1`
+waf protects the load balancers and api endpoints from web attacks
 
-**Requirements Encryption**
+vpc with public and private subnets across two availability zones - ec2 instances in private subnets connect through nat gateways for outbound internet access, application load balancer in public subnets receives traffic and routes to ec2 instances, rds database in private data subnets only accessible from application subnets through security groups
 
-- Use **AWS Key Management Service (KMS)** for encrypting data at rest across all resources.
+iam roles for ec2 to read from s3 financial bucket and access secrets manager for database credentials, cloudtrail role writes logs to cloudwatch - all using least privilege policies
 
-- All **S3 buckets** must have `default` server-side encryption (SSE-S3) enabled.
+network acls on subnets to filter traffic - public subnets allow http/https inbound from internet, private subnets restrict to vpc internal communication only
 
-**Security**
+cloudtrail trail sends events to cloudwatch log group and s3 bucket for long-term storage
 
-- Implement **AWS WAF** to protect all publicly accessible web applications.
+template should work as stackset deployment or single parameterized stack per region
 
-- Define **IAM roles** following the principle of least privilege, using AWS managed policies where applicable.
-
-- Configure **VPCs** with custom Network Access Control Lists (NACLs) to control inbound and outbound traffic.
-
-**Governance**
-
-- Enable **AWS CloudTrail** logging in all `AWS regions` to maintain a complete governance and audit trail.
-
-**Constraints**
-- Use **CloudFormation** best practices for **parameterization**, **resource naming**, and **reusability**.
-
-- Ensure the template is `multi-region` ready, either through StackSets or a well-parameterized single stack.
-
-- The template must pass all security compliance checks for financial data handling.
-
-**Output Format**
-- The final answer must be pure **YAML** inside a code block using the following syntax:
-
-```yaml
-# secure-architecture.yml
-<CloudFormation code here>
-```
-- No extra explanations outside the YAML block.
+output pure yaml in code block
