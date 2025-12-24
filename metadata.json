@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350169",
+  "team": "synth",
+  "startedAt": "2025-11-26T10:12:26.351Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "EC2",
+    "IAM",
+    "RDS",
+    "ALB",
+    "ASG",
+    "VPC",
+    "SNS",
+    "CloudFormation",
+    "Backup",
+    "CloudWatch LogGroup",
+    "CloudWatch Dashboard",
+    "CloudWatch Alarm",
+    "SSM Parameter Store",
+    "Secrets Manager"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
