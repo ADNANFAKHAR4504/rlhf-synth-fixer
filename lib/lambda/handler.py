@@ -4,9 +4,6 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
-# Initialize DynamoDB client
-dynamodb = boto3.resource("dynamodb")
-
 
 def handler(event, context):
     """
@@ -24,7 +21,8 @@ def handler(event, context):
         if not table_name:
             raise ValueError("TABLE_NAME environment variable not set")
 
-        # Get DynamoDB table
+        # Initialize DynamoDB client lazily
+        dynamodb = boto3.resource("dynamodb")
         table = dynamodb.Table(table_name)
 
         # Create a sample item to demonstrate functionality
