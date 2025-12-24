@@ -7,7 +7,7 @@ Parameters:
     Default: '10.0.0.0/8'
     Description: 'CIDR block allowed for SSH access'
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
-  
+
   AWSRegion:
     Type: String
     Default: 'ap-south-1'
@@ -22,15 +22,15 @@ Parameters:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI for us-east-1
+      AMI: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI for us-east-1
     us-west-2:
-      AMI: ami-0892d3c7ee96c0bf7  # Amazon Linux 2 AMI for us-west-2
+      AMI: ami-0892d3c7ee96c0bf7 # Amazon Linux 2 AMI for us-west-2
     eu-west-1:
-      AMI: ami-0a0c8eebcdd6dcbd0  # Amazon Linux 2 AMI for eu-west-1
+      AMI: ami-0a0c8eebcdd6dcbd0 # Amazon Linux 2 AMI for eu-west-1
     ap-southeast-1:
-      AMI: ami-0df7a207adb9748c7  # Amazon Linux 2 AMI for ap-southeast-1
+      AMI: ami-0df7a207adb9748c7 # Amazon Linux 2 AMI for ap-southeast-1
     ap-south-1:
-      AMI: ami-05a4fc6eaa38ee23c  # Amazon Linux 2 AMI for ap-south-1
+      AMI: ami-05a4fc6eaa38ee23c # Amazon Linux 2 AMI for ap-south-1
 
 Resources:
   # KMS Key for RDS Encryption
@@ -71,7 +71,7 @@ Resources:
       Description: 'Database administrator password'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "dbadmin"}'
-        GenerateStringKey: "password"
+        GenerateStringKey: 'password'
         PasswordLength: 16
         ExcludeCharacters: '"@/\'
 
@@ -502,7 +502,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:username: !Ref MFAEnforcementUser
-          
+
           - Sid: AllowUserToViewOwnUserInfo
             Effect: Allow
             Action:
@@ -550,11 +550,11 @@ Resources:
             yum install -y httpd
             systemctl start httpd
             systemctl enable httpd
-            
+
             # Install CloudWatch agent
             wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
             rpm -U ./amazon-cloudwatch-agent.rpm
-            
+
             # Configure CloudWatch agent
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
             {
@@ -578,10 +578,10 @@ Resources:
               }
             }
             EOF
-            
+
             # Start CloudWatch agent
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-            
+
             echo "<h1>Secure Web Server</h1>" > /var/www/html/index.html
         TagSpecifications:
           - ResourceType: instance
@@ -666,8 +666,8 @@ Resources:
   # RDS Database Instance
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-database-${AWSRegion}'
       DBInstanceClass: db.t3.micro
@@ -685,7 +685,7 @@ Resources:
       BackupRetentionPeriod: 7
       MultiAZ: false
       PubliclyAccessible: false
-      DeletionProtection: false
+      DeletionProtection: true
       Tags:
         - Key: Name
           Value: 'Secure Database'
@@ -725,7 +725,7 @@ Resources:
                 Resource: !Sub 'arn:aws:s3:::${ConfigBucket}/*'
         - PolicyName: ConfigServiceInlinePolicy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -736,7 +736,7 @@ Resources:
                   - s3:GetBucketAcl
                   - sns:Publish
                   - iam:PassRole
-                Resource: "*"
+                Resource: '*'
 
   ConfigBucket:
     Type: AWS::S3::Bucket
@@ -839,7 +839,7 @@ Outputs:
     Value: !GetAtt DatabaseInstance.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-DB-Endpoint'
-  
+
   AWSRegion:
     Description: 'AWS Region where infrastructure is deployed'
     Value: !Ref AWSRegion

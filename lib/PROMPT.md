@@ -1,32 +1,41 @@
-You are tasked with designing and implementing a secure-by-default infrastructure using AWS CloudFormation in YAML format. The infrastructure must align with AWS best practices and enforce strong security controls by default. Your solution must provision the following components:
+I need a CloudFormation YAML template for a secure web application stack.
 
-## Infrastructure Requirements
+Traffic flow
 
-1. A VPC configured with public and private subnets
-2. An Internet-facing Application Load Balancer (ALB) that routes traffic to a web server fleet managed by an Auto Scaling group
-3. Security Groups that restrict access to only allow HTTP (port 80) and HTTPS (port 443) traffic; all other inbound access must be denied
-4. An RDS database instance with:
-   - Encryption at rest using AWS KMS
-   - Automated backups enabled
-5. An S3 bucket to host static content with:
-   - AES256 encryption at rest
-   - Restricted access policies (only accessible via defined IAM Roles with least privilege)
-6. IAM Role configuration that:
-   - Grants the least privilege necessary
-   - Can access only the specific S3 bucket
-7. Enable CloudWatch Logs for all EC2 instances for real-time logging and monitoring
-8. Implement AWS Config to monitor and report on compliance issues across resources
-9. Restrict SSH access to EC2 instances by allowing access from a specific IP CIDR block only
-10. Enforce MFA (Multi-Factor Authentication) for all IAM user accounts
-11. Ensure all API Gateway endpoints, if created, are accessible only via HTTPS
+- Internet users connect to an internet facing Application Load Balancer in public subnets.
+- The load balancer forwards requests to EC2 instances in an Auto Scaling group in private subnets.
+- The application on the instances reads and writes data to an RDS database in private subnets.
+- The instances serve static assets from an S3 bucket using an instance IAM role with least privilege.
+- The instances send application and system logs to CloudWatch Logs.
+- AWS Config records configuration changes and delivers snapshots to an S3 bucket.
 
-## Constraints
+Build the template with these requirements
 
-- Output must be a valid CloudFormation YAML template
-- Use CloudFormation-native resource types only
-- All security configurations (such as security groups, IAM policies, encryption settings) must comply with AWS security best practices
-- Template must pass validation with:
+- A VPC with public and private subnets across at least two Availability Zones.
+- An internet gateway and routes for the public subnets.
+- Private subnet outbound access for instance updates using a NAT gateway.
+- An Application Load Balancer in the public subnets with listeners on port 80 and port 443, redirecting port 80 to port 443.
+- A target group and Auto Scaling group for the web tier in private subnets.
+- Security groups that reflect the connectivity described above.
+  - The load balancer security group allows inbound 80 and 443 from the internet.
+  - The instance security group allows inbound only from the load balancer security group.
+  - The database security group allows inbound only from the instance security group.
+- An RDS database instance with encryption at rest using a customer managed KMS key and automated backups enabled.
+- An S3 bucket for static content with server side encryption using AES256, public access blocked, and a bucket policy that only permits access from the instance IAM role.
+- An IAM role and instance profile for the EC2 instances with least privilege permissions scoped to the static content bucket and CloudWatch Logs.
+- CloudWatch Logs configuration so the EC2 instances ship logs into a log group.
+- AWS Config recorder, delivery channel, and an S3 bucket for Config data.
+- SSH should not be open to the world. If you include SSH, restrict it to a single CIDR parameter.
+- If you include API Gateway, ensure it enforces HTTPS only.
 
-```bash
-aws cloudformation validate-template --template-body file://template.yaml
-```
+Security expectations
+
+- Do not grant wildcard admin policies.
+- Keep data encrypted at rest.
+- Use least privilege everywhere.
+
+Constraints
+
+- Output only a valid CloudFormation YAML template.
+- Use only CloudFormation native resources.
+- The template must pass aws cloudformation validate-template.

@@ -43,6 +43,7 @@
     "Resources": {
         "RDSKMSKey": {
             "Type": "AWS::KMS::Key",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "Description": "KMS Key for RDS encryption",
                 "KeyPolicy": {
@@ -87,6 +88,7 @@
         },
         "DatabaseSecret": {
             "Type": "AWS::SecretsManager::Secret",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}/database/password-${AWSRegion}"
@@ -456,6 +458,7 @@
         },
         "StaticContentBucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "tapstack-static-content-${AWS::AccountId}-${AWSRegion}"
@@ -489,6 +492,7 @@
         },
         "LoggingBucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "tapstack-access-logs-${AWS::AccountId}-${AWSRegion}"
@@ -562,6 +566,229 @@
                         "Ref": "EC2Role"
                     }
                 ]
+            }
+        },
+        "MFAEnforcementGroup": {
+            "Type": "AWS::IAM::Group",
+            "Properties": {
+                "Path": "/"
+            }
+        },
+        "MFAEnforcementPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "MFAEnforcementPolicy",
+                "Groups": [
+                    {
+                        "Ref": "MFAEnforcementGroup"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowMFASetupActions",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:CreateVirtualMFADevice",
+                                "iam:EnableMFADevice",
+                                "iam:GetUser",
+                                "iam:ListMFADevices",
+                                "iam:ListVirtualMFADevices",
+                                "iam:ResyncMFADevice",
+                                "iam:ChangePassword",
+                                "iam:GetAccountPasswordPolicy",
+                                "iam:GetAccountSummary"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "DenyMostActionsWithoutMFA",
+                            "Effect": "Deny",
+                            "Action": [
+                                "ec2:*",
+                                "s3:*",
+                                "rds:*",
+                                "lambda:*",
+                                "dynamodb:*"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "BoolIfExists": {
+                                    "aws:MultiFactorAuthPresent": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "MFAProtectedAPIPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "MFAProtectedAPIPolicy",
+                "Groups": [
+                    {
+                        "Ref": "MFAEnforcementGroup"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowActionsWithMFA",
+                            "Effect": "Allow",
+                            "Action": [
+                                "ec2:*",
+                                "s3:*",
+                                "rds:*",
+                                "lambda:*",
+                                "dynamodb:*",
+                                "iam:GetUser",
+                                "iam:ListMFADevices"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "BoolIfExists": {
+                                    "aws:MultiFactorAuthPresent": "true"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "GlobalMFAEnforcementPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "GlobalMFAEnforcementPolicy",
+                "Users": [
+                    {
+                        "Ref": "MFAEnforcementUser"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowMFASetupAndBasicOperations",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:CreateVirtualMFADevice",
+                                "iam:EnableMFADevice",
+                                "iam:GetUser",
+                                "iam:ListMFADevices",
+                                "iam:ListVirtualMFADevices",
+                                "iam:ResyncMFADevice",
+                                "iam:ChangePassword",
+                                "iam:GetAccountPasswordPolicy",
+                                "iam:GetAccountSummary"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "DenyMostActionsWithoutMFA",
+                            "Effect": "Deny",
+                            "Action": [
+                                "ec2:*",
+                                "s3:*",
+                                "rds:*",
+                                "lambda:*",
+                                "dynamodb:*"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "BoolIfExists": {
+                                    "aws:MultiFactorAuthPresent": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "MFAEnforcementUser": {
+            "Type": "AWS::IAM::User",
+            "Properties": {
+                "Path": "/",
+                "Groups": [
+                    {
+                        "Ref": "MFAEnforcementGroup"
+                    }
+                ],
+                "LoginProfile": {
+                    "Password": {
+                        "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+                    },
+                    "PasswordResetRequired": true
+                }
+            }
+        },
+        "MFAUserAccessKey": {
+            "Type": "AWS::IAM::AccessKey",
+            "Properties": {
+                "UserName": {
+                    "Ref": "MFAEnforcementUser"
+                },
+                "Status": "Active"
+            }
+        },
+        "MFAUserSelfManagementPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "MFAUserSelfManagementPolicy",
+                "Users": [
+                    {
+                        "Ref": "MFAEnforcementUser"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowUserToManageOwnMFA",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:CreateVirtualMFADevice",
+                                "iam:EnableMFADevice",
+                                "iam:ResyncMFADevice",
+                                "iam:DeactivateMFADevice",
+                                "iam:DeleteVirtualMFADevice",
+                                "iam:ListMFADevices",
+                                "iam:ListVirtualMFADevices"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:mfa/${AWS::AccountId}:*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:username": {
+                                        "Ref": "MFAEnforcementUser"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowUserToViewOwnUserInfo",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:GetUser",
+                                "iam:ListAccessKeys",
+                                "iam:ListMFADevices"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${AWS::AccountId}:*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:username": {
+                                        "Ref": "MFAEnforcementUser"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
             }
         },
         "WebServerLaunchTemplate": {
@@ -862,6 +1089,7 @@
         },
         "ConfigBucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "tapstack-config-${AWS::AccountId}-${AWSRegion}"
@@ -938,6 +1166,19 @@
                 }
             }
         },
+        "IAMUserMFAEnabledRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "iam-user-mfa-enabled-${AWSRegion}"
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "IAM_USER_MFA_ENABLED"
+                }
+            }
+        },
         "IAMPasswordPolicyRule": {
             "Type": "AWS::Config::ConfigRule",
             "DependsOn": "ConfigurationRecorder",
@@ -948,6 +1189,19 @@
                 "Source": {
                     "Owner": "AWS",
                     "SourceIdentifier": "IAM_PASSWORD_POLICY"
+                }
+            }
+        },
+        "RootAccountMFAEnabledRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "root-account-mfa-enabled-${AWSRegion}"
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "ROOT_ACCOUNT_MFA_ENABLED"
                 }
             }
         }
@@ -1011,6 +1265,61 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-AWS-Region"
+                }
+            }
+        },
+        "MFAEnforcementGroup": {
+            "Description": "IAM Group for MFA Enforcement",
+            "Value": {
+                "Ref": "MFAEnforcementGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MFA-Group"
+                }
+            }
+        },
+        "MFAEnforcementUser": {
+            "Description": "IAM User for MFA Enforcement",
+            "Value": {
+                "Ref": "MFAEnforcementUser"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MFA-User"
+                }
+            }
+        },
+        "MFAUserAccessKey": {
+            "Description": "Access Key for MFA User (store securely)",
+            "Value": {
+                "Ref": "MFAUserAccessKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MFA-AccessKey"
+                }
+            }
+        },
+        "GlobalMFAEnforcementPolicy": {
+            "Description": "Global MFA Enforcement Policy ARN",
+            "Value": {
+                "Ref": "GlobalMFAEnforcementPolicy"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Global-MFA-Policy"
+                }
+            }
+        },
+        "EC2RoleName": {
+            "Description": "EC2 Instance Role Name",
+            "Value": {
+                "Ref": "EC2Role"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2-Role-Name"
                 }
             }
         }
