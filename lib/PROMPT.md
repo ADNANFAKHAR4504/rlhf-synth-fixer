@@ -1,58 +1,48 @@
-> **Act as an AWS Solutions Architect.**
-> Design a **CloudFormation template in JSON format** to provision a secure, highly available, and monitorable cloud environment in the **`us-east-1` region**. Follow AWS best practices for networking, IAM, logging, and resource availability.
+Need a CloudFormation template in JSON for a web application environment in us-east-1 region.
 
----
+## Infrastructure Requirements
 
-### **Requirements Overview**:
+Set up a multi-tier web app with proper service connectivity:
 
-You are setting up infrastructure for a **web application** that must meet **enterprise-grade cloud architecture standards**.
+1. **VPC with Multi-AZ Subnets**
+   - Create VPC for network isolation
+   - Add subnets across multiple availability zones for high availability
 
-#### 1. **Networking (VPC & Subnets)**:
+2. **EC2 Instances Connected to Services**
+   - Launch EC2 instances within the VPC subnets
+   - Attach IAM roles to instances to securely access S3 and DynamoDB without hardcoded credentials
+   - Security groups must allow HTTP port 80 and HTTPS port 443 from internet, deny other inbound ports
+   - EC2 instances send metrics to CloudWatch for monitoring
 
-* Create a **VPC**.
-* Include **subnets in multiple Availability Zones** to support **high availability** for EC2 instances.
+3. **S3 Bucket for Application Logs**
+   - Create S3 bucket with versioning enabled
+   - EC2 instances write application logs to this S3 bucket using IAM role permissions
 
-#### 2. **Compute (EC2)**:
+4. **DynamoDB for Application Data**
+   - Create DynamoDB table with on-demand capacity mode
+   - EC2 instances connect to DynamoDB to read/write application data via IAM role
 
-* Launch **EC2 instances** within the VPC.
-* Attach **IAM roles** to instances to securely access AWS services (avoid hardcoded credentials).
-* Enable **CloudWatch monitoring** on all EC2 instances.
+5. **IAM Roles with Least Privilege**
+   - IAM role attached to EC2 instances must grant only specific S3 PutObject/GetObject actions on the logging bucket
+   - IAM role must grant only specific DynamoDB read/write actions on the application table
+   - No wildcard permissions or overly broad access
 
-#### 3. **Security**:
+6. **CloudWatch Monitoring Integration**
+   - Enable CloudWatch detailed monitoring on all EC2 instances
+   - EC2 instances automatically send metrics to CloudWatch
 
-* Configure **security groups** to:
+## Key Integration Points
 
-  * **Block all incoming traffic by default**.
-  * Allow **only HTTP (port 80)** and **HTTPS (port 443)** from the public internet.
+- EC2 instances use IAM role to write logs to S3 bucket
+- EC2 instances use IAM role to access DynamoDB table for data persistence
+- Security groups control network access to EC2 instances
+- CloudWatch receives monitoring data from EC2 instances
+- All resources deployed across multiple availability zones where applicable
 
-#### 4. **Storage (S3 Logs)**:
+## Naming Convention
 
-* Create an **S3 bucket with versioning enabled** for **application logging**.
+Resources follow pattern: AppResource-Stage-RandomId
 
-#### 5. **Database (DynamoDB)**:
+## Output
 
-* Create a **DynamoDB table** with **on-demand (pay-per-request) capacity mode**.
-
----
-
-### **Compliance & Naming Constraints**:
-
-* Resources must be deployed in **`us-east-1`**.
-* **Resource names** must follow this pattern:
-  `AppResource-<Stage>-<RandomId>`
-* Use **IAM roles** to securely access AWS services.
-* Ensure **high availability** through **multi-AZ** deployments.
-* Enable **CloudWatch monitoring** on all EC2 instances.
-* Avoid exposing unnecessary ports — **only 80 & 443** should be public.
-
----
-
-### **Expected Output**:
-
-A **CloudFormation template in valid JSON format** that:
-
-* Provisions all required resources as described.
-* Passes CloudFormation validation and is ready to deploy.
-* Meets **all functional and security constraints** mentioned above.
-
----
+Single CloudFormation JSON template that provisions all resources with proper connectivity and security.
