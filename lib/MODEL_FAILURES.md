@@ -1,40 +1,40 @@
-# ✅ MODEL_FAILURES.md
+# MODEL_FAILURES.md
 
 ## Title: **QA Pipeline Results and Failure Analysis for CloudFormation-Based Multi-Region DynamoDB Deployment**
 
 ---
 
-## 🔍 Overview
+##  Overview
 
 This document provides a comprehensive analysis of the QA pipeline execution results for IAC-291415, including potential **failure scenarios**, **root causes**, and **diagnostic strategies** for deploying DynamoDB tables across AWS regions using CloudFormation. 
 
-**QA Pipeline Status: ✅ PASSED** - No critical failures identified during testing.
+**QA Pipeline Status:  PASSED** - No critical failures identified during testing.
 
 ---
 
-## 📊 QA Pipeline Execution Results
+##  QA Pipeline Execution Results
 
-### ✅ Code Quality Assessment - ALL PASSED
-- **ESLint**: ✅ No linting errors detected
-- **TypeScript Build**: ✅ Clean compilation with no errors  
-- **CFN-Lint (YAML)**: ✅ Template validation successful
-- **CFN-Lint (JSON)**: ✅ Template validation successful
+###  Code Quality Assessment - ALL PASSED
+- **ESLint**:  No linting errors detected
+- **TypeScript Build**:  Clean compilation with no errors  
+- **CFN-Lint (YAML)**:  Template validation successful
+- **CFN-Lint (JSON)**:  Template validation successful
 
-### ✅ Test Coverage Results - ALL PASSED
-- **Unit Tests**: ✅ 61/61 tests passed (100% success rate)
-- **Integration Tests**: ✅ 22/22 tests passed (gracefully handled missing AWS credentials)
+###  Test Coverage Results - ALL PASSED
+- **Unit Tests**:  61/61 tests passed (100% success rate)
+- **Integration Tests**:  22/22 tests passed (gracefully handled missing AWS credentials)
 
-### ⚠️ Deployment Status
-- **AWS Deployment**: ⚠️ SKIPPED (No AWS credentials available in test environment)
-- **Template Validation**: ✅ PASSED (Both YAML and JSON templates are syntactically valid)
-
----
+###  Deployment Status
+- **AWS Deployment**:  SKIPPED (No AWS credentials available in test environment)
+- **Template Validation**:  PASSED (Both YAML and JSON templates are syntactically valid)
 
 ---
 
-## 🚨 Common Failure Scenarios and Root Causes
+---
 
-### 1. ❗ Stack Creation Fails Due to Missing IAM Permissions
+##  Common Failure Scenarios and Root Causes
+
+### 1.  Stack Creation Fails Due to Missing IAM Permissions
 
 **Symptoms:**
 - `AccessDenied` errors during stack creation.
@@ -51,7 +51,7 @@ This document provides a comprehensive analysis of the QA pipeline execution res
 
 ---
 
-### 2. ❗ Cross-Stack Reference Import Failure
+### 2.  Cross-Stack Reference Import Failure
 
 **Symptoms:**
 - Error: `Template format error: Unresolved resource dependencies [SomeExportedValue] in the Resources block of the template`
@@ -65,7 +65,7 @@ This document provides a comprehensive analysis of the QA pipeline execution res
 
 ---
 
-### 3. ❗ Parameter Validation Failure
+### 3.  Parameter Validation Failure
 
 **Symptoms:**
 - Error: `Invalid template parameter value`
@@ -82,7 +82,7 @@ This document provides a comprehensive analysis of the QA pipeline execution res
 
 ---
 
-### 4. ❗ Resource Already Exists
+### 4.  Resource Already Exists
 
 **Symptoms:**
 - Error: `Table with name 'my-app-table' already exists`
@@ -98,7 +98,7 @@ This document provides a comprehensive analysis of the QA pipeline execution res
 
 ---
 
-### 5. ❗ Region Mismatch or Deployment in Wrong Region
+### 5.  Region Mismatch or Deployment in Wrong Region
 
 **Symptoms:**
 - Table ends up in a different region than intended.
@@ -114,7 +114,7 @@ This document provides a comprehensive analysis of the QA pipeline execution res
 
 ---
 
-### 6. ❗ Template Syntax or Linting Errors
+### 6.  Template Syntax or Linting Errors
 
 **Symptoms:**
 - CloudFormation rejects template immediately.
@@ -131,7 +131,7 @@ This document provides a comprehensive analysis of the QA pipeline execution res
 
 ---
 
-### 7. ❗ Rollback Triggers Due to Slow Table Creation or Timeout
+### 7.  Rollback Triggers Due to Slow Table Creation or Timeout
 
 **Symptoms:**
 - Stack creation times out or rolls back unexpectedly.
@@ -145,7 +145,7 @@ This document provides a comprehensive analysis of the QA pipeline execution res
 
 ---
 
-### 8. ❗ Export Collision from Multiple Stacks
+### 8.  Export Collision from Multiple Stacks
 
 **Symptoms:**
 - Error: `Export with name already exists`
@@ -162,7 +162,7 @@ This document provides a comprehensive analysis of the QA pipeline execution res
 
 ---
 
-## 🛠️ Debugging Tools & Techniques
+##  Debugging Tools & Techniques
 
 | Tool | Use Case |
 |------|----------|
@@ -175,7 +175,7 @@ This document provides a comprehensive analysis of the QA pipeline execution res
 
 ---
 
-## ✅ Recommendations to Minimize Failures
+##  Recommendations to Minimize Failures
 
 - Always test templates in non-prod with fixed parameters.
 - Use `DependsOn` explicitly for tightly coupled resources (if needed).
@@ -185,7 +185,7 @@ This document provides a comprehensive analysis of the QA pipeline execution res
 
 ---
 
-## 📚 References
+##  References
 
 - [CloudFormation Stack Events](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-describing-stacks.html)
 - [AWS CloudFormation Intrinsic Functions](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference.html)

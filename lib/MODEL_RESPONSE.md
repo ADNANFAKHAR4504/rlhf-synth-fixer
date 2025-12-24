@@ -1,16 +1,16 @@
-# ✅ MODEL_RESPONSE.md
+# MODEL_RESPONSE.md
 
 ## Title: **CloudFormation-Based Multi-Region Deployment of DynamoDB with Region-Specific Capacity and Intrinsic Referencing**
 
 ---
 
-## 🧩 Problem Summary
+##   Problem Summary
 
 The goal of this implementation is to design, parameterize, and validate CloudFormation templates that **deploy Amazon DynamoDB tables in multiple AWS regions**, each with its **own capacity configuration**, while ensuring **correct use of CloudFormation intrinsic functions** like `Fn::GetAtt`, `Ref`, and `Fn::ImportValue`. The implementation must ensure successful stack deployment, accurate resource referencing, and reusable infrastructure-as-code.
 
 ---
 
-## 📐 Architecture Overview
+##   Architecture Overview
 
 ### 1. **Infrastructure Topology**
 
@@ -31,9 +31,9 @@ The goal of this implementation is to design, parameterize, and validate CloudFo
 
 ---
 
-## 🧾 Stack Design
+##   Stack Design
 
-### ✅ Stack 1: `us-west-1` Region
+###   Stack 1: `us-west-1` Region
 
 - **Template Name**: `dynamodb-us-west-1.yaml`
 - **Table Configuration**:
@@ -43,7 +43,7 @@ The goal of this implementation is to design, parameterize, and validate CloudFo
   - `TableName` (Exported)
   - `TableArn` (Exported using `Fn::GetAtt`)
 
-### ✅ Stack 2: `us-west-2` Region
+###   Stack 2: `us-west-2` Region
 
 - **Template Name**: `dynamodb-us-west-2.yaml`
 - **Table Configuration**:
@@ -59,9 +59,9 @@ The goal of this implementation is to design, parameterize, and validate CloudFo
 
 ---
 
-## 🛠️ Implementation Highlights
+##    Implementation Highlights
 
-### 📌 Parameters (in `us-west-2.yaml`)
+###   Parameters (in `us-west-2.yaml`)
 
 ```yaml
 Parameters:
@@ -76,7 +76,7 @@ Parameters:
     Description: Write capacity units for DynamoDB table
 ```
 
-### 📌 Use of Intrinsic Functions
+###   Use of Intrinsic Functions
 
 | Function         | Used For                                               | Template              |
 |------------------|--------------------------------------------------------|-----------------------|
@@ -88,13 +88,13 @@ Parameters:
 
 ---
 
-## ✅ Validation Strategy
+##   Validation Strategy
 
-### 🔍 Linting
+###   Linting
 
 - All templates validated using `cfn-lint` to ensure CloudFormation syntax correctness and resource support.
 
-### ✅ CloudFormation Validation
+###   CloudFormation Validation
 
 - Templates tested using:
   - AWS Console stack deployment
@@ -104,7 +104,7 @@ Parameters:
     aws cloudformation deploy --template-file dynamodb-us-west-2.yaml --stack-name stack-west-2 --region us-west-2 --parameter-overrides ReadCapacity=20 WriteCapacity=10
     ```
 
-### 🔐 IAM Permissions
+###   IAM Permissions
 
 Ensure the deploying identity (user/role) has the following permissions:
 - `cloudformation:CreateStack`
@@ -116,7 +116,7 @@ Ensure the deploying identity (user/role) has the following permissions:
 
 ---
 
-## 🔁 Reusability & Extensibility
+##   Reusability & Extensibility
 
 - Templates are parameterized and modular, allowing easy reuse across environments.
 - Can be extended for:
@@ -127,7 +127,7 @@ Ensure the deploying identity (user/role) has the following permissions:
 
 ---
 
-## 📤 Outputs
+##   Outputs
 
 | Output Key | Description                                | Exported | Example Value                         |
 |------------|--------------------------------------------|----------|----------------------------------------|
@@ -136,7 +136,7 @@ Ensure the deploying identity (user/role) has the following permissions:
 
 ---
 
-## 🧪 Example Stack Parameters (us-west-2)
+##   Example Stack Parameters (us-west-2)
 
 ```sh
 aws cloudformation deploy   --template-file dynamodb-us-west-2.yaml   --stack-name stack-west-2   --region us-west-2   --parameter-overrides ReadCapacity=30 WriteCapacity=15
@@ -144,7 +144,7 @@ aws cloudformation deploy   --template-file dynamodb-us-west-2.yaml   --stack-na
 
 ---
 
-## ⚙️ Deployment Instructions
+##    Deployment Instructions
 
 ```sh
 # Deploy stack in us-west-1
@@ -156,21 +156,21 @@ aws cloudformation deploy   --template-file dynamodb-us-west-2.yaml   --stack-na
 
 ---
 
-## ✅ Success Criteria Checklist
+##   Success Criteria Checklist
 
 | Criteria                                                   | Status |
 |------------------------------------------------------------|--------|
-| Valid CloudFormation templates (`cfn-lint`)                | ✅     |
-| Tables created in both `us-west-1` and `us-west-2`         | ✅     |
-| Region-specific capacities applied                         | ✅     |
-| Parameters working in `us-west-2`                          | ✅     |
-| Exports and cross-stack references functional              | ✅     |
-| Intrinsic functions used correctly and effectively         | ✅     |
-| IAM permissions sufficient and scoped                      | ✅     |
+| Valid CloudFormation templates (`cfn-lint`)                |       |
+| Tables created in both `us-west-1` and `us-west-2`         |       |
+| Region-specific capacities applied                         |       |
+| Parameters working in `us-west-2`                          |       |
+| Exports and cross-stack references functional              |       |
+| Intrinsic functions used correctly and effectively         |       |
+| IAM permissions sufficient and scoped                      |       |
 
 ---
 
-## 📚 References
+##   References
 
 - AWS CloudFormation Intrinsic Functions: [Docs](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference.html)
 - AWS DynamoDB Resource Specification: [Docs](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-dynamodb-table.html)
