@@ -780,7 +780,7 @@ Resources:
     Properties:
       DBParameterGroupName: !Sub '${Environment}-${EnvironmentSuffix}-pg-params'
       Description: !Sub 'PostgreSQL parameter group for ${Environment}-${EnvironmentSuffix}'
-      Family: postgres16
+      Family: postgres17
       Parameters:
         log_statement: 'all'
         log_duration: 'on'
@@ -823,7 +823,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${Environment}-${EnvironmentSuffix}-postgres-db'
       DBInstanceClass: !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
       Engine: postgres
-      EngineVersion: '16'
+      EngineVersion: '17'
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       AllocatedStorage: !FindInMap [EnvironmentConfig, !Ref Environment, DBAllocatedStorage]
