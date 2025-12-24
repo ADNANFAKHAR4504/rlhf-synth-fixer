@@ -46,6 +46,16 @@
       "Description": "Enable RDS database (set to false for LocalStack)"
     }
   },
+  "Mappings": {
+    "RegionAMI": {
+      "us-east-1": {
+        "HVM64": "ami-0c55b159cbfafe1f0"
+      },
+      "us-west-2": {
+        "HVM64": "ami-0c55b159cbfafe1f0"
+      }
+    }
+  },
   "Conditions": {
     "HasKeyPair": {
       "Fn::Not": [
@@ -733,7 +743,7 @@
       "Type": "AWS::EC2::Instance",
       "Properties": {
         "InstanceType": "t3.micro",
-        "ImageId": "ami-0c55b159cbfafe1f0",
+        "ImageId": { "Fn::FindInMap": ["RegionAMI", { "Ref": "AWS::Region" }, "HVM64"] },
         "KeyName": {
           "Fn::If": [
             "HasKeyPair",
