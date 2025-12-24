@@ -1,0 +1,23 @@
+{
+  "platform": "pulumi",
+  "language": "js",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr233",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T21:03:13+05:30",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "Amazon S3",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "AWS CloudFormation"
+  ],
+  "wave": "P0"
+}
