@@ -535,7 +535,7 @@
         "AutoScalingGroupName": {"Fn::Sub": "asg-${EnvironmentSuffix}"},
         "LaunchTemplate": {
           "LaunchTemplateId": {"Ref": "LaunchTemplate"},
-          "Version": {"Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"]}
+          "Version": "$Latest"
         },
         "MinSize": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "MinSize"]},
         "MaxSize": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "MaxSize"]},
@@ -852,6 +852,14 @@
     "AccountId": {
       "Description": "AWS Account ID",
       "Value": {"Ref": "AWS::AccountId"}
+    },
+    "StackName": {
+      "Description": "CloudFormation Stack Name",
+      "Value": {"Ref": "AWS::StackName"}
+    },
+    "StackId": {
+      "Description": "CloudFormation Stack ID",
+      "Value": {"Ref": "AWS::StackId"}
     }
   }
 }
