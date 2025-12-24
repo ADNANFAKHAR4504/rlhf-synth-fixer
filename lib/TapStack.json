@@ -29,7 +29,7 @@
             "Description": "Cost center for billing allocation"
         },
         "LatestAmiId": {
-            "Type": "String",
+            "Type": "AWS::EC2::Image::Id",
             "Default": "ami-0ff8a91507f77f867",
             "Description": "Latest Amazon Linux 2 AMI ID"
         }
