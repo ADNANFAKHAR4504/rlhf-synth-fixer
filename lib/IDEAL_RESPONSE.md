@@ -73,13 +73,13 @@ VPC: 10.0.0.0/16
 │   ├── 10.0.0.0/24 (AZ-a)
 │   ├── 10.0.1.0/24 (AZ-b)
 │   └── 10.0.2.0/24 (AZ-c)
-│   └── Resources: NAT Gateways, Load Balancers
+│   └── Hosts: NAT Gateways, Load Balancers
 │
 ├── Private Subnets (3)
 │   ├── 10.0.10.0/24 (AZ-a)
 │   ├── 10.0.11.0/24 (AZ-b)
 │   └── 10.0.12.0/24 (AZ-c)
-│   └── Resources: EKS Nodes, Fargate Pods
+│   └── Hosts: EKS Nodes, Fargate Pods
 │
 ├── Internet Gateway
 ├── NAT Gateways (3, one per AZ)
@@ -98,19 +98,19 @@ EKS Control Plane (Managed by AWS)
 
 Worker Nodes
 ├── Frontend Node Group
-│   ├── Instance Type: t3.large
+│   ├── Instance Size: t3.large
 │   ├── Capacity: 2-10 nodes
 │   ├── Labels: role=frontend
 │   └── Taints: None
 │
 ├── Backend Node Group
-│   ├── Instance Type: m5.xlarge
+│   ├── Instance Size: m5.xlarge
 │   ├── Capacity: 2-10 nodes
 │   ├── Labels: role=backend
 │   └── Taints: None
 │
 └── Data Processing Node Group
-    ├── Instance Type: c5.2xlarge
+    ├── Instance Size: c5.2xlarge
     ├── Capacity: 2-10 nodes
     ├── Labels: role=data-processing
     └── Taints: None
@@ -348,7 +348,7 @@ spec:
   parameters:
     objects: |
       - objectName: "eks-app-secrets-prod"
-        objectType: "secretsmanager"
+        objectKind: "secretsmanager"
 ```
 
 ### 6. Zero-Trust Network Policies
