@@ -322,7 +322,11 @@ describe('TapStack CloudFormation Template', () => {
       const dbOutput = template.Outputs.DatabaseEndpoint;
       expect(dbOutput).toBeDefined();
       expect(dbOutput.Description).toBe('RDS Database Endpoint');
-      expect(dbOutput.Value['Fn::GetAtt']).toEqual(['Database', 'Endpoint.Address']);
+      // DatabaseEndpoint uses Fn::If to provide mock value in LocalStack
+      expect(dbOutput.Value['Fn::If']).toBeDefined();
+      expect(dbOutput.Value['Fn::If'][0]).toBe('CreateRealRDS');
+      expect(dbOutput.Value['Fn::If'][1]['Fn::GetAtt']).toEqual(['Database', 'Endpoint.Address']);
+      expect(dbOutput.Value['Fn::If'][2]).toBe('localhost:3306');
     });
 
     test('should have Environment output', () => {
