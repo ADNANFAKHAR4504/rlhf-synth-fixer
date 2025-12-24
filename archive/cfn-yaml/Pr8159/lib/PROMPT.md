@@ -1,0 +1,9 @@
+Create a production-ready CloudFormation YAML template that provisions a highly available, secure, and scalable web application infrastructure in the us-east-1 region. The setup should include all the necessary AWS services and configurations for a modern production deployment that follows security and availability best practices.
+
+Start by defining a VPC spanning multiple Availability Zones, with both public and private subnets. Deploy a NAT Gateway to enable outbound internet traffic for private instances while keeping them secure from direct external access. Place an Elastic Load Balancer (ALB) in front of the application tier to distribute incoming web traffic evenly and securely across multiple EC2 instances running Amazon Linux 2. These instances should be managed by an Auto Scaling Group with a minimum capacity of 2 and a maximum of 6, ensuring the system scales dynamically with demand.
+
+Use DynamoDB as the primary data store, configured with provisioned throughput 5 read and 5 write units and nightly backup policies for data durability. EC2 instances should communicate with DynamoDB using IAM roles with least-privilege permissions, without any hard-coded credentials, sensitive data should be stored securely in Systems Manager Parameter Store.
+
+Configure a CloudFront distribution with HTTPS enabled via ACM certificate, serving static assets stored in an S3 bucket with secure access permissions and logging enabled. Integrate Route 53 for domain management, routing requests to CloudFront for optimized global performance.
+
+Implement CloudWatch alarms to monitor critical metrics such as EC2 CPU utilization above 75% for over 5 minutes and ensure all resources are tagged with Environment: Production for consistent management. The final output should be a validated CloudFormation YAML file named web_application_stack.yaml, compliant with AWS best practices for scalability, fault tolerance, and security.
