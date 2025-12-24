@@ -2,35 +2,35 @@ Hey team,
 
 We're seeing a growing need to ensure our AWS infrastructure consistently meets compliance standards across all our environments. Right now, we're doing manual checks, which is time-consuming and error-prone. I've been asked to build an automated infrastructure compliance validation system that can continuously monitor our resources and alert us when something doesn't meet our standards.
 
-The compliance team has been especially concerned about ensuring we follow AWS best practices, security policies, and internal governance requirements. They want a system that can automatically check our infrastructure configurations, generate reports, and notify the right people when issues are found. This needs to be built using **CloudFormation with YAML** since that's our standard for infrastructure deployment.
+The compliance team has been especially concerned about ensuring we follow AWS best practices, security policies, and internal governance requirements. They want a system that can automatically check our infrastructure configurations, generate reports, and notify the right people when issues are found. This needs to be built using CloudFormation with YAML since that's our standard for infrastructure deployment.
 
 The business needs this to reduce manual audit time, catch compliance violations early, and provide clear audit trails for our security team. We're dealing with regulatory requirements that mandate continuous compliance monitoring, so this system needs to be reliable and comprehensive.
 
 ## What we need to build
 
-Create an infrastructure compliance validation system using **CloudFormation with YAML** that automatically monitors AWS resources for compliance violations.
+Create an infrastructure compliance validation system using CloudFormation with YAML that automatically monitors AWS resources for compliance violations.
 
 ### Core Requirements
 
-1. **Automated Compliance Checking**
+1. Automated Compliance Checking
    - Deploy AWS Config to continuously evaluate resource configurations
    - Implement compliance rules that check against security standards
    - Support both managed AWS Config rules and custom compliance checks
    - Enable automatic remediation where appropriate
 
-2. **Monitoring and Alerting**
+2. Monitoring and Alerting
    - Send notifications when compliance violations are detected
    - Integrate with SNS for real-time alerting
    - Provide detailed information about what failed and why
    - Support different notification channels for different severity levels
 
-3. **Reporting and Audit Trail**
+3. Reporting and Audit Trail
    - Store compliance check results for historical analysis
    - Generate compliance status reports
    - Maintain audit logs of all compliance events
    - Provide visibility into compliance trends over time
 
-4. **Security and Access Control**
+4. Security and Access Control
    - Implement least-privilege IAM roles for all components
    - Encrypt sensitive data at rest and in transit
    - Secure all API communications
@@ -38,17 +38,17 @@ Create an infrastructure compliance validation system using **CloudFormation wit
 
 ### Technical Requirements
 
-- All infrastructure defined using **CloudFormation with YAML**
-- Use **AWS Config** for continuous compliance evaluation
-- Use **AWS Config Rules** for compliance checks (both managed and custom)
-- Use **Lambda** for custom compliance validation logic where needed
-- Use **SNS** for notifications and alerting
-- Use **S3** for storing compliance reports and Config data
-- Use **CloudWatch Logs** for centralized logging
-- Use **IAM** roles with least-privilege permissions
-- Resource names must include **environmentSuffix** parameter for uniqueness
+- All infrastructure defined using CloudFormation with YAML
+- Use AWS Config for continuous compliance evaluation
+- Use AWS Config Rules for compliance checks (both managed and custom)
+- Use Lambda for custom compliance validation logic where needed
+- Use SNS for notifications and alerting
+- Use S3 for storing compliance reports and Config data
+- Use CloudWatch Logs for centralized logging
+- Use IAM roles with least-privilege permissions
+- Resource names must include environmentSuffix parameter for uniqueness
 - Follow naming convention: resource-type-${EnvironmentSuffix}
-- Deploy to **us-east-1** region
+- Deploy to us-east-1 region
 
 ### Constraints
 
@@ -63,14 +63,14 @@ Create an infrastructure compliance validation system using **CloudFormation wit
 
 ## Success Criteria
 
-- **Functionality**: System automatically detects and reports compliance violations
-- **Performance**: Compliance checks execute within acceptable timeframes
-- **Reliability**: System operates continuously without manual intervention
-- **Security**: All components follow AWS security best practices with encryption and least privilege
-- **Resource Naming**: All resources include environmentSuffix parameter
-- **Observability**: Comprehensive logging and monitoring with CloudWatch
-- **Cost**: Optimized for serverless and pay-per-use services
-- **Code Quality**: Well-structured YAML, comprehensive tests, clear documentation
+- Functionality: System automatically detects and reports compliance violations
+- Performance: Compliance checks execute within acceptable timeframes
+- Reliability: System operates continuously without manual intervention
+- Security: All components follow AWS security best practices with encryption and least privilege
+- Resource Naming: All resources include environmentSuffix parameter
+- Observability: Comprehensive logging and monitoring with CloudWatch
+- Cost: Optimized for serverless and pay-per-use services
+- Code Quality: Well-structured YAML, comprehensive tests, clear documentation
 
 ## What to deliver
 
