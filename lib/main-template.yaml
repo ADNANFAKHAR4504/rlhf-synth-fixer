@@ -168,6 +168,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-VPCId'
 
+  SecurityGroup:
+    Description: Lambda Security Group ID
+    Value: !GetAtt ComputeStack.Outputs.LambdaSecurityGroupId
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroup'
+
   DBClusterEndpoint:
     Description: RDS Cluster Endpoint
     Value: !GetAtt DatabaseStack.Outputs.DBClusterEndpoint
