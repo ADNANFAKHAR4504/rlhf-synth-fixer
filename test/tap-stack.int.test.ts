@@ -86,8 +86,8 @@ describe('TapStack Serverless Integration Tests', () => {
       }
     }
 
-    // Extract key outputs - using Function URL instead of API Gateway
-    functionUrl = stackOutputs.FunctionUrl || '';
+    // Extract key outputs - using API Gateway URL
+    functionUrl = stackOutputs.ApiGatewayInvokeUrl || '';
     lambdaFunctionName = stackOutputs.LambdaFunctionArn?.split(':').pop() || '';
     artifactsBucketName = stackOutputs.ArtifactsBucketName || '';
 
@@ -116,7 +116,7 @@ describe('TapStack Serverless Integration Tests', () => {
     });
 
     test('should have all required outputs', () => {
-      expect(stackOutputs.FunctionUrl).toBeDefined();
+      expect(stackOutputs.ApiGatewayInvokeUrl).toBeDefined();
       expect(stackOutputs.LambdaFunctionArn).toBeDefined();
       expect(stackOutputs.ArtifactsBucketName).toBeDefined();
       expect(stackOutputs.EnvironmentName).toBeDefined();
@@ -188,13 +188,13 @@ describe('TapStack Serverless Integration Tests', () => {
     });
   });
 
-  describe('Lambda Function URL', () => {
+  describe('API Gateway', () => {
     test('should respond to HTTP requests', async () => {
       if (useFlatOutputs) {
-        // Validate Function URL structure
+        // Validate API Gateway URL structure
         expect(functionUrl).toBeDefined();
         expect(functionUrl).toContain('http');
-        console.log('✅ Flat outputs: Lambda Function URL structure validated');
+        console.log('✅ Flat outputs: API Gateway URL structure validated');
       } else {
         // Real HTTP test
         try {
@@ -417,7 +417,7 @@ describe('TapStack Serverless Integration Tests', () => {
     });
 
     test('should have valid output structure', () => {
-      expect(stackOutputs.FunctionUrl).toContain('http');
+      expect(stackOutputs.ApiGatewayInvokeUrl).toContain('http');
       expect(stackOutputs.LambdaFunctionArn).toContain('lambda');
       expect(stackOutputs.ArtifactsBucketName).toContain('artifacts');
       expect(stackOutputs.EnvironmentName).toBe(actualEnvironmentName);
