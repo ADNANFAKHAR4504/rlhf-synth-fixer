@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr930",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T08:59:26+00:00",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "Infrastructure Provisioning"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "S3",
+    "IAM",
+    "KMS",
+    "CloudTrail",
+    "Config",
+    "GuardDuty",
+    "CloudWatch"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr2011"
+  }
+}
