@@ -1495,6 +1495,133 @@ run_local_cicd() {
 | Tests | `unit-tests.sh` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | IDEAL | `validate-ideal-response.sh` | ✅ | ✅ | ✅ | ✅ | ✅ |
 
+### ⚠️ AGENT EXECUTION INSTRUCTIONS (MUST FOLLOW)
+
+**CRITICAL**: When `/synth-fixer <PR>` is called, the agent MUST execute these steps in order:
+
+#### Step 1: Setup Worktree & Rebase
+
+```bash
+# In iac-test-automations repo
+cd $REPO_PATH  # From config.env
+
+# Fetch PR branch
+gh pr checkout <PR_NUMBER>
+
+# Or create worktree
+WORKTREE_PATH="$WORKTREE_BASE/synth-fixer-<PR_NUMBER>"
+git worktree add "$WORKTREE_PATH" origin/<branch_name>
+cd "$WORKTREE_PATH"
+
+# Rebase with main
+git fetch origin main
+git rebase origin/main
+```
+
+#### Step 2: Run ALL Scripts Locally (in this exact order)
+
+**The agent MUST run each script and fix errors before proceeding:**
+
+```bash
+# Navigate to worktree
+cd "$WORKTREE_PATH"
+
+# 1️⃣ Detect Project Files
+echo "Running: Detect Project Files..."
+./scripts/ci-validate-wave.sh        # If fails → fix metadata.json
+./scripts/check-project-files.sh     # If fails → fix missing files
+./scripts/detect-metadata.sh         # If fails → fix metadata.json
+
+# 2️⃣ Prompt Quality
+echo "Running: Prompt Quality..."
+bash .claude/scripts/claude-validate-prompt-quality.sh  # If fails → fix PROMPT.md
+
+# 3️⃣ Validate Commit Message
+echo "Running: Validate Commit..."
+npx commitlint --last                # If fails → cannot auto-fix, report error
+
+# 4️⃣ Jest Config (ts/js only)
+if [[ "$LANGUAGE" == "ts" ]] || [[ "$LANGUAGE" == "js" ]]; then
+  echo "Running: Jest Config Validation..."
+  ./scripts/ci-validate-jest-config.sh  # If fails → fix jest.config.js
+fi
+
+# 5️⃣ Build
+echo "Running: Build..."
+./scripts/build.sh                   # If fails → fix TypeScript/build errors
+
+# 6️⃣ Synth (cdk/cdktf only)
+if [[ "$PLATFORM" == "cdk" ]] || [[ "$PLATFORM" == "cdktf" ]]; then
+  echo "Running: Synth..."
+  ./scripts/synth.sh                 # If fails → fix CDK errors
+fi
+
+# 7️⃣ Lint
+echo "Running: Lint..."
+./scripts/lint.sh                    # If fails → auto-fix with eslint/prettier
+
+# 8️⃣ Unit Tests
+echo "Running: Unit Tests..."
+./scripts/unit-tests.sh              # If fails → fix tests or remove ResourceNotFound tests
+
+# 9️⃣ IDEAL_RESPONSE Validation
+echo "Running: IDEAL_RESPONSE..."
+bash .claude/scripts/validate-ideal-response.sh  # If fails → regenerate IDEAL_RESPONSE
+```
+
+#### Step 3: Fix Errors Until All Pass
+
+**For each failed script:**
+1. Analyze the error output
+2. Fix the issue (only in allowed files: lib/, test/, metadata.json, etc.)
+3. Re-run the failed script
+4. Repeat until it passes
+5. Move to next script
+
+**Error Fix Strategies:**
+| Script | Error Type | Fix Strategy |
+|--------|------------|--------------|
+| `ci-validate-wave.sh` | Wave validation | Set wave to P0 (hcl) or P1 (others) |
+| `check-project-files.sh` | Missing files | Create required files |
+| `detect-metadata.sh` | Invalid metadata | Fix metadata.json fields |
+| `claude-validate-prompt-quality.sh` | PROMPT.md issues | Remove emojis, fix formatting |
+| `ci-validate-jest-config.sh` | Jest config | Fix test folder path |
+| `build.sh` | TypeScript errors | Fix code in lib/ |
+| `synth.sh` | CDK errors | Fix stack code |
+| `lint.sh` | Lint errors | Run eslint --fix or fix manually |
+| `unit-tests.sh` | Test failures | Fix tests OR remove ResourceNotFound tests |
+| `validate-ideal-response.sh` | IDEAL_RESPONSE | Regenerate from lib/ code |
+
+#### Step 4: Push ONLY After ALL Pass
+
+```bash
+# ALL scripts must pass before pushing!
+if all_scripts_passed; then
+  git add -A
+  git commit -m "fix: local CI/CD fixes"
+  git push origin "$BRANCH_NAME" --force-with-lease
+  echo "✅ Push successful! Waiting for remote CI/CD..."
+else
+  echo "❌ Some scripts still failing - do NOT push"
+fi
+```
+
+### ⛔ DO NOT PUSH UNTIL:
+
+- ✅ `ci-validate-wave.sh` passes
+- ✅ `check-project-files.sh` passes
+- ✅ `detect-metadata.sh` passes
+- ✅ `claude-validate-prompt-quality.sh` passes
+- ✅ `commitlint --last` passes
+- ✅ `ci-validate-jest-config.sh` passes (ts/js)
+- ✅ `build.sh` passes
+- ✅ `synth.sh` passes (cdk/cdktf)
+- ✅ `lint.sh` passes
+- ✅ `unit-tests.sh` passes
+- ✅ `validate-ideal-response.sh` passes
+
+**Only when ALL checks are ✅ green → THEN push to remote!**
+
 ## Detailed Steps
 
 ### Step 1: Initialize
