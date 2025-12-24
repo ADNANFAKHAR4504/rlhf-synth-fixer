@@ -1,38 +1,26 @@
-You are tasked with enhancing the security of a web application deployed on AWS by configuring IAM roles and policies using AWS CloudFormation. Your objective is to enforce the principle of least privilege while enabling specific access to AWS resources.
+Need to set up IAM security for our web app running on EC2. Have to lock down S3 access properly using CloudFormation.
 
-## Security Configuration Requirements:
+## What I need:
 
-### IAM Role for EC2 Instances
+### EC2 IAM Role
+- Create role that EC2 instances can use
+- Only allow reading from S3 buckets (no writes!)
+- Need an explicit deny on all S3 write operations to be safe
 
-Create an IAM role that can be attached to EC2 instances.
+### IAM User Policy
+- Set up read-only access to one specific S3 bucket
+- Attach to a specific user
 
-The role must only allow read access to Amazon S3 buckets.
+### Security
+Follow least privilege - only grant what's actually needed. No wildcards or broad permissions.
 
-Explicitly deny write permissions to S3.
+Use YAML format, call it security-configuration.yml.
 
-### IAM Policy for a Specific User
+## Deliverable:
+Working CloudFormation template with:
+- EC2 role with S3 read permissions + write deny
+- User policy for specific bucket read access
+- All the resource IDs and definitions needed
+- Should deploy without errors
 
-Define an IAM policy that grants read-only access to a specific S3 bucket.
-
-Attach this policy to a specific IAM user.
-
-### Least Privilege Enforcement
-
-Ensure that all permissions granted (roles and policies) follow the principle of least privilege—only the necessary actions and resources should be specified.
-
-### YAML Format Requirement
-
-Use YAML syntax to author the CloudFormation template.
-
-Name the file: security-configuration.yml.
-
-## Expected Output:
-A fully functional and valid CloudFormation template named security-configuration.yml that includes:
-
-The EC2 IAM Role with appropriate permissions.
-
-The read-only S3 policy for an IAM user.
-
-All necessary logical IDs and resource definitions.
-
-Valid syntax and structure deployable via the AWS CloudFormation console.
+Make sure it actually deploys through the CF console.
