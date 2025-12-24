@@ -84,9 +84,14 @@ class TapStack(TerraformStack):
                     "iam": "http://localhost:4566",
                     "lambda": "http://localhost:4566",
                     "s3": "http://s3.localhost.localstack.cloud:4566",
+                    "s3control": "http://localhost:4566",
                     "sts": "http://localhost:4566",
                 }],
                 # Skip default_tags for LocalStack to avoid S3 Control API issues
+                # Ignore tags on S3 resources to prevent S3 Control API calls
+                ignore_tags=[{
+                    "key_prefixes": [""],
+                }],
             )
         else:
             AwsProvider(
