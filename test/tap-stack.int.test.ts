@@ -19,13 +19,16 @@ import {
 } from '@aws-sdk/client-s3';
 import fs from 'fs';
 
-// Load deployment outputs
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+// Load deployment outputs - try cdk-outputs first (CI), fall back to cfn-outputs (local)
+const outputsPath = fs.existsSync('cdk-outputs/flat-outputs.json')
+  ? 'cdk-outputs/flat-outputs.json'
+  : 'cfn-outputs/flat-outputs.json';
+const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
-const ec2Client = new EC2Client({ region: 'us-east-2' });
-const s3Client = new S3Client({ region: 'us-east-2' });
+// Use environment region (us-east-1 for LocalStack) or default to us-east-2 for AWS
+const region = process.env.AWS_REGION || 'us-east-2';
+const ec2Client = new EC2Client({ region });
+const s3Client = new S3Client({ region });
 
 describe('Hub-and-Spoke Network Architecture Integration Tests', () => {
   describe('VPC Resources', () => {
