@@ -415,7 +415,9 @@ Resources:
       Engine: postgres
       EngineVersion: '16.6'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:ssm-secure:${DBPassword}}}'
+      # For LocalStack: Use direct password instead of SSM resolution
+      # In production AWS, replace this with: !Sub '{{resolve:ssm-secure:${DBPassword}}}'
+      MasterUserPassword: 'TestPassword123!'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true

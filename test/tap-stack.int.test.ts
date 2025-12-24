@@ -26,8 +26,9 @@ const iam = new IAMClient(clientConfig);
 const ssm = new SSMClient(clientConfig);
 
 // Test configuration
-const STACK_NAME = process.env.STACK_NAME || 'TapStack';
 const ENVIRONMENT = process.env.ENVIRONMENT || 'production';
+const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const STACK_NAME = process.env.STACK_NAME || `TapStack${ENVIRONMENT_SUFFIX}`;
 const AWS_REGION = process.env.AWS_REGION || 'us-west-2';
 
 // Load CloudFormation outputs if available
