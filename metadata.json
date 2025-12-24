@@ -3,7 +3,7 @@
   "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "291216",
+  "po_id": "LS-291216",
   "team": "synth-2",
   "startedAt": "2025-08-04T18:06:14.066Z",
   "subtask": "Security, Compliance, and Governance",
@@ -20,5 +20,6 @@
     "CloudWatch",
     "WAF",
     "IAM"
-  ]
+  ],
+  "wave": "P0"
 }
