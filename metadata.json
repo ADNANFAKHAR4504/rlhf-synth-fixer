@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291892_ls",
+  "team": "2",
+  "startedAt": "2025-12-23T17:01:31.351Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "SecurityGroup",
+    "Bucket",
+    "BucketPolicy",
+    "ConfigurationRecorder",
+    "DeliveryChannel",
+    "ConfigRule",
+    "Role",
+    "Policy",
+    "Key",
+    "DBInstance",
+    "Table",
+    "Trail",
+    "Detector",
+    "LogGroup",
+    "Function",
+    "WebACL"
+  ],
+  "wave": "P0"
+}
