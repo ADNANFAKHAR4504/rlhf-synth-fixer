@@ -144,18 +144,9 @@ Resources:
         - Key: Name
           Value: 'Private Subnet 2'
 
-  # NAT Gateway (Single for cost optimization)
-  NATGatewayEIP:
-    Type: AWS::EC2::EIP
-    DependsOn: AttachGateway
-    Properties:
-      Domain: vpc
-
-  NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
+  # Note: NAT Gateway removed for LocalStack compatibility
+  # LocalStack does not support EIP AllocationId properly (returns 'unknown')
+  # Private subnets use Internet Gateway directly in LocalStack testing environment
 
   # Route Tables
   PublicRouteTable:
@@ -196,10 +187,11 @@ Resources:
 
   DefaultPrivateRoute:
     Type: AWS::EC2::Route
+    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway
+      GatewayId: !Ref InternetGateway  # Using IGW for LocalStack compatibility
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation

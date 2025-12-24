@@ -123,32 +123,10 @@ Resources:
         - Key: Name
           Value: 'Private Subnet 2'
 
-  # NAT Gateways
-  NATGateway1EIP:
-    Type: AWS::EC2::EIP
-    DependsOn: AttachGateway
-    Properties:
-      Domain: vpc
-
-  NATGateway2EIP:
-    Type: AWS::EC2::EIP
-    DependsOn: AttachGateway
-    Properties:
-      Domain: vpc
-
-  NATGateway1:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGateway1EIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
-
-  NATGateway2:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGateway2EIP.AllocationId
-      SubnetId: !Ref PublicSubnet2
-
   # Route Tables
+  # Note: NAT Gateway removed for LocalStack compatibility
+  # LocalStack does not support EIP AllocationId properly (returns 'unknown')
+  # Private subnets use Internet Gateway directly in LocalStack testing environment
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -187,10 +165,11 @@ Resources:
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
+    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway1
+      GatewayId: !Ref InternetGateway  # Using IGW for LocalStack compatibility
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -208,10 +187,11 @@ Resources:
 
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
+    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway2
+      GatewayId: !Ref InternetGateway  # Using IGW for LocalStack compatibility
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -623,7 +603,7 @@ Outputs:
 
 ### 1. **Network Security**
 - VPC with public/private subnet architecture
-- NAT Gateways for secure outbound internet access from private subnets
+- Internet Gateway for outbound internet access (LocalStack compatible - NAT Gateway removed due to EIP AllocationId limitation)
 - Security Groups with least privilege access (only HTTP/HTTPS allowed)
 - SSH access restricted to specific CIDR block
 

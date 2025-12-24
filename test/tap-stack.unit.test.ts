@@ -190,13 +190,14 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       });
     });
 
-    test('should have NAT gateway for private subnet internet access', () => {
-      expect(template.Resources.NATGateway).toBeDefined();
-      expect(template.Resources.NATGatewayEIP).toBeDefined();
-      
-      const natGw = template.Resources.NATGateway;
-      expect(natGw.Type).toBe('AWS::EC2::NatGateway');
-      expect(natGw.Properties.AllocationId['Fn::GetAtt']).toEqual(['NATGatewayEIP', 'AllocationId']);
+    test('private subnets should have route to internet via Internet Gateway (LocalStack compatible)', () => {
+      // NAT Gateway removed for LocalStack compatibility - EIP AllocationId not supported
+      // Private subnets use Internet Gateway directly in LocalStack testing environment
+      expect(template.Resources.DefaultPrivateRoute).toBeDefined();
+      const privateRoute = template.Resources.DefaultPrivateRoute;
+      expect(privateRoute.Type).toBe('AWS::EC2::Route');
+      expect(privateRoute.Properties.GatewayId.Ref).toBe('InternetGateway');
+      expect(privateRoute.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
     });
   });
 
@@ -439,6 +440,14 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(output.Value['Ref']).toBe('AWSRegion');
       expect(output.Description).toContain('AWS Region where infrastructure is deployed');
       expect(output.Export.Name['Fn::Sub']).toBe('${AWS::StackName}-AWS-Region');
+    });
+
+    test('should export EC2 role name', () => {
+      expect(template.Outputs.EC2RoleName).toBeDefined();
+      const output = template.Outputs.EC2RoleName;
+      expect(output.Value['Ref']).toBe('EC2Role');
+      expect(output.Description).toContain('EC2 IAM Role Name');
+      expect(output.Export.Name['Fn::Sub']).toBe('${AWS::StackName}-EC2-Role-Name');
     });
   });
 
