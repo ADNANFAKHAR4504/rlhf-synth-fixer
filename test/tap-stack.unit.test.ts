@@ -331,7 +331,8 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
     test('RDS instance should have proper security settings', () => {
       const db = template.Resources.DatabaseInstance;
       expect(db.Properties.PubliclyAccessible).toBe(false);
-      expect(db.Properties.DeletionProtection).toBe(true);
+      // DeletionProtection disabled for LocalStack compatibility (testing environment)
+      expect(db.Properties.DeletionProtection).toBe(false);
       expect(db.Properties.BackupRetentionPeriod).toBe(7);
     });
 
@@ -446,7 +447,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(template.Outputs.EC2RoleName).toBeDefined();
       const output = template.Outputs.EC2RoleName;
       expect(output.Value['Ref']).toBe('EC2Role');
-      expect(output.Description).toContain('EC2 IAM Role Name');
+      expect(output.Description).toContain('EC2 Instance Role Name');
       expect(output.Export.Name['Fn::Sub']).toBe('${AWS::StackName}-EC2-Role-Name');
     });
   });
@@ -483,7 +484,8 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('deletion policies should be appropriate for data resources', () => {
       const db = template.Resources.DatabaseInstance;
-      expect(db.DeletionPolicy).toBe('Snapshot');
+      // DeletionPolicy set to Delete for LocalStack compatibility (testing environment)
+      expect(db.DeletionPolicy).toBe('Delete');
     });
 
     test('launch template should use region-specific AMI mapping', () => {

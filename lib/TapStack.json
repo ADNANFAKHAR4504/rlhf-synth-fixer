@@ -1,0 +1,1307 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure-by-default multi-region infrastructure with comprehensive security controls",
+    "Parameters": {
+        "AllowedSSHCIDR": {
+            "Type": "String",
+            "Default": "10.0.0.0/8",
+            "Description": "CIDR block allowed for SSH access",
+            "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$"
+        },
+        "AWSRegion": {
+            "Type": "String",
+            "Default": "ap-south-1",
+            "Description": "AWS region for the infrastructure deployment",
+            "AllowedValues": [
+                "us-east-1",
+                "us-west-2",
+                "eu-west-1",
+                "ap-southeast-1",
+                "ap-south-1"
+            ]
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "us-east-1": {
+                "AMI": "ami-0c02fb55956c7d316"
+            },
+            "us-west-2": {
+                "AMI": "ami-0892d3c7ee96c0bf7"
+            },
+            "eu-west-1": {
+                "AMI": "ami-0a0c8eebcdd6dcbd0"
+            },
+            "ap-southeast-1": {
+                "AMI": "ami-0df7a207adb9748c7"
+            },
+            "ap-south-1": {
+                "AMI": "ami-05a4fc6eaa38ee23c"
+            }
+        }
+    },
+    "Resources": {
+        "RDSKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "Description": "KMS Key for RDS encryption",
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow RDS Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "rds.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "RDSKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/rds-encryption-key-${AWSRegion}"
+                },
+                "TargetKeyId": {
+                    "Ref": "RDSKMSKey"
+                }
+            }
+        },
+        "DatabaseSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}/database/password-${AWSRegion}"
+                },
+                "Description": "Database administrator password",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
+                }
+            }
+        },
+        "SecureVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SecureVPC"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SecureVPC-IGW"
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Public Subnet 1"
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Public Subnet 2"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": "10.0.3.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Private Subnet 1"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": "10.0.4.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Private Subnet 2"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Public Route Table"
+                    }
+                ]
+            }
+        },
+        "DefaultPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                }
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Private Route Table"
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                }
+            }
+        },
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Application Load Balancer",
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTP access from internet"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS access from internet"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "10.0.0.0/16",
+                        "Description": "HTTP to web servers"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "ALB Security Group"
+                    }
+                ]
+            }
+        },
+        "WebServerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for web servers",
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "10.0.0.0/16",
+                        "Description": "HTTP from ALB"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "AllowedSSHCIDR"
+                        },
+                        "Description": "SSH from allowed CIDR"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Web Server Security Group"
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for RDS database",
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebServerSecurityGroup"
+                        },
+                        "Description": "MySQL from web servers"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Database Security Group"
+                    }
+                ]
+            }
+        },
+        "StaticContentBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tapstack-static-content-${AWS::AccountId}-${AWSRegion}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "LoggingBucket"
+                    },
+                    "LogFilePrefix": "static-content-access-logs/"
+                }
+            }
+        },
+        "LoggingBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tapstack-access-logs-${AWS::AccountId}-${AWSRegion}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "EC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3AccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${StaticContentBucket}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${StaticContentBucket}"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "MFAEnforcementGroup": {
+            "Type": "AWS::IAM::Group",
+            "Properties": {
+                "Path": "/"
+            }
+        },
+        "MFAEnforcementPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "MFAEnforcementPolicy",
+                "Groups": [
+                    {
+                        "Ref": "MFAEnforcementGroup"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowMFASetupActions",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:CreateVirtualMFADevice",
+                                "iam:EnableMFADevice",
+                                "iam:GetUser",
+                                "iam:ListMFADevices",
+                                "iam:ListVirtualMFADevices",
+                                "iam:ResyncMFADevice",
+                                "iam:ChangePassword",
+                                "iam:GetAccountPasswordPolicy",
+                                "iam:GetAccountSummary"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "DenyMostActionsWithoutMFA",
+                            "Effect": "Deny",
+                            "Action": [
+                                "ec2:*",
+                                "s3:*",
+                                "rds:*",
+                                "lambda:*",
+                                "dynamodb:*"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "BoolIfExists": {
+                                    "aws:MultiFactorAuthPresent": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "MFAProtectedAPIPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "MFAProtectedAPIPolicy",
+                "Groups": [
+                    {
+                        "Ref": "MFAEnforcementGroup"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowActionsWithMFA",
+                            "Effect": "Allow",
+                            "Action": [
+                                "ec2:*",
+                                "s3:*",
+                                "rds:*",
+                                "lambda:*",
+                                "dynamodb:*",
+                                "iam:GetUser",
+                                "iam:ListMFADevices"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "BoolIfExists": {
+                                    "aws:MultiFactorAuthPresent": "true"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "GlobalMFAEnforcementPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "GlobalMFAEnforcementPolicy",
+                "Users": [
+                    {
+                        "Ref": "MFAEnforcementUser"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowMFASetupAndBasicOperations",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:CreateVirtualMFADevice",
+                                "iam:EnableMFADevice",
+                                "iam:GetUser",
+                                "iam:ListMFADevices",
+                                "iam:ListVirtualMFADevices",
+                                "iam:ResyncMFADevice",
+                                "iam:ChangePassword",
+                                "iam:GetAccountPasswordPolicy",
+                                "iam:GetAccountSummary"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "DenyMostActionsWithoutMFA",
+                            "Effect": "Deny",
+                            "Action": [
+                                "ec2:*",
+                                "s3:*",
+                                "rds:*",
+                                "lambda:*",
+                                "dynamodb:*"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "BoolIfExists": {
+                                    "aws:MultiFactorAuthPresent": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "MFAEnforcementUser": {
+            "Type": "AWS::IAM::User",
+            "Properties": {
+                "Path": "/",
+                "Groups": [
+                    {
+                        "Ref": "MFAEnforcementGroup"
+                    }
+                ],
+                "LoginProfile": {
+                    "Password": {
+                        "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+                    },
+                    "PasswordResetRequired": true
+                }
+            }
+        },
+        "MFAUserAccessKey": {
+            "Type": "AWS::IAM::AccessKey",
+            "Properties": {
+                "UserName": {
+                    "Ref": "MFAEnforcementUser"
+                },
+                "Status": "Active"
+            }
+        },
+        "MFAUserSelfManagementPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "MFAUserSelfManagementPolicy",
+                "Users": [
+                    {
+                        "Ref": "MFAEnforcementUser"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowUserToManageOwnMFA",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:CreateVirtualMFADevice",
+                                "iam:EnableMFADevice",
+                                "iam:ResyncMFADevice",
+                                "iam:DeactivateMFADevice",
+                                "iam:DeleteVirtualMFADevice",
+                                "iam:ListMFADevices",
+                                "iam:ListVirtualMFADevices"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:mfa/${AWS::AccountId}:*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:username": {
+                                        "Ref": "MFAEnforcementUser"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowUserToViewOwnUserInfo",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:GetUser",
+                                "iam:ListAccessKeys",
+                                "iam:ListMFADevices"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${AWS::AccountId}:*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:username": {
+                                        "Ref": "MFAEnforcementUser"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "WebServerLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${AWS::StackName}-web-server-template-${AWSRegion}"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Fn::FindInMap": [
+                            "RegionMap",
+                            {
+                                "Ref": "AWSRegion"
+                            },
+                            "AMI"
+                        ]
+                    },
+                    "InstanceType": "t3.micro",
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "WebServerSecurityGroup"
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Install CloudWatch agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"${CloudWatchLogGroup}\",\n            \"log_stream_name\": \"{instance_id}/httpd/access_log\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"${CloudWatchLogGroup}\",\n            \"log_stream_name\": \"{instance_id}/httpd/error_log\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n\necho \"<h1>Secure Web Server</h1>\" > /var/www/html/index.html\n"
+                        }
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": "Secure Web Server"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "WebServerLaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "WebServerLaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": 2,
+                "MaxSize": 6,
+                "DesiredCapacity": 2,
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "ALBTargetGroup"
+                    }
+                ],
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Secure ASG Instance",
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-alb-${AWSRegion}"
+                },
+                "Scheme": "internet-facing",
+                "Type": "application",
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Secure ALB"
+                    }
+                ]
+            }
+        },
+        "ALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-tg-${AWSRegion}"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "HealthCheckPath": "/",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3
+            }
+        },
+        "ALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for RDS database",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "DB Subnet Group"
+                    }
+                ]
+            }
+        },
+        "DatabaseInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${AWS::StackName}-database-${AWSRegion}"
+                },
+                "DBInstanceClass": "db.t3.micro",
+                "Engine": "mysql",
+                "EngineVersion": "8.0.42",
+                "AllocatedStorage": 20,
+                "StorageType": "gp2",
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "RDSKMSKey"
+                },
+                "MasterUsername": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "DatabaseSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "BackupRetentionPeriod": 7,
+                "MultiAZ": false,
+                "PubliclyAccessible": false,
+                "DeletionProtection": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Secure Database"
+                    }
+                ]
+            }
+        },
+        "CloudWatchLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ec2/${AWS::StackName}-${AWSRegion}"
+                },
+                "RetentionInDays": 14
+            }
+        },
+        "ConfigServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "ConfigDeliveryPermissions",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketAcl",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${ConfigBucket}"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${ConfigBucket}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "ConfigServiceInlinePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "config:Put*",
+                                        "config:Get*",
+                                        "config:Describe*",
+                                        "s3:PutObject",
+                                        "s3:GetBucketAcl",
+                                        "sns:Publish",
+                                        "iam:PassRole"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ConfigBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tapstack-config-${AWS::AccountId}-${AWSRegion}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                }
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-delivery-channel-${AWSRegion}"
+                },
+                "S3BucketName": {
+                    "Ref": "ConfigBucket"
+                }
+            }
+        },
+        "ConfigurationRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-config-recorder-${AWSRegion}"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigServiceRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "S3BucketPublicAccessProhibitedRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "s3-bucket-public-access-prohibited-${AWSRegion}"
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+                }
+            }
+        },
+        "RDSStorageEncryptedRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "rds-storage-encrypted-${AWSRegion}"
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
+                }
+            }
+        },
+        "IAMUserMFAEnabledRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "iam-user-mfa-enabled-${AWSRegion}"
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "IAM_USER_MFA_ENABLED"
+                }
+            }
+        },
+        "IAMPasswordPolicyRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "iam-password-policy-${AWSRegion}"
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "IAM_PASSWORD_POLICY"
+                }
+            }
+        },
+        "RootAccountMFAEnabledRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "root-account-mfa-enabled-${AWSRegion}"
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "ROOT_ACCOUNT_MFA_ENABLED"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "SecureVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                }
+            }
+        },
+        "LoadBalancerDNS": {
+            "Description": "Application Load Balancer DNS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ALB-DNS"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "S3 Bucket for Static Content",
+            "Value": {
+                "Ref": "StaticContentBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3-Bucket"
+                }
+            }
+        },
+        "DatabaseEndpoint": {
+            "Description": "RDS Database Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DatabaseInstance",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DB-Endpoint"
+                }
+            }
+        },
+        "AWSRegion": {
+            "Description": "AWS Region where infrastructure is deployed",
+            "Value": {
+                "Ref": "AWSRegion"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AWS-Region"
+                }
+            }
+        },
+        "MFAEnforcementGroup": {
+            "Description": "IAM Group for MFA Enforcement",
+            "Value": {
+                "Ref": "MFAEnforcementGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MFA-Group"
+                }
+            }
+        },
+        "MFAEnforcementUser": {
+            "Description": "IAM User for MFA Enforcement",
+            "Value": {
+                "Ref": "MFAEnforcementUser"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MFA-User"
+                }
+            }
+        },
+        "MFAUserAccessKey": {
+            "Description": "Access Key for MFA User (store securely)",
+            "Value": {
+                "Ref": "MFAUserAccessKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MFA-AccessKey"
+                }
+            }
+        },
+        "GlobalMFAEnforcementPolicy": {
+            "Description": "Global MFA Enforcement Policy ARN",
+            "Value": {
+                "Ref": "GlobalMFAEnforcementPolicy"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Global-MFA-Policy"
+                }
+            }
+        },
+        "EC2RoleName": {
+            "Description": "EC2 Instance Role Name",
+            "Value": {
+                "Ref": "EC2Role"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2-Role-Name"
+                }
+            }
+        }
+    }
+}

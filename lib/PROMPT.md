@@ -1,35 +1,15 @@
-You are tasked with designing and implementing a secure-by-default infrastructure using **AWS CloudFormation in YAML format**. The infrastructure must align with AWS best practices and enforce strong security controls by default. Your solution must provision the following components:
+Build me a secure AWS infrastructure using CloudFormation YAML that connects services with proper security controls.
 
-### **Infrastructure Requirements:**
+I need an internet-facing ALB that receives HTTP and HTTPS traffic from the internet and routes it to an Auto Scaling group of web servers running in private subnets. The ALB security group allows only ports 80 and 443 from 0.0.0.0/0, and the web server security group accepts traffic only from the ALB security group.
 
-1. A **VPC** configured with public and private subnets.
-2. An **Internet-facing Application Load Balancer** (ALB) that routes traffic to a **web server fleet** managed by an **Auto Scaling group**.
-3. **Security Groups** that restrict access to only allow **HTTP (port 80)** and **HTTPS (port 443)** traffic; all other inbound access must be denied.
-4. An **RDS database instance** with:
+The web servers connect to an encrypted RDS MySQL database through a database security group that allows port 3306 only from the web server security group. The RDS instance uses a KMS key for encryption at rest and stores credentials in Secrets Manager. Automated backups are enabled with 7-day retention.
 
-   * **Encryption at rest using AWS KMS**
-   * **Automated backups enabled**
-5. An **S3 bucket** to host static content with:
+Create an S3 bucket for static content with AES256 encryption and public access blocked. An IAM role attached to the EC2 instances grants read-only access to this specific S3 bucket using s3:GetObject and s3:ListBucket actions on the bucket ARN only.
 
-   * **AES256 encryption at rest**
-   * **Restricted access policies** (only accessible via defined IAM Roles with least privilege)
-6. **IAM Role** configuration that:
+The EC2 instances stream logs to CloudWatch Logs groups using the CloudWatch agent configured in the launch template user data. AWS Config monitors all resources and reports compliance violations for S3 public access, RDS encryption, and IAM password policies.
 
-   * Grants the **least privilege** necessary
-   * Can access **only the specific S3 bucket**
-7. Enable **CloudWatch Logs** for all EC2 instances for real-time **logging and monitoring**.
-8. Implement **AWS Config** to monitor and report on **compliance issues** across resources.
-9. **Restrict SSH access** to EC2 instances by allowing access from a **specific IP CIDR block only**.
-10. Enforce **MFA** (Multi-Factor Authentication) for **all IAM user accounts**.
-11. Ensure **all API Gateway endpoints**, if created, are accessible **only via HTTPS**.
+SSH access to EC2 instances is restricted to a specific CIDR block defined as a parameter. All IAM users must have MFA enabled, enforced through an IAM policy that denies actions when aws:MultiFactorAuthPresent is false.
 
-### **Constraints:**
+The VPC has public subnets for the ALB and private subnets for the web servers and RDS. Route tables connect public subnets to an Internet Gateway and private subnets have outbound internet access.
 
-* Output must be a valid **CloudFormation YAML template**.
-* Use **CloudFormation-native resource types** only.
-* All **security configurations** (e.g., security groups, IAM policies, encryption settings) must comply with **AWS security best practices**.
-* Template must pass validation with:
-
-  ```bash
-  aws cloudformation validate-template --template-body file://template.yaml  
-  ```
+Output a valid CloudFormation YAML template using only native CloudFormation resource types.
