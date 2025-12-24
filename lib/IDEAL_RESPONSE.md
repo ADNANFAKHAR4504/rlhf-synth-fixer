@@ -209,13 +209,13 @@ aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}
 
 ## Compliance Verification
 
-✅ **IAM Role for EC2**: Created with S3 read-only access  
-✅ **Explicit Write Denial**: Comprehensive S3 write operations denied  
-✅ **IAM User Policy**: Read-only access to specific S3 bucket  
-✅ **Least Privilege**: All permissions follow minimal access principle  
-✅ **YAML Format**: CloudFormation template in YAML syntax  
-✅ **Resource Definitions**: All logical IDs and properties included  
-✅ **Deployable Template**: Valid CloudFormation syntax  
+ **IAM Role for EC2**: Created with S3 read-only access  
+ **Explicit Write Denial**: Comprehensive S3 write operations denied  
+ **IAM User Policy**: Read-only access to specific S3 bucket  
+ **Least Privilege**: All permissions follow minimal access principle  
+ **YAML Format**: CloudFormation template in YAML syntax  
+ **Resource Definitions**: All logical IDs and properties included  
+ **Deployable Template**: Valid CloudFormation syntax  
 
 ## Key Security Resources Created
 
