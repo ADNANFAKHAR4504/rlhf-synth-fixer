@@ -543,15 +543,15 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
+          FromPort: 5432
+          ToPort: 5432
           SourceSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: Allow MySQL from web servers
+          Description: Allow PostgreSQL from web servers
         - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
+          FromPort: 5432
+          ToPort: 5432
           SourceSecurityGroupId: !Ref BastionSecurityGroup
-          Description: Allow MySQL from Bastion for maintenance
+          Description: Allow PostgreSQL from Bastion for maintenance
       Tags:
         - Key: Name
           Value: webapp-database-sg
@@ -1145,8 +1145,8 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       DBName: !Ref DatabaseName
-      Engine: MySQL
-      EngineVersion: '8.0'
+      Engine: postgres
+      EngineVersion: '13'
       DBInstanceClass: !Ref DatabaseInstanceClass
       AllocatedStorage: 20
       MaxAllocatedStorage: 100
