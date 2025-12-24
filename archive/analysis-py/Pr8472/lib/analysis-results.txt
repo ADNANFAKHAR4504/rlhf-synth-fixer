@@ -1,0 +1,129 @@
+2025-12-22 13:12:52,285 - botocore.credentials - INFO - Found credentials in environment variables.
+2025-12-22 13:12:52,437 - __main__ - INFO - Starting AWS Backup forensic audit...
+2025-12-22 13:12:52,437 - __main__ - INFO - Phase 1: Resource discovery
+2025-12-22 13:12:52,437 - __main__ - INFO - Discovering AWS resources...
+2025-12-22 13:12:52,536 - __main__ - INFO - Discovered 9 resources
+2025-12-22 13:12:52,536 - __main__ - INFO - Discovering backup infrastructure...
+2025-12-22 13:12:55,407 - __main__ - ERROR - Failed to discover backup plans: An error occurred (500) when calling the ListBackupSelections operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-22 13:13:12,221 - __main__ - ERROR - Failed to discover recovery points: An error occurred (404) when calling the ListRecoveryPointsByBackupVault operation: <!doctype html>
+<html lang=en>
+<title>404 Not Found</title>
+<h1>Not Found</h1>
+<p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>
+
+2025-12-22 13:13:12,225 - __main__ - ERROR - Failed to discover backup jobs: An error occurred (404) when calling the ListBackupJobs operation: <!doctype html>
+<html lang=en>
+<title>404 Not Found</title>
+<h1>Not Found</h1>
+<p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>
+
+2025-12-22 13:13:12,225 - __main__ - INFO - Discovered 0 plans, 2 vaults
+2025-12-22 13:13:12,225 - __main__ - INFO - Phase 2: Running compliance checks
+2025-12-22 13:13:12,225 - __main__ - INFO - Checking for unprotected resources requiring backup...
+2025-12-22 13:13:12,225 - __main__ - INFO - Checking production resource backup coverage...
+2025-12-22 13:13:12,226 - __main__ - INFO - Checking backup retention policies...
+2025-12-22 13:13:12,226 - __main__ - INFO - Checking vault immutability configuration...
+2025-12-22 13:13:12,226 - __main__ - INFO - Checking cross-region disaster recovery configuration...
+2025-12-22 13:13:12,226 - __main__ - INFO - Checking vault encryption...
+2025-12-22 13:13:12,226 - __main__ - INFO - Checking recovery point gaps...
+2025-12-22 13:13:12,226 - __main__ - INFO - Checking for consecutive backup failures...
+2025-12-22 13:13:12,226 - __main__ - INFO - Checking vault notification configuration...
+2025-12-22 13:13:12,226 - __main__ - INFO - Checking restore testing compliance...
+2025-12-22 13:13:12,231 - __main__ - ERROR - Failed to get restore jobs: An error occurred (404) when calling the ListRestoreJobs operation: <!doctype html>
+<html lang=en>
+<title>404 Not Found</title>
+<h1>Not Found</h1>
+<p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>
+
+2025-12-22 13:13:12,231 - __main__ - INFO - Checking for orphaned recovery points...
+2025-12-22 13:13:12,231 - __main__ - INFO - Checking cost optimization configurations...
+2025-12-22 13:13:12,231 - __main__ - INFO - Phase 3: Generating reports
+2025-12-22 13:13:12,237 - __main__ - INFO - JSON report saved to backup_compliance_audit.json
+2025-12-22 13:13:12,237 - __main__ - INFO - CSV report saved to recovery_readiness_report.csv
+
+================================================================================
+AWS BACKUP COMPLIANCE AUDIT REPORT
+================================================================================
+
+Audit Date: 2025-12-22T13:13:12.231358+00:00
+Region: us-east-1
+Account: 123456789012
+Total Resources Analyzed: 9
+
+--------------------------------------------------------------------------------
+COMPLIANCE SUMMARY
+--------------------------------------------------------------------------------
+
+Total Findings: 14
+   Critical: 9
+   High: 3
+   Medium: 2
+   Low: 0
+   Info: 0
+
+--------------------------------------------------------------------------------
+INFRASTRUCTURE SUMMARY
+--------------------------------------------------------------------------------
+
+Backup Plans: 0
+Backup Vaults: 2
+Total Recovery Points: 0
+Protected Resources: 0
+
+--------------------------------------------------------------------------------
+DETAILED FINDINGS TABLE
+--------------------------------------------------------------------------------
+
+Check ID          Severity   Resource Type   Resource ID                        
+--------------------------------------------------------------------------------
+AWS-BACKUP-001    CRITICAL   EC2             i-8f5f0e7d631255161                
+AWS-BACKUP-001    CRITICAL   EC2             i-427130e4d78dde2fd                
+AWS-BACKUP-001    CRITICAL   EBS             vol-1ae9f85b58607e893              
+AWS-BACKUP-001    CRITICAL   RDS             prod-database                      
+AWS-BACKUP-001    CRITICAL   DynamoDB        ProductionUserData                 
+AWS-BACKUP-002    CRITICAL   EC2             i-8f5f0e7d631255161                
+AWS-BACKUP-002    CRITICAL   EBS             vol-1ae9f85b58607e893              
+AWS-BACKUP-002    CRITICAL   RDS             prod-database                      
+AWS-BACKUP-002    CRITICAL   DynamoDB        ProductionUserData                 
+AWS-BACKUP-004    HIGH       BackupVault     DefaultVault                       
+AWS-BACKUP-004    HIGH       BackupVault     EncryptedVault                     
+AWS-BACKUP-006    HIGH       BackupVault     DefaultVault                       
+AWS-BACKUP-009    MEDIUM     BackupVault     DefaultVault                       
+AWS-BACKUP-009    MEDIUM     BackupVault     EncryptedVault                     
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+CRITICAL FINDINGS (Action Required)
+--------------------------------------------------------------------------------
+
+1. [Unprotected Resources] EC2: i-8f5f0e7d631255161
+   Issue: Resource tagged with RequireBackup:true has no backup plan assigned
+   Action: Create and assign a backup plan to this resource immediately
+
+2. [Unprotected Resources] EC2: i-427130e4d78dde2fd
+   Issue: Resource tagged with RequireBackup:true has no backup plan assigned
+   Action: Create and assign a backup plan to this resource immediately
+
+3. [Unprotected Resources] EBS: vol-1ae9f85b58607e893
+   Issue: Resource tagged with RequireBackup:true has no backup plan assigned
+   Action: Create and assign a backup plan to this resource immediately
+
+4. [Unprotected Resources] RDS: prod-database
+   Issue: Resource tagged with RequireBackup:true has no backup plan assigned
+   Action: Create and assign a backup plan to this resource immediately
+
+5. [Unprotected Resources] DynamoDB: ProductionUserData
+   Issue: Resource tagged with RequireBackup:true has no backup plan assigned
+   Action: Create and assign a backup plan to this resource immediately
+
+================================================================================
+Full reports saved:
+  - backup_compliance_audit.json
+  - recovery_readiness_report.csv
+================================================================================
+

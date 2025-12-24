@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "3546",
+  "team": "5",
+  "startedAt": "2025-10-04T16:46:05.741Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "IAM",
+    "CloudWatch",
+    "Systems Manager Parameter Store",
+    "Application Auto Scaling"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
