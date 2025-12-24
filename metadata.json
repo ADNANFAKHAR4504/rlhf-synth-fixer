@@ -7,9 +7,7 @@
   "subtask": "Application Deployment",
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)",
-    "Web Application Deployment",
-    "Security Configuration as Code",
-    "General Infrastructure Tooling QA"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "API Gateway",
