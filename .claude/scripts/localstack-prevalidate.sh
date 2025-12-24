@@ -389,6 +389,72 @@ if [[ -d "lib" ]]; then
   fi
 fi
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 2c: Prompt Quality Validation (for synthetic tasks)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📋 STEP 2c: Prompt Quality Validation"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [[ -f "lib/PROMPT.md" ]]; then
+  log_info "Validating prompt quality (Claude Review: Prompt Quality check)..."
+  
+  PROMPT_QUALITY_SCRIPT="$PROJECT_ROOT/.claude/scripts/claude-validate-prompt-quality.sh"
+  FIX_PROMPT_SCRIPT="$PROJECT_ROOT/.claude/scripts/fix-prompt-quality.sh"
+  
+  if [[ -x "$PROMPT_QUALITY_SCRIPT" ]]; then
+    # Run prompt quality validation
+    if bash "$PROMPT_QUALITY_SCRIPT" > /tmp/prompt_quality_output.log 2>&1; then
+      log_success "Prompt quality validation passed"
+    else
+      log_error "Prompt quality validation FAILED"
+      
+      # Show key failures
+      echo ""
+      grep -E "FAIL|detected|found" /tmp/prompt_quality_output.log 2>/dev/null | head -8 | while read -r line; do
+        echo "   $line"
+      done
+      echo ""
+      
+      # Attempt auto-fix if enabled
+      if [[ "$FIX_ERRORS" == "true" ]] && [[ -x "$FIX_PROMPT_SCRIPT" ]]; then
+        log_info "Attempting automatic prompt quality fix..."
+        
+        if bash "$FIX_PROMPT_SCRIPT" "lib/PROMPT.md" > /tmp/fix_prompt_output.log 2>&1; then
+          # Re-validate after fix
+          if bash "$PROMPT_QUALITY_SCRIPT" > /dev/null 2>&1; then
+            log_success "Prompt quality now PASSES after auto-fix"
+            log_fix "Applied prompt quality fixes to lib/PROMPT.md"
+            VALIDATION_PASSED=true
+          else
+            log_warning "Prompt quality still fails after auto-fix - manual rewrite needed"
+            echo ""
+            echo "   Common issues requiring manual intervention:"
+            echo "   - Rewrite sentences to remove parentheses (max 1 allowed)"
+            echo "   - Use natural phrasing instead of 'e.g.', 'i.e.'"
+            echo "   - Remove template-style brackets [placeholder]"
+            echo ""
+            echo "   See: .claude/prompts/claude-prompt-quality-review.md for examples"
+            echo ""
+          fi
+        else
+          log_warning "Prompt quality fix script encountered errors"
+          cat /tmp/fix_prompt_output.log 2>/dev/null | tail -10 || true
+        fi
+      else
+        log_warning "Auto-fix disabled or fix script not found"
+        echo "   Run: bash .claude/scripts/fix-prompt-quality.sh lib/PROMPT.md"
+      fi
+    fi
+  else
+    log_warning "Prompt quality validation script not found - skipping"
+  fi
+else
+  log_info "No lib/PROMPT.md found - skipping prompt quality check"
+fi
+
 # Check wave field - use wave lookup to determine correct wave from P0/P1 CSV
 WAVE=$(jq -r '.wave // ""' metadata.json 2>/dev/null || echo "")
 
