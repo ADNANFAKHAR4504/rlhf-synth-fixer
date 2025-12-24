@@ -1,3 +1,0 @@
-ignore_templates:
-  - lib/flat-outputs.json
-  - flat-outputs.json

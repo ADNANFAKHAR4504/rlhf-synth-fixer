@@ -1,9 +1,0 @@
-{
-  "Environment": "dev",
-  "PrivateSubnet1Id": "subnet-abec278c467dcb9f4",
-  "PrivateSubnet2Id": "subnet-560f34cebbaa8be9f",
-  "PublicSubnet1Id": "subnet-dcf71b36fd8bd59ef",
-  "PublicSubnet2Id": "subnet-adedd7d6562f7b985",
-  "SecurityGroupId": "sg-f361135b6fe4d0d81",
-  "VPCId": "vpc-ecbbaf37f811ff3e6"
-}
