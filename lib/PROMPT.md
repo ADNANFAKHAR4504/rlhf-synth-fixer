@@ -1,26 +1,28 @@
-Need to set up IAM security for our web app running on EC2. Have to lock down S3 access properly using CloudFormation.
+Need to lock down S3 access for our EC2 instances using IAM. The app is running on EC2 and needs to read from S3, but we're seeing write access where there shouldn't be any.
 
-## What I need:
+## What to build:
 
-### EC2 IAM Role
-- Create role that EC2 instances can use
-- Only allow reading from S3 buckets (no writes!)
-- Need an explicit deny on all S3 write operations to be safe
+### EC2 Role with S3 Access
+Set up an IAM role that EC2 instances assume to connect to S3 buckets. The role grants read-only access (GetObject, ListBucket) but explicitly blocks all write operations (PutObject, DeleteObject, etc) using a deny statement.
 
-### IAM User Policy
-- Set up read-only access to one specific S3 bucket
-- Attach to a specific user
+When the EC2 app calls S3, it uses this role's credentials through the instance profile.
 
-### Security
-Follow least privilege - only grant what's actually needed. No wildcards or broad permissions.
+### User Policy for Specific Bucket
+Also need an IAM policy attached to a specific user that allows reading from one particular S3 bucket. The user authenticates and can only access that single bucket for reads.
 
-Use YAML format, call it security-configuration.yml.
+## Security Requirements:
+- Least privilege only - specify exact S3 actions needed
+- No wildcards on resources
+- Explicit deny on write operations
+- Role assumption flow: EC2 → Instance Profile → IAM Role → S3 access
 
-## Deliverable:
-Working CloudFormation template with:
-- EC2 role with S3 read permissions + write deny
-- User policy for specific bucket read access
-- All the resource IDs and definitions needed
-- Should deploy without errors
+Use CloudFormation with YAML. Call it security-configuration.yml.
 
-Make sure it actually deploys through the CF console.
+## Expected:
+Working CFN template that:
+- Creates the IAM role with instance profile for EC2
+- Sets up S3 read permissions and write denies
+- Creates user policy for specific bucket access
+- All properly linked so EC2 can assume the role and access S3
+
+Should deploy clean through CloudFormation console.
