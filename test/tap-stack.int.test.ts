@@ -21,10 +21,10 @@ const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
                      process.env.AWS_ENDPOINT_URL?.includes('4566') ||
                      process.env.LOCALSTACK_HOSTNAME !== undefined;
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-// Default to 'localstack' when running against LocalStack, otherwise 'Pr154'
+// Get stack name from environment variable or construct from suffix
+// CI/CD sets STACK_NAME directly, local testing uses tap-stack-{suffix} convention
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || (isLocalStack ? 'localstack' : 'Pr154');
-const stackName = `tap-stack-${environmentSuffix}`;
+const stackName = process.env.STACK_NAME || `tap-stack-${environmentSuffix}`;
 const region = 'us-east-1';
 const localStackEndpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
 
