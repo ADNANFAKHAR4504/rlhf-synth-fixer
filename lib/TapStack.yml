@@ -780,17 +780,17 @@ Resources:
 
 
 Outputs:
-  VpcId:
+  VPCId:
     Description: VPC ID where the Aurora cluster is deployed.
     Value: !Ref Vpc
     Export:
       Name: !Sub vpc-id-${EnvironmentSuffix}
 
-  DbSecurityGroupId:
-    Description: Database Security Group ID.
-    Value: !Ref DbSecurityGroup
+  SecurityGroupId:
+    Description: Security Group ID for post-deployment fixes.
+    Value: !Ref AppTierSecurityGroup
     Export:
-      Name: !Sub db-sg-${EnvironmentSuffix}
+      Name: !Sub sg-id-${EnvironmentSuffix}
 
   ClusterEndpoint:
     Description: Writer endpoint of the Aurora cluster.
