@@ -584,9 +584,10 @@ Resources:
     DependsOn:
     - FinancialServicesVPC
     Properties:
-      DBInstanceClass: db.t3.medium
-      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 5
       Engine: postgres
+      EngineVersion: '13.9'
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:username}}']]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:password}}']]
       StorageEncrypted: true
@@ -595,6 +596,7 @@ Resources:
       DBSubnetGroupName: !Ref FinancialDBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
+      BackupRetentionPeriod: 0
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
