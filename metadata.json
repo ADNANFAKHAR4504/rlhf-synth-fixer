@@ -13,8 +13,7 @@
   ],
   "aws_services": [
     "EC2",
-    "AutoScaling",
-    "ELB",
+    "VPC",
     "Route53",
     "IAM"
   ],
