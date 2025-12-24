@@ -51,7 +51,7 @@ module.exports = [
   // Main project configuration (excludes templates)
   {
     files: ['**/*.ts'],
-    ignores: ['templates/**/*.ts'],
+    ignores: ['templates/**/*.ts', '.claude/**/*.ts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
