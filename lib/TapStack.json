@@ -29,9 +29,9 @@
             "Description": "Cost center for billing allocation"
         },
         "LatestAmiId": {
-            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
-            "Description": "Latest Amazon Linux 2 AMI ID"
+            "Type": "String",
+            "Default": "ami-0ff8a91507f77f867",
+            "Description": "AMI ID for EC2 instances (Amazon Linux 2 for LocalStack compatibility)"
         }
     },
     "Mappings": {

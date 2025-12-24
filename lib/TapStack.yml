@@ -28,8 +28,8 @@ Parameters:
 
   LatestAmiId:
     Type: String
-    Default: 'ami-0abcdef1234567890'
-    Description: AMI ID for EC2 instances (hardcoded for LocalStack)
+    Default: 'ami-0ff8a91507f77f867'
+    Description: AMI ID for EC2 instances (Amazon Linux 2 for LocalStack compatibility)
 
 # ============================================================================
 # MAPPINGS - Environment-specific configurations
