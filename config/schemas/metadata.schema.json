@@ -161,6 +161,12 @@
           "description": "Original PR number before LocalStack migration (e.g., Pr7179)"
         }
       }
+    },
+    "training_quality": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Training quality score from 1-10"
     }
   }
 }

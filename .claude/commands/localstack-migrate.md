@@ -42,8 +42,111 @@ This command uses modular shell scripts in `.claude/scripts/` for better maintai
 | `localstack-dashboard.sh`         | **NEW**: Real-time migration dashboard                                |
 | `localstack-rollback.sh`          | **NEW**: Rollback failed migrations                                   |
 | `localstack-enhance-tests.sh`     | **NEW**: Auto-enhance tests for LocalStack                            |
+| `localstack-ci-simulate.sh`       | **NEW**: Run full CI/CD pipeline locally before pushing               |
 
 All scripts use `set -euo pipefail` for strict error handling and trap handlers for cleanup.
+
+## 🚀 LOCAL-FIRST WORKFLOW (DEFAULT!)
+
+**Local-first is the DEFAULT** - Do all heavy lifting locally, then auto-push to CI for final validation.
+
+### Task Completion Criteria
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TASK IS COMPLETE WHEN: archive-folders job passes in CI/CD                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ❌ Local validation passed       → NOT COMPLETE (just local)               │
+│  ❌ PR created                    → NOT COMPLETE (PR exists)                │
+│  ❌ deploy job passed             → NOT COMPLETE (partial CI)               │
+│  ✅ archive-folders job passed    → COMPLETE! (production ready)            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Why Local-First?
+
+| Old Workflow (CI-heavy) | New Workflow (Local-first) |
+|------------------------|---------------------------|
+| ❌ Push → Wait 15-30min → Fix → Push → Repeat | ✅ Fix locally → Push once → Usually passes |
+| ❌ 5-10 CI iterations common | ✅ 1-2 CI iterations max |
+| ❌ Hard to debug CI failures | ✅ Full local debugging |
+| ❌ Consumes CI credits on every push | ✅ CI only runs once (or twice) |
+
+### Local CI Simulation
+
+The `localstack-ci-simulate.sh` script runs ALL CI/CD jobs locally:
+
+```bash
+# Run full CI simulation on your work directory
+.claude/scripts/localstack-ci-simulate.sh ./worktree/localstack-Pr7179
+
+# Run specific job only
+.claude/scripts/localstack-ci-simulate.sh --job build ./worktree/localstack-Pr7179
+
+# Run from a specific job onwards
+.claude/scripts/localstack-ci-simulate.sh --from deploy ./worktree/localstack-Pr7179
+
+# Auto-fix issues while running
+.claude/scripts/localstack-ci-simulate.sh --fix ./worktree/localstack-Pr7179
+```
+
+### Jobs Simulated Locally
+
+| Job | Local Simulation | Notes |
+|-----|-----------------|-------|
+| detect-metadata | ✅ Full | Validates metadata.json, file locations, emojis |
+| claude-review-prompt-quality | ✅ Basic | Checks PROMPT.md exists and has content |
+| validate-commit-message | ✅ Full | Conventional commits validation |
+| validate-jest-config | ✅ Full | Jest roots configuration |
+| build | ✅ Full | npm install, npm build |
+| synth | ✅ Full | CDK/CDKTF synthesis |
+| deploy | ✅ Full | Deploys to local LocalStack |
+| lint | ✅ Full | ESLint/Ruff checks |
+| unit-tests | ✅ Full | Jest/Pytest tests |
+| integration-tests-live | ✅ Full | Against LocalStack |
+| claude-code-action | ⏭️ Skip | Only in CI (Claude review) |
+| cleanup | ✅ Full | Destroys LocalStack resources |
+| claude-review-ideal-response | ✅ Basic | Validates IDEAL_RESPONSE.md |
+| archive-folders | ⏭️ Skip | Only in CI |
+
+### Usage
+
+```bash
+# Full workflow: local work → auto push → monitor CI until complete
+/localstack-migrate Pr7179
+
+# With auto-fix enabled (recommended)
+/localstack-migrate --fix Pr7179
+```
+
+### Default End-to-End Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  DEFAULT WORKFLOW: Local First → Auto Push → CI Complete                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PHASE 1: LOCAL WORK (Saves CI iterations!)                                 │
+│  ──────────────────────────────────────────                                 │
+│  Step 1: Copy files to worktree                                             │
+│  Step 2: Run localstack-ci-simulate.sh (ALL 14 jobs locally)                │
+│  Step 3: If fails → Apply fixes with localstack-fixer                       │
+│  Step 4: Iterate until local CI simulation passes                           │
+│                                                                             │
+│  PHASE 2: AUTO PUSH TO CI (When local passes)                               │
+│  ─────────────────────────────────────────────                              │
+│  Step 5: Create PR automatically                                            │
+│  Step 6: Push to branch → CI pipeline starts                                │
+│                                                                             │
+│  PHASE 3: MONITOR CI UNTIL COMPLETE                                         │
+│  ────────────────────────────────────                                       │
+│  Step 7: Monitor CI/CD pipeline                                             │
+│  Step 8: If CI fails → Auto-invoke localstack-fixer → Push fix              │
+│  Step 9: Iterate until archive-folders job passes                           │
+│  Step 10: ✅ TASK COMPLETE!                                                 │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ## Enhanced Features
 
@@ -157,12 +260,35 @@ Fixes are automatically ordered based on error analysis. See `intelligent_fixes`
 
 ## Usage
 
+**DEFAULT: Local-first, then auto-push to CI** - All work happens locally first, then automatically pushes to CI for final validation. Task is complete when CI passes.
+
 ```bash
+# ═══════════════════════════════════════════════════════════════════════════════
+# 🚀 DEFAULT WORKFLOW: Local First → Auto Push to CI → Complete when CI Passes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Full migration workflow (local work → auto CI push → monitor until complete)
+/localstack-migrate Pr7179
+
+# With explicit auto-fix enabled
+/localstack-migrate --fix Pr7179
+
 # Migrate a specific task by path
 /localstack-migrate ./archive/cdk-ts/Pr7179
 
-# Migrate by PR number (auto-detects platform, fetches from GitHub if not in archive)
-/localstack-migrate Pr7179
+# ═══════════════════════════════════════════════════════════════════════════════
+# 🔧 LOCAL-ONLY MODE (For debugging/testing - does NOT complete the task)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Run only local validation, don't push to CI (task NOT complete)
+/localstack-migrate --local-only Pr7179
+
+# Run local CI simulation on existing worktree
+/localstack-migrate --simulate ./worktree/localstack-Pr7179
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OTHER OPTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
 
 # Migrate by PR number with explicit GitHub fetch
 /localstack-migrate --github Pr2077
@@ -185,21 +311,16 @@ Fixes are automatically ordered based on error analysis. See `intelligent_fixes`
 # PARALLEL EXECUTION: Skip LocalStack reset (for running multiple agents)
 /localstack-migrate --no-reset Pr7179
 
-# PARALLEL EXECUTION: Multiple agents on different PRs
-# Terminal 1: /localstack-migrate --no-reset Pr7179
-# Terminal 2: /localstack-migrate --no-reset Pr7180
-# Terminal 3: /localstack-migrate --no-reset Pr7181
-
-# NEW: Pre-migration compatibility check
+# Pre-migration compatibility check
 /localstack-migrate --check Pr7179
 
-# NEW: Show real-time dashboard
+# Show real-time dashboard
 /localstack-migrate --dashboard
 
-# NEW: Enhance tests for LocalStack
+# Enhance tests for LocalStack
 /localstack-migrate --enhance-tests Pr7179
 
-# NEW: Rollback a failed migration
+# Rollback a failed migration
 /localstack-migrate --rollback Pr7179
 ```
 
@@ -862,13 +983,359 @@ echo ""
 echo "📋 Migration log: $MIGRATION_LOG"
 echo ""
 
-# Exit with appropriate code
+# Don't exit yet - PR creation is only PARTIAL completion
+# Task is complete only when archive-folders job passes
+```
+
+### Step 12: Monitor CI/CD Pipeline Until Archive Stage (TASK COMPLETION)
+
+> **CRITICAL**: A task is NOT complete when the PR is created. It is only complete when the **archive-folders** job passes in CI/CD. This step monitors the pipeline and triggers auto-fixes until that checkpoint is reached.
+
+```bash
+# ═══════════════════════════════════════════════════════════════
+# STEP 12: POST-PR MONITORING AND AUTO-FIX LOOP
+# ═══════════════════════════════════════════════════════════════
+# Task completion criteria:
+#   ✅ archive-folders job passes = TASK COMPLETE
+#   ❌ Any job fails = Trigger localstack-fixer, retry
+# ═══════════════════════════════════════════════════════════════
+
 if [ "$MIGRATION_STATUS" = "success" ]; then
-  exit 0
+  log_header "🔄 STEP 12: MONITORING CI/CD UNTIL TASK COMPLETION"
+  
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  ⚠️  PR CREATED - BUT TASK IS NOT YET COMPLETE!"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "  Task completion requires: archive-folders job to PASS"
+  echo ""
+  echo "  The orchestrator will now:"
+  echo "    1. Monitor the CI/CD pipeline"
+  echo "    2. If any job fails → trigger localstack-fixer"
+  echo "    3. Push fixes and wait for new pipeline run"
+  echo "    4. Repeat until archive-folders passes"
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  
+  # Configuration for monitoring
+  MAX_FIX_ITERATIONS=5
+  PIPELINE_TIMEOUT=2700  # 45 minutes
+  POLL_INTERVAL=45
+  WAIT_AFTER_PUSH=60
+  
+  # Job order for progress tracking
+  JOB_ORDER=(
+    "detect-metadata"
+    "claude-review-prompt-quality"
+    "validate-commit-message"
+    "validate-jest-config"
+    "build"
+    "synth"
+    "deploy"
+    "lint"
+    "unit-tests"
+    "integration-tests-live"
+    "claude-code-action"
+    "cleanup"
+    "claude-review-ideal-response"
+    "archive-folders"  # FINAL CHECKPOINT
+  )
+  
+  FINAL_CHECKPOINT="archive-folders"
+  FIX_ITERATION=0
+  START_TIME=$(date +%s)
+  TASK_COMPLETE=false
+  
+  # Wait for CI to start
+  log_info "Waiting ${WAIT_AFTER_PUSH}s for CI/CD pipeline to start..."
+  sleep $WAIT_AFTER_PUSH
+  
+  # Main monitoring loop
+  while [ "$TASK_COMPLETE" = "false" ]; do
+    ELAPSED=$(($(date +%s) - START_TIME))
+    
+    # Check timeout
+    if [ "$ELAPSED" -ge "$PIPELINE_TIMEOUT" ]; then
+      log_error "Pipeline timeout reached after ${ELAPSED}s"
+      log_error "Task is NOT complete - manual intervention required"
+      break
+    fi
+    
+    # Check max iterations
+    if [ "$FIX_ITERATION" -ge "$MAX_FIX_ITERATIONS" ]; then
+      log_error "Maximum fix iterations ($MAX_FIX_ITERATIONS) reached"
+      log_error "Task is NOT complete - manual intervention required"
+      break
+    fi
+    
+    log_info "Checking pipeline status... (elapsed: ${ELAPSED}s, iteration: $FIX_ITERATION)"
+    
+    # Get PR branch
+    PR_BRANCH=$(gh pr view "$NEW_PR_NUMBER" --repo "$GITHUB_REPO" --json headRefName -q '.headRefName' 2>/dev/null || echo "")
+    
+    if [ -z "$PR_BRANCH" ]; then
+      log_warning "Could not get PR branch, retrying..."
+      sleep $POLL_INTERVAL
+      continue
+    fi
+    
+    # Get latest workflow run
+    WORKFLOW_RUN=$(gh run list --repo "$GITHUB_REPO" --branch "$PR_BRANCH" --limit 1 --json databaseId,status,conclusion 2>/dev/null || echo "[]")
+    
+    if [ "$WORKFLOW_RUN" = "[]" ] || [ -z "$WORKFLOW_RUN" ]; then
+      log_warning "No workflow runs found, waiting..."
+      sleep $POLL_INTERVAL
+      continue
+    fi
+    
+    RUN_ID=$(echo "$WORKFLOW_RUN" | jq -r '.[0].databaseId')
+    RUN_STATUS=$(echo "$WORKFLOW_RUN" | jq -r '.[0].status')
+    RUN_CONCLUSION=$(echo "$WORKFLOW_RUN" | jq -r '.[0].conclusion // "in_progress"')
+    
+    # Get job statuses
+    JOBS=$(gh run view "$RUN_ID" --repo "$GITHUB_REPO" --json jobs 2>/dev/null | jq '.jobs // []' || echo "[]")
+    
+    # Check archive-folders status
+    ARCHIVE_STATUS=$(echo "$JOBS" | jq -r '.[] | select(.name == "archive-folders") | .conclusion // "pending"')
+    
+    # Check for any failures
+    FAILED_JOBS=$(echo "$JOBS" | jq -r '[.[] | select(.conclusion == "failure")] | length')
+    RUNNING_JOBS=$(echo "$JOBS" | jq -r '[.[] | select(.status == "in_progress" or .status == "queued")] | length')
+    FIRST_FAILED=$(echo "$JOBS" | jq -r '[.[] | select(.conclusion == "failure")][0].name // ""')
+    
+    # Display progress
+    echo ""
+    echo "┌─────────────────────────────────────────────────────────────┐"
+    echo "│  📊 PIPELINE PROGRESS - PR #$NEW_PR_NUMBER"
+    echo "├─────────────────────────────────────────────────────────────┤"
+    
+    for job in "${JOB_ORDER[@]}"; do
+      JOB_STATUS=$(echo "$JOBS" | jq -r --arg name "$job" '.[] | select(.name == $name) | .conclusion // .status // "pending"')
+      case "$JOB_STATUS" in
+        success) ICON="✅" ;;
+        failure) ICON="❌" ;;
+        in_progress|queued) ICON="🔄" ;;
+        skipped) ICON="⏭️ " ;;
+        *) ICON="⏳" ;;
+      esac
+      if [ "$job" = "$FINAL_CHECKPOINT" ]; then
+        echo "│  $ICON $job [FINAL]"
+      else
+        echo "│  $ICON $job"
+      fi
+    done
+    
+    echo "└─────────────────────────────────────────────────────────────┘"
+    echo ""
+    
+    # Check if task is complete
+    if [ "$ARCHIVE_STATUS" = "success" ]; then
+      TASK_COMPLETE=true
+      
+      log_header "🎉 TASK COMPLETE - ARCHIVE STAGE REACHED!"
+      echo ""
+      echo "   PR #$NEW_PR_NUMBER is now PRODUCTION READY!"
+      echo "   Total fix iterations: $FIX_ITERATION"
+      echo "   Total time: ${ELAPSED}s"
+      echo ""
+      echo "   The task has passed all CI/CD checkpoints and is ready for manual review."
+      echo ""
+      
+      # Update migration log with completion status
+      "$PROJECT_ROOT/.claude/scripts/localstack-update-log.sh" \
+        --task-path "$TASK_PATH" \
+        --status "completed" \
+        --pr-url "${NEW_PR_URL:-}" \
+        --pr-number "${NEW_PR_NUMBER:-}" \
+        --iterations "$FIX_ITERATION" 2>/dev/null || true
+      
+      break
+      
+    elif [ "$FAILED_JOBS" -gt 0 ]; then
+      # Pipeline failed - trigger auto-fix
+      FIX_ITERATION=$((FIX_ITERATION + 1))
+      
+      log_warning "Pipeline failed at: $FIRST_FAILED"
+      log_fix "Triggering auto-fix iteration $FIX_ITERATION..."
+      echo ""
+      echo "═══════════════════════════════════════════════════════════════"
+      echo "  🤖 INVOKING LOCALSTACK-FIXER AGENT"
+      echo "═══════════════════════════════════════════════════════════════"
+      echo ""
+      echo "  Target PR: #$NEW_PR_NUMBER"
+      echo "  Failed Job: $FIRST_FAILED"
+      echo "  Iteration: $FIX_ITERATION of $MAX_FIX_ITERATIONS"
+      echo ""
+      echo "  The fixer agent will:"
+      echo "    1. Fetch error logs from failed job"
+      echo "    2. Analyze errors and identify fixes"
+      echo "    3. Apply batch fixes"
+      echo "    4. Run local pre-validation"
+      echo "    5. Push fixes to trigger new CI run"
+      echo ""
+      echo "═══════════════════════════════════════════════════════════════"
+      echo ""
+      
+      # >>> INVOKE LOCALSTACK-FIXER AGENT HERE <<<
+      # The agent system will pick up this invocation
+      # Agent context: Fix PR #$NEW_PR_NUMBER, failed at $FIRST_FAILED
+      
+      # Wait for fix to be applied and new CI run to start
+      log_info "Waiting ${WAIT_AFTER_PUSH}s for new CI run after fix..."
+      sleep $WAIT_AFTER_PUSH
+      
+    elif [ "$RUNNING_JOBS" -gt 0 ]; then
+      # Pipeline still running
+      log_info "Pipeline running... waiting ${POLL_INTERVAL}s"
+      sleep $POLL_INTERVAL
+      
+    else
+      # Pipeline completed but archive not reached - check again
+      log_info "Pipeline completed, checking archive status..."
+      sleep $POLL_INTERVAL
+    fi
+  done
+  
+  # Final status
+  if [ "$TASK_COMPLETE" = "true" ]; then
+    exit 0
+  else
+    log_error "Task did NOT complete - archive stage not reached"
+    log_info "Manual intervention required for PR #$NEW_PR_NUMBER"
+    exit 1
+  fi
+  
 else
+  log_header "❌ MIGRATION FAILED - PR NOT CREATED"
+  
+  echo "   Task:   $TASK_PATH"
+  echo "   Reason: $MIGRATION_REASON"
+  echo ""
+  echo "💡 Next steps:"
+  echo "   - Review errors in migration log"
+  echo "   - Try manual migration"
+  echo "   - Check if services are supported in LocalStack Community"
+  
   exit 1
 fi
 ```
+
+## Task Completion Criteria
+
+**IMPORTANT**: A localstack-migrate task is NOT complete until:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TASK COMPLETION STAGES                                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ❌ PR Created                    → PARTIAL (not complete)                  │
+│  ❌ Deployment passed             → PARTIAL (not complete)                  │
+│  ❌ Tests passed                  → PARTIAL (not complete)                  │
+│  ❌ Claude review passed          → PARTIAL (not complete)                  │
+│  ✅ archive-folders job passed    → COMPLETE (production ready)             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+The orchestrator will automatically:
+1. Monitor the CI/CD pipeline after PR creation
+2. Detect any failures at any checkpoint
+3. Invoke the localstack-fixer agent to fix issues
+4. Push fixes and wait for new pipeline run
+5. Repeat until archive-folders passes (max 5 iterations)
+
+## CI/CD Pipeline Compliance
+
+The localstack-migrate command automatically ensures that created PRs will pass the CI/CD pipeline's "Detect Project Files" job. Here's what happens:
+
+### Pre-Flight Validation
+
+Before creating a PR, the script validates:
+
+1. **File Locations**: All files must be in allowed folders (`bin/`, `lib/`, `test/`, `tests/`, `cli/`, `scripts/`, `.github/`) or be allowed root files
+2. **Metadata Schema**: `metadata.json` must have all required fields and valid enum values
+3. **Required Documentation**: For synthetic tasks (team starting with `synth`), ensures `lib/PROMPT.md` and `lib/MODEL_RESPONSE.md` exist
+
+### Automatic Fixes
+
+The PR creation script automatically:
+
+| Issue | Auto-Fix |
+| ----- | -------- |
+| Missing `PROMPT.md` | Creates placeholder with task context |
+| Missing `MODEL_RESPONSE.md` | Creates placeholder with migration summary |
+| Invalid metadata fields | Sanitizes to valid enum values via `localstack-sanitize-metadata.sh` |
+| Missing `wave` field | Defaults to "P1" |
+| Invalid `subtask` values | Maps to closest valid subtask |
+| Invalid `subject_labels` | Maps to closest valid labels |
+
+### Pipeline Job Dependencies
+
+Understanding the CI/CD job flow helps diagnose issues:
+
+```
+detect-metadata (Detect Project Files)
+    ├── Validates metadata.json against schema
+    ├── Checks file locations (check-project-files.sh)
+    ├── Validates required docs for synth tasks
+    └── Outputs: platform, language, provider, subject_labels
+         │
+         ▼
+claude-review-prompt-quality
+         │
+         ▼
+validate-commit-message → validate-jest-config (JS/TS only)
+         │
+         ▼
+      build
+         │
+         ▼
+    synth (CDK/CDKTF only)
+         │
+         ▼
+      deploy → lint → unit-tests
+         │
+         ▼
+integration-tests-live
+         │
+         ▼
+  claude-code-action
+         │
+         ▼
+      cleanup → claude-review-ideal-response
+         │
+         ▼
+  archive-folders
+```
+
+### Troubleshooting CI/CD Failures
+
+If the "Detect Project Files" job fails:
+
+1. **Check metadata.json schema**: Run the schema validator locally
+   ```bash
+   npm install -g ajv-cli
+   ajv validate -s config/schemas/metadata.schema.json -d metadata.json
+   ```
+
+2. **Verify file locations**: Run the check script
+   ```bash
+   ./scripts/check-project-files.sh
+   ```
+
+3. **Check required docs for synth tasks**:
+   ```bash
+   # For team starting with "synth"
+   ls -la lib/PROMPT.md lib/MODEL_RESPONSE.md
+   ```
+
+4. **Re-run sanitization manually**:
+   ```bash
+   .claude/scripts/localstack-sanitize-metadata.sh metadata.json
+   ```
 
 ## Supported Platforms
 
