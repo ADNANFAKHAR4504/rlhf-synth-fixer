@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291590",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T10:25:51.176Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "EC2",
+    "IAM",
+    "S3",
+    "RDS",
+    "CloudTrail",
+    "CloudWatch"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr1870"
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

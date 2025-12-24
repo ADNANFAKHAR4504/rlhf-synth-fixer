@@ -210,12 +210,30 @@ jq --argjson valid_subtasks "$VALID_SUBTASKS" \
     subtask: (.subtask | enforce_subtask_string),
     provider: "localstack",
     subject_labels: (
-      [.subject_labels[]? | map_label]
+      # Handle both array and string types for subject_labels
+      (if (.subject_labels | type) == "array" then
+        .subject_labels
+      elif (.subject_labels | type) == "string" then
+        [.subject_labels]
+      else
+        []
+      end)
+      | map(map_label)
       | unique
       | map(select(. as $l | $valid_labels | index($l)))
       | if length == 0 then ["General Infrastructure Tooling QA"] else . end
     ),
-    aws_services: (.aws_services // []),
+    aws_services: (
+      # Handle both array and string types for aws_services
+      if (.aws_services | type) == "array" then
+        .aws_services
+      elif (.aws_services | type) == "string" then
+        # Split comma-separated string into array
+        (.aws_services | split(",") | map(gsub("^\\s+|\\s+$"; "")))
+      else
+        []
+      end
+    ),
     wave: (.wave // "P1")
   }
   # Add migrated_from object only if we have the original PR reference
@@ -231,9 +249,57 @@ jq --argjson valid_subtasks "$VALID_SUBTASKS" \
     end)
 ' "$METADATA_FILE" > "${METADATA_FILE}.tmp"
 
+# ═══════════════════════════════════════════════════════════════════════════
+# VALIDATE SANITIZATION RESULT
+# ═══════════════════════════════════════════════════════════════════════════
+
 # Validate the result is valid JSON
 if ! jq empty "${METADATA_FILE}.tmp" 2>/dev/null; then
   log_error "Sanitization produced invalid JSON"
+  log_error "Original metadata was:"
+  cat "${METADATA_FILE}.backup" 2>/dev/null || true
+  mv "${METADATA_FILE}.backup" "$METADATA_FILE"
+  rm -f "${METADATA_FILE}.tmp"
+  exit 1
+fi
+
+# Validate all required fields are present
+REQUIRED_FIELDS=("platform" "language" "complexity" "turn_type" "po_id" "team" "startedAt" "subtask" "provider" "subject_labels" "aws_services" "wave")
+MISSING_FIELDS=()
+
+for field in "${REQUIRED_FIELDS[@]}"; do
+  if ! jq -e ".$field" "${METADATA_FILE}.tmp" &>/dev/null; then
+    MISSING_FIELDS+=("$field")
+  fi
+done
+
+if [ ${#MISSING_FIELDS[@]} -gt 0 ]; then
+  log_error "Sanitization failed: missing required fields: ${MISSING_FIELDS[*]}"
+  log_error "Original metadata was:"
+  cat "${METADATA_FILE}.backup" 2>/dev/null || true
+  log_error "Sanitized result was:"
+  cat "${METADATA_FILE}.tmp" 2>/dev/null || true
+  mv "${METADATA_FILE}.backup" "$METADATA_FILE"
+  rm -f "${METADATA_FILE}.tmp"
+  exit 1
+fi
+
+# Validate that no disallowed fields are present (schema has additionalProperties: false)
+# Note: training_quality IS allowed by schema as an optional field, so it's not in this list
+DISALLOWED_FIELDS=("coverage" "author" "dockerS3Location" "task_id" "pr_id" "localstack_migration" "original_po_id" "original_pr_id" "testDependencies" "background" "training_quality_justification")
+FOUND_DISALLOWED=()
+
+for field in "${DISALLOWED_FIELDS[@]}"; do
+  if jq -e ".$field" "${METADATA_FILE}.tmp" &>/dev/null; then
+    FOUND_DISALLOWED+=("$field")
+  fi
+done
+
+if [ ${#FOUND_DISALLOWED[@]} -gt 0 ]; then
+  log_error "Sanitization failed: disallowed fields still present: ${FOUND_DISALLOWED[*]}"
+  log_error "These fields must be removed to pass schema validation (additionalProperties: false)"
+  log_error "Sanitized result was:"
+  cat "${METADATA_FILE}.tmp" 2>/dev/null || true
   mv "${METADATA_FILE}.backup" "$METADATA_FILE"
   rm -f "${METADATA_FILE}.tmp"
   exit 1
