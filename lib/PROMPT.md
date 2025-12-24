@@ -1,4 +1,4 @@
-Design an AWS CloudFormation template in YAML named `secure_infrastructure.yml` that provisions a secure infrastructure setup in the **us-east-1** region. The template must follow the organization's standard naming conventions and comply with the constraints listed below. All resources should be deployed in the dedicated AWS account with ID **123456789012**, using the provided VPC ID **vpc-abcde12345**.
+Design an AWS CloudFormation template in YAML named `secure_infrastructure.yml` that provisions a secure infrastructure setup in the **us-east-1** region. The template must follow the organization's standard naming conventions and comply with the constraints listed below. Deploy to the dedicated AWS account with ID **123456789012**, using the provided VPC ID **vpc-abcde12345**.
 
 ## Requirements
 
@@ -47,12 +47,12 @@ Design an AWS CloudFormation template in YAML named `secure_infrastructure.yml` 
 
 ## Constraints
 
-- All resources must include **Name** and **Environment** tags.  
+- Each component must include **Name** and **Environment** tags.  
 - IAM roles must follow the **least privilege** principle.  
 - EC2 instances must use **approved AMI IDs**.  
 - All Lambda functions must enforce **VPC configuration**.  
 - CloudFront distributions must log to the designated S3 bucket.  
-- Application Load Balancer accepts HTTPS from the internet; all other resources restricted to VPC internal traffic.  
+- Application Load Balancer accepts HTTPS from the internet; all other services restricted to VPC internal traffic.  
 
 ## Expected Output
 
