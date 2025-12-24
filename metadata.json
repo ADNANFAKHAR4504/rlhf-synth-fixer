@@ -6,13 +6,11 @@
   "po_id": "LS-291210",
   "team": "synth-2",
   "startedAt": "2025-08-21T12:48:38.443Z",
-  "subtask": "General Infrastructure Provisioning",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup",
-    "General Infrastructure Tooling QA",
-    "IaC Optimization",
-    "Security Configuration as Code"
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "VPC",
@@ -31,7 +29,7 @@
   ],
   "wave": "P0",
   "migrated_from": {
-    "po_id": "291210",
+    "po_id": "LS-291210",
     "pr": "Pr1950"
   }
 }

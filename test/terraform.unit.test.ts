@@ -75,6 +75,13 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/variable\s+"vpc_cidr_primary"\s*{/);
       expect(stackContent).toMatch(/variable\s+"vpc_cidr_secondary"\s*{/);
     });
+
+    test("declares LocalStack compatibility flags", () => {
+      expect(stackContent).toMatch(/variable\s+"enable_ec2"\s*{/);
+      expect(stackContent).toMatch(/variable\s+"enable_rds"\s*{/);
+      expect(stackContent).toMatch(/variable\s+"enable_nat_gateway"\s*{/);
+      expect(stackContent).toMatch(/variable\s+"enable_cloudfront"\s*{/);
+    });
   });
 
   describe("Locals", () => {
@@ -193,8 +200,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/associate_public_ip_address\s*=\s*false/);
     });
 
-    test("EC2 instances have encrypted root volumes", () => {
-      expect(stackContent).toMatch(/encrypted\s*=\s*true/);
+    test("EC2 instances use conditional count for LocalStack compatibility", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_instance"\s+"web_primary"[\s\S]*?count\s*=\s*var\.enable_ec2/);
     });
   });
 

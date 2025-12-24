@@ -53,6 +53,31 @@ variable "ec2_instance_type" {
   default     = "t3.micro"
 }
 
+# LocalStack compatibility flags
+variable "enable_ec2" {
+  description = "Enable EC2 instance creation (set to false for LocalStack Community)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_rds" {
+  description = "Enable RDS instance creation (set to false for LocalStack Community)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_nat_gateway" {
+  description = "Enable NAT Gateway creation (set to false for LocalStack Community)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_cloudfront" {
+  description = "Enable CloudFront distribution (set to false for LocalStack Community)"
+  type        = bool
+  default     = false
+}
+
 # Locals
 locals {
   project_name = "iac-aws-nova-model-breaking"
@@ -144,7 +169,7 @@ resource "aws_internet_gateway" "primary" {
 # NAT Gateway EIPs - Primary
 resource "aws_eip" "nat_primary" {
   provider = aws.primary
-  count    = 2
+  count    = var.enable_nat_gateway ? 2 : 0
 
   domain = "vpc"
 
@@ -204,7 +229,7 @@ resource "aws_subnet" "database_primary" {
 # NAT Gateways - Primary
 resource "aws_nat_gateway" "primary" {
   provider = aws.primary
-  count    = 2
+  count    = var.enable_nat_gateway ? 2 : 0
 
   allocation_id = aws_eip.nat_primary[count.index].id
   subnet_id     = aws_subnet.public_primary[count.index].id
@@ -238,9 +263,12 @@ resource "aws_route_table" "private_primary" {
 
   vpc_id = aws_vpc.primary.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.primary[count.index].id
+  dynamic "route" {
+    for_each = var.enable_nat_gateway ? [1] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = aws_nat_gateway.primary[count.index].id
+    }
   }
 
   tags = merge(local.common_tags, {
@@ -319,6 +347,7 @@ resource "aws_security_group" "database_primary" {
 # DB Subnet Group - Primary
 resource "aws_db_subnet_group" "primary" {
   provider = aws.primary
+  count    = var.enable_rds ? 1 : 0
 
   name       = "${local.name_prefix}-${var.environment}-db-subnet-group-primary"
   subnet_ids = aws_subnet.database_primary[*].id
@@ -331,6 +360,7 @@ resource "aws_db_subnet_group" "primary" {
 # RDS Instance - Primary
 resource "aws_db_instance" "primary" {
   provider = aws.primary
+  count    = var.enable_rds ? 1 : 0
 
   identifier     = "${local.name_prefix}-${var.environment}-db-primary"
   engine         = "mysql"
@@ -348,7 +378,7 @@ resource "aws_db_instance" "primary" {
   password = random_password.db_password.result
 
   vpc_security_group_ids = [aws_security_group.database_primary.id]
-  db_subnet_group_name   = aws_db_subnet_group.primary.name
+  db_subnet_group_name   = aws_db_subnet_group.primary[0].name
 
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
@@ -365,7 +395,7 @@ resource "aws_db_instance" "primary" {
 # EC2 Instance - Primary
 resource "aws_instance" "web_primary" {
   provider = aws.primary
-  count    = 2
+  count    = var.enable_ec2 ? 2 : 0
 
   ami           = data.aws_ami.amazon_linux_primary.id
   instance_type = var.ec2_instance_type
@@ -415,7 +445,7 @@ resource "aws_internet_gateway" "secondary" {
 # NAT Gateway EIPs - Secondary
 resource "aws_eip" "nat_secondary" {
   provider = aws.secondary
-  count    = 2
+  count    = var.enable_nat_gateway ? 2 : 0
 
   domain = "vpc"
 
@@ -475,7 +505,7 @@ resource "aws_subnet" "database_secondary" {
 # NAT Gateways - Secondary
 resource "aws_nat_gateway" "secondary" {
   provider = aws.secondary
-  count    = 2
+  count    = var.enable_nat_gateway ? 2 : 0
 
   allocation_id = aws_eip.nat_secondary[count.index].id
   subnet_id     = aws_subnet.public_secondary[count.index].id
@@ -509,9 +539,12 @@ resource "aws_route_table" "private_secondary" {
 
   vpc_id = aws_vpc.secondary.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.secondary[count.index].id
+  dynamic "route" {
+    for_each = var.enable_nat_gateway ? [1] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = aws_nat_gateway.secondary[count.index].id
+    }
   }
 
   tags = merge(local.common_tags, {
@@ -609,6 +642,7 @@ resource "aws_kms_alias" "secondary" {
 # DB Subnet Group - Secondary
 resource "aws_db_subnet_group" "secondary" {
   provider = aws.secondary
+  count    = var.enable_rds ? 1 : 0
 
   name       = "${local.name_prefix}-${var.environment}-db-subnet-group-secondary"
   subnet_ids = aws_subnet.database_secondary[*].id
@@ -618,9 +652,10 @@ resource "aws_db_subnet_group" "secondary" {
   })
 }
 
-# RDS Instance - Secondary  
+# RDS Instance - Secondary
 resource "aws_db_instance" "secondary" {
   provider = aws.secondary
+  count    = var.enable_rds ? 1 : 0
 
   identifier     = "${local.name_prefix}-${var.environment}-db-secondary"
   engine         = "mysql"
@@ -638,7 +673,7 @@ resource "aws_db_instance" "secondary" {
   password = random_password.db_password.result
 
   vpc_security_group_ids = [aws_security_group.database_secondary.id]
-  db_subnet_group_name   = aws_db_subnet_group.secondary.name
+  db_subnet_group_name   = aws_db_subnet_group.secondary[0].name
 
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
@@ -655,7 +690,7 @@ resource "aws_db_instance" "secondary" {
 # EC2 Instances - Secondary
 resource "aws_instance" "web_secondary" {
   provider = aws.secondary
-  count    = 2
+  count    = var.enable_ec2 ? 2 : 0
 
   ami           = data.aws_ami.amazon_linux_secondary.id
   instance_type = var.ec2_instance_type
@@ -705,6 +740,7 @@ data "aws_ami" "amazon_linux_secondary" {
 # Route 53 Hosted Zone
 resource "aws_route53_zone" "main" {
   provider = aws.global
+  count    = var.enable_cloudfront ? 1 : 0
 
   name = "${local.name_prefix}-${var.environment}.local"
 
@@ -716,9 +752,10 @@ resource "aws_route53_zone" "main" {
 # CloudFront Distribution
 resource "aws_cloudfront_distribution" "main" {
   provider = aws.global
+  count    = var.enable_cloudfront ? 1 : 0
 
   origin {
-    domain_name = aws_route53_zone.main.name
+    domain_name = aws_route53_zone.main[0].name
     origin_id   = "primary"
 
     custom_origin_config {
@@ -784,22 +821,43 @@ output "secondary_private_subnet_ids" {
 
 output "primary_rds_endpoint" {
   description = "RDS instance endpoint in primary region"
-  value       = aws_db_instance.primary.endpoint
+  value       = var.enable_rds ? aws_db_instance.primary[0].endpoint : ""
 }
 
 output "secondary_rds_endpoint" {
   description = "RDS instance endpoint in secondary region"
-  value       = aws_db_instance.secondary.endpoint
+  value       = var.enable_rds ? aws_db_instance.secondary[0].endpoint : ""
+}
+
+# LocalStack compatibility outputs
+output "enable_ec2" {
+  description = "Whether EC2 instances are enabled"
+  value       = var.enable_ec2
+}
+
+output "enable_rds" {
+  description = "Whether RDS instances are enabled"
+  value       = var.enable_rds
+}
+
+output "enable_nat_gateway" {
+  description = "Whether NAT Gateways are enabled"
+  value       = var.enable_nat_gateway
 }
 
 output "cloudfront_domain_name" {
   description = "CloudFront distribution domain name"
-  value       = aws_cloudfront_distribution.main.domain_name
+  value       = var.enable_cloudfront ? aws_cloudfront_distribution.main[0].domain_name : ""
 }
 
 output "route53_zone_id" {
   description = "Route 53 hosted zone ID"
-  value       = aws_route53_zone.main.zone_id
+  value       = var.enable_cloudfront ? aws_route53_zone.main[0].zone_id : ""
+}
+
+output "enable_cloudfront" {
+  description = "Whether CloudFront distribution is enabled"
+  value       = var.enable_cloudfront
 }
 
 output "primary_kms_key_id" {

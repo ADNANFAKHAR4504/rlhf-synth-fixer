@@ -12,7 +12,7 @@ terraform {
   }
 
   # Using local backend for testing due to S3 permission issues
-  # backend "s3" {}
+  backend "s3" {}
 }
 
 provider "aws" {
