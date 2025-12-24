@@ -1170,6 +1170,30 @@ Outputs:
     Value: !Ref Vpc
     Export: { Name: !Sub "VpcId-${EnvironmentSuffix}" }
 
+  VPCId:
+    Description: VPC Id for post-deploy script compatibility
+    Value: !Ref Vpc
+
+  SecurityGroupId:
+    Description: ALB Security Group Id for post-deploy script compatibility
+    Value: !Ref AlbSecurityGroup
+
+  InternetGatewayId:
+    Description: Internet Gateway Id for post-deploy script compatibility
+    Value: !Ref InternetGateway
+
+  NATGatewayId:
+    Description: NAT Gateway Id for post-deploy script compatibility
+    Value: !Ref NatGatewayAz1
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 Id for post-deploy script compatibility
+    Value: !Ref PublicSubnetAz1
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 Id for post-deploy script compatibility
+    Value: !Ref PrivateSubnetAz1
+
   PrivateSubnetIds:
     Description: Private subnet Ids (AZ1, AZ2, AZ3)
     Value: !Join [",", [!Ref PrivateSubnetAz1, !Ref PrivateSubnetAz2, !Ref PrivateSubnetAz3]]
