@@ -59,25 +59,35 @@ import {
 /*                           Outputs & Setup                           */
 /* ------------------------------------------------------------------ */
 
-const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
-if (!fs.existsSync(p)) {
+// Try flat-outputs.json first (LocalStack), then all-outputs.json (AWS)
+const flatPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
+const allPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+
+let outputs: Record<string, string> = {};
+let outputsArray: { OutputKey: string; OutputValue: string }[] = [];
+
+if (fs.existsSync(flatPath)) {
+  // Flat format: { OutputKey: OutputValue, ... }
+  outputs = JSON.parse(fs.readFileSync(flatPath, "utf8"));
+  outputsArray = Object.entries(outputs).map(([k, v]) => ({
+    OutputKey: k,
+    OutputValue: v,
+  }));
+} else if (fs.existsSync(allPath)) {
+  // Nested format: { "<StackName>": [ { OutputKey, OutputValue }, ... ] }
+  const raw = JSON.parse(fs.readFileSync(allPath, "utf8"));
+  const firstTopKey = Object.keys(raw)[0];
+  if (!firstTopKey) {
+    throw new Error("No top-level keys found in all-outputs.json");
+  }
+  outputsArray = raw[firstTopKey];
+  for (const o of outputsArray) {
+    outputs[o.OutputKey] = o.OutputValue;
+  }
+} else {
   throw new Error(
-    `Expected outputs file at ${p} — create it (from CloudFormation stack outputs) before running integration tests.`
+    `Expected outputs file at ${flatPath} or ${allPath} — create it (from CloudFormation stack outputs) before running integration tests.`
   );
-}
-
-// Generic format: { "<StackName>": [ { OutputKey, OutputValue }, ... ] }
-const raw = JSON.parse(fs.readFileSync(p, "utf8"));
-const firstTopKey = Object.keys(raw)[0];
-if (!firstTopKey) {
-  throw new Error("No top-level keys found in all-outputs.json");
-}
-
-const outputsArray: { OutputKey: string; OutputValue: string }[] =
-  raw[firstTopKey];
-const outputs: Record<string, string> = {};
-for (const o of outputsArray) {
-  outputs[o.OutputKey] = o.OutputValue;
 }
 
 // Helper: deduce region, preferring cluster endpoint, then env variables
