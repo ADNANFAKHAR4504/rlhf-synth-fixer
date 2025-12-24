@@ -1,0 +1,1099 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Secure, modular CloudFormation template for web application infrastructure with latest AWS features",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Project Configuration"
+          },
+          "Parameters": [
+            "ProjectName",
+            "EnvironmentSuffix",
+            "Owner"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Infrastructure Configuration"
+          },
+          "Parameters": [
+            "InstanceType",
+            "DBInstanceClass",
+            "AmiId"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Security Configuration"
+          },
+          "Parameters": [
+            "AllowedCIDR",
+            "HTTPPort",
+            "HTTPSPort",
+            "DatabasePort"
+          ]
+        }
+      ],
+      "ParameterLabels": {
+        "ProjectName": {
+          "default": "Project Name"
+        },
+        "EnvironmentSuffix": {
+          "default": "Environment Suffix"
+        },
+        "Owner": {
+          "default": "Owner"
+        },
+        "InstanceType": {
+          "default": "EC2 Instance Type"
+        },
+        "DBInstanceClass": {
+          "default": "Aurora DB Instance Class"
+        },
+        "AmiId": {
+          "default": "AMI ID"
+        },
+        "AllowedCIDR": {
+          "default": "Allowed CIDR Block"
+        },
+        "HTTPPort": {
+          "default": "HTTP Port"
+        },
+        "HTTPSPort": {
+          "default": "HTTPS Port"
+        },
+        "DatabasePort": {
+          "default": "Database Port"
+        }
+      }
+    }
+  },
+  "Parameters": {
+    "ProjectName": {
+      "Type": "String",
+      "Default": "webapp",
+      "Description": "Project name for resource naming"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "Owner": {
+      "Type": "String",
+      "Default": "cloud-team",
+      "Description": "The owner of the resources, for tagging purposes."
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.micro",
+      "AllowedValues": [
+        "t3.micro",
+        "t3.small",
+        "t3.medium",
+        "t3.large"
+      ],
+      "Description": "EC2 instance type"
+    },
+    "DBInstanceClass": {
+      "Type": "String",
+      "Default": "db.t4g.medium",
+      "Description": "The instance class for the Aurora DB instance. Allows modern burstable (t3, t4g) and memory-optimized (r5, r6g, r7g) classes.",
+      "AllowedPattern": "^db\\.(t(3|4g)|r(5|6g|7g))\\..*$",
+      "ConstraintDescription": "Must be a valid Aurora-compatible instance class (e.g., db.t4g.medium, db.r6g.large)."
+    },
+    "AmiId": {
+      "Type": "String",
+      "Default": "ami-0c55b159cbfafe1f0",
+      "Description": "The AMI ID for the EC2 instances (LocalStack-compatible)"
+    },
+    "AllowedCIDR": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "Description": "CIDR block allowed for inbound access. Defaults to the VPC CIDR.",
+      "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-9]|3[0-2]))?$",
+      "ConstraintDescription": "Must be a valid CIDR range (e.g., 10.0.0.0/16)"
+    },
+    "HTTPPort": {
+      "Type": "Number",
+      "Default": 80,
+      "MinValue": 1,
+      "MaxValue": 65535,
+      "Description": "HTTP port for web server access"
+    },
+    "HTTPSPort": {
+      "Type": "Number",
+      "Default": 443,
+      "MinValue": 1,
+      "MaxValue": 65535,
+      "Description": "HTTPS port for web server access"
+    },
+    "DatabasePort": {
+      "Type": "Number",
+      "Default": 3306,
+      "MinValue": 1,
+      "MaxValue": 65535,
+      "Description": "Database port for MySQL access"
+    },
+    "MasterUserPassword": {
+      "Type": "String",
+      "NoEcho": true,
+      "Default": "TempPassword123!",
+      "MinLength": 8,
+      "Description": "Master password for the database (LocalStack compatibility)"
+    },
+    "DeployEC2": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": ["true", "false"],
+      "Description": "Set to true to deploy EC2 instance (has LocalStack AMI compatibility issues)"
+    }
+  },
+  "Conditions": {
+    "ShouldDeployEC2": {
+      "Fn::Equals": [
+        {
+          "Ref": "DeployEC2"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-vpc"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-igw"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "VPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-public-subnet-1"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-public-subnet-2"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.101.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-private-subnet-1"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.102.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-private-subnet-2"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-public-rt"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "VPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "WebServerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for web servers with restricted access",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": {
+              "Ref": "HTTPPort"
+            },
+            "ToPort": {
+              "Ref": "HTTPPort"
+            },
+            "CidrIp": {
+              "Ref": "AllowedCIDR"
+            },
+            "Description": "HTTP access from allowed CIDR"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": {
+              "Ref": "HTTPSPort"
+            },
+            "ToPort": {
+              "Ref": "HTTPSPort"
+            },
+            "CidrIp": {
+              "Ref": "AllowedCIDR"
+            },
+            "Description": "HTTPS access from allowed CIDR"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "All outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-web-sg"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Allow inbound database connections from the web server security group",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": {
+              "Ref": "DatabasePort"
+            },
+            "ToPort": {
+              "Ref": "DatabasePort"
+            },
+            "SourceSecurityGroupId": {
+              "Ref": "WebServerSecurityGroup"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-db-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "ApplicationTierS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-application-data-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              },
+              "BucketKeyEnabled": true
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-app-bucket"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "EC2InstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3AccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${ApplicationTierS3Bucket}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${ApplicationTierS3Bucket}"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchLogsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/ec2/${ProjectName}-${EnvironmentSuffix}*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "EC2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "EC2InstanceRole"
+          }
+        ]
+      }
+    },
+    "WebServerInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Condition": "ShouldDeployEC2",
+      "Properties": {
+        "ImageId": "ami-ff0fea8310f3",
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "IamInstanceProfile": {
+          "Ref": "EC2InstanceProfile"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "WebServerSecurityGroup"
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho '<h1>Hello from ${ProjectName}-${EnvironmentSuffix}</h1>' > /var/www/html/index.html\n"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-web-server"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnet group for RDS database",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-db-subnet-group"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.08.2",
+        "DatabaseName": {
+          "Fn::Sub": "${ProjectName}DB"
+        },
+        "MasterUsername": "admin",
+        "MasterUserPassword": {
+          "Ref": "MasterUserPassword"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "BackupRetentionPeriod": 7,
+        "StorageEncrypted": true,
+        "DeletionProtection": false,
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {
+          "Ref": "DatabaseCluster"
+        },
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      }
+    },
+    "CloudTrailEventDataStore": {
+      "Type": "AWS::CloudTrail::EventDataStore",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-cloudtrail-lake"
+        },
+        "RetentionPeriod": 90,
+        "AdvancedEventSelectors": [
+          {
+            "FieldSelectors": [
+              {
+                "Field": "eventCategory",
+                "Equals": [
+                  "Management"
+                ]
+              }
+            ]
+          }
+        ],
+        "TerminationProtectionEnabled": false,
+        "MultiRegionEnabled": false,
+        "OrganizationEnabled": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-cloudtrail-lake"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "The ID of the VPC",
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-vpc-id"
+        }
+      }
+    },
+    "PublicSubnet1Id": {
+      "Description": "The ID of the first public subnet",
+      "Value": {
+        "Ref": "PublicSubnet1"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-public-subnet-1-id"
+        }
+      }
+    },
+    "PublicSubnet2Id": {
+      "Description": "The ID of the second public subnet",
+      "Value": {
+        "Ref": "PublicSubnet2"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-public-subnet-2-id"
+        }
+      }
+    },
+    "PrivateSubnet1Id": {
+      "Description": "The ID of the first private subnet",
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-private-subnet-1-id"
+        }
+      }
+    },
+    "PrivateSubnet2Id": {
+      "Description": "The ID of the second private subnet",
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-private-subnet-2-id"
+        }
+      }
+    },
+    "WebServerSecurityGroupId": {
+      "Description": "The ID of the Web Server Security Group",
+      "Value": {
+        "Ref": "WebServerSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-web-sg-id"
+        }
+      }
+    },
+    "DatabaseSecurityGroupId": {
+      "Description": "The ID of the Database Security Group",
+      "Value": {
+        "Ref": "DatabaseSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-db-sg-id"
+        }
+      }
+    },
+    "ApplicationTierS3BucketName": {
+      "Description": "The name of the S3 bucket for application data",
+      "Value": {
+        "Ref": "ApplicationTierS3Bucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-app-bucket-name"
+        }
+      }
+    },
+    "DatabaseEndpoint": {
+      "Description": "The endpoint of the RDS database",
+      "Value": {
+        "Fn::GetAtt": [
+          "DatabaseInstance",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-db-endpoint"
+        }
+      }
+    },
+    "WebServerInstanceId": {
+      "Condition": "ShouldDeployEC2",
+      "Description": "The ID of the Web Server EC2 instance",
+      "Value": {
+        "Ref": "WebServerInstance"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ec2-instance-id"
+        }
+      }
+    }
+  }
+}

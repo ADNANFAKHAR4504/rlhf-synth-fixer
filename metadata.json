@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-229218",
+  "team": "synth-2",
+  "startedAt": "2025-07-26T10:42:10.655Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "S3",
+    "IAM",
+    "CloudTrail"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "229218",
+    "pr": "Pr314"
+  }
+}
