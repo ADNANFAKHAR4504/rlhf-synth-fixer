@@ -90,7 +90,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref HubVpc
-      CidrBlock: !Select [0, !Cidr [!Ref HubVpcCidr, 6, 8]]
+      CidrBlock: '10.0.0.0/24'
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
@@ -109,7 +109,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref HubVpc
-      CidrBlock: !Select [1, !Cidr [!Ref HubVpcCidr, 6, 8]]
+      CidrBlock: '10.0.1.0/24'
       AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
@@ -128,7 +128,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref HubVpc
-      CidrBlock: !Select [2, !Cidr [!Ref HubVpcCidr, 6, 8]]
+      CidrBlock: '10.0.2.0/24'
       AvailabilityZone: !Select [2, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
@@ -296,7 +296,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref Spoke1Vpc
-      CidrBlock: !Select [0, !Cidr [!Ref Spoke1VpcCidr, 6, 8]]
+      CidrBlock: '10.1.0.0/24'
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
@@ -314,7 +314,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref Spoke1Vpc
-      CidrBlock: !Select [1, !Cidr [!Ref Spoke1VpcCidr, 6, 8]]
+      CidrBlock: '10.1.1.0/24'
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
@@ -332,7 +332,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref Spoke1Vpc
-      CidrBlock: !Select [2, !Cidr [!Ref Spoke1VpcCidr, 6, 8]]
+      CidrBlock: '10.1.2.0/24'
       AvailabilityZone: !Select [2, !GetAZs '']
       Tags:
         - Key: Name
@@ -434,7 +434,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref Spoke2Vpc
-      CidrBlock: !Select [0, !Cidr [!Ref Spoke2VpcCidr, 6, 8]]
+      CidrBlock: '10.2.0.0/24'
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
@@ -452,7 +452,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref Spoke2Vpc
-      CidrBlock: !Select [1, !Cidr [!Ref Spoke2VpcCidr, 6, 8]]
+      CidrBlock: '10.2.1.0/24'
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
@@ -470,7 +470,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref Spoke2Vpc
-      CidrBlock: !Select [2, !Cidr [!Ref Spoke2VpcCidr, 6, 8]]
+      CidrBlock: '10.2.2.0/24'
       AvailabilityZone: !Select [2, !GetAZs '']
       Tags:
         - Key: Name
