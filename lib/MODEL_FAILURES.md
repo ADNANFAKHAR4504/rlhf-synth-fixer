@@ -94,7 +94,47 @@
  Set up log retention policies  
 
 ### Additional Requirements
- All resources tagged with env, owner, project  
- Resources restricted to us-east-1 region  
- Comprehensive outputs for integration  
+ All resources tagged with env, owner, project
+ Resources restricted to us-east-1 region
+ Comprehensive outputs for integration
  Delete policies ensure complete cleanup
+
+## LocalStack-Specific Modifications
+
+This template has been adapted for compatibility with LocalStack Community edition, which has limited support for certain AWS features. The following modifications were made to ensure successful deployment while maintaining the core infrastructure patterns:
+
+### RDS Database Configuration
+**Encryption Disabled**: Set `StorageEncrypted: false` instead of using KMS encryption. LocalStack Community has limited KMS integration for RDS resources, and encryption would cause deployment failures or incomplete resource initialization.
+
+**Static Credentials**: Using hardcoded `MasterUsername: admin` and `MasterUserPassword: TempPassword123!` instead of dynamic Secrets Manager integration. LocalStack's Secrets Manager implementation doesn't fully support CloudFormation's dynamic secret resolution during RDS instance creation.
+
+**Backup Retention**: Set `BackupRetentionPeriod: 0` to disable automated backups. LocalStack Community doesn't fully implement RDS backup and snapshot features, which can cause timeouts during deployment.
+
+**Enhanced Monitoring Removed**: Removed `MonitoringInterval` and `MonitoringRoleArn` properties. LocalStack doesn't support RDS Enhanced Monitoring, and these properties would cause validation errors or deployment hangs.
+
+**CloudWatch Log Exports Removed**: Removed `EnableCloudwatchLogsExports` property. LocalStack has limited integration between RDS and CloudWatch Logs, which would prevent successful database initialization.
+
+### EC2 Instance Placement
+**Public Subnet Deployment**: EC2 instance deployed in `PublicSubnet` instead of `PrivateSubnet`. LocalStack Community edition doesn't fully support NAT Gateway functionality, so instances in private subnets cannot reach the internet for package installation and updates. Placing the instance in a public subnet with an Internet Gateway ensures proper connectivity during deployment and testing.
+
+### AMI ID Resolution
+**SSM Parameter Store Lookup**: Using `AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>` with path `/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2` instead of hardcoded AMI IDs. This approach:
+- Avoids CloudFormation cfn-lint validation errors for AMI ID format
+- Works consistently in LocalStack's SSM Parameter Store implementation
+- Ensures the template uses a valid AMI reference pattern
+- Prevents `E1152` lint errors about invalid AMI ID formats
+
+### Security Group Output
+**Standardized Output Key**: Output key changed from `WebServerSecurityGroupId` to `SecurityGroupId` to match the expectations of LocalStack's post-deployment fix script (`localstack-cloudformation-post-deploy-fix.sh`). The post-deployment script applies additional fixes for LocalStack limitations and requires this specific output key name.
+
+### Secrets Manager Integration
+**Simplified Lambda Configuration**: While the Lambda function for secret rotation is included in the template, it's configured to work with LocalStack's limited Secrets Manager implementation. In a production AWS environment, this would integrate more tightly with RDS credential updates through Secrets Manager's rotation framework.
+
+### Impact on Security Posture
+These LocalStack adaptations reduce the security posture compared to a production AWS deployment (e.g., unencrypted RDS, static credentials, public subnet placement). However, they are appropriate for:
+- Local development and testing environments
+- CI/CD pipeline validation
+- Learning and training scenarios
+- Cost-effective infrastructure testing
+
+For production AWS deployments, the original security configurations (KMS encryption, Secrets Manager, private subnets with NAT Gateway, enhanced monitoring) should be restored.
