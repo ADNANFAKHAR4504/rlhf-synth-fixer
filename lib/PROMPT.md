@@ -36,8 +36,8 @@ Create a hub-and-spoke network infrastructure using **CloudFormation with YAML**
 ### Security and Access Control
 
 4. **Security Groups**
-   - Create security group allowing HTTPS (port 443) between all VPCs
-   - Create security group allowing SSH (port 22) from hub to spokes only
+   - Create security group allowing HTTPS on port 443 between all VPCs
+   - Create security group allowing SSH on port 22 from hub to spokes only
    - No SSH access between spokes
    - Proper ingress and egress rules for Transit Gateway traffic
 
@@ -66,11 +66,11 @@ Create a hub-and-spoke network infrastructure using **CloudFormation with YAML**
 - Use **VPC Endpoints** for Systems Manager access
 - Use **S3** for Flow Logs storage
 - Use **NAT Gateway** for outbound internet access from spokes
-- Resource names must include **environmentSuffix** parameter for uniqueness
+- Names must include **environmentSuffix** parameter for uniqueness
 - Follow naming convention: resource-type-environment-suffix
 - Deploy to **us-east-2** region
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements - Must Follow
 
 - All resources must include the environmentSuffix parameter for multi-environment support
 - All resources must be destroyable with DeletionPolicy: Delete
@@ -97,7 +97,7 @@ Create a hub-and-spoke network infrastructure using **CloudFormation with YAML**
 - **Security**: VPC endpoints enable private Systems Manager access
 - **Monitoring**: Flow Logs capture all network traffic to S3 in Parquet format
 - **Compliance**: All resources properly tagged with required metadata
-- **Resource Naming**: All resources include environmentSuffix for uniqueness
+- **Naming**: All resources include environmentSuffix for uniqueness
 - **Code Quality**: Clean CloudFormation YAML, well-structured, fully documented
 - **Outputs**: Export VPC IDs, subnet IDs, Transit Gateway ID, route table IDs
 
