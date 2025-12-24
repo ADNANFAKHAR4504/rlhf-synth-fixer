@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-ls-291187",
+  "team": "synth-2",
+  "startedAt": "2025-07-31T16:52:17.750Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "ls-291187",
+    "pr": "Pr380"
+  }
+}
