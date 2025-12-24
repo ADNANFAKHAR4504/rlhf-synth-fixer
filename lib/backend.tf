@@ -1,6 +1,5 @@
-# Backend configuration removed to fix Lint job
-# The backend is configured at runtime via -backend-config CLI flags in deploy scripts
-# See scripts/localstack-ci-deploy.sh and scripts/bootstrap.sh for backend configuration
+# Backend is configured via CLI flags in deploy scripts
+# For linting, local backend is used by default
 terraform {
-  # backend "s3" {}
+  backend "local" {}
 }
