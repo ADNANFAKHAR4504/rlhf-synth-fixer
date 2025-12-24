@@ -438,12 +438,11 @@ The solution implements an event-driven architecture with the following componen
 Run unit tests:
 
 ```bash
-pipenv run cfn-flip-to-json > lib/TapStack.json
-npm test -- test/tap-stack.unit.test.ts
+npm test
 ```
 
 Run integration tests (requires deployed stack):
 
 ```bash
-npm test -- test/tap-stack.int.test.ts
+npm run test:integration
 ```
