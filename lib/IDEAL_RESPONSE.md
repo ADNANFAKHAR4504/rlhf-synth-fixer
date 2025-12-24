@@ -113,7 +113,7 @@ Parameters:
     MinValue: 50
     MaxValue: 100
     ConstraintDescription: Must be between 50 and 100
-AmiId:    Description: Amazon Machine Image ID for EC2 instances    Type: AWS::EC2::Image::Id    Default: ami-12345678
+Type: String
   
 
 # ==========================================
