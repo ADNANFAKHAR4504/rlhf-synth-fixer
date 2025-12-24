@@ -629,4 +629,137 @@ describe('TapStack Unit Tests', () => {
       });
     });
   });
+
+  describe('LocalStack Configuration', () => {
+    let localStackApp: cdk.App;
+    let localStackStack: TapStack;
+    let localStackTemplate: Template;
+    const originalEnv = process.env;
+
+    beforeEach(() => {
+      // Set environment variable to simulate LocalStack
+      process.env = { ...originalEnv, AWS_ENDPOINT_URL: 'http://localhost:4566' };
+      localStackApp = new cdk.App();
+      localStackStack = new TapStack(localStackApp, 'LocalStackTestStack', {
+        environmentSuffix: 'local',
+        env: {
+          account: '000000000000',
+          region: 'us-east-1',
+        },
+      });
+      localStackTemplate = Template.fromStack(localStackStack);
+    });
+
+    afterEach(() => {
+      // Restore original environment
+      process.env = originalEnv;
+    });
+
+    test('VPC is created in LocalStack mode', () => {
+      localStackTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true,
+      });
+    });
+
+    test('VPC has DESTROY removal policy in LocalStack mode', () => {
+      const vpcResources = localStackTemplate.findResources('AWS::EC2::VPC');
+      const vpcKeys = Object.keys(vpcResources);
+      expect(vpcKeys.length).toBeGreaterThan(0);
+
+      // In LocalStack mode, DeletionPolicy should be Delete (DESTROY)
+      const vpc = vpcResources[vpcKeys[0]];
+      expect(vpc.DeletionPolicy).toBe('Delete');
+    });
+
+    test('Security Group has DESTROY removal policy in LocalStack mode', () => {
+      const sgResources = localStackTemplate.findResources('AWS::EC2::SecurityGroup');
+      const sgKeys = Object.keys(sgResources);
+      expect(sgKeys.length).toBeGreaterThan(0);
+
+      // In LocalStack mode, DeletionPolicy should be Delete (DESTROY)
+      const sg = sgResources[sgKeys[0]];
+      expect(sg.DeletionPolicy).toBe('Delete');
+    });
+
+    test('IAM Role has DESTROY removal policy in LocalStack mode', () => {
+      const roleResources = localStackTemplate.findResources('AWS::IAM::Role');
+      const roleKeys = Object.keys(roleResources);
+
+      // Find the Ec2InstanceRole (not the custom resource handler role)
+      const ec2RoleKey = roleKeys.find(key => key.includes('Ec2InstanceRole'));
+      expect(ec2RoleKey).toBeDefined();
+
+      const role = roleResources[ec2RoleKey!];
+      expect(role.DeletionPolicy).toBe('Delete');
+    });
+
+    test('Launch Template has DESTROY removal policy in LocalStack mode', () => {
+      const ltResources = localStackTemplate.findResources('AWS::EC2::LaunchTemplate');
+      const ltKeys = Object.keys(ltResources);
+      expect(ltKeys.length).toBeGreaterThan(0);
+
+      const lt = ltResources[ltKeys[0]];
+      expect(lt.DeletionPolicy).toBe('Delete');
+    });
+
+    test('Auto Scaling Group has DESTROY removal policy in LocalStack mode', () => {
+      const asgResources = localStackTemplate.findResources('AWS::AutoScaling::AutoScalingGroup');
+      const asgKeys = Object.keys(asgResources);
+      expect(asgKeys.length).toBeGreaterThan(0);
+
+      const asg = asgResources[asgKeys[0]];
+      expect(asg.DeletionPolicy).toBe('Delete');
+    });
+
+    test('No NAT Gateway is created in LocalStack mode', () => {
+      const natGateways = localStackTemplate.findResources('AWS::EC2::NatGateway');
+      expect(Object.keys(natGateways).length).toBe(0);
+    });
+
+    test('Private subnets use PRIVATE_ISOLATED type in LocalStack mode', () => {
+      // In LocalStack mode, private subnets should not have routes to NAT Gateway
+      // They are PRIVATE_ISOLATED which means no outbound internet access
+      const privateSubnets = localStackTemplate.findResources('AWS::EC2::Subnet', {
+        Properties: {
+          MapPublicIpOnLaunch: false,
+        },
+      });
+      expect(Object.keys(privateSubnets).length).toBe(2);
+    });
+
+    test('IAM Role has no managed policies in LocalStack mode', () => {
+      const roleResources = localStackTemplate.findResources('AWS::IAM::Role');
+      const roleKeys = Object.keys(roleResources);
+
+      // Find the Ec2InstanceRole (not the custom resource handler role)
+      const ec2RoleKey = roleKeys.find(key => key.includes('Ec2InstanceRole'));
+      expect(ec2RoleKey).toBeDefined();
+
+      const role = roleResources[ec2RoleKey!];
+      // In LocalStack mode, ManagedPolicyArns should be undefined or empty
+      expect(role.Properties.ManagedPolicyArns).toBeUndefined();
+    });
+
+    test('All resources have correct naming in LocalStack mode', () => {
+      const namePrefix = 'tap-local';
+
+      localStackTemplate.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupName: `${namePrefix}-web-sg`,
+      });
+
+      localStackTemplate.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `${namePrefix}-ec2-role`,
+      });
+
+      localStackTemplate.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+        LaunchTemplateName: `${namePrefix}-launch-template`,
+      });
+
+      localStackTemplate.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        AutoScalingGroupName: `${namePrefix}-asg`,
+      });
+    });
+  });
 });

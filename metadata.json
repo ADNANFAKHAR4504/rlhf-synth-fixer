@@ -11,6 +11,15 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["VPC", "EC2", "AutoScaling", "IAM"],
-  "wave": "P1"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "AutoScaling",
+    "IAM"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "trainr63",
+    "pr": "Pr904"
+  }
 }
