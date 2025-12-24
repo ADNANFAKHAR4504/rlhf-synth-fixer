@@ -25,6 +25,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/localstack-common.sh"
 
+# Source wave lookup utilities for P0/P1 wave determination
+if [ -f "$SCRIPT_DIR/wave-lookup.sh" ]; then
+  source "$SCRIPT_DIR/wave-lookup.sh"
+  WAVE_LOOKUP_AVAILABLE=true
+else
+  log_warn "wave-lookup.sh not found - will use default wave"
+  WAVE_LOOKUP_AVAILABLE=false
+fi
+
 # Setup error handling
 setup_error_handling
 
@@ -74,6 +83,47 @@ VALID_TURN_TYPES='["single","multi"]'
 VALID_TEAMS='["2","3","4","5","6","synth","synth-1","synth-2","stf"]'
 
 # ═══════════════════════════════════════════════════════════════════════════
+# WAVE LOOKUP - Determine correct wave from P0/P1 CSV files
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Look up the correct wave from CSV reference files
+LOOKED_UP_WAVE=""
+if [ "$WAVE_LOOKUP_AVAILABLE" = "true" ]; then
+  log_info "Looking up wave from P0.csv/P1.csv reference files..."
+  
+  # Try to get wave from existing metadata info
+  if LOOKED_UP_WAVE=$(get_wave_for_task "$METADATA_FILE" 2>/dev/null); then
+    log_success "Wave found in CSV: $LOOKED_UP_WAVE"
+  else
+    # If metadata doesn't have migration info, try extracting PR from directory path
+    DIR_NAME=$(basename "$(dirname "$METADATA_FILE")")
+    if [[ "$DIR_NAME" =~ ^Pr[0-9]+$ ]]; then
+      if LOOKED_UP_WAVE=$(get_wave_for_pr "$DIR_NAME" 2>/dev/null); then
+        log_success "Wave found for $DIR_NAME: $LOOKED_UP_WAVE"
+      fi
+    fi
+    
+    # If still not found, check if we have original_pr_id in metadata
+    if [ -z "$LOOKED_UP_WAVE" ]; then
+      ORIGINAL_PR=$(jq -r '.original_pr_id // .migrated_from.pr // ""' "$METADATA_FILE" 2>/dev/null)
+      if [ -n "$ORIGINAL_PR" ] && [ "$ORIGINAL_PR" != "null" ]; then
+        if LOOKED_UP_WAVE=$(get_wave_for_pr "$ORIGINAL_PR" 2>/dev/null); then
+          log_success "Wave found for original PR $ORIGINAL_PR: $LOOKED_UP_WAVE"
+        fi
+      fi
+    fi
+  fi
+fi
+
+# Set default wave if lookup failed
+if [ -z "$LOOKED_UP_WAVE" ]; then
+  log_warn "Wave not found in CSV files - using existing wave or default 'P1'"
+  LOOKED_UP_WAVE=$(jq -r '.wave // "P1"' "$METADATA_FILE" 2>/dev/null || echo "P1")
+fi
+
+log_info "Using wave: $LOOKED_UP_WAVE"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SANITIZE METADATA
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -82,6 +132,7 @@ cp "$METADATA_FILE" "${METADATA_FILE}.backup"
 
 # Apply comprehensive sanitization with jq
 jq --argjson valid_subtasks "$VALID_SUBTASKS" \
+   --arg looked_up_wave "$LOOKED_UP_WAVE" \
    --argjson valid_labels "$VALID_LABELS" \
    --argjson valid_platforms "$VALID_PLATFORMS" \
    --argjson valid_languages "$VALID_LANGUAGES" \
@@ -234,7 +285,7 @@ jq --argjson valid_subtasks "$VALID_SUBTASKS" \
         []
       end
     ),
-    wave: (.wave // "P1")
+    wave: $looked_up_wave
   }
   # Add migrated_from object only if we have the original PR reference
   + (if $final_original_pr != null then
@@ -285,7 +336,8 @@ if [ ${#MISSING_FIELDS[@]} -gt 0 ]; then
 fi
 
 # Validate that no disallowed fields are present (schema has additionalProperties: false)
-DISALLOWED_FIELDS=("coverage" "author" "dockerS3Location" "training_quality" "task_id" "pr_id" "localstack_migration" "original_po_id" "original_pr_id" "testDependencies" "background" "training_quality_justification")
+# Note: training_quality IS allowed by schema as an optional field, so it's not in this list
+DISALLOWED_FIELDS=("coverage" "author" "dockerS3Location" "task_id" "pr_id" "localstack_migration" "original_po_id" "original_pr_id" "testDependencies" "background" "training_quality_justification")
 FOUND_DISALLOWED=()
 
 for field in "${DISALLOWED_FIELDS[@]}"; do

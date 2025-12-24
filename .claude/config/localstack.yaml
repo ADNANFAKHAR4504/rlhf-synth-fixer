@@ -182,15 +182,30 @@ smart_selection:
 
 # ═══════════════════════════════════════════════════════════════
 # PARALLEL EXECUTION SETTINGS
+# Optimized for 20 concurrent agents with resource management
 # ═══════════════════════════════════════════════════════════════
 parallel:
   enabled: true
-  max_concurrent_agents: 10 # Maximum parallel agents
+  max_concurrent_agents: 20 # Maximum parallel agents (increased from 10)
   use_git_worktrees: true # Use git worktrees for isolation
   use_file_locking: true # Lock migration log for concurrent writes
-  lock_timeout_seconds: 30 # Timeout for acquiring file lock
-  lock_retry_attempts: 10 # Number of retry attempts for lock
-  stale_lock_timeout: 60 # Consider lock stale after this many seconds
+  lock_timeout_seconds: 60 # Timeout for acquiring file lock (increased for 20 agents)
+  lock_retry_attempts: 20 # Number of retry attempts for lock (increased)
+  stale_lock_timeout: 120 # Consider lock stale after this many seconds
+  
+  # Resource management for high concurrency
+  resource_limits:
+    max_memory_per_agent: '2G' # Memory limit per agent
+    cpu_throttle_threshold: 80 # Throttle new agents if CPU > 80%
+    disk_space_min_gb: 10 # Minimum free disk space required
+  
+  # Watchdog settings for persistent LocalStack
+  watchdog:
+    enabled: true
+    health_check_interval: 30 # Seconds between health checks
+    auto_restart: true # Auto-restart LocalStack if unhealthy
+    pre_bootstrap: true # Keep LocalStack pre-bootstrapped
+    persistence_mode: true # Enable LocalStack persistence
 
 # ═══════════════════════════════════════════════════════════════
 # WORKING DIRECTORY SETTINGS

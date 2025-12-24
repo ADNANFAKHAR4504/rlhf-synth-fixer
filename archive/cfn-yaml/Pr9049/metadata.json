@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912250",
+  "team": "synth-2",
+  "startedAt": "2025-11-10T10:15:44.016Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "SecretsManager",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "Lambda",
+    "EC2"
+  ],
+  "provider": "localstack",
+  "wave": "P1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

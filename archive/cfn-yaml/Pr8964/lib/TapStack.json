@@ -1,0 +1,514 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production-ready serverless infrastructure with S3, Lambda, and API Gateway",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Suffix for the environment (e.g., dev, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters."
+        },
+        "ProjectName": {
+            "Type": "String",
+            "Default": "serverless-app",
+            "Description": "Project name for resource naming and tagging"
+        }
+    },
+    "Resources": {
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3AccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-bucket-${AWS::AccountId}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-bucket-${AWS::AccountId}"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ServerlessLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-function"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 128,
+                "Environment": {
+                    "Variables": {
+                        "S3_BUCKET": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-bucket-${AWS::AccountId}"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Basic Lambda function that processes API Gateway requests\n    and interacts with S3 bucket\n    \"\"\"\n    s3_bucket = os.environ.get('S3_BUCKET')\n    environment = os.environ.get('ENVIRONMENT')\n    \n    # Handle different HTTP methods\n    http_method = event.get('httpMethod', 'GET')\n    \n    try:\n        if http_method == 'GET':\n            # Return basic information\n            response_body = {\n                'message': 'Hello from serverless Lambda!',\n                'timestamp': datetime.utcnow().isoformat(),\n                'environment': environment,\n                's3_bucket': s3_bucket,\n                'method': http_method\n            }\n        elif http_method == 'POST':\n            # Process POST data\n            body = json.loads(event.get('body', '{}'))\n            response_body = {\n                'message': 'Data received successfully',\n                'received_data': body,\n                'timestamp': datetime.utcnow().isoformat(),\n                'environment': environment\n            }\n        else:\n            response_body = {\n                'message': f'Method {http_method} not supported',\n                'timestamp': datetime.utcnow().isoformat()\n            }\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n                'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'\n            },\n            'body': json.dumps(response_body)\n        }\n    \n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'error': 'Internal server error',\n                'message': str(e)\n            })\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "LambdaInvokePermissionS3": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ServerlessLambdaFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "s3.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-bucket-${AWS::AccountId}"
+                }
+            }
+        },
+        "ServerlessS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "DependsOn": "LambdaInvokePermissionS3",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-bucket-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "NotificationConfiguration": {
+                    "LambdaConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "ServerlessLambdaFunction",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ServerlessS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ServerlessS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureConnections",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${ServerlessS3Bucket}/*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${ServerlessS3Bucket}"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaInvokePermissionAPI": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ServerlessLambdaFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ServerlessAPIGateway}/*/*"
+                }
+            }
+        },
+        "ServerlessAPIGateway": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-api"
+                },
+                "Description": "Serverless API Gateway for Lambda function",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "APIGatewayResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ServerlessAPIGateway"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "ServerlessAPIGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "serverless"
+            }
+        },
+        "APIGatewayMethodGET": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ServerlessAPIGateway"
+                },
+                "ResourceId": {
+                    "Ref": "APIGatewayResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ServerlessLambdaFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Origin": true,
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true
+                        }
+                    }
+                ]
+            }
+        },
+        "APIGatewayMethodPOST": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ServerlessAPIGateway"
+                },
+                "ResourceId": {
+                    "Ref": "APIGatewayResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ServerlessLambdaFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Origin": true,
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true
+                        }
+                    }
+                ]
+            }
+        },
+        "APIGatewayMethodOPTIONS": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ServerlessAPIGateway"
+                },
+                "ResourceId": {
+                    "Ref": "APIGatewayResource"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            }
+                        }
+                    ],
+                    "PassthroughBehavior": "WHEN_NO_MATCH",
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true,
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    }
+                ]
+            }
+        },
+        "APIGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "APIGatewayMethodGET",
+                "APIGatewayMethodPOST",
+                "APIGatewayMethodOPTIONS"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ServerlessAPIGateway"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            }
+        },
+        "LambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ServerlessLambdaFunction}"
+                },
+                "RetentionInDays": 14,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "S3BucketName": {
+            "Description": "Name of the created S3 bucket",
+            "Value": {
+                "Ref": "ServerlessS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3Bucket"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Name of the Lambda function",
+            "Value": {
+                "Ref": "ServerlessLambdaFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunction"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "ARN of the Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ServerlessLambdaFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+                }
+            }
+        },
+        "APIGatewayURL": {
+            "Description": "URL of the API Gateway endpoint",
+            "Value": {
+                "Fn::Sub": "https://${ServerlessAPIGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}/serverless"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-APIGatewayURL"
+                }
+            }
+        },
+        "APIGatewayId": {
+            "Description": "ID of the API Gateway",
+            "Value": {
+                "Ref": "ServerlessAPIGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-APIGatewayId"
+                }
+            }
+        },
+        "Region": {
+            "Description": "AWS Region where resources are deployed",
+            "Value": {
+                "Ref": "AWS::Region"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Region"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,430 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless Infrastructure Deployment with API Gateway, Lambda, and DynamoDB - LocalStack Compatible",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming"
+        }
+    },
+    "Resources": {
+        "UserDataTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "UserData-${EnvironmentSuffix}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "userId",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "userId",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "UserDataLambdaRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaBasicExecution",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "UserDataTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "UserDataLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "UserDataHandler-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ndef get_dynamodb_resource():\n    endpoint_url = os.environ.get('AWS_ENDPOINT_URL')\n    if endpoint_url:\n        return boto3.resource('dynamodb', endpoint_url=endpoint_url)\n    return boto3.resource('dynamodb')\n\ndynamodb = get_dynamodb_resource()\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef lambda_handler(event, context):\n    try:\n        print(f\"Received event: {json.dumps(event)}\")\n        \n        http_method = event.get('httpMethod', '')\n        \n        if http_method == 'POST':\n            # Handle POST request - store data\n            body = json.loads(event.get('body', '{}'))\n            user_id = body.get('userId')\n            user_data = body.get('data', {})\n            \n            if not user_id:\n                return {\n                    'statusCode': 400,\n                    'headers': {\n                        'Content-Type': 'application/json',\n                        'Access-Control-Allow-Origin': '*'\n                    },\n                    'body': json.dumps({'error': 'userId is required'})\n                }\n            \n            # Store data in DynamoDB\n            table.put_item(\n                Item={\n                    'userId': user_id,\n                    'data': user_data,\n                    'timestamp': datetime.utcnow().isoformat()\n                }\n            )\n            \n            return {\n                'statusCode': 200,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'message': 'Data stored successfully', 'userId': user_id})\n            }\n        \n        elif http_method == 'GET':\n            # Handle GET request - retrieve data\n            query_params = event.get('queryStringParameters', {})\n            print(f\"Query parameters: {query_params}\")\n            \n            user_id = None\n            if query_params:\n                user_id = query_params.get('userId')\n            \n            print(f\"Extracted user_id: '{user_id}'\")\n            \n            if not user_id:\n                return {\n                    'statusCode': 400,\n                    'headers': {\n                        'Content-Type': 'application/json',\n                        'Access-Control-Allow-Origin': '*'\n                    },\n                    'body': json.dumps({'error': 'userId query parameter is required'})\n                }\n            \n            # Retrieve data from DynamoDB\n            print(f\"Querying DynamoDB for userId: '{user_id}'\")\n            response = table.get_item(Key={'userId': user_id})\n            print(f\"DynamoDB response: {response}\")\n            \n            if 'Item' in response:\n                return {\n                    'statusCode': 200,\n                    'headers': {\n                        'Content-Type': 'application/json',\n                        'Access-Control-Allow-Origin': '*'\n                    },\n                    'body': json.dumps(response['Item'], default=str)\n                }\n            else:\n                return {\n                    'statusCode': 404,\n                    'headers': {\n                        'Content-Type': 'application/json',\n                        'Access-Control-Allow-Origin': '*'\n                    },\n                    'body': json.dumps({'error': f'User not found for userId: {user_id}'})\n                }\n        \n        else:\n            return {\n                'statusCode': 405,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'Method not allowed'})\n            }\n            \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "UserDataTable"
+                        }
+                    }
+                },
+                "Timeout": 30,
+                "MemorySize": 128,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/UserDataHandler-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "UserDataApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "UserDataAPI-${EnvironmentSuffix}"
+                },
+                "Description": "REST API for user data storage and retrieval",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "UserDataResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "UserDataApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "UserDataApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "userdata"
+            }
+        },
+        "GetMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "UserDataApi"
+                },
+                "ResourceId": {
+                    "Ref": "UserDataResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "ApiKeyRequired": true,
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserDataLambda.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": "200",
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    },
+                    {
+                        "StatusCode": "400",
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    },
+                    {
+                        "StatusCode": "404",
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    }
+                ]
+            }
+        },
+        "PostMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "UserDataApi"
+                },
+                "ResourceId": {
+                    "Ref": "UserDataResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "ApiKeyRequired": true,
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserDataLambda.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": "200",
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    },
+                    {
+                        "StatusCode": "400",
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaApiGatewayPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "UserDataLambda"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserDataApi}/*/*"
+                }
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "GetMethod",
+                "PostMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "UserDataApi"
+                },
+                "StageName": "prod"
+            }
+        },
+        "ApiKey": {
+            "Type": "AWS::ApiGateway::ApiKey",
+            "DependsOn": "ApiDeployment",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "UserDataAPIKey-${EnvironmentSuffix}"
+                },
+                "Description": "API Key for User Data API",
+                "Enabled": true,
+                "StageKeys": [
+                    {
+                        "RestApiId": {
+                            "Ref": "UserDataApi"
+                        },
+                        "StageName": "prod"
+                    }
+                ]
+            }
+        },
+        "UsagePlan": {
+            "Type": "AWS::ApiGateway::UsagePlan",
+            "DependsOn": "ApiDeployment",
+            "Properties": {
+                "UsagePlanName": {
+                    "Fn::Sub": "UserDataUsagePlan-${EnvironmentSuffix}"
+                },
+                "Description": "Usage plan with 1000 requests per month limit",
+                "Quota": {
+                    "Limit": 1000,
+                    "Period": "MONTH"
+                },
+                "Throttle": {
+                    "BurstLimit": 10,
+                    "RateLimit": 5
+                },
+                "ApiStages": [
+                    {
+                        "ApiId": {
+                            "Ref": "UserDataApi"
+                        },
+                        "Stage": "prod"
+                    }
+                ]
+            }
+        },
+        "UsagePlanKey": {
+            "Type": "AWS::ApiGateway::UsagePlanKey",
+            "Properties": {
+                "KeyId": {
+                    "Ref": "ApiKey"
+                },
+                "KeyType": "API_KEY",
+                "UsagePlanId": {
+                    "Ref": "UsagePlan"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "ApiGatewayEndpoint": {
+            "Description": "API Gateway endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${UserDataApi}.execute-api.${AWS::Region}.amazonaws.com/prod/userdata"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiGatewayEndpoint"
+                }
+            }
+        },
+        "ApiKeyId": {
+            "Description": "API Key ID for accessing the API",
+            "Value": {
+                "Ref": "ApiKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiKeyId"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "DynamoDB Table Name",
+            "Value": {
+                "Ref": "UserDataTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBTableName"
+                }
+            }
+        },
+        "DynamoDBTableArn": {
+            "Description": "DynamoDB Table ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "UserDataTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBTableArn"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Lambda Function Name",
+            "Value": {
+                "Ref": "UserDataLambda"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionName"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "UserDataLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+                }
+            }
+        },
+        "RestApiId": {
+            "Description": "REST API ID",
+            "Value": {
+                "Ref": "UserDataApi"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RestApiId"
+                }
+            }
+        }
+    }
+}
