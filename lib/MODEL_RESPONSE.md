@@ -704,7 +704,7 @@ Here's a comprehensive CloudFormation template that meets all your requirements:
 
 ## Key Features Implemented
 
-### 🔒 **Security & Compliance**
+###  **Security & Compliance**
 - **IAM Roles**: Least privilege access with specific policies
 - **VPC Security**: Public/private subnet architecture with proper CIDR blocks
 - **Security Groups**: Restrictive rules with SSH limited to specific IPs
@@ -718,13 +718,13 @@ Here's a comprehensive CloudFormation template that meets all your requirements:
 - **CloudWatch**: Log groups for centralized logging
 - **Config Rules**: MFA enforcement and root access key monitoring
 
-### 🏗️ **Infrastructure Best Practices**
+###  **Infrastructure Best Practices**
 - **Tagging Strategy**: Consistent tagging across all resources
 - **Dynamic References**: Uses Secrets Manager for database passwords
 - **Resource Naming**: Descriptive logical names following conventions
 - **Outputs**: Exportable values for cross-stack references
 
-### 🛡️ **Additional Security Measures**
+###  **Additional Security Measures**
 - **S3 Security**: Public access blocked, encryption enabled
 - **SSL/TLS**: Security groups configured for HTTPS traffic
 - **DeletionProtection**: Enabled for critical resources like RDS
