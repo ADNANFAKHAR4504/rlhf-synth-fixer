@@ -155,3 +155,81 @@ resource "aws_cloudwatch_dashboard" "payment_processing" {
     ]
   })
 }
+
+# Enhanced CloudWatch Alarm for Lambda throttling
+resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
+  provider            = aws.primary
+  alarm_name          = "${local.resource_prefix}-lambda-throttles-${local.current_region}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "Throttles"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 10
+  alarm_description   = "This metric monitors Lambda function throttling"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    FunctionName = aws_lambda_function.payment_processor.function_name
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.resource_prefix}-lambda-throttles-alarm"
+    }
+  )
+}
+
+# CloudWatch Alarm for DynamoDB throttling
+resource "aws_cloudwatch_metric_alarm" "dynamodb_throttles" {
+  provider            = aws.primary
+  alarm_name          = "${local.resource_prefix}-dynamodb-throttles-${local.current_region}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "UserErrors"
+  namespace           = "AWS/DynamoDB"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 10
+  alarm_description   = "This metric monitors DynamoDB throttling and user errors"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    TableName = aws_dynamodb_table.transactions.name
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.resource_prefix}-dynamodb-throttles-alarm"
+    }
+  )
+}
+
+# Enhanced CloudWatch Alarm for API Gateway 5XX errors
+resource "aws_cloudwatch_metric_alarm" "api_gateway_5xx" {
+  provider            = aws.primary
+  alarm_name          = "${local.resource_prefix}-api-5xx-${local.current_region}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "5XXError"
+  namespace           = "AWS/ApiGateway"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 10
+  alarm_description   = "This metric monitors API Gateway 5XX server errors"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    ApiName = aws_api_gateway_rest_api.payment_api.name
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.resource_prefix}-api-5xx-alarm"
+    }
+  )
+}

@@ -56,7 +56,9 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
           "dynamodb:Query",
           "dynamodb:Scan"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:dynamodb:*:*:table/${local.resource_prefix}-transactions-*"
+        ]
       }
     ]
   })
@@ -102,7 +104,9 @@ resource "aws_iam_role_policy" "s3_replication" {
           "s3:GetReplicationConfiguration",
           "s3:ListBucket"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:s3:::${local.resource_prefix}-documents-*"
+        ]
       },
       {
         Effect = "Allow"
@@ -111,7 +115,9 @@ resource "aws_iam_role_policy" "s3_replication" {
           "s3:GetObjectVersionAcl",
           "s3:GetObjectVersionTagging"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:s3:::${local.resource_prefix}-documents-*/*"
+        ]
       },
       {
         Effect = "Allow"
@@ -120,7 +126,9 @@ resource "aws_iam_role_policy" "s3_replication" {
           "s3:ReplicateDelete",
           "s3:ReplicateTags"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:s3:::${local.resource_prefix}-documents-*/*"
+        ]
       },
       {
         Effect = "Allow"
@@ -128,7 +136,10 @@ resource "aws_iam_role_policy" "s3_replication" {
           "kms:Decrypt",
           "kms:DescribeKey"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:kms:us-east-1:*:key/*",
+          "arn:aws:kms:eu-west-1:*:key/*"
+        ]
         Condition = {
           StringLike = {
             "kms:ViaService" = [
@@ -144,7 +155,10 @@ resource "aws_iam_role_policy" "s3_replication" {
           "kms:Encrypt",
           "kms:GenerateDataKey"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:kms:us-east-1:*:key/*",
+          "arn:aws:kms:eu-west-1:*:key/*"
+        ]
         Condition = {
           StringLike = {
             "kms:ViaService" = [
