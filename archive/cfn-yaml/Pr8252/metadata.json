@@ -23,5 +23,12 @@
     "Config",
     "ElasticLoadBalancingV2"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
