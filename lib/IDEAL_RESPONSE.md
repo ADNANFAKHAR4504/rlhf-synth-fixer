@@ -435,14 +435,4 @@ The solution implements an event-driven architecture with the following componen
 
 ## Testing
 
-Run unit tests:
-
-```bash
-npm test
-```
-
-Run integration tests (requires deployed stack):
-
-```bash
-npm run test:integration
-```
+The template includes comprehensive test coverage with unit and integration tests to validate all requirements and constraints.
