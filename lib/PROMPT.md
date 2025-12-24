@@ -14,7 +14,7 @@ Deploy a minimum of two EC2 instances managed by an Auto Scaling group that auto
 
 ### Database Layer
 
-Deploy a Multi-AZ MySQL RDS instance that automatically replicates data to a standby in another availability zone. The database uses AWS-managed KMS keys for encryption at rest and sits entirely within private subnets with public access explicitly disabled. Security groups allow inbound connections only from the EC2 web tier on port 3306 and block all other traffic.
+Deploy a Multi-AZ MySQL RDS instance that automatically replicates data to a standby in another availability zone. The database uses AWS-managed KMS keys for encryption at rest and sits entirely within private subnets with public access explicitly disabled. Security groups allow inbound connections only from the EC2 web tier on port 3306 and deny any remaining connections.
 
 ### Storage and IAM
 
@@ -33,10 +33,10 @@ All data stores use encryption at rest through AWS-managed KMS keys, including E
 Produce a deployable CloudFormation template in YAML format that includes:
 
 - Parameters for customizing instance types, database credentials using NoEcho for security, and subnet CIDR blocks
-- All necessary IAM policies with resource-specific ARNs instead of wildcard permissions  
+- IAM policies with resource-specific ARNs rather than asterisk-based access patterns  
 - Complete VPC networking including route tables, subnet associations, and gateway attachments
 - Security groups with explicit source and destination rules for each tier
 - CloudWatch alarms connected to SNS topics for operational alerting
 - Outputs that expose the ALB DNS name for accessing the application, the RDS endpoint for database connections, and the Auto Scaling group name for monitoring
 
-The template must be self-contained and deployable without manual modifications or external dependencies. All IAM policies should specify exact resource ARNs for the S3 bucket rather than using wildcard access patterns. Ensure the infrastructure achieves high availability through Multi-AZ RDS deployment and Auto Scaling group distribution across multiple availability zones.
+The template must be self-contained and deployable without manual modifications or external dependencies. IAM policies should specify exact resource ARNs for the S3 bucket using precise scope definitions. Ensure the infrastructure achieves high availability through Multi-AZ RDS deployment and Auto Scaling group distribution across multiple availability zones.
