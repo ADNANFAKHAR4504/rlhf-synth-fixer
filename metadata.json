@@ -3,7 +3,7 @@
   "language": "yaml",
   "complexity": "medium",
   "turn_type": "single",
-  "po_id": "291198",
+  "po_id": "LS-291198",
   "team": "synth-2",
   "startedAt": "2025-08-01T06:59:32.271Z",
   "subtask": "Application Deployment",
@@ -17,5 +17,6 @@
     "iam",
     "cloudwatch",
     "logs"
-  ]
+  ],
+  "wave": "P0"
 }
