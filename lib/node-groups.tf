@@ -42,9 +42,9 @@ resource "aws_eks_node_group" "system" {
   subnet_ids      = aws_subnet.private_system[*].id
 
   scaling_config {
-    desired_size = 2
-    max_size     = 4
-    min_size     = 2
+    desired_size = 1
+    max_size     = 2
+    min_size     = 1
   }
 
   instance_types = ["t3.medium"]
@@ -126,9 +126,9 @@ resource "aws_eks_node_group" "application" {
   subnet_ids      = aws_subnet.private_application[*].id
 
   scaling_config {
-    desired_size = 3
-    max_size     = 10
-    min_size     = 3
+    desired_size = 1
+    max_size     = 3
+    min_size     = 1
   }
 
   instance_types = ["m5.large"]
@@ -203,6 +203,7 @@ resource "aws_launch_template" "spot" {
 }
 
 # Spot Instance Node Group
+# Note: Using ON_DEMAND for LocalStack compatibility (SPOT capacity type may not be fully supported)
 resource "aws_eks_node_group" "spot" {
   count = var.enable_spot_instances ? 1 : 0
 
@@ -212,13 +213,13 @@ resource "aws_eks_node_group" "spot" {
   subnet_ids      = aws_subnet.private_spot[*].id
 
   scaling_config {
-    desired_size = 2
-    max_size     = 10
+    desired_size = 1
+    max_size     = 5
     min_size     = 0
   }
 
   instance_types = ["m5.large"]
-  capacity_type  = "SPOT"
+  capacity_type  = "ON_DEMAND"  # Changed from SPOT for LocalStack compatibility
 
   launch_template {
     id      = aws_launch_template.spot.id

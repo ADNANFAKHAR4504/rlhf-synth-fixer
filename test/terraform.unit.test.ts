@@ -275,8 +275,9 @@ describe('Terraform EKS Cluster Infrastructure Unit Tests', () => {
       expect(nodeGroupsContent).toMatch(/http_tokens\s*=\s*"required"/);
     });
 
-    test('spot node group should use SPOT capacity type', () => {
-      expect(nodeGroupsContent).toMatch(/capacity_type\s*=\s*"SPOT"/);
+    test('spot node group should have capacity type configured', () => {
+      // Note: Using ON_DEMAND for LocalStack compatibility instead of SPOT
+      expect(nodeGroupsContent).toMatch(/capacity_type\s*=\s*"ON_DEMAND"/);
     });
 
     test('node groups should have taints configured', () => {
