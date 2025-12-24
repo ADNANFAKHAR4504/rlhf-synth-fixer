@@ -77,7 +77,7 @@ Parameters:
     Description: EC2 Key Pair name for SSH access (leave empty to create a new one)
   
   LatestAmiId:
-    Type: String
+    Type: AWS::EC2::Image::Id
     Default: ami-12345678
     Description: Latest Amazon Linux 2 AMI ID
   
@@ -609,7 +609,7 @@ Resources:
       Engine: mysql
       EngineVersion: '8.0.42'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: 'TempPassword123!'  # LocalStack-compatible static password
+      MasterUserPassword: !Sub '{{resolve:ssm:/${AWS::StackName}/database/password}}'
       AllocatedStorage: 20
       StorageType: gp3
       StorageEncrypted: true
