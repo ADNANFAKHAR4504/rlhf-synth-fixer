@@ -59,23 +59,23 @@ Details in `.claude/agents/synth-fixer.md`
 
 ## REQUIRED FIELD: wave
 
-**CRITICAL**: The `wave` field is REQUIRED and must ALWAYS be "P0"
+**CRITICAL**: The `wave` field is REQUIRED and must ALWAYS be "P1"
 
 ### Rule:
-- `wave` must ALWAYS be `"P0"` - no exceptions
-- Synth team only uses P0
+- `wave` must ALWAYS be `"P1"` - no exceptions
+- Synth team only uses P1
 
 ### Fix Pattern:
 ```bash
-# Always set wave to P0
-jq '.wave = "P0"' metadata.json > tmp.json && mv tmp.json metadata.json
+# Always set wave to P1
+jq '.wave = "P1"' metadata.json > tmp.json && mv tmp.json metadata.json
 ```
 
 ### Schema Requirement:
 ```json
 "wave": {
   "type": "string",
-  "const": "P0"
+  "const": "P1"
 }
 ```
 

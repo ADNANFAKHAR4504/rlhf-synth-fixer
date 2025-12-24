@@ -181,7 +181,7 @@ The agent automatically ensures `metadata.json` has correct values:
 {
   "team": "synth",           // ALWAYS "synth"
   "provider": "localstack",  // ALWAYS "localstack"
-  "wave": "P0"               // ALWAYS "P0" - required field
+  "wave": "P1"               // ALWAYS "P1" - required field
 }
 ```
 

@@ -768,7 +768,7 @@ When fixing `metadata.json`, these fields are MANDATORY:
   "team": "synth",           // ⚠️ ALWAYS "synth" - no other value!
   "provider": "localstack",  // ALWAYS "localstack"
   "subtask": "<string>",     // Must be string, not array
-  "wave": "P0"               // ⚠️ ALWAYS "P0" - required field
+  "wave": "P1"               // ⚠️ ALWAYS "P1" - required field
 }
 ```
 
@@ -2099,7 +2099,7 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
               fi
             fi
             # Ensure provider, team, and wave are set
-            jq '.provider = "localstack" | .team = "synth" | .wave = "P0"' metadata.json > metadata.json.tmp
+            jq '.provider = "localstack" | .team = "synth" | .wave = "P1"' metadata.json > metadata.json.tmp
             mv metadata.json.tmp metadata.json
             APPLIED_FIXES+=("$fix")
           fi
@@ -2114,8 +2114,8 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
             # Set required fields
             .provider = "localstack" |
             .team = "synth" |
-            # Ensure wave field is ALWAYS P0 (required)
-            .wave = "P0" |
+            # Ensure wave field is ALWAYS P1 (required)
+            .wave = "P1" |
             # Remove disallowed fields
             del(.task_id, .training_quality, .coverage, .author, .dockerS3Location, .pr_id, .original_pr_id, .localstack_migration)
           ' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
@@ -3462,7 +3462,7 @@ The schema has `additionalProperties: false`, meaning ONLY these fields are allo
 - `provider` - enum: aws, localstack
 - `subject_labels` - array of enums (see below)
 - `aws_services` - array of strings
-- `wave` - **ALWAYS "P0"** (required field - synth team uses P0)
+- `wave` - **ALWAYS "P1"** (required field - synth team uses P1)
 
 ### CRITICAL: `subtask` vs `subject_labels` Type Enforcement
 
