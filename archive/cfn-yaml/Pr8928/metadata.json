@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291454",
+  "team": "synth-2",
+  "startedAt": "2025-08-14T10:40:38.733Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "KMS",
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "SecretsManager",
+    "Lambda",
+    "RDS",
+    "CloudWatch",
+    "CloudTrail"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
+}
