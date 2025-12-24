@@ -1,19 +1,19 @@
-Need a CloudFormation template (YAML) for setting up a basic AWS environment. We're testing this on us-west-2 but should work anywhere.
+Need a CloudFormation template for us-west-2. Basic setup - S3, EC2, DynamoDB.
 
-What I need:
+Here's what I'm looking for:
 
-S3 bucket - versioning on, name should be a parameter so we can change it per environment
+S3 bucket with versioning. Bucket name needs to be a param.
 
-EC2 instance - needs to run in a VPC/subnet (both should be parameters). Instance type should also be configurable.
+EC2 instance. Needs VPC ID and subnet ID as params, also instance type. We'll provide those when we deploy.
 
-IAM role for the EC2 - just s3:ListBucket permissions, nothing more. We had issues before with overly permissive roles.
+IAM role for EC2 - ONLY s3:ListBucket permission. Last time someone gave it s3:* and we got flagged in the security audit.
 
-Security group - SSH access but ONLY from our office IP (make this a parameter). Don't want it wide open.
+Security group for SSH - just our office IP (203.0.113.0/32 placeholder, make it a param though). Not opening SSH to 0.0.0.0/0.
 
-CloudWatch alarm - trigger if CPU goes over 70%. Our instances sometimes spike and we need to know about it.
+CloudWatch alarm for CPU > 70%. Instances keep spiking and nobody notices until things break.
 
-DynamoDB table - configurable table name, needs a primary key (also configurable), read capacity of 5 is fine for now.
+DynamoDB table. Table name as param, primary key name as param, set read capacity to 5.
 
-Tag everything with Project: CloudSetup so we can track costs properly.
+Tag everything Project: CloudSetup. Finance wants to track what this costs.
 
-Keep it clean and use parameters where it makes sense. File should be called TapStack.yml. Just give me the YAML, don't need explanations.  
+Call it TapStack.yml. Don't need docs, just the template.  
