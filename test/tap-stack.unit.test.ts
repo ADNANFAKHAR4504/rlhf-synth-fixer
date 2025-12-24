@@ -163,10 +163,11 @@ describe('TapStack CloudFormation Template', () => {
         const bucket = template.Resources.CloudTrailBucket;
         expect(bucket).toBeDefined();
         expect(bucket.Type).toBe('AWS::S3::Bucket');
-        
+
         const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
         expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-        expect(encryption.ServerSideEncryptionByDefault.KMSMasterKeyID.Ref).toBe('DataEncryptionKey');
+        // KMS key is referenced via Fn::GetAtt to get the ARN
+        expect(encryption.ServerSideEncryptionByDefault.KMSMasterKeyID['Fn::GetAtt']).toEqual(['DataEncryptionKey', 'Arn']);
       });
 
       test('should have SensitiveDataBucket with proper configuration', () => {
