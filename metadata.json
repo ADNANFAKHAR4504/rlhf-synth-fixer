@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350154",
+  "team": "3",
+  "startedAt": "2025-12-02T09:35:07.969Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "CloudFormation",
+    "CloudTrail",
+    "CloudWatch",
+    "EC2",
+    "EventBridge",
+    "IAM",
+    "Lambda",
+    "RDS",
+    "S3 Bucket",
+    "Secrets Manager",
+    "SNS",
+    "VPC"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
