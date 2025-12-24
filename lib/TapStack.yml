@@ -418,54 +418,6 @@ Resources:
               RunOrder: 1
 
   # EventBridge Rule to trigger pipeline on CodeCommit changes
-  PipelineTriggerRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub pipeline-trigger-${EnvironmentSuffix}
-      Description: Trigger pipeline on repository changes
-      EventPattern:
-        source:
-          - aws.codecommit
-        detail-type:
-          - CodeCommit Repository State Change
-        detail:
-          event:
-            - referenceCreated
-            - referenceUpdated
-          referenceType:
-            - branch
-          referenceName:
-            - !Ref SourceBranchName
-        resources:
-          - !Sub arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${SourceRepositoryName}
-      State: ENABLED
-      Targets:
-        - Arn: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${CodePipeline}
-          RoleArn: !GetAtt EventBridgePipelineRole.Arn
-          Id: CodePipelineTarget
-
-  # IAM Role for EventBridge to start pipeline
-  EventBridgePipelineRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub eventbridge-pipeline-role-${EnvironmentSuffix}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: StartPipelineExecution
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: codepipeline:StartPipelineExecution
-                Resource: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${CodePipeline}
-
-Outputs:
   PipelineName:
     Description: Name of the CodePipeline
     Value: !Ref CodePipeline
