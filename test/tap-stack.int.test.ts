@@ -12,11 +12,34 @@ const outputs: Record<string, string> = JSON.parse(outputsRaw || '{}');
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
+// LocalStack endpoint configuration
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+                     process.env.LOCALSTACK_ENDPOINT !== undefined;
+
+const localStackEndpoint = process.env.AWS_ENDPOINT_URL ||
+                           process.env.LOCALSTACK_ENDPOINT ||
+                           'http://localhost:4566';
+
 describe('TapStack Integration Tests', () => {
   jest.setTimeout(300000); // allow up to 5 minutes for live AWS calls
 
   const region = process.env.AWS_REGION || 'us-east-1';
-  AWS.config.update({ region });
+
+  // Configure AWS SDK with LocalStack support
+  const awsConfig: AWS.ConfigurationOptions = {
+    region,
+  };
+
+  // Add LocalStack-specific configuration if detected
+  if (isLocalStack) {
+    awsConfig.endpoint = localStackEndpoint;
+    awsConfig.s3ForcePathStyle = true;
+    awsConfig.accessKeyId = 'test';
+    awsConfig.secretAccessKey = 'test';
+  }
+
+  AWS.config.update(awsConfig);
 
   const ec2 = new AWS.EC2();
   const rds = new AWS.RDS();
