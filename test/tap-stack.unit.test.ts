@@ -316,7 +316,6 @@ describe('TapStack CloudFormation Template', () => {
         'RDSInstanceEndpoint',
         'VPCId',
         'LambdaFunctionArn',
-        'DatabasePasswordParameterName',
         'SecurityGroupId'
       ];
 
@@ -456,7 +455,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have expected number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(7); // PrimaryS3BucketName, AccessLogsS3BucketName, RDSInstanceEndpoint, VPCId, LambdaFunctionArn, DatabasePasswordParameterName, SecurityGroupId
+      expect(outputCount).toBe(6); // PrimaryS3BucketName, AccessLogsS3BucketName, RDSInstanceEndpoint, VPCId, LambdaFunctionArn, SecurityGroupId (DatabasePasswordParameterName removed for LocalStack)
     });
   });
 });
