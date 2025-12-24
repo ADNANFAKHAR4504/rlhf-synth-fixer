@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291868_ls",
+  "team": "2",
+  "startedAt": "2025-12-24T18:27:32.222Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3Bucket",
+    "S3BucketPolicy",
+    "KMSKey",
+    "CloudFrontDistribution",
+    "WAFv2WebACL",
+    "WAFv2WebACLAssociation",
+    "IAMPolicy",
+    "GuardDutyDetector",
+    "EC2VPC",
+    "EC2NetworkAcl",
+    "EC2NetworkAclEntry",
+    "RDSDBInstance"
+  ],
+  "wave": "P0"
+}
