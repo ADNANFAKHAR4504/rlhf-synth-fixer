@@ -64,12 +64,6 @@ Parameters:
     Description: EC2 instance type for both primary and standby instances
     ConstraintDescription: Must be a valid EC2 instance type
 
-  ImageId:
-    Type: String
-    Default: ami-0bb84b8ffd87024d8
-    Description: AMI ID to use for EC2 instances (defaults to Amazon Linux 2023 in us-east-1)
-    ConstraintDescription: Must be a valid AMI ID
-
   HostedZoneId:
     Type: String
     Default: Z0909377OVFW706BZN9J
