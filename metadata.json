@@ -22,6 +22,6 @@
     "CloudWatch",
     "WAF"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "training_quality": 8
 }
