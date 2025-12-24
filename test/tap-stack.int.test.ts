@@ -24,9 +24,26 @@ import {
   GetPublicAccessBlockCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('CloudFormation Stack - Comprehensive Integration Tests', () => {
-  const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'dev'}`;
+  // Support both LocalStack and regular AWS deployments
+  // Check metadata.json to determine provider
+  let isLocalStack = false;
+  try {
+    const metadataPath = path.join(__dirname, '..', 'metadata.json');
+    if (fs.existsSync(metadataPath)) {
+      const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+      isLocalStack = metadata.provider === 'localstack';
+    }
+  } catch (error) {
+    console.warn('Could not read metadata.json, assuming AWS deployment');
+  }
+
+  const stackName = isLocalStack
+    ? `localstack-stack-${process.env.ENVIRONMENT_SUFFIX || 'dev'}`
+    : `TapStack${process.env.ENVIRONMENT_SUFFIX || 'dev'}`;
 
   const cfClient = new CloudFormationClient({});
   const ec2Client = new EC2Client({});
