@@ -43,7 +43,7 @@ Metadata:
 Parameters:
   EnvironmentName:
     Description: An environment name that is prefixed to resource names
-    Type: AWS::EC2::Image::Id
+    Type: String
     Default: 'production'
     AllowedValues:
       - development
@@ -54,7 +54,7 @@ Parameters:
   
   EnvironmentType:
     Description: Environment type for resource sizing and configuration
-    Type: AWS::EC2::Image::Id
+    Type: String
     Default: 'production'
     AllowedValues:
       - development
@@ -63,12 +63,12 @@ Parameters:
   
   KeyPairName:
     Description: EC2 Key Pair for SSH access (leave empty to skip SSH key configuration)
-    Type: AWS::EC2::Image::Id
+    Type: String
     Default: ''
   
   InstanceType:
     Description: EC2 instance type for the web server
-    Type: AWS::EC2::Image::Id
+    Type: String
     Default: 't3.micro'
     AllowedValues:
       - t3.micro
@@ -79,28 +79,28 @@ Parameters:
   
   VPCCIDR:
     Description: CIDR block for the VPC
-    Type: AWS::EC2::Image::Id
+    Type: String
     Default: '10.0.0.0/16'
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/16$'
     ConstraintDescription: Must be a valid /16 CIDR block
   
   AllowedSSHIP:
     Description: IP address range that can SSH to the EC2 instances (use your IP/32 for production)
-    Type: AWS::EC2::Image::Id
+    Type: String
     Default: '10.0.0.0/16'
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/(3[0-2]|[1-2][0-9]|[0-9])$'
     ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x
   
   AlertEmail:
     Description: Email address for CloudWatch alarm notifications
-    Type: AWS::EC2::Image::Id
+    Type: String
     Default: 'alerts@example.com'
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     ConstraintDescription: Must be a valid email address
   
   EnableDetailedMonitoring:
     Description: Enable detailed CloudWatch monitoring for EC2 instance
-    Type: AWS::EC2::Image::Id
+    Type: String
     Default: 'true'
     AllowedValues:
       - 'true'
