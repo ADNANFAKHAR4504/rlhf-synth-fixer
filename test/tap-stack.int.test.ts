@@ -60,15 +60,33 @@ import {
 
 /* ---------------------------- Setup / Helpers --------------------------- */
 
-const outputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
-if (!fs.existsSync(outputsPath)) {
-  throw new Error(`Expected outputs file at ${outputsPath} — create it before running integration tests.`);
+// Support multiple output file paths and formats
+const possiblePaths = [
+  path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"),
+  path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json"),
+  path.resolve(process.cwd(), "cdk-outputs/all-outputs.json"),
+];
+
+const outputsPath = possiblePaths.find(p => fs.existsSync(p));
+if (!outputsPath) {
+  throw new Error(`Expected outputs file at one of: ${possiblePaths.join(", ")} — create it before running integration tests.`);
 }
 const raw = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+
+// Handle both formats: flat key-value or CloudFormation array format
+let outputs: Record<string, string> = {};
 const firstTopKey = Object.keys(raw)[0];
-const outputsArray: { OutputKey: string; OutputValue: string }[] = raw[firstTopKey];
-const outputs: Record<string, string> = {};
-for (const o of outputsArray) outputs[o.OutputKey] = o.OutputValue;
+if (Array.isArray(raw[firstTopKey])) {
+  // CloudFormation array format: { "stack-name": [{ OutputKey, OutputValue }, ...] }
+  const outputsArray: { OutputKey: string; OutputValue: string }[] = raw[firstTopKey];
+  for (const o of outputsArray) outputs[o.OutputKey] = o.OutputValue;
+} else if (typeof raw[firstTopKey] === "string") {
+  // Flat key-value format: { "VpcId": "vpc-xxx", ... }
+  outputs = raw as Record<string, string>;
+} else {
+  // Nested format: { "stack-name": { "VpcId": "vpc-xxx", ... } }
+  outputs = raw[firstTopKey] as Record<string, string>;
+}
 
 function deduceRegion(): string {
   // Try to infer region from ALB DNS (e.g., ...us-east-1.elb.amazonaws.com)
