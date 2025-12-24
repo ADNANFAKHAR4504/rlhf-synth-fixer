@@ -5,8 +5,5 @@
   "PublicSubnet1Id": "subnet-dcf71b36fd8bd59ef",
   "PublicSubnet2Id": "subnet-adedd7d6562f7b985",
   "SecurityGroupId": "sg-f361135b6fe4d0d81",
-  "VPCId": "vpc-ecbbaf37f811ff3e6",
-  "WebServerInstanceId": "i-5585a910f2de26830",
-  "WebServerPublicIP": "54.214.19.237",
-  "WebServerURL": "http://54.214.19.237"
+  "VPCId": "vpc-ecbbaf37f811ff3e6"
 }
