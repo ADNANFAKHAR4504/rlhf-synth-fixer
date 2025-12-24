@@ -29,13 +29,26 @@ type TfOutputValue<T> = {
 };
 
 type StructuredOutputs = {
-  lb_domain?: TfOutputValue<string>;
-  vpc_id?: TfOutputValue<string>;
-  instance_id?: TfOutputValue<string>;
-  enable_alb?: TfOutputValue<boolean>;
-  enable_asg?: TfOutputValue<boolean>;
-  enable_ec2?: TfOutputValue<boolean>;
+  lb_domain?: TfOutputValue<string> | string;
+  vpc_id?: TfOutputValue<string> | string;
+  instance_id?: TfOutputValue<string> | string;
+  enable_alb?: TfOutputValue<boolean> | boolean;
+  enable_asg?: TfOutputValue<boolean> | boolean;
+  enable_ec2?: TfOutputValue<boolean> | boolean;
 };
+
+// Helper to extract value from either nested or flat output format
+function extractValue<T>(output: TfOutputValue<T> | T | undefined, defaultValue: T): T {
+  if (output === undefined || output === null) {
+    return defaultValue;
+  }
+  // Check if it's a nested format with .value property
+  if (typeof output === 'object' && output !== null && 'value' in output) {
+    return (output as TfOutputValue<T>).value;
+  }
+  // It's a flat value
+  return output as T;
+}
 
 function readStructuredOutputs(): StructuredOutputs {
   // Try multiple possible output file locations
@@ -75,12 +88,13 @@ const iamClient = new IAMClient(clientConfig);
 
 // Read outputs
 const outputs = readStructuredOutputs();
-const vpcId = outputs.vpc_id?.value || "";
-const instanceId = outputs.instance_id?.value || "";
-const lbDomain = outputs.lb_domain?.value || "";
-const albEnabled = outputs.enable_alb?.value ?? true;
-const asgEnabled = outputs.enable_asg?.value ?? true;
-const ec2Enabled = outputs.enable_ec2?.value ?? true;
+const vpcId = extractValue(outputs.vpc_id, "");
+const instanceId = extractValue(outputs.instance_id, "");
+const lbDomain = extractValue(outputs.lb_domain, "");
+// Default to false for LocalStack compatibility - ALB/ASG are typically disabled in LocalStack
+const albEnabled = extractValue(outputs.enable_alb, false);
+const asgEnabled = extractValue(outputs.enable_asg, false);
+const ec2Enabled = extractValue(outputs.enable_ec2, true);
 
 async function retry<T>(fn: () => Promise<T>, attempts = 12, baseMs = 2000): Promise<T> {
   let lastErr: any;
@@ -471,12 +485,16 @@ describe("Infrastructure Integration Tests", () => {
 
     test("enable_alb output exists and is boolean", () => {
       expect(outputs.enable_alb).toBeDefined();
-      expect(typeof outputs.enable_alb?.value).toBe("boolean");
+      // Handle both nested format (with .value) and flat format (direct boolean)
+      const albValue = extractValue(outputs.enable_alb, undefined);
+      expect(typeof albValue).toBe("boolean");
     });
 
     test("enable_asg output exists and is boolean", () => {
       expect(outputs.enable_asg).toBeDefined();
-      expect(typeof outputs.enable_asg?.value).toBe("boolean");
+      // Handle both nested format (with .value) and flat format (direct boolean)
+      const asgValue = extractValue(outputs.enable_asg, undefined);
+      expect(typeof asgValue).toBe("boolean");
     });
 
     test("instance_id is set when ASG is disabled and EC2 is enabled", () => {
