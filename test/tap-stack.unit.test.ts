@@ -281,7 +281,7 @@ describe('Route53 Failover CloudFormation Template', () => {
 
     test('should have health check output', () => {
       const healthCheckOutput = template.Outputs.PrimaryHealthCheckId;
-      expect(healthCheckOutput.Description).toBe('Route53 Health Check ID for the primary instance');
+      expect(healthCheckOutput.Description).toBe('Route53 Health Check ID for the primary instance (only available if Route53 is enabled)');
       expect(healthCheckOutput.Value).toEqual({ Ref: 'PrimaryHealthCheck' });
     });
   });
@@ -307,7 +307,7 @@ describe('Route53 Failover CloudFormation Template', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6); // Updated: added LatestAmiId parameter
+      expect(parameterCount).toBe(8); // EnableRoute53, EnableCloudWatch, KeyPairName, InstanceType, LatestAmiId, HostedZoneId, DomainName, AllowedSSHCIDR
     });
 
     test('should have expected number of outputs', () => {
