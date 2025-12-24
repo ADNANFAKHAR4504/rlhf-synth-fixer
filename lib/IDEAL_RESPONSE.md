@@ -1,26 +1,33 @@
-# Terraform Infrastructure Documentation
+# High Availability Web Application - Terraform Configuration
 
 ## Overview
-This document provides the complete Terraform configuration for a high-availability web application infrastructure on AWS. The infrastructure includes an Application Load Balancer, Auto Scaling Group, RDS database, and comprehensive monitoring with CloudWatch.
 
-## Architecture Components
+This document provides the complete Terraform configuration for deploying a highly available web application infrastructure on AWS. The solution creates a production-ready environment with load balancing, auto-scaling, database, and comprehensive monitoring.
 
-### High Availability Features
-- Multi-AZ deployment across availability zones
+## Architecture
+
+The infrastructure includes:
+- VPC with multiple availability zones
 - Application Load Balancer for traffic distribution
-- Auto Scaling Group with CPU-based scaling policies
-- RDS database with multi-AZ enabled
-- Comprehensive monitoring and alerting
+- Auto Scaling Group with EC2 instances
+- RDS MySQL database with Multi-AZ deployment
+- Security groups following least privilege principles
+- IAM roles for EC2 instances
+- CloudWatch monitoring and alarms
+- Secrets Manager for database credentials
 
-### Security Features
-- IAM roles with least privilege access
-- Security groups with restricted access
-- AWS Secrets Manager for database password
-- Encrypted storage for RDS
+## Complete Terraform Configuration
 
-## Variables
+### File: lib/tap_stack.tf
 
 ```hcl
+# Terraform configuration for High Availability Web Application
+# This configuration creates a production-ready infrastructure on AWS
+# LocalStack-compatible version - some resources are conditionally created
+
+########################
+# Variables
+########################
 variable "aws_region" {
   description = "AWS region for the infrastructure"
   type        = string
@@ -56,11 +63,16 @@ variable "db_instance_class" {
   type        = string
   default     = "db.t3.micro"
 }
-```
 
-## Data Sources
+variable "localstack_mode" {
+  description = "Set to true when deploying to LocalStack (skips unsupported resources)"
+  type        = bool
+  default     = true
+}
 
-```hcl
+########################
+# Data Sources
+########################
 data "aws_vpc" "default" {
   default = true
 }
@@ -72,34 +84,27 @@ data "aws_subnets" "default" {
   }
 }
 
-# Get public subnets for ALB (must be in different AZs)
-data "aws_subnets" "public" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-
-  filter {
-    name   = "state"
-    values = ["available"]
-  }
-
-  filter {
-    name   = "map-public-ip-on-launch"
-    values = ["true"]
-  }
-}
-
 data "aws_availability_zones" "available" {
   state = "available"
 }
-```
 
-## Security Groups
+########################
+# Locals
+########################
+locals {
+  common_tags = {
+    Name        = "${var.app_name}-${var.environment_suffix}"
+    Environment = "Production"
+    ManagedBy   = "terraform"
+  }
 
-### Application Load Balancer Security Group
+  # Use first 2 available subnets
+  subnet_ids = slice(data.aws_subnets.default.ids, 0, min(2, length(data.aws_subnets.default.ids)))
+}
 
-```hcl
+########################
+# Security Groups
+########################
 resource "aws_security_group" "alb" {
   name        = "${var.app_name}-${var.environment_suffix}-alb-sg"
   description = "Security group for Application Load Balancer"
@@ -135,11 +140,7 @@ resource "aws_security_group" "alb" {
     ManagedBy   = "terraform"
   }
 }
-```
 
-### EC2 Instances Security Group
-
-```hcl
 resource "aws_security_group" "ec2" {
   name        = "${var.app_name}-${var.environment_suffix}-ec2-sg"
   description = "Security group for EC2 instances"
@@ -167,11 +168,7 @@ resource "aws_security_group" "ec2" {
     ManagedBy   = "terraform"
   }
 }
-```
 
-### RDS Database Security Group
-
-```hcl
 resource "aws_security_group" "rds" {
   name        = "${var.app_name}-${var.environment_suffix}-rds-sg"
   description = "Security group for RDS database"
@@ -191,13 +188,10 @@ resource "aws_security_group" "rds" {
     ManagedBy   = "terraform"
   }
 }
-```
 
-## IAM Roles and Policies
-
-### EC2 Instance Role
-
-```hcl
+########################
+# IAM Roles and Policies
+########################
 resource "aws_iam_role" "ec2_role" {
   name = "${var.app_name}-${var.environment_suffix}-ec2-role"
 
@@ -225,11 +219,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.app_name}-${var.environment_suffix}-ec2-profile"
   role = aws_iam_role.ec2_role.name
 }
-```
 
-### CloudWatch Policy
-
-```hcl
 resource "aws_iam_role_policy" "cloudwatch_policy" {
   name = "${var.app_name}-${var.environment_suffix}-cloudwatch-policy"
   role = aws_iam_role.ec2_role.id
@@ -252,14 +242,13 @@ resource "aws_iam_role_policy" "cloudwatch_policy" {
     ]
   })
 }
-```
 
-## Launch Template
-
-```hcl
+########################
+# Launch Template
+########################
 resource "aws_launch_template" "app" {
   name_prefix   = "${var.app_name}-${var.environment_suffix}-template-"
-  image_id      = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI in us-east-1 (keeping same for now)
+  image_id      = "ami-0c02fb55956c7d316"
   instance_type = var.instance_type
 
   network_interfaces {
@@ -273,16 +262,11 @@ resource "aws_launch_template" "app" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              # Enable debugging
               set -x
-              
-              # Update system
               yum update -y
               yum install -y httpd
               systemctl start httpd
               systemctl enable httpd
-              
-              # Create a simple web page
               cat > /var/www/html/index.html << 'HTML_EOF'
               <!DOCTYPE html>
               <html>
@@ -304,28 +288,19 @@ resource "aws_launch_template" "app" {
                       <div class="info">
                           <h2>Instance Information</h2>
                           <p><strong>Hostname:</strong> $(hostname -f)</p>
-                          <p><strong>Instance ID:</strong> $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-                          <p><strong>Availability Zone:</strong> $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
                           <p><strong>Launch Time:</strong> $(date)</p>
                       </div>
                   </div>
               </body>
               </html>
               HTML_EOF
-              
-              # Install CloudWatch agent for monitoring
               yum install -y amazon-cloudwatch-agent
               systemctl enable amazon-cloudwatch-agent
               systemctl start amazon-cloudwatch-agent
-              
-              # Create a simple health check endpoint
               cat > /var/www/html/health << 'HEALTH_EOF'
               OK
               HEALTH_EOF
-              
-              # Verify Apache is running
               systemctl status httpd
-              curl -f http://localhost/ || echo "Apache health check failed"
               EOF
   )
 
@@ -344,21 +319,22 @@ resource "aws_launch_template" "app" {
     ManagedBy   = "terraform"
   }
 }
-```
 
-## Application Load Balancer
-
-### Load Balancer
-
-```hcl
+########################
+# Application Load Balancer (AWS only - not supported in LocalStack Community)
+########################
 resource "aws_lb" "app" {
+  count = var.localstack_mode ? 0 : 1
+
   name               = "${var.app_name}-${var.environment_suffix}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = slice(data.aws_subnets.public.ids, 0, 2)
+  subnets            = local.subnet_ids
 
-  enable_deletion_protection = false
+  enable_deletion_protection       = false
+  enable_http2                     = true
+  enable_cross_zone_load_balancing = true
 
   tags = {
     Name        = "${var.app_name}-${var.environment_suffix}-alb"
@@ -366,12 +342,10 @@ resource "aws_lb" "app" {
     ManagedBy   = "terraform"
   }
 }
-```
 
-### Target Group
-
-```hcl
 resource "aws_lb_target_group" "app" {
+  count = var.localstack_mode ? 0 : 1
+
   name     = "${var.app_name}-${var.environment_suffix}-tg"
   port     = 80
   protocol = "HTTP"
@@ -395,33 +369,32 @@ resource "aws_lb_target_group" "app" {
     ManagedBy   = "terraform"
   }
 }
-```
 
-### Listener
-
-```hcl
 resource "aws_lb_listener" "app" {
-  load_balancer_arn = aws_lb.app.arn
+  count = var.localstack_mode ? 0 : 1
+
+  load_balancer_arn = aws_lb.app[0].arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+    target_group_arn = aws_lb_target_group.app[0].arn
   }
 }
-```
 
-## Auto Scaling Group
-
-```hcl
+########################
+# Auto Scaling Group (AWS only - not fully supported in LocalStack Community)
+########################
 resource "aws_autoscaling_group" "app" {
+  count = var.localstack_mode ? 0 : 1
+
   name                      = "${var.app_name}-${var.environment_suffix}-asg"
   desired_capacity          = 1
   max_size                  = 4
   min_size                  = 1
-  target_group_arns         = [aws_lb_target_group.app.arn]
-  vpc_zone_identifier       = slice(data.aws_subnets.public.ids, 0, 2)
+  target_group_arns         = [aws_lb_target_group.app[0].arn]
+  vpc_zone_identifier       = local.subnet_ids
   health_check_grace_period = 600
   health_check_type         = "ELB"
 
@@ -448,40 +421,36 @@ resource "aws_autoscaling_group" "app" {
     propagate_at_launch = true
   }
 }
-```
 
-## Auto Scaling Policies
-
-### Scale Up Policy
-
-```hcl
+########################
+# Auto Scaling Policies (AWS only)
+########################
 resource "aws_autoscaling_policy" "scale_up" {
+  count = var.localstack_mode ? 0 : 1
+
   name                   = "${var.app_name}-${var.environment_suffix}-scale-up"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
-  autoscaling_group_name = aws_autoscaling_group.app.name
+  autoscaling_group_name = aws_autoscaling_group.app[0].name
 }
-```
 
-### Scale Down Policy
-
-```hcl
 resource "aws_autoscaling_policy" "scale_down" {
+  count = var.localstack_mode ? 0 : 1
+
   name                   = "${var.app_name}-${var.environment_suffix}-scale-down"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
-  autoscaling_group_name = aws_autoscaling_group.app.name
+  autoscaling_group_name = aws_autoscaling_group.app[0].name
 }
-```
 
-## CloudWatch Alarms
-
-### CPU High Alarm
-
-```hcl
+########################
+# CloudWatch Alarms (AWS only for ASG-linked alarms)
+########################
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  count = var.localstack_mode ? 0 : 1
+
   alarm_name          = "${var.app_name}-${var.environment_suffix}-cpu-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
@@ -491,18 +460,16 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "Scale up if CPU > 80% for 4 minutes"
-  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
+  alarm_actions       = [aws_autoscaling_policy.scale_up[0].arn]
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app.name
+    AutoScalingGroupName = aws_autoscaling_group.app[0].name
   }
 }
-```
 
-### CPU Low Alarm
-
-```hcl
 resource "aws_cloudwatch_metric_alarm" "cpu_low" {
+  count = var.localstack_mode ? 0 : 1
+
   alarm_name          = "${var.app_name}-${var.environment_suffix}-cpu-low"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
@@ -512,17 +479,14 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   statistic           = "Average"
   threshold           = "20"
   alarm_description   = "Scale down if CPU < 20% for 4 minutes"
-  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
+  alarm_actions       = [aws_autoscaling_policy.scale_down[0].arn]
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app.name
+    AutoScalingGroupName = aws_autoscaling_group.app[0].name
   }
 }
-```
 
-### Memory High Alarm
-
-```hcl
+# General CloudWatch alarms that work in LocalStack
 resource "aws_cloudwatch_metric_alarm" "memory_high" {
   alarm_name          = "${var.app_name}-${var.environment_suffix}-memory-high"
   comparison_operator = "GreaterThanThreshold"
@@ -535,15 +499,15 @@ resource "aws_cloudwatch_metric_alarm" "memory_high" {
   alarm_description   = "Memory utilization is high"
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app.name
+    InstanceName = "${var.app_name}-${var.environment_suffix}"
   }
+
+  tags = local.common_tags
 }
-```
 
-### ALB 5XX Errors Alarm
-
-```hcl
 resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
+  count = var.localstack_mode ? 0 : 1
+
   alarm_name          = "${var.app_name}-${var.environment_suffix}-alb-5xx"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
@@ -555,19 +519,18 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
   alarm_description   = "ALB 5XX errors are high"
 
   dimensions = {
-    LoadBalancer = aws_lb.app.arn_suffix
+    LoadBalancer = aws_lb.app[0].arn_suffix
   }
 }
-```
 
-## RDS Database
-
-### DB Subnet Group
-
-```hcl
+########################
+# RDS Database (AWS only - not supported in LocalStack Community)
+########################
 resource "aws_db_subnet_group" "app" {
+  count = var.localstack_mode ? 0 : 1
+
   name       = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
-  subnet_ids = slice(data.aws_subnets.default.ids, 0, 2)
+  subnet_ids = local.subnet_ids
 
   tags = {
     Name        = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
@@ -575,12 +538,10 @@ resource "aws_db_subnet_group" "app" {
     ManagedBy   = "terraform"
   }
 }
-```
 
-### RDS Instance
-
-```hcl
 resource "aws_db_instance" "app" {
+  count = var.localstack_mode ? 0 : 1
+
   identifier = "${var.app_name}-${var.environment_suffix}-db"
 
   engine         = "mysql"
@@ -597,7 +558,7 @@ resource "aws_db_instance" "app" {
   password = aws_secretsmanager_secret_version.db_password.secret_string
 
   vpc_security_group_ids = [aws_security_group.rds.id]
-  db_subnet_group_name   = aws_db_subnet_group.app.name
+  db_subnet_group_name   = aws_db_subnet_group.app[0].name
 
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
@@ -614,13 +575,10 @@ resource "aws_db_instance" "app" {
     ManagedBy   = "terraform"
   }
 }
-```
 
-## AWS Secrets Manager
-
-### Database Password Secret
-
-```hcl
+########################
+# AWS Secrets Manager (supported in LocalStack)
+########################
 resource "aws_secretsmanager_secret" "db_password" {
   name        = "${var.app_name}-${var.environment_suffix}-db-password"
   description = "Database password for ${var.app_name} application"
@@ -642,11 +600,10 @@ resource "random_password" "db_password" {
   special          = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
-```
 
-## CloudWatch Logs
-
-```hcl
+########################
+# CloudWatch Logs (supported in LocalStack)
+########################
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/aws/ec2/${var.app_name}-${var.environment_suffix}"
   retention_in_days = 7
@@ -657,11 +614,10 @@ resource "aws_cloudwatch_log_group" "app" {
     ManagedBy   = "terraform"
   }
 }
-```
 
-## Outputs
-
-```hcl
+########################
+# Outputs
+########################
 output "aws_region" {
   description = "AWS region used for the infrastructure"
   value       = var.aws_region
@@ -669,32 +625,32 @@ output "aws_region" {
 
 output "alb_dns_name" {
   description = "DNS name of the load balancer"
-  value       = aws_lb.app.dns_name
+  value       = var.localstack_mode ? "localstack-mode-no-alb" : aws_lb.app[0].dns_name
 }
 
 output "alb_zone_id" {
   description = "Zone ID of the load balancer"
-  value       = aws_lb.app.zone_id
+  value       = var.localstack_mode ? "localstack-mode-no-alb" : aws_lb.app[0].zone_id
 }
 
 output "rds_endpoint" {
   description = "RDS instance endpoint"
-  value       = aws_db_instance.app.endpoint
+  value       = var.localstack_mode ? "localstack-mode-no-rds" : aws_db_instance.app[0].endpoint
 }
 
 output "rds_port" {
   description = "RDS instance port"
-  value       = aws_db_instance.app.port
+  value       = var.localstack_mode ? 3306 : aws_db_instance.app[0].port
 }
 
 output "asg_name" {
   description = "Auto Scaling Group name"
-  value       = aws_autoscaling_group.app.name
+  value       = var.localstack_mode ? "localstack-mode-no-asg" : aws_autoscaling_group.app[0].name
 }
 
 output "asg_arn" {
   description = "Auto Scaling Group ARN"
-  value       = aws_autoscaling_group.app.arn
+  value       = var.localstack_mode ? "localstack-mode-no-asg" : aws_autoscaling_group.app[0].arn
 }
 
 output "vpc_id" {
@@ -706,9 +662,49 @@ output "subnet_ids" {
   description = "Subnet IDs"
   value       = data.aws_subnets.default.ids
 }
+
+output "security_group_alb_id" {
+  description = "ALB Security Group ID"
+  value       = aws_security_group.alb.id
+}
+
+output "security_group_ec2_id" {
+  description = "EC2 Security Group ID"
+  value       = aws_security_group.ec2.id
+}
+
+output "security_group_rds_id" {
+  description = "RDS Security Group ID"
+  value       = aws_security_group.rds.id
+}
+
+output "iam_role_arn" {
+  description = "EC2 IAM Role ARN"
+  value       = aws_iam_role.ec2_role.arn
+}
+
+output "launch_template_id" {
+  description = "Launch Template ID"
+  value       = aws_launch_template.app.id
+}
+
+output "secrets_manager_secret_arn" {
+  description = "Secrets Manager Secret ARN"
+  value       = aws_secretsmanager_secret.db_password.arn
+}
+
+output "cloudwatch_log_group_name" {
+  description = "CloudWatch Log Group Name"
+  value       = aws_cloudwatch_log_group.app.name
+}
+
+output "localstack_mode" {
+  description = "Whether LocalStack mode is enabled"
+  value       = var.localstack_mode
+}
 ```
 
-## Provider Configuration
+### File: lib/provider.tf
 
 ```hcl
 terraform {
@@ -725,7 +721,6 @@ terraform {
     }
   }
 
-  # S3 backend configuration
   backend "s3" {}
 }
 
@@ -734,24 +729,36 @@ provider "aws" {
 }
 ```
 
+### File: lib/terraform.tfvars
+
+```hcl
+aws_region         = "us-east-1"
+environment        = "production"
+app_name           = "webapp"
+instance_type      = "t3.micro"
+db_instance_class  = "db.t3.micro"
+environment_suffix = "ls"
+localstack_mode    = true
+```
+
 ## Deployment Instructions
 
-1. **Initialize Terraform**:
+1. Initialize Terraform:
    ```bash
    terraform init
    ```
 
-2. **Plan the deployment**:
+2. Plan the deployment:
    ```bash
    terraform plan
    ```
 
-3. **Apply the configuration**:
+3. Apply the configuration:
    ```bash
    terraform apply
    ```
 
-4. **Verify the deployment**:
+4. Verify the deployment:
    ```bash
    terraform output
    ```
@@ -764,53 +771,43 @@ provider "aws" {
 - RDS instance is encrypted and not publicly accessible
 - IAM roles have minimal required permissions
 
-## Monitoring and Alerting
+## High Availability Features
 
-The infrastructure includes comprehensive monitoring with CloudWatch alarms for:
-- CPU utilization (scale up/down triggers)
-- Memory utilization
-- ALB 5XX errors
-- Auto Scaling Group health
+- Multi-AZ deployment using default VPC subnets
+- Application Load Balancer distributes traffic across instances
+- Auto Scaling Group maintains desired capacity
+- RDS database configured with Multi-AZ for failover
+- Health checks ensure only healthy instances receive traffic
 
-## Cost Optimization
+## LocalStack Compatibility
 
-- Uses t3.micro instances for development/testing
-- RDS instance can be scaled based on demand
-- Auto Scaling Group helps optimize costs during low traffic periods
-- All resources are properly tagged for cost allocation
+The configuration includes a `localstack_mode` variable that conditionally creates resources:
+- When `localstack_mode = true`: Skips ALB, RDS, and ASG resources (not supported in LocalStack Community)
+- When `localstack_mode = false`: Creates full production infrastructure on AWS
 
-## Testing
+Resources always created in both modes:
+- Security Groups
+- IAM Roles and Policies
+- Launch Template
+- Secrets Manager
+- CloudWatch Log Groups
+- CloudWatch Alarms (memory alarm)
 
-### Unit Tests
+## Outputs
 
-Unit tests validate the Terraform configuration structure and syntax. They are run locally with `npm run test:unit` and verify:
-- All required variables are defined with proper defaults
-- Security groups have correct configurations
-- IAM roles and policies are properly structured
-- Resources use proper naming conventions with environment suffix
-- LocalStack compatibility with conditional resource creation
-
-### Integration Tests
-
-Integration tests validate deployed resources in LocalStack or AWS. Key features:
-
-- **Multi-path output file support**: Checks `cfn-outputs/`, `cdk-outputs/`, and root-level paths
-- **Graceful error handling**: Handles LocalStack-specific limitations with Secrets Manager
-- **Flexible assertions**: Security group lookups filter by specific GroupId
-- **LocalStack mode detection**: Skips tests for unsupported resources (ALB, RDS, ASG)
-
-The integration tests are located at `test/terraform.int.test.ts` and validate:
-- VPC and subnet creation across multiple availability zones
-- Security group rules follow least privilege principle
-- IAM roles have proper assume role policies
-- CloudWatch Log Groups and Alarms are configured correctly
-- Secrets Manager secrets are created for database passwords
-- Resource tagging meets production requirements
-
-### LocalStack Compatibility
-
-The infrastructure supports LocalStack deployment for local testing:
-- `localstack_mode` variable enables conditional resource creation
-- Resources not supported by LocalStack Community Edition (ELBv2, RDS, ASG) are skipped
-- Security groups, IAM roles, VPC, and CloudWatch resources are always created
-- Outputs provide placeholder values for skipped resources
+| Output | Description |
+|--------|-------------|
+| aws_region | AWS region used for deployment |
+| alb_dns_name | DNS name of the Application Load Balancer |
+| rds_endpoint | RDS database endpoint |
+| asg_name | Auto Scaling Group name |
+| vpc_id | VPC ID |
+| subnet_ids | List of subnet IDs |
+| security_group_alb_id | ALB Security Group ID |
+| security_group_ec2_id | EC2 Security Group ID |
+| security_group_rds_id | RDS Security Group ID |
+| iam_role_arn | EC2 IAM Role ARN |
+| launch_template_id | Launch Template ID |
+| secrets_manager_secret_arn | Secrets Manager Secret ARN |
+| cloudwatch_log_group_name | CloudWatch Log Group name |
+| localstack_mode | Whether LocalStack mode is enabled |
