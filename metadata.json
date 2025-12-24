@@ -6,11 +6,25 @@
   "po_id": "LS-229145",
   "team": "synth-2",
   "startedAt": "2025-07-17T10:33:35.140Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Security Configuration as Code"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "VPC",
+    "S3",
+    "RDS",
+    "DynamoDB",
+    "Lambda",
+    "CloudFront",
+    "Route53",
+    "SNS",
+    "CloudTrail",
+    "Config",
+    "WAF",
+    "KMS",
+    "SecretsManager"
+  ],
   "wave": "P0"
 }
