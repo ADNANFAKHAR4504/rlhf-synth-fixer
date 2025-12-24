@@ -17,5 +17,5 @@
     "s3",
     "dynamodb"
   ],
-  "wave": "P1"
+  "wave": "P0"
 }
