@@ -6,7 +6,7 @@
   "po_id": "LS-291786",
   "team": "synth-2",
   "startedAt": "2025-08-18T11:45:07.342Z",
-  "subtask": "General Infrastructure Provisioning",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup",
@@ -30,5 +30,9 @@
     "Internet Gateway",
     "Security Groups"
   ],
-  "wave": "P1"
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291786",
+    "pr": "Pr1560"
+  }
 }
