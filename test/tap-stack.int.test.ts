@@ -17,8 +17,11 @@ import {
 } from '@aws-sdk/client-ec2';
 import fs from 'fs';
 
-// Read AWS region from file
-const awsRegion = fs.readFileSync('lib/AWS_REGION', 'utf8').trim();
+// Read AWS region from environment or file (fallback to us-east-1)
+const awsRegion = process.env.AWS_REGION ||
+  (fs.existsSync('lib/AWS_REGION')
+    ? fs.readFileSync('lib/AWS_REGION', 'utf8').trim()
+    : 'us-east-1');
 const expectedEnvironmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr265';
 
 const outputs = JSON.parse(
