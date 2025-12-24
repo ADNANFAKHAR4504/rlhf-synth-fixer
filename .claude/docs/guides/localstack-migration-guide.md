@@ -355,7 +355,7 @@ The `metadata.json` is updated with migration tracking fields:
 {
   "po_id": "LS-trainr97",
   "provider": "localstack",
-  "wave": "P1",
+  "wave": "P0",  // Looked up from P0.csv/P1.csv based on original task
   "migrated_from": {
     "po_id": "trainr97",
     "pr": "Pr7179"
@@ -363,6 +363,14 @@ The `metadata.json` is updated with migration tracking fields:
   ...
 }
 ```
+
+**Wave Assignment:**
+The `wave` field is automatically determined by looking up the original task in:
+- `.claude/docs/references/P0.csv` - P0 (priority) tasks
+- `.claude/docs/references/P1.csv` - P1 (standard) tasks
+
+The lookup uses the `migrated_from.pr` or `migrated_from.po_id` to find the correct wave.
+If the task is not found in either CSV, it defaults to "P1".
 
 **Migration Tracking Fields:**
 
