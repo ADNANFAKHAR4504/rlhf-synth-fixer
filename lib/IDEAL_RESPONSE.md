@@ -1031,8 +1031,6 @@ Resources:
         - TargetGroupArn: !Ref PaymentTargetGroup
           ContainerName: !Sub "payment-${EnvironmentSuffix}"
           ContainerPort: !Ref PaymentContainerPort
-      ServiceRegistries:
-        - RegistryArn: !GetAtt PaymentDiscoveryService.Arn
       Tags:
         - { Key: Name,        Value: !Sub "svc-payment-${EnvironmentSuffix}" }
         - { Key: Environment, Value: Production }
@@ -1064,8 +1062,6 @@ Resources:
         - TargetGroupArn: !Ref FraudTargetGroup
           ContainerName: !Sub "fraud-${EnvironmentSuffix}"
           ContainerPort: !Ref FraudContainerPort
-      ServiceRegistries:
-        - RegistryArn: !GetAtt FraudDiscoveryService.Arn
       Tags:
         - { Key: Name,        Value: !Sub "svc-fraud-${EnvironmentSuffix}" }
         - { Key: Environment, Value: Production }
@@ -1097,8 +1093,6 @@ Resources:
         - TargetGroupArn: !Ref ReportingTargetGroup
           ContainerName: !Sub "reporting-${EnvironmentSuffix}"
           ContainerPort: !Ref ReportingContainerPort
-      ServiceRegistries:
-        - RegistryArn: !GetAtt ReportingDiscoveryService.Arn
       Tags:
         - { Key: Name,        Value: !Sub "svc-reporting-${EnvironmentSuffix}" }
         - { Key: Environment, Value: Production }
