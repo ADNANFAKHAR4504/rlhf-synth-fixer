@@ -2,103 +2,75 @@
 
 Hey team,
 
-We've been asked to build a mission-critical database infrastructure for a financial services company that's dealing with transaction processing across multiple regions. They need absolute confidence that even if an entire AWS region goes down, their database stays up with minimal data loss. This is the kind of system where downtime is measured in millions of dollars per minute, so we need to get it right.
+We need to build a mission-critical database infrastructure for a financial services company handling transaction processing across multiple regions. They need absolute confidence that even if an entire AWS region goes down, their database stays up with minimal data loss. Downtime costs millions of dollars per minute, so we need to get it right.
 
-The business wants a solution that spans us-east-1 as the primary region and us-west-2 for disaster recovery. They need automated failover capabilities, point-in-time recovery, and the ability to backtrack if something goes wrong. We're talking about strict RPO/RTO requirements here, so every detail matters.
+The business wants a solution that spans us-east-1 as the primary region with us-west-2 for disaster recovery. They need automated failover capabilities, point-in-time recovery, and the ability to backtrack if something goes wrong. Strict RPO/RTO requirements here, so every detail matters.
 
-I've been asked to create this infrastructure using **CloudFormation with YAML**. The architecture needs to demonstrate AWS best practices for high availability and disaster recovery while keeping operations simple enough for their team to manage.
+I need to create this infrastructure using CloudFormation with YAML. The architecture should demonstrate AWS best practices for high availability and disaster recovery.
 
 ## What we need to build
 
-Create a highly available Aurora Global Database using **CloudFormation with YAML** for multi-region transaction processing with automated disaster recovery capabilities.
+Deploy an Aurora Global Database cluster in us-east-1 that replicates data to a secondary cluster in us-west-2. The primary cluster writes transactions to Aurora storage, which then streams changes to the secondary region through Aurora cross-region replication. CloudWatch monitors replication lag and triggers SNS alerts when thresholds are exceeded.
 
-### Core Requirements
+The primary Aurora cluster connects to KMS in us-east-1 for data encryption at rest. The secondary cluster connects to a separate KMS key in us-west-2. Both clusters reside in private VPC subnets with security groups restricting access to application tier only.
 
-1. **Aurora Global Database Architecture**
-   - Primary Aurora cluster in us-east-1 region
-   - Secondary Aurora cluster in us-west-2 for disaster recovery
-   - Use Aurora MySQL 5.7 compatible engine
-   - Deploy with db.r5.large instance class
-   - Configure writer and reader endpoints in primary region
-   - Enable cross-region replication with lag monitoring
+Enhanced monitoring data flows from Aurora instances to CloudWatch metrics every 10 seconds. CloudWatch alarms watch replication lag and trigger SNS notifications when lag exceeds acceptable thresholds.
 
-2. **Data Protection and Recovery**
-   - Enable automated backups with 35-day retention period
-   - Configure backtrack with 24-hour window for quick recovery
-   - Implement point-in-time recovery with 5-minute granularity
-   - Set deletion_protection to true for all database instances
-   - Enable copy_tags_to_snapshot for consistent tagging
+## Core Requirements
 
-3. **Security and Encryption**
-   - Implement KMS encryption using customer-managed keys
-   - Separate KMS keys for each region (us-east-1 and us-west-2)
-   - Enable storage encryption at rest
-   - Configure secure VPC networking with private subnets
-   - Deploy across 3 Availability Zones in each region
+Aurora Global Database Architecture:
+- Primary Aurora cluster in us-east-1 connects to writer and reader endpoints
+- Secondary Aurora cluster in us-west-2 receives replicated data from primary
+- Aurora MySQL 5.7 compatible engine with db.r5.large instance class
+- Cross-region replication streams data continuously to secondary region
 
-4. **High Availability Configuration**
-   - Configure automatic failover with promotion tier priorities
-   - Set up Multi-AZ deployment for primary cluster
-   - Enable enhanced monitoring with 10-second intervals
-   - Create CloudWatch alarms for replication lag
-   - Monitor cluster health and performance metrics
+Data Protection and Recovery:
+- Automated backups stored in S3 with 35-day retention period
+- Backtrack window of 24 hours allows quick recovery from errors
+- Point-in-time recovery enables restoration to any point within retention window
+- Deletion protection prevents accidental database deletion
 
-5. **Infrastructure Outputs**
-   - Export connection strings for writer and reader endpoints
-   - Provide clear failover instructions for operations team
-   - Document manual promotion procedures for secondary region
-   - Output monitoring dashboard URLs
-   - Include KMS key ARNs for both regions
+Security and Encryption:
+- Primary cluster connects to KMS key in us-east-1 for encryption
+- Secondary cluster connects to separate KMS key in us-west-2
+- VPC security groups restrict database access to specific CIDR ranges
+- Private subnets isolate database from public internet access
+- Deploy across 3 Availability Zones in each region
 
-### Technical Requirements
+High Availability Configuration:
+- Automatic failover promotes secondary instances based on promotion tier
+- Multi-AZ deployment distributes instances across availability zones
+- Enhanced monitoring sends metrics to CloudWatch every 10 seconds
+- CloudWatch alarms monitor replication lag and notify via SNS
 
-- All infrastructure defined using **CloudFormation with YAML**
-- Use **Aurora MySQL** for the global database cluster
-- Use **RDS** service for cluster and instance management
-- Use **KMS** for encryption key management in both regions
-- Use **CloudWatch** for monitoring and alerting
-- Resource names must include **EnvironmentSuffix** parameter for uniqueness
-- Follow naming convention: `{resource-type}-${EnvironmentSuffix}`
-- Deploy primary cluster to **us-east-1** region
-- Deploy secondary cluster to **us-west-2** region
-- All resources must be destroyable (no DeletionPolicy: Retain)
+## Technical Requirements
 
-### Optional Enhancements
-
-- Add **Lambda** function for automated failover testing (enables regular DR drills)
-- Implement **SNS** notifications for replication lag alerts (improves incident response)
-- Create **Route 53** health checks for automatic DNS failover (reduces RTO)
-
-### Constraints
-
-- Use Aurora Global Database with at least one secondary region
-- Configure automatic failover with promotion tier priorities
-- Enable backtrack capability with minimum 24-hour window
-- Implement point-in-time recovery with 5-minute granularity
-- Set up cross-region read replicas with lag monitoring
-- Configure automated backups with 35-day retention
-- Use KMS encryption with customer-managed keys in each region
-- Enable enhanced monitoring with 10-second granularity
-- Configure deletion protection on all production instances
-- All resources must support clean teardown for testing
+- CloudFormation YAML template defines all infrastructure
+- Aurora MySQL powers the global database cluster
+- RDS service manages cluster and instance lifecycle
+- KMS keys encrypt data in both us-east-1 and us-west-2
+- CloudWatch collects monitoring data and triggers alerts
+- SNS delivers notifications when alarms fire
+- All resource names include EnvironmentSuffix parameter for uniqueness
+- Naming convention uses resource-type-EnvironmentSuffix format
+- All resources support clean teardown for testing
 
 ## Success Criteria
 
-- **Functionality**: Aurora Global Database deployed across two regions with active replication
-- **Performance**: Replication lag under 1 second for global database
-- **Reliability**: Automatic failover capability with clear promotion procedures
-- **Security**: KMS encryption enabled with customer-managed keys in both regions
-- **Monitoring**: Enhanced monitoring configured with 10-second intervals
-- **Resource Naming**: All resources include EnvironmentSuffix parameter for uniqueness
-- **Recovery**: 35-day backup retention with 24-hour backtrack window
-- **Documentation**: Clear connection strings and failover instructions provided
+- Aurora Global Database deployed with active replication between regions
+- Replication lag stays under 1 second during normal operations
+- Automatic failover promotes secondary when primary becomes unavailable
+- KMS encryption protects data at rest in both regions
+- Enhanced monitoring reports metrics every 10 seconds
+- All resources include EnvironmentSuffix in names
+- 35-day backup retention with 24-hour backtrack window
+- Clear connection strings and failover instructions in outputs
 
 ## What to deliver
 
-- Complete **CloudFormation YAML** template implementation
-- Primary Aurora cluster in us-east-1 with writer/reader instances
-- Secondary Aurora cluster in us-west-2 for disaster recovery
-- KMS keys for encryption in both regions
-- Enhanced monitoring and CloudWatch alarms
+- Complete CloudFormation YAML template
+- Primary Aurora cluster in us-east-1 with writer and reader instances
+- Secondary Aurora cluster in us-west-2 receiving replicated data
+- KMS keys configured in both regions
+- CloudWatch alarms connected to SNS for alerting
 - Comprehensive outputs with connection strings and failover instructions
-- Clear documentation for operations team
