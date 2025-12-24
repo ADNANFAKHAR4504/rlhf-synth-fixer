@@ -21,24 +21,24 @@ These are NON-NEGOTIABLE constraints. Do not use any other IaC platform or langu
 
 You MUST implement ALL of the following requirements:
 
-1. Deploy an EKS cluster version 1.28 with private API endpoint access only (CORE: EKS)
-2. Configure three managed node groups: system (t3.medium), application (m5.large), and spot instances (m5.large) with distinct taints and labels (CORE: EC2)
-3. Implement pod security standards with baseline enforcement for all namespaces
-4. Enable IRSA (IAM Roles for Service Accounts) with OIDC provider configuration
-5. Configure cluster autoscaler with proper IAM permissions and node group tags
-6. Set up aws-ebs-csi-driver addon with encrypted GP3 storage class as default
-7. Implement network segmentation with dedicated subnets for each node group
-8. Enable control plane logging for api, audit, authenticator, controllerManager, and scheduler
-9. Configure KMS encryption for EKS secrets with customer-managed key rotation
-10. Set up aws-load-balancer-controller with IAM role for ALB/NLB provisioning
+1. Deploy an EKS cluster version 1.28 with private API endpoint access only that connects to dedicated VPC subnets for network isolation
+2. Configure three managed node groups running on EC2 instances that connect to the EKS control plane: system nodes on t3.medium, application nodes on m5.large, and spot instances on m5.large with distinct taints and labels
+3. Implement pod security standards with baseline enforcement that validates and controls pod specifications across all namespaces
+4. Enable IRSA that connects Kubernetes service accounts to IAM roles through OIDC provider, allowing pods to assume IAM roles for AWS service access
+5. Configure cluster autoscaler that monitors node utilization and scales EC2 node groups based on pod resource requirements using IAM permissions
+6. Set up aws-ebs-csi-driver addon that provisions encrypted EBS volumes with GP3 storage class as default for persistent pod storage
+7. Implement network segmentation where each node group connects through dedicated VPC subnets with security groups controlling inter-node communication
+8. Enable control plane logging that streams api, audit, authenticator, controllerManager, and scheduler logs to CloudWatch for monitoring
+9. Configure KMS encryption that protects EKS secrets stored in etcd with customer-managed key rotation enabled
+10. Set up aws-load-balancer-controller that creates ALB and NLB resources when Kubernetes ingress and service objects are deployed, using IAM role for provisioning
 
 ## Optional Enhancements
 
 If time permits, consider implementing:
 
-- Add AWS Systems Manager Session Manager for node access (OPTIONAL: Systems Manager) - eliminates SSH key management
-- Implement Karpenter for advanced autoscaling (OPTIONAL: EC2 Karpenter) - improves cost optimization and scaling speed
-- Add Amazon GuardDuty EKS Protection (OPTIONAL: GuardDuty) - provides runtime threat detection
+- Add AWS Systems Manager Session Manager for node access - eliminates SSH key management
+- Implement Karpenter for advanced autoscaling - improves cost optimization and scaling speed
+- Add Amazon GuardDuty EKS Protection - provides runtime threat detection
 
 ## Constraints
 
@@ -62,9 +62,9 @@ You MUST adhere to the following constraints:
 
 ## Environment Suffix Requirement
 
-**CRITICAL**: ALL resource names MUST include the `environment_suffix` variable:
-- Pattern: `{resource-name}-${var.environment_suffix}`
-- Example: `eks-cluster-${var.environment_suffix}`
+**CRITICAL**: ALL resource names MUST include the environment_suffix variable:
+- Pattern: resource-name concatenated with var.environment_suffix
+- Example: eks-cluster-pr123 where pr123 is the environment suffix
 - This prevents resource conflicts in parallel deployments
 
 ## Expected Output
@@ -73,12 +73,12 @@ Complete Terraform configuration files that provision a secure, production-ready
 
 ## AWS Services Used
 
-- Amazon EKS (Elastic Kubernetes Service)
-- Amazon EC2 (Elastic Compute Cloud)
-- Amazon VPC (Virtual Private Cloud)
-- AWS IAM (Identity and Access Management)
-- AWS KMS (Key Management Service)
-- Amazon EBS (Elastic Block Store)
+- Amazon EKS for managed Kubernetes control plane
+- Amazon EC2 for worker node compute instances
+- Amazon VPC for network isolation and subnets
+- AWS IAM for service account role bindings
+- AWS KMS for secrets encryption
+- Amazon EBS for persistent volume storage
 
 ## File Structure
 
@@ -94,7 +94,7 @@ lib/
 ├── node-groups.tf          # Managed node group configurations
 ├── iam.tf                  # IAM roles and policies
 ├── networking.tf           # VPC and subnet configurations
-├── addons.tf               # EKS addons (CSI driver, load balancer controller)
+├── addons.tf               # EKS addons - CSI driver and load balancer controller
 ├── security.tf             # Security groups and KMS keys
 └── backend.tf              # S3 backend configuration
 ```
