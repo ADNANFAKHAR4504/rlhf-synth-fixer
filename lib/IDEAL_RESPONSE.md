@@ -794,6 +794,11 @@ output "rds_endpoint" {
   value       = aws_db_instance.main.endpoint
 }
 
+output "rds_identifier" {
+  description = "Identifier of the RDS MySQL instance"
+  value       = aws_db_instance.main.identifier
+}
+
 output "rds_address" {
   description = "Address of the RDS MySQL instance"
   value       = aws_db_instance.main.address
