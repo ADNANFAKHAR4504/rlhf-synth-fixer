@@ -1,6 +1,6 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend, TerraformOutput, TerraformAsset, AssetType
+from cdktf import TerraformStack, S3Backend, TerraformOutput, TerraformAsset, AssetType, Fn
 from constructs import Construct
 from pathlib import Path
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -38,6 +38,9 @@ from cdktf_cdktf_provider_aws.data_aws_availability_zones import (
 from cdktf_cdktf_provider_aws.data_aws_iam_policy_document import (
     DataAwsIamPolicyDocument,
 )
+# Import local provider from generated bindings (cdktf get)
+from imports.local.provider import LocalProvider
+from imports.local.file import File as LocalFile
 import json
 import os
 
@@ -96,6 +99,9 @@ class TapStack(TerraformStack):
                 region=aws_region,
                 default_tags=[default_tags],
             )
+
+        # Configure Local Provider for writing output files
+        LocalProvider(self, "local")
 
         # Configure backend based on environment
         # For LocalStack, use local backend to avoid S3 bucket dependency
@@ -623,19 +629,53 @@ def lambda_handler(event, context):
         """
         Create Terraform outputs for important resource information.
         """
+        # Define output values
+        api_gateway_url_value = f"https://{self.api_gateway.id}.execute-api.{self.region}.amazonaws.com/{self.api_stage.stage_name}"
+        lambda_function_name_value = self.lambda_function.function_name
+        dynamodb_table_name_value = self.dynamodb_table.name
+        vpc_id_value = self.vpc.id
+
         TerraformOutput(
             self,
             "api_gateway_url",
-            value=f"https://{self.api_gateway.id}.execute-api.{self.region}.amazonaws.com/{self.api_stage.stage_name}",
+            value=api_gateway_url_value,
         )
 
         TerraformOutput(
-            self, "lambda_function_name", value=self.lambda_function.function_name
+            self, "lambda_function_name", value=lambda_function_name_value
         )
 
         TerraformOutput(
             self,
             "dynamodb_table_name",
-            value=self.dynamodb_table.name)
+            value=dynamodb_table_name_value)
 
-        TerraformOutput(self, "vpc_id", value=self.vpc.id)
+        TerraformOutput(self, "vpc_id", value=vpc_id_value)
+
+        # Create output files for CI/CD pipeline consumption
+        # This ensures outputs are available even if cdktf output command fails
+        repo_root = Path(__file__).resolve().parents[1]
+
+        # Create output JSON content using Fn.jsonencode for proper terraform interpolation
+        outputs_content = Fn.jsonencode({
+            "api_gateway_url": api_gateway_url_value,
+            "lambda_function_name": lambda_function_name_value,
+            "dynamodb_table_name": dynamodb_table_name_value,
+            "vpc_id": vpc_id_value
+        })
+
+        # Write to cfn-outputs directory
+        LocalFile(
+            self,
+            "cfn_outputs_file",
+            filename=str(repo_root / "cfn-outputs" / "flat-outputs.json"),
+            content=outputs_content,
+        )
+
+        # Write to cdk-outputs directory
+        LocalFile(
+            self,
+            "cdk_outputs_file",
+            filename=str(repo_root / "cdk-outputs" / "flat-outputs.json"),
+            content=outputs_content,
+        )
