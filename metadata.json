@@ -23,7 +23,7 @@
     "sns",
     "ssm"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "291335",
     "pr": "Pr710"

@@ -473,6 +473,7 @@ class TestComponents(unittest.TestCase):
         self.mock_pulumi.log.info.assert_called()
 
     # ===== Compute Component Tests =====
+    @patch.dict(os.environ, {"PROVIDER": ""})
     @patch('os.path.exists')
     def test_compute_component_creates_vpc_and_resources(self, mock_exists):
         """Test compute component creates VPC, subnets, and EC2 instances"""
@@ -497,6 +498,7 @@ class TestComponents(unittest.TestCase):
         self.assertTrue(len(component.ec2_instances) > 0)
         self.assertIsNotNone(component.alb)
 
+    @patch.dict(os.environ, {"PROVIDER": ""})
     @patch('os.path.exists')
     def test_compute_component_vpc_cidr_by_environment(self, mock_exists):
         from lib.components.compute import ComputeComponent
