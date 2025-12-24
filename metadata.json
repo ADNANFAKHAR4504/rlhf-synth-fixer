@@ -9,8 +9,11 @@
   "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Cloud Environment Setup"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "VPC",
+    "EC2"
+  ],
   "wave": "P1"
 }
