@@ -1,7 +1,3 @@
-# Security Foundation Infrastructure
-
-Hey team,
-
 We need to build a comprehensive security foundation for a financial services company moving to AWS. They're in the process of implementing zero-trust security principles and need to comply with PCI-DSS requirements. The infrastructure must support multi-region operations with strict encryption and access controls.
 
 I've been asked to create this using **Terraform with HCL** to establish the security baseline. This will be the foundation that all other teams build on top of, so it needs to be rock-solid and compliant from day one.
