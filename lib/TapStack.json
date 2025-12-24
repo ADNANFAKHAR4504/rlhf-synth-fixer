@@ -40,9 +40,15 @@
       "Description": "Name of an existing EC2 KeyPair (leave empty if no SSH access needed)"
     },
     "LatestAmiId": {
-      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
-      "Description": "Latest Amazon Linux 2 AMI ID"
+      "Type": "String",
+      "Default": "ami-12345678",
+      "Description": "Latest Amazon Linux 2 AMI ID (use ami-12345678 for LocalStack)"
+    },
+    "EnableRDS": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": ["true", "false"],
+      "Description": "Enable RDS database (set to false for LocalStack)"
     }
   },
   "Conditions": {
@@ -56,6 +62,14 @@
             ""
           ]
         }
+      ]
+    },
+    "CreateRDS": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableRDS"
+        },
+        "true"
       ]
     }
   },
@@ -383,6 +397,7 @@
     },
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
+      "Condition": "CreateRDS",
       "Properties": {
         "DBSubnetGroupName": {
           "Fn::Sub": "${EnvironmentSuffix}-db-subnet-group"
@@ -414,6 +429,7 @@
     },
     "DatabaseSecret": {
       "Type": "AWS::SecretsManager::Secret",
+      "Condition": "CreateRDS",
       "Properties": {
         "Name": {
           "Fn::Sub": "${EnvironmentSuffix}-db-credentials"
@@ -497,6 +513,7 @@
     },
     "RDSInstance": {
       "Type": "AWS::RDS::DBInstance",
+      "Condition": "CreateRDS",
       "DeletionPolicy": "Snapshot",
       "UpdateReplacePolicy": "Snapshot",
       "Properties": {
@@ -559,6 +576,7 @@
     },
     "RDSMonitoringRole": {
       "Type": "AWS::IAM::Role",
+      "Condition": "CreateRDS",
       "Properties": {
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -609,47 +627,84 @@
             "PolicyName": "S3Access",
             "PolicyDocument": {
               "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetObject",
-                    "s3:PutObject",
-                    "s3:ListBucket"
-                  ],
-                  "Resource": [
+              "Statement": {
+                "Fn::If": [
+                  "CreateRDS",
+                  [
                     {
-                      "Fn::GetAtt": [
-                        "S3Bucket",
-                        "Arn"
+                      "Effect": "Allow",
+                      "Action": [
+                        "s3:GetObject",
+                        "s3:PutObject",
+                        "s3:ListBucket"
+                      ],
+                      "Resource": [
+                        {
+                          "Fn::GetAtt": [
+                            "S3Bucket",
+                            "Arn"
+                          ]
+                        },
+                        {
+                          "Fn::Join": [
+                            "",
+                            [
+                              {
+                                "Fn::GetAtt": [
+                                  "S3Bucket",
+                                  "Arn"
+                                ]
+                              },
+                              "/*"
+                            ]
+                          ]
+                        }
                       ]
                     },
                     {
-                      "Fn::Join": [
-                        "",
-                        [
-                          {
-                            "Fn::GetAtt": [
-                              "S3Bucket",
-                              "Arn"
+                      "Effect": "Allow",
+                      "Action": [
+                        "secretsmanager:GetSecretValue"
+                      ],
+                      "Resource": {
+                        "Ref": "DatabaseSecret"
+                      }
+                    }
+                  ],
+                  [
+                    {
+                      "Effect": "Allow",
+                      "Action": [
+                        "s3:GetObject",
+                        "s3:PutObject",
+                        "s3:ListBucket"
+                      ],
+                      "Resource": [
+                        {
+                          "Fn::GetAtt": [
+                            "S3Bucket",
+                            "Arn"
+                          ]
+                        },
+                        {
+                          "Fn::Join": [
+                            "",
+                            [
+                              {
+                                "Fn::GetAtt": [
+                                  "S3Bucket",
+                                  "Arn"
+                                ]
+                              },
+                              "/*"
                             ]
-                          },
-                          "/*"
-                        ]
+                          ]
+                        }
                       ]
                     }
                   ]
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "secretsmanager:GetSecretValue"
-                  ],
-                  "Resource": {
-                    "Ref": "DatabaseSecret"
-                  }
-                }
-              ]
+                ]
+              }
             }
           }
         ],
@@ -822,21 +877,33 @@
     },
     "RDSEndpoint": {
       "Value": {
-        "Fn::GetAtt": [
-          "RDSInstance",
-          "Endpoint.Address"
+        "Fn::If": [
+          "CreateRDS",
+          {
+            "Fn::GetAtt": [
+              "RDSInstance",
+              "Endpoint.Address"
+            ]
+          },
+          "RDS-NOT-ENABLED"
         ]
       },
-      "Description": "RDS PostgreSQL endpoint address"
+      "Description": "RDS PostgreSQL endpoint address (or RDS-NOT-ENABLED if disabled)"
     },
     "RDSPort": {
       "Value": {
-        "Fn::GetAtt": [
-          "RDSInstance",
-          "Endpoint.Port"
+        "Fn::If": [
+          "CreateRDS",
+          {
+            "Fn::GetAtt": [
+              "RDSInstance",
+              "Endpoint.Port"
+            ]
+          },
+          "5432"
         ]
       },
-      "Description": "RDS PostgreSQL port"
+      "Description": "RDS PostgreSQL port (default 5432)"
     },
     "EC2InstanceId": {
       "Value": {
@@ -860,9 +927,15 @@
     },
     "DatabaseCredentialsSecret": {
       "Value": {
-        "Ref": "DatabaseSecret"
+        "Fn::If": [
+          "CreateRDS",
+          {
+            "Ref": "DatabaseSecret"
+          },
+          "RDS-NOT-ENABLED"
+        ]
       },
-      "Description": "AWS Secrets Manager secret containing database credentials"
+      "Description": "AWS Secrets Manager secret containing database credentials (or RDS-NOT-ENABLED if disabled)"
     },
     "EnvironmentSuffix": {
       "Value": {
