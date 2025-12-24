@@ -8,7 +8,7 @@ The infrastructure must include these essential components:
 
 1. **ECS Fargate Deployment**: Deploy the application on AWS Fargate without managing servers directly. The setup should include an ECS cluster, service, and task definitions optimized for containerized applications.
 
-2. **GitHub Actions CI/CD**: Implement automated deployment pipeline that triggers when code is pushed to the main branch. This should handle building, testing, and deploying the application seamlessly.
+2. **Automated CI/CD Workflow**: Implement automated deployment pipeline using GitHub CI/CD that triggers when code is pushed to the main branch. This should handle building, testing, and deploying the application seamlessly.
 
 3. **Auto Scaling Configuration**: Use AWS Auto Scaling to handle varying load patterns. Configure scaling policies based on CPU and memory metrics to ensure optimal performance during traffic spikes.
 
@@ -38,4 +38,4 @@ Please incorporate these recent AWS capabilities:
 
 Generate infrastructure code using Pulumi with JavaScript that creates all necessary AWS resources. The code should be organized with clear separation of concerns - VPC components, ECS resources, monitoring setup, and CI/CD integration should be in separate logical modules.
 
-Provide complete working code that can be deployed immediately, including GitHub Actions workflow files for the CI/CD pipeline. Make sure all resource names follow the specified naming conventions and that the infrastructure is optimized for the us-west-2 region.
+Provide complete working code that can be deployed immediately, including GitHub CI/CD workflow files for the deployment pipeline. Make sure all resource names follow the specified naming conventions and that the infrastructure is optimized for the us-west-2 region.
