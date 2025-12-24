@@ -24,8 +24,9 @@ variable "instance_profile_name" {
 }
 
 variable "target_group_arn" {
-  description = "Target group ARN"
+  description = "Target group ARN (empty string if ALB disabled)"
   type        = string
+  default     = ""
 }
 
 variable "instance_type" {
@@ -51,4 +52,10 @@ variable "desired_capacity" {
 variable "common_tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)
+}
+
+variable "enable_asg" {
+  description = "Whether to create ASG (disabled for LocalStack, uses simple EC2 instead)"
+  type        = bool
+  default     = true
 }

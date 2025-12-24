@@ -11,6 +11,17 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": [],
-  "wave": "P1"
+  "aws_services": [
+    "EC2",
+    "RDS",
+    "VPC",
+    "ALB",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291724",
+    "pr": "Pr1093"
+  }
 }

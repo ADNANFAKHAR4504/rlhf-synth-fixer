@@ -235,9 +235,9 @@ describe("Terraform Modular Infrastructure (static checks)", () => {
       new RegExp(String.raw`target_group_arn\s*=\s*module\.lb_module\.target_group_arn`, "m")
     );
 
-    // Check explicit dependency
+    // Check explicit dependency (includes lb_module in depends_on)
     expect(ec2Module!).toMatch(
-      new RegExp(String.raw`depends_on\s*=\s*\[\s*module\.lb_module\s*\]`, "m")
+      new RegExp(String.raw`depends_on\s*=\s*\[.*module\.lb_module`, "m")
     );
   });
 

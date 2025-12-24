@@ -1,47 +1,49 @@
-You are a senior DevOps engineer specializing in AWS infrastructure automation. Create a comprehensive Terraform infrastructure solution for a highly scalable web application with the following specific requirements:
+# Terraform Multi-Environment Web Application Infrastructure
 
-## Core Infrastructure Requirements:
-- **Platform**: AWS Cloud
-- **IaC Tool**: Terraform with HCL configuration
-- **Application Type**: Highly scalable web application
-- **Environments**: staging and production with different sizing requirements
-- **State Management**: Terraform Cloud for remote state
-- **Security**: Secrets management system integration (no hardcoded sensitive data)
+## Overview
 
-## Technical Implementation Requirements:
+Create a Terraform infrastructure for a highly scalable web application on AWS. The Application Load Balancer connects to EC2 instances running in an Auto Scaling group across multiple availability zones. EC2 instances retrieve database credentials from AWS Secrets Manager and connect to RDS for data persistence.
 
-### 1. Terraform Modules Architecture:
-- Create reusable Terraform modules for common components (VPC, EC2, ALB)
-- Implement proper module versioning and documentation
-- Design modules to accept environment-specific parameters
-- Include input validation and output definitions for each module
+## Architecture
 
-### 2. Multi-Environment Support:
-- Configure 'staging' and 'production' environments with different resource sizing:
-  - Staging: Smaller EC2 instances (e.g., t3.small) for cost optimization
-  - Production: Larger EC2 instances (e.g., t3.large) for performance
-- Implement environment-specific configuration files
-- Use Terraform workspaces for environment state isolation
+The infrastructure spans staging and production environments with the following components:
 
-### 3. Automated Rollback Strategy:
-- Design infrastructure deployment pipeline with automated rollback capabilities
-- Implement health checks and validation steps post-deployment
-- Create rollback procedures for failed deployments
-- Include monitoring and alerting for deployment failures
+- VPC with public and private subnets that isolates application tiers
+- Application Load Balancer in public subnets that routes traffic to EC2 instances
+- EC2 Auto Scaling group in private subnets that scales based on demand
+- RDS database in private subnets that stores application data
+- Secrets Manager integrated with EC2 to securely retrieve database credentials
+- IAM roles attached to EC2 instances for least-privilege access
 
-### 4. Resource Management Standards:
-- Apply consistent environment-specific tags to all resources (Environment, Project, Owner, CostCenter)
-- Implement uniform resource naming conventions following pattern: `{environment}-{service}-{component}-{identifier}`
-- Ensure all resources support the tagging strategy
+## Environment Configuration
 
-### 5. Terraform Cloud Integration:
-- Configure Terraform Cloud workspaces for each environment
-- Set up proper authentication and authorization
-- Implement workspace-specific variables and environment configurations
-- Configure automated triggers and notifications
+### Staging Environment
+- Uses t3.small instances for cost optimization
+- Runs with minimum 1 and maximum 2 instances in the Auto Scaling group
+- Connects to a db.t3.small RDS instance
 
-### 6. Security and Secrets Management:
-- Integrate with AWS Secrets Manager or Systems Manager Parameter Store
-- Use Terraform data sources to retrieve sensitive information
-- Implement least-privilege IAM policies
-- Never store secrets in plain text within configuration files
+### Production Environment
+- Uses t3.large instances for better performance
+- Runs with minimum 2 and maximum 6 instances in the Auto Scaling group
+- Connects to a db.t3.medium RDS instance with Multi-AZ enabled
+
+## Module Structure
+
+Create reusable Terraform modules for:
+
+- VPC module that provisions networking components with public and private subnets
+- EC2 module that configures Auto Scaling groups attached to the load balancer
+- ALB module that sets up listeners and target groups routing to EC2
+- RDS module that deploys the database with security groups allowing EC2 access
+- Secrets module that creates database credentials retrieved by EC2 at runtime
+
+## State Management
+
+Configure Terraform Cloud workspaces for remote state management. Each environment uses a separate workspace to isolate state files. Workspaces connect to version control for automated plan and apply workflows.
+
+## Security Requirements
+
+- EC2 instances assume IAM roles that grant access to Secrets Manager
+- Security groups restrict traffic flow between ALB, EC2, and RDS
+- RDS credentials stored in Secrets Manager are never hardcoded
+- All resources tagged with Environment, Project, Owner, and CostCenter

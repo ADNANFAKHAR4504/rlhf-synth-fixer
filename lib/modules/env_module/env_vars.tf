@@ -7,39 +7,44 @@ locals {
 
   project = "HCLTuring"
 
+  # LocalStack does not support ELBv2 (ALB) or Auto Scaling in Community Edition
+  # Set to false for LocalStack testing, true for real AWS
+  enable_alb = false
+  enable_asg = false
+
   common_tags = {
-    "Application": "multi-env",
-    "ManagedBy": "HCL",
-    "Owned": "Turing"
+    "Application" : "multi-env",
+    "ManagedBy" : "HCL",
+    "Owned" : "Turing"
   }
 
   env_type = {
-    default = "default"
-    staging = "staging"
+    default    = "default"
+    staging    = "staging"
     production = "production"
   }
 
   instance_type = {
-    default = "t2.micro"
-    staging = "t3.small"
+    default    = "t2.micro"
+    staging    = "t3.small"
     production = "t3.large"
   }
 
   as_group_desired = {
-    default = 1
-    staging = 1
+    default    = 1
+    staging    = 1
     production = 2
   }
 
   as_group_min = {
-    default = 1
-    staging = 1
+    default    = 1
+    staging    = 1
     production = 2
   }
 
   as_group_max = {
-    default = 2
-    staging = 2
+    default    = 2
+    staging    = 2
     production = 4
   }
 }

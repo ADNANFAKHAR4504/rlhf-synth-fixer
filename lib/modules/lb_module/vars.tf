@@ -33,3 +33,9 @@ variable "health_check_path" {
   type        = string
   default     = "/"
 }
+
+variable "enable_alb" {
+  description = "Whether to create ALB resources (disabled for LocalStack)"
+  type        = bool
+  default     = true
+}
