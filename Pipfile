@@ -61,4 +61,4 @@ pulumi-create-stack = "sh -c 'pulumi stack select \"${PULUMI_ORG}/TapStack/TapSt
 pulumi-deploy = "pulumi up --yes --refresh --stack \"${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}\""
 pulumi-destroy = "pulumi destroy --yes --refresh --stack \"${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}\""
 pulumi-remove-stack = "pulumi stack rm \"${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}\" --yes --force"
-lint = "pylint lib tap.py"
+lint = "pylint lib test"
