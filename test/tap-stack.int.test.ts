@@ -47,24 +47,31 @@ try {
   };
 }
 
-// For LocalStack, the API Gateway URL should already be in LocalStack format
-// But if it's still in AWS format, we need to handle it
+// For LocalStack, convert API Gateway URL to proper LocalStack format
 if (isLocalStack && outputs.ApiGatewayUrl) {
-  // If the URL contains execute-api (AWS format), it needs to be converted
-  if (outputs.ApiGatewayUrl.includes('execute-api')) {
-    // Extract API ID from the URL
-    const apiIdMatch = outputs.ApiGatewayUrl.match(/https?:\/\/([a-z0-9]+)\.execute-api/);
-    if (apiIdMatch) {
-      const apiId = apiIdMatch[1];
-      // LocalStack API Gateway URL format: http://localhost:4566/restapis/{api-id}/{stage}/_user_request_
-      outputs.ApiGatewayUrl = `${endpoint}/restapis/${apiId}/${environmentSuffix}/_user_request_`;
+  // Extract API ID from any format URL
+  let apiId = null;
+
+  // Try AWS format first: https://{api-id}.execute-api.{region}.amazonaws.com/{stage}
+  const awsMatch = outputs.ApiGatewayUrl.match(/https?:\/\/([a-z0-9]+)\.execute-api/);
+  if (awsMatch) {
+    apiId = awsMatch[1];
+  } else {
+    // Try LocalStack format: http://localhost:4566/restapis/{api-id}/...
+    const lsMatch = outputs.ApiGatewayUrl.match(/restapis\/([a-z0-9]+)/);
+    if (lsMatch) {
+      apiId = lsMatch[1];
     }
-  } else if (!outputs.ApiGatewayUrl.includes('localhost') && !outputs.ApiGatewayUrl.includes('4566')) {
-    // If URL doesn't contain LocalStack endpoint, it needs to be fixed
-    console.log(`Warning: API Gateway URL doesn't appear to be LocalStack format: ${outputs.ApiGatewayUrl}`);
   }
 
-  console.log(`Using LocalStack API Gateway URL: ${outputs.ApiGatewayUrl}`);
+  if (apiId) {
+    // LocalStack API Gateway URL format is simpler: http://localhost:4566/restapis/{api-id}/{stage}
+    // The path after that should just be the resource path (e.g., /data)
+    outputs.ApiGatewayUrl = `${endpoint}/restapis/${apiId}/${environmentSuffix}`;
+    console.log(`✓ Converted to LocalStack API Gateway URL: ${outputs.ApiGatewayUrl}`);
+  } else {
+    console.log(`Warning: Could not extract API ID from URL: ${outputs.ApiGatewayUrl}`);
+  }
 }
 
 describe('Serverless Application Integration Tests', () => {
