@@ -22,6 +22,29 @@ import {
 } from '@aws-sdk/client-secrets-manager';
 import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
 
+// Helper function to parse subnet IDs - handles both JSON arrays and comma-separated strings
+function parseSubnetIds(value: string): string[] {
+  if (!value) return [];
+
+  // If it's already an array, return it
+  if (Array.isArray(value)) return value;
+
+  // Try to parse as JSON first
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed;
+    // If it's a single string, wrap it in an array
+    return [parsed];
+  } catch {
+    // If JSON parsing fails, treat as comma-separated string or single value
+    if (value.includes(',')) {
+      return value.split(',').map(id => id.trim());
+    }
+    // Single subnet ID
+    return [value];
+  }
+}
+
 describe('Terraform Infrastructure Integration Tests', () => {
 let outputs: any = {};
 const environmentSuffix = 'dev';
@@ -96,7 +119,7 @@ const environmentSuffix = 'dev';
           return;
         }
 
-        const subnetIds = JSON.parse(outputs.primary_public_subnet_ids);
+        const subnetIds = parseSubnetIds(outputs.primary_public_subnet_ids);
         expect(subnetIds).toHaveLength(2);
 
         const command = new DescribeSubnetsCommand({
@@ -121,7 +144,7 @@ const environmentSuffix = 'dev';
           return;
         }
 
-        const subnetIds = JSON.parse(outputs.primary_private_subnet_ids);
+        const subnetIds = parseSubnetIds(outputs.primary_private_subnet_ids);
         expect(subnetIds).toHaveLength(2);
 
         const command = new DescribeSubnetsCommand({
@@ -233,7 +256,7 @@ const environmentSuffix = 'dev';
           return;
         }
 
-        const subnetIds = JSON.parse(outputs.secondary_public_subnet_ids);
+        const subnetIds = parseSubnetIds(outputs.secondary_public_subnet_ids);
         expect(subnetIds).toHaveLength(2);
 
         const command = new DescribeSubnetsCommand({
@@ -257,7 +280,7 @@ const environmentSuffix = 'dev';
           return;
         }
 
-        const subnetIds = JSON.parse(outputs.secondary_private_subnet_ids);
+        const subnetIds = parseSubnetIds(outputs.secondary_private_subnet_ids);
         expect(subnetIds).toHaveLength(2);
 
         const command = new DescribeSubnetsCommand({
@@ -503,7 +526,7 @@ const environmentSuffix = 'dev';
         return;
       }
 
-      const subnetIds = JSON.parse(outputs.primary_private_subnet_ids);
+      const subnetIds = parseSubnetIds(outputs.primary_private_subnet_ids);
       const command = new DescribeSubnetsCommand({
         SubnetIds: subnetIds,
       });
@@ -565,8 +588,8 @@ const environmentSuffix = 'dev';
         return;
       }
 
-      const publicSubnetIds = JSON.parse(outputs.primary_public_subnet_ids);
-      const privateSubnetIds = JSON.parse(outputs.primary_private_subnet_ids);
+      const publicSubnetIds = parseSubnetIds(outputs.primary_public_subnet_ids);
+      const privateSubnetIds = parseSubnetIds(outputs.primary_private_subnet_ids);
       const allSubnetIds = [...publicSubnetIds, ...privateSubnetIds];
 
       const command = new DescribeSubnetsCommand({
