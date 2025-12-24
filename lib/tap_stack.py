@@ -376,7 +376,8 @@ class TapStack(Stack):
             retry_attempts=2  # Add retry attempts
         )
 
-        # (You can add CDK Aspects, MFA enforcement, and root account restriction constructs as needed and outputs as well
+        # You can add CDK Aspects, MFA enforcement, and root account
+        # restriction constructs as needed and outputs as well
 
         # === Outputs ===
         CfnOutput(
