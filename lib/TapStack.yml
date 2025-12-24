@@ -365,8 +365,7 @@ Resources:
   StaticContentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      # Note: S3 bucket name will be auto-generated to ensure global uniqueness
-      # and compliance with DNS naming conventions
+      BucketName: !Sub ${EnvironmentName}-static-content-${AWS::AccountId}-${AWS::Region}
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
         BlockPublicPolicy: false
