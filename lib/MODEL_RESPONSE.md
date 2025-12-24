@@ -670,31 +670,31 @@ output "db_secret_arn" {
 
 ## Key Features and Best Practices Implemented:
 
-### 🏗️ **Infrastructure Designs**
+### ️ **Infrastructure Designs**
 - **Multi-region setup** with us-east-1 (primary) and us-west-2 (secondary)
 - **VPC with public/private subnets** in each region using 10.0.0.0/16 CIDR
 - **NAT Gateways** for secure outbound internet access from private subnets
 - **Internet Gateways** for public subnet internet connectivity
 
-### 🛡️ **Security**
+### ️ **Security**
 - **Security Groups** with least-privilege access for RDS instances
 - **Encrypted storage** for RDS instances
 - **AWS Secrets Manager** for secure password storage with cross-region replication
 - **IAM roles** with minimal required permissions for RDS Enhanced Monitoring
 
-### 🔄 **High Availability & Resilience**
+###  **High Availability & Resilience**
 - **Multi-AZ RDS deployments** in both regions for automatic failover
 - **Multiple Availability Zones** utilized in each region
 - **Enhanced monitoring** and Performance Insights enabled
 - **Automated backups** with 7-day retention
 
-### 📊 **Monitoring & Maintenance**
+###  **Monitoring & Maintenance**
 - **Enhanced monitoring** with 60-second intervals
 - **Performance Insights** enabled for database performance monitoring
 - **Maintenance windows** scheduled during low-traffic periods
 - **Custom parameter groups** for optimized MySQL performance
 
-### 🚀 **Production Readiness**
+###  **Production Readiness**
 - **Proper resource naming** and tagging strategy
 - **Outputs** for important resource identifiers
 - **Random password generation** with secure storage
