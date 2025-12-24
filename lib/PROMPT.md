@@ -1,8 +1,8 @@
 # Infrastructure Compliance Analysis System
 
-We need to build a comprehensive compliance monitoring system for our financial services company. The security team is drowning in manual audits across our 50+ CloudFormation stacks spanning multiple regions, and we need an automated solution that can catch policy violations before they become problems. I've been asked to create this using **CloudFormation with YAML**.
+Our financial services company requires an automated compliance monitoring system for infrastructure management. The security team currently performs manual audits across 50+ CloudFormation stacks spanning multiple regions. An automated solution is needed to detect policy violations proactively using **CloudFormation with YAML**.
 
-The business wants a system that continuously monitors our infrastructure, generates detailed compliance reports, and alerts the security team when critical violations occur. Right now, teams are deploying resources without proper tagging, encryption, or security group configurations, and we have no automated way to track this drift.
+The system must continuously monitor infrastructure, generate detailed compliance reports, and alert the security team when critical violations occur. Currently, teams deploy resources without proper tagging, encryption, or security group configurations, with no automated mechanism to track configuration drift.
 
 This needs to be production-ready and handle the scale of our multi-region deployments across us-east-1, us-west-2, and eu-west-1. The security team needs daily reports showing which stacks are non-compliant, what resources are violating policies, and specific remediation steps to fix the issues.
 
