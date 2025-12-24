@@ -583,6 +583,7 @@ Resources:
           Ref: CostCenter
   Database:
     Type: AWS::RDS::DBInstance
+    DependsOn: DatabaseSecret
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
@@ -604,8 +605,7 @@ Resources:
       DBName:
         Fn::Sub: ${ProjectName}${Environment}
       MasterUsername: admin
-      MasterUserPassword:
-        Fn::Sub: '{{resolve:secretsmanager:${ProjectName}/database/${Environment}:SecretString:password}}'
+      MasterUserPassword: TestPassword123!
       VPCSecurityGroups:
       - Ref: DatabaseSecurityGroup
       DBSubnetGroupName:
