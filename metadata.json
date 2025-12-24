@@ -1,0 +1,26 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291729",
+  "team": "synth-2",
+  "startedAt": "2025-08-06T07:53:15.977Z",
+  "subtask": "Serverless Data Pipeline",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "Lambda",
+    "APIGateway",
+    "S3",
+    "Kinesis",
+    "SecretsManager",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "SNS"
+  ],
+  "wave": "P1"
+}
