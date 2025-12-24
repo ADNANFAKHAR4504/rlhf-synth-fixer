@@ -268,4 +268,45 @@ describe('WebServerStack', () => {
       Value: { Ref: 'S3Bucket07682993' },
     });
   });
+
+  // Test case to cover SNS alarm functionality 
+  describe('WebServerStack with SNS alarms', () => {
+    const appWithAlarms = new cdk.App();
+    const stackWithAlarms = new WebServerStack(appWithAlarms, 'TestWebServerStackWithAlarms', {
+      vpcId: 'vpc-123456', 
+      environmentSuffix: 'test',
+      alarmEmail: 'test@example.com',
+      env,
+    });
+
+    const templateWithAlarms = Template.fromStack(stackWithAlarms);
+
+    test('creates SNS topic when alarmEmail is provided', () => {
+      templateWithAlarms.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: 'test-alarms',
+      });
+    });
+
+    test('creates SNS subscription when alarmEmail is provided', () => {
+      templateWithAlarms.hasResourceProperties('AWS::SNS::Subscription', {
+        Protocol: 'email',
+        Endpoint: 'test@example.com',
+      });
+    });
+
+    test('creates CloudWatch alarms with SNS actions', () => {
+      templateWithAlarms.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: 'webserver-test-cpu-utilization',
+        AlarmActions: Match.arrayWith([
+          { Ref: Match.stringLikeRegexp('AlarmTopic') }
+        ])
+      });
+    });
+
+    test('SNS topic output is included when alarm email is provided', () => {
+      templateWithAlarms.hasOutput('AlarmTopicArn', {
+        Value: { Ref: Match.stringLikeRegexp('AlarmTopic') },
+      });
+    });
+  });
 });
