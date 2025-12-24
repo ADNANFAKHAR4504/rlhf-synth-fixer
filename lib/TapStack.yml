@@ -1393,64 +1393,10 @@ Resources:
         }
         
   # ====================
-  # AWS BACKUP
+  # AWS BACKUP - REMOVED (Not fully supported in LocalStack)
   # ====================
-  BackupVault:
-    Type: AWS::Backup::BackupVault
-    Properties:
-      BackupVaultName: webapp-backup-vault
-      BackupVaultTags:
-        iac-rlhf-amazon: 'true'
-        Environment: !Ref EnvironmentName
-        
-  BackupPlan:
-    Type: AWS::Backup::BackupPlan
-    Properties:
-      BackupPlan:
-        BackupPlanName: webapp-backup-plan
-        BackupPlanRules:
-          - RuleName: DailyBackups
-            TargetBackupVault: !Ref BackupVault
-            ScheduleExpression: cron(0 5 ? * * *)
-            StartWindowMinutes: 60
-            CompletionWindowMinutes: 120
-            Lifecycle:
-              DeleteAfterDays: 100
-              MoveToColdStorageAfterDays: 7
-            RecoveryPointTags:
-              iac-rlhf-amazon: 'true'
-              
-  BackupSelection:
-    Type: AWS::Backup::BackupSelection
-    Properties:
-      BackupPlanId: !Ref BackupPlan
-      BackupSelection:
-        SelectionName: webapp-backup-selection
-        IamRoleArn: !GetAtt BackupRole.Arn
-        Resources:
-          - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DatabaseInstance}'
-        ListOfTags:
-          - ConditionType: STRINGEQUALS
-            ConditionKey: iac-rlhf-amazon
-            ConditionValue: 'true'
-            
-  BackupRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: webapp-backup-role
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: backup.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
-        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
-      Tags:
-        - Key: iac-rlhf-amazon
-          Value: 'true'
+  # BackupVault, BackupPlan, BackupSelection, and BackupRole removed
+  # RDS automated backups are still enabled via BackupRetentionPeriod
 
 # ====================
 # OUTPUTS
@@ -1640,18 +1586,8 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-Dashboard-URL'
       
-  BackupVaultArn:
-    Description: ARN of Backup Vault
-    Value: !GetAtt BackupVault.BackupVaultArn
-    Export:
-      Name: !Sub '${AWS::StackName}-BackupVault-ARN'
-      
-  BackupPlanId:
-    Description: ID of Backup Plan
-    Value: !Ref BackupPlan
-    Export:
-      Name: !Sub '${AWS::StackName}-BackupPlan-ID'
-      
+  # BackupVaultArn and BackupPlanId outputs removed (AWS Backup not supported in LocalStack)
+
   StackName:
     Description: CloudFormation Stack Name
     Value: !Ref AWS::StackName
