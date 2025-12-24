@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000829",
+  "team": "synth",
+  "startedAt": "2025-11-04T15:11:39+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "NATGateway",
+    "RouteTable",
+    "VPCFlowLogs",
+    "CloudWatchLogs",
+    "NetworkACL",
+    "DHCPOptions",
+    "IAM",
+    "EIP"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
