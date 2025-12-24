@@ -752,7 +752,7 @@ resource "aws_db_instance" "postgres" {
   provider               = aws.primary
   identifier             = "${local.resource_prefix}-postgres-${local.current_region}"
   engine                 = "postgres"
-  engine_version         = "15.4"
+  engine_version         = "15.5"
   instance_class         = "db.t3.medium"
   allocated_storage      = 100
   max_allocated_storage  = 500

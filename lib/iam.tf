@@ -121,6 +121,38 @@ resource "aws_iam_role_policy" "s3_replication" {
           "s3:ReplicateTags"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringLike = {
+            "kms:ViaService" = [
+              "s3.us-east-1.amazonaws.com",
+              "s3.eu-west-1.amazonaws.com"
+            ]
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringLike = {
+            "kms:ViaService" = [
+              "s3.us-east-1.amazonaws.com",
+              "s3.eu-west-1.amazonaws.com"
+            ]
+          }
+        }
       }
     ]
   })

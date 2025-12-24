@@ -88,15 +88,23 @@ resource "aws_db_instance" "postgres" {
   )
 }
 
-# Automated DB snapshot copy to other region (for primary only)
-# Commented out for initial deployment - requires existing snapshot
-# resource "aws_db_snapshot_copy" "cross_region" {
-#   provider                      = aws.primary
-#   count                         = local.is_primary ? 1 : 0
-#   source_db_snapshot_identifier = "arn:aws:rds:${local.current_region}:${data.aws_caller_identity.current.account_id}:snapshot:rds:${aws_db_instance.postgres.identifier}-*"
-#   target_db_snapshot_identifier = "${local.resource_prefix}-postgres-copy-${local.other_region}"
-#   kms_key_id                    = "arn:aws:kms:${local.other_region}:${data.aws_caller_identity.current.account_id}:alias/${local.resource_prefix}-rds-${local.other_region}"
-#   copy_tags                     = true
-#
-#   depends_on = [aws_db_instance.postgres]
-# }
+# RDS instance in secondary region (read replica for cross-region replication)
+resource "aws_db_instance" "postgres_secondary" {
+  provider               = aws.secondary
+  count                  = local.is_primary ? 1 : 0
+  identifier             = "${local.resource_prefix}-postgres-${local.other_region}"
+  replicate_source_db    = aws_db_instance.postgres.arn
+  instance_class         = "db.t3.medium"
+  storage_encrypted      = true
+  kms_key_id             = aws_kms_key.rds_secondary.arn
+  publicly_accessible    = false
+  skip_final_snapshot    = true
+  backup_retention_period = 7
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.resource_prefix}-postgres-replica-${local.other_region}"
+    }
+  )
+}
