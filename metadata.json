@@ -1,30 +1,18 @@
 {
-  "platform": "pulumi",
-  "language": "js",
-  "complexity": "hard",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
   "turn_type": "single",
-  "po_id": "LS-trainr125-new",
+  "po_id": "LS-292043",
   "team": "synth-2",
-  "startedAt": "2025-08-22T13:09:38+05:30",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "startedAt": "2025-08-13T10:08:56.239Z",
+  "subtask": "Application Deployment",
   "provider": "localstack",
-  "subject_labels": [
-    "Cloud Environment Setup",
-    "Environment Migration"
-  ],
-  "wave": "P0",
-  "training_quality": 9,
-  "aws_services": [
-    "ECS",
-    "Fargate",
-    "VPC",
-    "EC2 (Security Groups)",
-    "Application Load Balancer (ALB)",
-    "ECR",
-    "CloudWatch",
-    "Service Discovery",
-    "Secrets Manager",
-    "IAM",
-    "Auto Scaling"
-  ]
+  "subject_labels": ["Serverless Infrastructure (Functions as Code)"],
+  "aws_services": ["API Gateway", "Lambda", "DynamoDB", "S3", "CloudWatch", "SNS", "IAM"],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "292043",
+    "pr": "Pr1107"
+  }
 }

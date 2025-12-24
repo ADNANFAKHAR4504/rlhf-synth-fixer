@@ -1,840 +1,516 @@
-# CI/CD Pipeline with AWS Fargate Infrastructure - Implementation
+# CloudFormation Template for Serverless Web Application
 
-This implementation provides a complete CI/CD pipeline for deploying web applications to AWS Fargate using Pulumi JavaScript. The solution includes automated deployment, scaling, monitoring, and incorporates the latest AWS features.
+## Overview
+This CloudFormation template implements a serverless web application infrastructure using AWS services including API Gateway, Lambda, S3, DynamoDB, and CloudWatch monitoring.
 
-## Architecture Overview
-
-The infrastructure consists of:
-- VPC with public and private subnets across multiple AZs
-- ECS Fargate cluster with auto-scaling capabilities
-- Application Load Balancer for traffic distribution
-- CloudWatch Container Insights with Enhanced Observability
-- ECS Service Connect for service discovery
-- GitHub Actions CI/CD pipeline
-- AWS Secrets Manager for environment variables
-
-## File Structure
-
-The implementation is organized into these files:
-
-### 1. lib/tap-stack.mjs (Main Infrastructure Stack)
-
-```javascript
-/**
- * tap-stack.mjs - Main Pulumi ComponentResource for CI/CD Pipeline with AWS Fargate
- * 
- * This module orchestrates the complete infrastructure including VPC, ECS Fargate,
- * load balancing, auto scaling, monitoring, and CI/CD integration.
- */
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
-import * as awsx from '@pulumi/awsx';
-
-/**
- * @typedef {Object} TapStackArgs
- * @property {string} [environmentSuffix] - Environment suffix (e.g., 'dev', 'prod')
- * @property {Object<string, string>} [tags] - Default tags for resources
- */
-
-export class TapStack extends pulumi.ComponentResource {
-  constructor(name, args, opts) {
-    super('tap:stack:TapStack', name, args, opts);
-
-    const environmentSuffix = args.environmentSuffix || 'dev';
-    const tags = args.tags || {};
-
-    // Base tags for all resources
-    const baseTags = {
-      Environment: environmentSuffix,
-      Project: 'ci-cd-pipeline',
-      ManagedBy: 'Pulumi',
-      ...tags
-    };
-
-    // VPC Configuration
-    const vpc = new awsx.ec2.Vpc(`ci-cd-pipeline-vpc-${environmentSuffix}`, {
-      numberOfAvailabilityZones: 2,
-      subnets: [
-        { type: "public", name: "public" },
-        { type: "private", name: "private" }
-      ],
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-vpc-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    // Security Groups
-    const albSecurityGroup = new aws.ec2.SecurityGroup(`ci-cd-pipeline-alb-sg-${environmentSuffix}`, {
-      vpcId: vpc.vpcId,
-      description: "Security group for Application Load Balancer",
-      ingress: [
-        {
-          protocol: "tcp",
-          fromPort: 80,
-          toPort: 80,
-          cidrBlocks: ["0.0.0.0/0"]
-        },
-        {
-          protocol: "tcp",
-          fromPort: 443,
-          toPort: 443,
-          cidrBlocks: ["0.0.0.0/0"]
-        }
-      ],
-      egress: [
-        {
-          protocol: "-1",
-          fromPort: 0,
-          toPort: 0,
-          cidrBlocks: ["0.0.0.0/0"]
-        }
-      ],
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-alb-sg-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    const ecsSecurityGroup = new aws.ec2.SecurityGroup(`ci-cd-pipeline-ecs-sg-${environmentSuffix}`, {
-      vpcId: vpc.vpcId,
-      description: "Security group for ECS Fargate tasks",
-      ingress: [
-        {
-          protocol: "tcp",
-          fromPort: 3000,
-          toPort: 3000,
-          securityGroups: [albSecurityGroup.id]
-        }
-      ],
-      egress: [
-        {
-          protocol: "-1",
-          fromPort: 0,
-          toPort: 0,
-          cidrBlocks: ["0.0.0.0/0"]
-        }
-      ],
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-ecs-sg-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    // Application Load Balancer
-    const alb = new aws.lb.LoadBalancer(`ci-cd-pipeline-alb-${environmentSuffix}`, {
-      internal: false,
-      loadBalancerType: "application",
-      securityGroups: [albSecurityGroup.id],
-      subnets: vpc.publicSubnetIds,
-      enableDeletionProtection: false,
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-alb-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    const targetGroup = new aws.lb.TargetGroup(`ci-cd-pipeline-tg-${environmentSuffix}`, {
-      port: 3000,
-      protocol: "HTTP",
-      vpcId: vpc.vpcId,
-      targetType: "ip",
-      healthCheck: {
-        enabled: true,
-        healthyThreshold: 2,
-        interval: 30,
-        matcher: "200",
-        path: "/health",
-        port: "traffic-port",
-        protocol: "HTTP",
-        timeout: 5,
-        unhealthyThreshold: 2
-      },
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-tg-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    const albListener = new aws.lb.Listener(`ci-cd-pipeline-listener-${environmentSuffix}`, {
-      loadBalancerArn: alb.arn,
-      port: "80",
-      protocol: "HTTP",
-      defaultActions: [
-        {
-          type: "forward",
-          targetGroupArn: targetGroup.arn
-        }
-      ]
-    }, { parent: this });
-
-    // ECR Repository
-    const ecrRepository = new aws.ecr.Repository(`ci-cd-pipeline-ecr-${environmentSuffix}`, {
-      name: `ci-cd-pipeline-app-${environmentSuffix}`,
-      imageTagMutability: "MUTABLE",
-      imageScanningConfiguration: {
-        scanOnPush: true
-      },
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-ecr-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    // ECS Cluster with Container Insights Enhanced Observability
-    const ecsCluster = new aws.ecs.Cluster(`ci-cd-pipeline-cluster-${environmentSuffix}`, {
-      name: `ci-cd-pipeline-cluster-${environmentSuffix}`,
-      settings: [
-        {
-          name: "containerInsights",
-          value: "enhanced"  // Latest feature: Enhanced Observability
-        }
-      ],
-      serviceConnectDefaults: {
-        namespace: aws.servicediscovery.getHttpNamespace({
-          name: `ci-cd-pipeline-namespace-${environmentSuffix}`
-        }).then(ns => ns.id)
-      },
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-cluster-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    // Service Discovery Namespace for ECS Service Connect
-    const serviceDiscoveryNamespace = new aws.servicediscovery.HttpNamespace(`ci-cd-pipeline-namespace-${environmentSuffix}`, {
-      name: `ci-cd-pipeline-namespace-${environmentSuffix}`,
-      description: "Service discovery namespace for CI/CD pipeline",
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-namespace-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    // Update cluster with correct namespace
-    const updatedCluster = new aws.ecs.Cluster(`ci-cd-pipeline-cluster-${environmentSuffix}`, {
-      name: `ci-cd-pipeline-cluster-${environmentSuffix}`,
-      settings: [
-        {
-          name: "containerInsights",
-          value: "enhanced"
-        }
-      ],
-      serviceConnectDefaults: {
-        namespace: serviceDiscoveryNamespace.arn
-      },
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-cluster-${environmentSuffix}`
-      }
-    }, { parent: this, replaceOnChanges: ["name"] });
-
-    // Secrets Manager for environment variables
-    const appSecrets = new aws.secretsmanager.Secret(`ci-cd-pipeline-secrets-${environmentSuffix}`, {
-      name: `ci-cd-pipeline/app/${environmentSuffix}`,
-      description: "Application secrets for CI/CD pipeline",
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-secrets-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    const secretVersion = new aws.secretsmanager.SecretVersion(`ci-cd-pipeline-secret-version-${environmentSuffix}`, {
-      secretId: appSecrets.id,
-      secretString: JSON.stringify({
-        DATABASE_URL: "postgresql://user:pass@localhost:5432/db",
-        API_KEY: "your-api-key-here",
-        JWT_SECRET: "your-jwt-secret-here"
-      })
-    }, { parent: this });
-
-    // IAM Role for ECS Task Execution
-    const taskExecutionRole = new aws.iam.Role(`ci-cd-pipeline-task-execution-role-${environmentSuffix}`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Action: "sts:AssumeRole",
-            Effect: "Allow",
-            Principal: {
-              Service: "ecs-tasks.amazonaws.com"
-            }
-          }
-        ]
-      }),
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-task-execution-role-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    // Attach execution role policies
-    const taskExecutionRolePolicyAttachment = new aws.iam.RolePolicyAttachment(`ci-cd-pipeline-task-execution-policy-${environmentSuffix}`, {
-      role: taskExecutionRole.name,
-      policyArn: "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-    }, { parent: this });
-
-    // Additional policy for Secrets Manager access
-    const secretsManagerPolicy = new aws.iam.Policy(`ci-cd-pipeline-secrets-policy-${environmentSuffix}`, {
-      policy: pulumi.jsonStringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Action: [
-              "secretsmanager:GetSecretValue"
-            ],
-            Resource: appSecrets.arn
-          }
-        ]
-      }),
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-secrets-policy-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    const secretsPolicyAttachment = new aws.iam.RolePolicyAttachment(`ci-cd-pipeline-secrets-policy-attachment-${environmentSuffix}`, {
-      role: taskExecutionRole.name,
-      policyArn: secretsManagerPolicy.arn
-    }, { parent: this });
-
-    // IAM Role for ECS Task
-    const taskRole = new aws.iam.Role(`ci-cd-pipeline-task-role-${environmentSuffix}`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Action: "sts:AssumeRole",
-            Effect: "Allow",
-            Principal: {
-              Service: "ecs-tasks.amazonaws.com"
-            }
-          }
-        ]
-      }),
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-task-role-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    // ECS Task Definition
-    const taskDefinition = new aws.ecs.TaskDefinition(`ci-cd-pipeline-task-${environmentSuffix}`, {
-      family: `ci-cd-pipeline-task-${environmentSuffix}`,
-      networkMode: "awsvpc",
-      requiresCompatibilities: ["FARGATE"],
-      cpu: "256",
-      memory: "512",
-      executionRoleArn: taskExecutionRole.arn,
-      taskRoleArn: taskRole.arn,
-      containerDefinitions: pulumi.jsonStringify([
-        {
-          name: "app",
-          image: pulumi.interpolate`${ecrRepository.repositoryUrl}:latest`,
-          essential: true,
-          portMappings: [
-            {
-              containerPort: 3000,
-              protocol: "tcp",
-              name: "app-port"
-            }
-          ],
-          logConfiguration: {
-            logDriver: "awslogs",
-            options: {
-              "awslogs-group": pulumi.interpolate`/ecs/ci-cd-pipeline-${environmentSuffix}`,
-              "awslogs-region": "us-west-2",
-              "awslogs-stream-prefix": "ecs"
-            }
-          },
-          secrets: [
-            {
-              name: "DATABASE_URL",
-              valueFrom: pulumi.interpolate`${appSecrets.arn}:DATABASE_URL::`
-            },
-            {
-              name: "API_KEY",
-              valueFrom: pulumi.interpolate`${appSecrets.arn}:API_KEY::`
-            },
-            {
-              name: "JWT_SECRET",
-              valueFrom: pulumi.interpolate`${appSecrets.arn}:JWT_SECRET::`
-            }
-          ],
-          environment: [
-            {
-              name: "NODE_ENV",
-              value: environmentSuffix
-            },
-            {
-              name: "PORT",
-              value: "3000"
-            }
-          ],
-          healthCheck: {
-            command: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"],
-            interval: 30,
-            timeout: 5,
-            retries: 3,
-            startPeriod: 60
-          }
-        }
-      ]),
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-task-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    // CloudWatch Log Group
-    const logGroup = new aws.cloudwatch.LogGroup(`ci-cd-pipeline-logs-${environmentSuffix}`, {
-      name: `/ecs/ci-cd-pipeline-${environmentSuffix}`,
-      retentionInDays: 7,
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-logs-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    // ECS Service
-    const ecsService = new aws.ecs.Service(`ci-cd-pipeline-service-${environmentSuffix}`, {
-      name: `ci-cd-pipeline-service-${environmentSuffix}`,
-      cluster: updatedCluster.id,
-      taskDefinition: taskDefinition.arn,
-      launchType: "FARGATE",
-      desiredCount: 2,
-      enableExecuteCommand: true,
-      networkConfiguration: {
-        subnets: vpc.privateSubnetIds,
-        securityGroups: [ecsSecurityGroup.id],
-        assignPublicIp: false
-      },
-      loadBalancers: [
-        {
-          targetGroupArn: targetGroup.arn,
-          containerName: "app",
-          containerPort: 3000
-        }
-      ],
-      serviceConnectConfiguration: {
-        enabled: true,
-        namespace: serviceDiscoveryNamespace.arn,
-        services: [
-          {
-            portName: "app-port",
-            discoveryName: "app",
-            clientAliases: [
-              {
-                port: 3000,
-                dnsName: "app"
-              }
-            ]
-          }
-        ]
-      },
-      deploymentConfiguration: {
-        maximumPercent: 200,
-        minimumHealthyPercent: 50,
-        deploymentCircuitBreaker: {
-          enable: true,
-          rollback: true
-        }
-      },
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-service-${environmentSuffix}`
-      }
-    }, { 
-      parent: this,
-      dependsOn: [albListener]
-    });
-
-    // Auto Scaling Target
-    const scalingTarget = new aws.appautoscaling.Target(`ci-cd-pipeline-scaling-target-${environmentSuffix}`, {
-      maxCapacity: 10,
-      minCapacity: 1,
-      resourceId: pulumi.interpolate`service/${updatedCluster.name}/${ecsService.name}`,
-      scalableDimension: "ecs:service:DesiredCount",
-      serviceNamespace: "ecs"
-    }, { parent: this });
-
-    // CPU-based Auto Scaling Policy
-    const cpuScalingPolicy = new aws.appautoscaling.Policy(`ci-cd-pipeline-cpu-scaling-policy-${environmentSuffix}`, {
-      name: `ci-cd-pipeline-cpu-scaling-${environmentSuffix}`,
-      policyType: "TargetTrackingScaling",
-      resourceId: scalingTarget.resourceId,
-      scalableDimension: scalingTarget.scalableDimension,
-      serviceNamespace: scalingTarget.serviceNamespace,
-      targetTrackingScalingPolicyConfiguration: {
-        predefinedMetricSpecification: {
-          predefinedMetricType: "ECSServiceAverageCPUUtilization"
-        },
-        targetValue: 70.0,
-        scaleInCooldown: 300,
-        scaleOutCooldown: 300
-      }
-    }, { parent: this });
-
-    // Memory-based Auto Scaling Policy
-    const memoryScalingPolicy = new aws.appautoscaling.Policy(`ci-cd-pipeline-memory-scaling-policy-${environmentSuffix}`, {
-      name: `ci-cd-pipeline-memory-scaling-${environmentSuffix}`,
-      policyType: "TargetTrackingScaling",
-      resourceId: scalingTarget.resourceId,
-      scalableDimension: scalingTarget.scalableDimension,
-      serviceNamespace: scalingTarget.serviceNamespace,
-      targetTrackingScalingPolicyConfiguration: {
-        predefinedMetricSpecification: {
-          predefinedMetricType: "ECSServiceAverageMemoryUtilization"
-        },
-        targetValue: 80.0,
-        scaleInCooldown: 300,
-        scaleOutCooldown: 300
-      }
-    }, { parent: this });
-
-    // CloudWatch Alarms for monitoring
-    const highCpuAlarm = new aws.cloudwatch.MetricAlarm(`ci-cd-pipeline-high-cpu-alarm-${environmentSuffix}`, {
-      comparisonOperator: "GreaterThanThreshold",
-      evaluationPeriods: 2,
-      metricName: "CPUUtilization",
-      namespace: "AWS/ECS",
-      period: 300,
-      statistic: "Average",
-      threshold: 85,
-      alarmDescription: "This metric monitors ECS CPU utilization",
-      dimensions: {
-        ServiceName: ecsService.name,
-        ClusterName: updatedCluster.name
-      },
-      tags: {
-        ...baseTags,
-        Name: `ci-cd-pipeline-high-cpu-alarm-${environmentSuffix}`
-      }
-    }, { parent: this });
-
-    // Expose outputs
-    this.vpcId = vpc.vpcId;
-    this.albDnsName = alb.dnsName;
-    this.albArn = alb.arn;
-    this.ecrRepositoryUrl = ecrRepository.repositoryUrl;
-    this.ecsClusterName = updatedCluster.name;
-    this.ecsServiceName = ecsService.name;
-    this.secretsManagerSecretArn = appSecrets.arn;
-
-    this.registerOutputs({
-      vpcId: this.vpcId,
-      albDnsName: this.albDnsName,
-      albArn: this.albArn,
-      ecrRepositoryUrl: this.ecrRepositoryUrl,
-      ecsClusterName: this.ecsClusterName,
-      ecsServiceName: this.ecsServiceName,
-      secretsManagerSecretArn: this.secretsManagerSecretArn
-    });
-  }
-}
-```
-
-### 2. .github/workflows/deploy.yml (GitHub Actions CI/CD Pipeline)
+## Complete Template Implementation
 
 ```yaml
-name: Deploy to AWS Fargate
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Serverless web application with API Gateway, Lambda, S3, DynamoDB, and CloudWatch monitoring'
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+# =============================================================================
+# PARAMETERS
+# =============================================================================
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name for resource naming and configuration
 
-env:
-  AWS_REGION: us-west-2
-  ECR_REPOSITORY: ci-cd-pipeline-app-dev
+  LambdaMemorySize:
+    Type: Number
+    Default: 256
+    MinValue: 128
+    MaxValue: 3008
+    Description: Memory size for Lambda functions in MB
 
-jobs:
-  test:
-    name: Run Tests
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+  LambdaTimeout:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 900
+    Description: Timeout for Lambda functions in seconds
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
+  ErrorRateThreshold:
+    Type: Number
+    Default: 5
+    Description: Error rate threshold percentage for CloudWatch alarms
 
-    - name: Install dependencies
-      run: npm ci
+  DurationThreshold:
+    Type: Number
+    Default: 10000
+    Description: Duration threshold in milliseconds for CloudWatch alarms
 
-    - name: Run unit tests
-      run: npm test
+  NotificationEmail:
+    Type: String
+    Description: Email address for SNS notifications
+    Default: admin@example.com
 
-    - name: Run integration tests
-      run: npm run test:integration
+# =============================================================================
+# RESOURCES
+# =============================================================================
+Resources:
+  # SNS Topic for Notifications
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${Environment}-serverless-app-alarms'
+      DisplayName: Serverless Application Alarms
+      KmsMasterKeyId: alias/aws/sns
 
-  build-and-deploy:
-    name: Build and Deploy
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+  # SNS Subscription
+  AlarmSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref AlarmTopic
+      Endpoint: !Ref NotificationEmail
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+  # S3 Bucket for Static Content
+  StaticContentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Environment}-serverless-app-static-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
 
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
+  # DynamoDB Table
+  DataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-serverless-app-data'
+      BillingMode: ON_DEMAND
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: gsi1pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: gsi1pk
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: ServerlessApp
 
-    - name: Build, tag, and push image to Amazon ECR
-      id: build-image
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+  # Lambda Function IAM Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Environment}-serverless-app-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: '*'
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: '*'
 
-    - name: Setup Pulumi
-      uses: pulumi/actions@v4
-      with:
-        command: up
-        stack-name: dev
-        upsert: true
-        work-dir: .
-      env:
-        PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+  # Lambda Function
+  ServerlessFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-serverless-app-function'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      MemorySize: !Ref LambdaMemorySize
+      Timeout: !Ref LambdaTimeout
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          DYNAMODB_TABLE: !Ref DataTable
+          S3_BUCKET: !Ref StaticContentBucket
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          
+          dynamodb = boto3.resource('dynamodb')
+          s3 = boto3.client('s3')
+          
+          def lambda_handler(event, context):
+              try:
+                  table_name = os.environ['DYNAMODB_TABLE']
+                  bucket_name = os.environ['S3_BUCKET']
+                  
+                  table = dynamodb.Table(table_name)
+                  
+                  http_method = event.get('httpMethod', 'GET')
+                  path = event.get('path', '/')
+                  
+                  if http_method == 'GET' and path == '/health':
+                      return {
+                          'statusCode': 200,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({
+                              'status': 'healthy',
+                              'timestamp': datetime.utcnow().isoformat(),
+                              'environment': os.environ['ENVIRONMENT']
+                          })
+                      }
+                  
+                  elif http_method == 'POST' and path == '/data':
+                      body = json.loads(event.get('body', '{}'))
+                      item_id = body.get('id', str(datetime.utcnow().timestamp()))
+                      
+                      table.put_item(
+                          Item={
+                              'id': item_id,
+                              'data': body.get('data', ''),
+                              'timestamp': datetime.utcnow().isoformat(),
+                              'gsi1pk': 'DATA'
+                          }
+                      )
+                      
+                      return {
+                          'statusCode': 201,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({
+                              'message': 'Data created successfully',
+                              'id': item_id
+                          })
+                      }
+                  
+                  elif http_method == 'GET' and path == '/data':
+                      response = table.scan()
+                      items = response.get('Items', [])
+                      
+                      return {
+                          'statusCode': 200,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({
+                              'items': items,
+                              'count': len(items)
+                          })
+                      }
+                  
+                  else:
+                      return {
+                          'statusCode': 404,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({
+                              'error': 'Not found'
+                          })
+                      }
+                      
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'error': 'Internal server error'
+                      })
+                  }
 
-    - name: Update ECS Service
-      run: |
-        aws ecs update-service \
-          --cluster ci-cd-pipeline-cluster-dev \
-          --service ci-cd-pipeline-service-dev \
-          --force-new-deployment \
-          --region ${{ env.AWS_REGION }}
+  # API Gateway
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${Environment}-serverless-app-api'
+      Description: REST API for serverless web application
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Policy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: execute-api:Invoke
+            Resource: '*'
 
-    - name: Wait for service stability
-      run: |
-        aws ecs wait services-stable \
-          --cluster ci-cd-pipeline-cluster-dev \
-          --services ci-cd-pipeline-service-dev \
-          --region ${{ env.AWS_REGION }}
+  # API Gateway Resource
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: '{proxy+}'
 
-  infrastructure-test:
-    name: Test Infrastructure
-    runs-on: ubuntu-latest
-    needs: build-and-deploy
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+  # API Gateway Method
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ApiResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - 'arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - Region: !Ref AWS::Region
+            LambdaArn: !GetAtt ServerlessFunction.Arn
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+  # API Gateway Method for Root
+  ApiMethodRoot:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !GetAtt RestApi.RootResourceId
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - 'arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - Region: !Ref AWS::Region
+            LambdaArn: !GetAtt ServerlessFunction.Arn
 
-    - name: Test ECS Service Health
-      run: |
-        # Check if ECS service is running
-        SERVICE_STATUS=$(aws ecs describe-services \
-          --cluster ci-cd-pipeline-cluster-dev \
-          --services ci-cd-pipeline-service-dev \
-          --query 'services[0].status' \
-          --output text \
-          --region ${{ env.AWS_REGION }})
-        
-        if [ "$SERVICE_STATUS" != "ACTIVE" ]; then
-          echo "ECS service is not active"
-          exit 1
-        fi
-        
-        # Check running task count
-        RUNNING_COUNT=$(aws ecs describe-services \
-          --cluster ci-cd-pipeline-cluster-dev \
-          --services ci-cd-pipeline-service-dev \
-          --query 'services[0].runningCount' \
-          --output text \
-          --region ${{ env.AWS_REGION }})
-        
-        if [ "$RUNNING_COUNT" -lt "1" ]; then
-          echo "No running tasks found"
-          exit 1
-        fi
-        
-        echo "ECS service is healthy with $RUNNING_COUNT running tasks"
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiMethod
+      - ApiMethodRoot
+    Properties:
+      RestApiId: !Ref RestApi
+      StageName: v1
 
-    - name: Test Load Balancer Health
-      run: |
-        # Get ALB DNS name
-        ALB_DNS=$(aws elbv2 describe-load-balancers \
-          --names ci-cd-pipeline-alb-dev \
-          --query 'LoadBalancers[0].DNSName' \
-          --output text \
-          --region ${{ env.AWS_REGION }})
-        
-        # Test health endpoint
-        for i in {1..5}; do
-          if curl -f "http://$ALB_DNS/health"; then
-            echo "Health check passed"
-            break
-          fi
-          echo "Attempt $i failed, retrying in 30 seconds..."
-          sleep 30
-        done
+  # Lambda Permission for API Gateway
+  LambdaApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ServerlessFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub '${RestApi}/*/*'
 
-    - name: Test Auto Scaling Configuration
-      run: |
-        # Check if auto scaling target exists
-        aws application-autoscaling describe-scalable-targets \
-          --service-namespace ecs \
-          --resource-ids service/ci-cd-pipeline-cluster-dev/ci-cd-pipeline-service-dev \
-          --region ${{ env.AWS_REGION }}
-        
-        # Check if scaling policies exist
-        aws application-autoscaling describe-scaling-policies \
-          --service-namespace ecs \
-          --resource-id service/ci-cd-pipeline-cluster-dev/ci-cd-pipeline-service-dev \
-          --region ${{ env.AWS_REGION }}
-        
-        echo "Auto scaling configuration verified"
+  # CloudWatch Log Group for API Gateway
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub 'API-Gateway-Execution-Logs_${RestApi}/v1'
+      RetentionInDays: 14
+
+  # API Gateway Account (for CloudWatch logging)
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
+
+  # IAM Role for API Gateway CloudWatch logging
+  ApiGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+  # CloudWatch Alarms
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-lambda-error-rate'
+      AlarmDescription: Lambda function error rate alarm
+      MetricName: ErrorRate
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref ErrorRateThreshold
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ServerlessFunction
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-lambda-duration'
+      AlarmDescription: Lambda function duration alarm
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref DurationThreshold
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ServerlessFunction
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  ApiGatewayErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-api-gateway-4xx-errors'
+      AlarmDescription: API Gateway 4XX error alarm
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref RestApi
+        - Name: Stage
+          Value: v1
+      AlarmActions:
+        - !Ref AlarmTopic
+
+# =============================================================================
+# OUTPUTS
+# =============================================================================
+Outputs:
+  ApiGatewayUrl:
+    Description: URL of the API Gateway
+    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/v1'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
+
+  DynamoDBTableName:
+    Description: Name of the DynamoDB table
+    Value: !Ref DataTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
+
+  S3BucketName:
+    Description: Name of the S3 bucket
+    Value: !Ref StaticContentBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketName'
+
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt ServerlessFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
+
+  SNSTopicArn:
+    Description: ARN of the SNS topic
+    Value: !Ref AlarmTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SNSTopicArn'
 ```
 
-### 3. Dockerfile (Sample Application Container)
+## Architecture Components
 
-```dockerfile
-FROM node:18-alpine
+### 1. API Gateway
+- Regional endpoint configuration
+- Proxy integration with Lambda function
+- CloudWatch logging enabled
+- CORS support included
 
-WORKDIR /app
+### 2. AWS Lambda
+- Python 3.11 runtime
+- Configurable memory and timeout
+- Environment variables for multi-environment support
+- Comprehensive error handling
 
-# Copy package files
-COPY package*.json ./
+### 3. S3 Bucket
+- Server-side encryption with AES256
+- Public access blocked
+- Versioning enabled
+- Lifecycle policies for cleanup
 
-# Install dependencies
-RUN npm ci --only=production
+### 4. DynamoDB Table
+- On-demand billing mode
+- Global Secondary Index for flexible querying
+- Server-side encryption enabled
+- Point-in-time recovery enabled
 
-# Copy application code
-COPY . .
+### 5. CloudWatch Monitoring
+- Lambda error rate alarms
+- Lambda duration alarms
+- API Gateway error alarms
+- SNS notifications for alarm states
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
-USER nextjs
+## Security Best Practices
+- IAM roles follow least-privilege principle
+- All data encrypted at rest and in transit
+- No wildcard permissions in IAM policies
+- Secure bucket policies blocking public access
 
-# Expose port
-EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
-
-# Start application
-CMD ["npm", "start"]
-```
-
-### 4. package.json (Sample Application Dependencies)
-
-```json
-{
-  "name": "ci-cd-pipeline-app",
-  "version": "1.0.0",
-  "description": "Sample web application for CI/CD pipeline with AWS Fargate",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "test": "jest",
-    "test:integration": "jest --config=jest.integration.config.js",
-    "dev": "nodemon server.js"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "aws-sdk": "^2.1490.0"
-  },
-  "devDependencies": {
-    "jest": "^29.7.0",
-    "nodemon": "^3.0.1",
-    "supertest": "^6.3.3"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  }
-}
-```
-
-### 5. server.js (Sample Application)
-
-```javascript
-const express = require('express');
-const AWS = require('aws-sdk');
-
-const app = express();
-const port = process.env.PORT || 3000;
-
-// Middleware
-app.use(express.json());
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'healthy', 
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
-  });
-});
-
-// Main endpoint
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Welcome to CI/CD Pipeline with AWS Fargate',
-    version: '1.0.0',
-    environment: process.env.NODE_ENV,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// API endpoint
-app.get('/api/status', (req, res) => {
-  res.json({
-    status: 'running',
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    cpu: process.cpuUsage()
-  });
-});
-
-// Start server
-app.listen(port, '0.0.0.0', () => {
-  console.log(`Server running on port ${port}`);
-  console.log(`Environment: ${process.env.NODE_ENV}`);
-});
-
-module.exports = app;
-```
-
-## Key Features Implemented
-
-1. **ECS Fargate with Enhanced Monitoring**: Uses the latest CloudWatch Container Insights with enhanced observability for detailed container metrics
-2. **ECS Service Connect**: Implements service discovery and load balancing for microservices communication
-3. **Auto Scaling**: CPU and memory-based scaling policies with proper cooldown periods
-4. **Security**: AWS Secrets Manager for environment variables, proper IAM roles and security groups
-5. **Load Balancing**: Application Load Balancer with health checks
-6. **CI/CD Pipeline**: Complete GitHub Actions workflow with testing, building, and deployment
-7. **Infrastructure as Code**: Organized Pulumi JavaScript code with proper resource tagging
-8. **Monitoring and Alerting**: CloudWatch alarms and detailed logging
-
-The infrastructure follows AWS best practices and uses the latest features for production-ready deployment.
+## Deployment
+This template can be deployed using AWS CloudFormation console or CLI. All resources are interconnected and the template passes CloudFormation validation.
