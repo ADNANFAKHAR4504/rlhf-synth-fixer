@@ -866,7 +866,7 @@ Resources:
                 Action:
                   - 'secretsmanager:GetSecretValue'
                 Resource:
-                  - !GetAtt DatabaseInstance.MasterUserSecret.SecretArn
+                  - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:rds!db-*'
         - PolicyName: webapp-prod-rds-policy
           PolicyDocument:
             Version: '2012-10-17'
