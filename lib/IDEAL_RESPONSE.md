@@ -1,4 +1,4 @@
-```
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Modular multi-environment infrastructure template with VPC, EC2, RDS, and ALB
 Parameters:
