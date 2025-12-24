@@ -1,0 +1,785 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Multi-Region Disaster Recovery Solution for Transaction Processing System - Primary Region Template",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming to ensure uniqueness across deployments",
+      "Default": "prod",
+      "AllowedPattern": "[a-z0-9-]+",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "SecondaryRegion": {
+      "Type": "String",
+      "Description": "Secondary AWS region for disaster recovery",
+      "Default": "us-west-2",
+      "AllowedValues": [
+        "us-west-2",
+        "us-west-1",
+        "eu-west-1",
+        "ap-southeast-1"
+      ]
+    }
+  },
+  "Resources": {
+    "TransactionKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": "KMS key for transaction data encryption in primary region",
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow DynamoDB to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "dynamodb.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": {
+                    "Fn::Sub": "dynamodb.${AWS::Region}.amazonaws.com"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "Allow S3 to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow Lambda to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudWatch Logs",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                }
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "EnableKeyRotation": true,
+        "MultiRegion": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-kms-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "TransactionKMSAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/transaction-encryption-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "TransactionKMSKey"
+        }
+      }
+    },
+    "TransactionDynamoDBTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "transactions-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "transactionId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          },
+          {
+            "AttributeName": "customerId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "transactionId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "CustomerIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "customerId",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "timestamp",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transactions-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "ReplicationType",
+            "Value": "Global"
+          }
+        ]
+      }
+    },
+    "TransactionDocumentsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "transaction-documents-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": [
+                    "TransactionKMSKey",
+                    "Arn"
+                  ]
+                }
+              },
+              "BucketKeyEnabled": true
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-documents-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "transaction-lambda-role-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "TransactionProcessingPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "TransactionDynamoDBTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${TransactionDynamoDBTable.Arn}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${TransactionDocumentsBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:Encrypt",
+                    "kms:GenerateDataKey"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "TransactionKMSKey",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "AlertSNSTopic"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-lambda-role-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "CrossRegionAssumeRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "cross-region-assume-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "sts:ExternalId": {
+                    "Fn::Sub": "dr-failover-${EnvironmentSuffix}"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CrossRegionAccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:DescribeTable",
+                    "dynamodb:DescribeGlobalTable"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket",
+                    "s3:GetBucketLocation"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:lambda:${SecondaryRegion}:${AWS::AccountId}:function:transaction-processor-*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "cross-region-assume-role-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "TransactionProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "transaction-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ndynamodb = boto3.resource('dynamodb')\ns3 = boto3.client('s3')\nsns = boto3.client('sns')\n\ndef lambda_handler(event, context):\n    region = os.environ['AWS_REGION']\n    env_suffix = os.environ['ENVIRONMENT_SUFFIX']\n    table_name = f'transactions-{env_suffix}'\n    bucket_name = os.environ['BUCKET_NAME']\n    sns_topic = os.environ['SNS_TOPIC_ARN']\n    \n    try:\n        table = dynamodb.Table(table_name)\n        \n        transaction_id = event.get('transactionId')\n        customer_id = event.get('customerId')\n        amount = event.get('amount')\n        timestamp = int(datetime.now().timestamp())\n        \n        response = table.put_item(\n            Item={\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'customerId': customer_id,\n                'amount': amount,\n                'region': region,\n                'status': 'processed'\n            }\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Transaction processed successfully',\n                'transactionId': transaction_id,\n                'region': region\n            })\n        }\n    except Exception as e:\n        sns.publish(\n            TopicArn=sns_topic,\n            Subject='Transaction Processing Error',\n            Message=f'Error processing transaction: {str(e)}'\n        )\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)})\n        }\n"
+        },
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "BUCKET_NAME": {
+              "Ref": "TransactionDocumentsBucket"
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "AlertSNSTopic"
+            },
+            "TABLE_NAME": {
+              "Ref": "TransactionDynamoDBTable"
+            }
+          }
+        },
+        "Timeout": 30,
+        "MemorySize": 512,
+        "KmsKeyArn": {
+          "Fn::GetAtt": [
+            "TransactionKMSKey",
+            "Arn"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-processor-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "TransactionProcessorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/transaction-processor-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "TransactionKMSKey",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "AlertSNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "transaction-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Transaction Processing Alerts",
+        "KmsMasterKeyId": {
+          "Ref": "TransactionKMSKey"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-alerts-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DynamoDBThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "dynamodb-throttle-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "AlarmDescription": "Alert when DynamoDB throttling occurs",
+        "MetricName": "UserErrors",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TransactionDynamoDBTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "AlertSNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "lambda-errors-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "AlarmDescription": "Alert when Lambda function errors exceed threshold",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "TransactionProcessorFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "AlertSNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LambdaThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "lambda-throttle-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "AlarmDescription": "Alert when Lambda function throttling occurs",
+        "MetricName": "Throttles",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "TransactionProcessorFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "AlertSNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  "Outputs": {
+    "PrimaryRegion": {
+      "Description": "Primary AWS region",
+      "Value": {
+        "Ref": "AWS::Region"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrimaryRegion"
+        }
+      }
+    },
+    "SecondaryRegion": {
+      "Description": "Secondary AWS region for disaster recovery",
+      "Value": {
+        "Ref": "SecondaryRegion"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecondaryRegion"
+        }
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "DynamoDB Global Table name",
+      "Value": {
+        "Ref": "TransactionDynamoDBTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DynamoDBTableName"
+        }
+      }
+    },
+    "DynamoDBTableArn": {
+      "Description": "DynamoDB Global Table ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "TransactionDynamoDBTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DynamoDBTableArn"
+        }
+      }
+    },
+    "S3BucketName": {
+      "Description": "S3 bucket name for transaction documents",
+      "Value": {
+        "Ref": "TransactionDocumentsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3BucketName"
+        }
+      }
+    },
+    "S3BucketArn": {
+      "Description": "S3 bucket ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "TransactionDocumentsBucket",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3BucketArn"
+        }
+      }
+    },
+    "LambdaFunctionName": {
+      "Description": "Lambda function name for transaction processing",
+      "Value": {
+        "Ref": "TransactionProcessorFunction"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaFunctionName"
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "TransactionProcessorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+        }
+      }
+    },
+    "KMSKeyId": {
+      "Description": "KMS key ID for encryption",
+      "Value": {
+        "Ref": "TransactionKMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+        }
+      }
+    },
+    "KMSKeyArn": {
+      "Description": "KMS key ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "TransactionKMSKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyArn"
+        }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "SNS topic ARN for alerts",
+      "Value": {
+        "Ref": "AlertSNSTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
+        }
+      }
+    },
+    "PrimaryEndpoint": {
+      "Description": "Primary region endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://lambda.${AWS::Region}.amazonaws.com/2015-03-31/functions/transaction-processor-${EnvironmentSuffix}/invocations"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrimaryEndpoint"
+        }
+      }
+    },
+    "CrossRegionRoleArn": {
+      "Description": "Cross-region assume role ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "CrossRegionAssumeRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CrossRegionRoleArn"
+        }
+      }
+    }
+  }
+}
