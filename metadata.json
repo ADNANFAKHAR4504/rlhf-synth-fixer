@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "provider": "localstack",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291576",
+  "team": "synth-2",
+  "wave": "P0",
+  "startedAt": "2025-08-22T05:53:13.844Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Elastic Load Balancer",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "CloudFront",
+    "Secrets Manager",
+    "KMS"
+  ]
+}
