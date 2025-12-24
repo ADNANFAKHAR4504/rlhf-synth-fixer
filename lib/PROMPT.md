@@ -6,7 +6,7 @@ I need a CloudFormation template in JSON format that sets up a secure production
 
 Build a VPC with 10.0.0.0/16 CIDR that has public subnet 10.0.1.0/24 and private subnet 10.0.2.0/24. The VPC needs an Internet Gateway attached to it so public resources can reach the internet.
 
-Set up security groups that only allow what's necessary - HTTPS/HTTP from 0.0.0.0/0 but restrict SSH to specific IPs only. The web security group should allow inbound 443, 80, and SSH from a specific CIDR. Database security group should only accept MySQL traffic from the web security group.
+Set up security groups with least privilege access - HTTPS/HTTP from internet (0.0.0.0/0) but restrict SSH to specific IPs only. The web security group should allow inbound 443, 80, and SSH from a specific CIDR. Database security group should only accept MySQL port 3306 connections from the web security group.
 
 Deploy an RDS MySQL database in the private subnet that's only accessible from the web security group. The database needs encryption at rest and should NOT be publicly accessible. Set up automated backups with 7-day retention.
 
@@ -22,7 +22,7 @@ Add AWS WAF with managed rule sets - use the Common Rule Set and Known Bad Input
 
 ## Technical Requirements
 
-All S3 buckets need encryption enabled and must block all public access. Use bucket policies that only allow the specific AWS services to write.
+All S3 buckets need encryption enabled and must block public access completely. Use bucket policies that grant write permissions only to the specific AWS services that need them.
 
 The RDS database needs a subnet group with at least 2 subnets. Use db.t3.micro instance class with encrypted storage.
 
