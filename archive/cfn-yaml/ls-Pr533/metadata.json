@@ -1,0 +1,20 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "284210",
+  "team": "synth-2",
+  "startedAt": "2025-08-04T15:05:34.736Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "UsamaIftikhar12",
+  "dockerS3Location": "",
+  "wave": "P1",
+  "subtask": "Provisioning",
+  "subject_labels": ["Lambda", "S3", "CloudWatch", "IAM"],
+  "aws_services": ["Lambda", "S3", "SecretsManager", "CloudWatch", "IAM", "EC2", "Logs"],
+  "provider": "aws"
+}
