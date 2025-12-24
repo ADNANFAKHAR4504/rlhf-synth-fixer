@@ -451,3 +451,9 @@ Outputs:
     Value: !GetAtt MyAppLambdaFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-LambdaFunction'
+
+  SecurityGroupId:
+    Description: 'Lambda Security Group ID'
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroup'

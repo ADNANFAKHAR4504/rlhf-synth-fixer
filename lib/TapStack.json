@@ -778,6 +778,17 @@
           "Fn::Sub": "${AWS::StackName}-DBPasswordParameterName"
         }
       }
+    },
+    "SecurityGroupId": {
+      "Description": "Lambda Security Group ID",
+      "Value": {
+        "Ref": "LambdaSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecurityGroup"
+        }
+      }
     }
   }
 }
