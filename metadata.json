@@ -9,9 +9,7 @@
   "subtask": "CI/CD Pipeline Integration",
   "provider": "localstack",
   "subject_labels": [
-    "CI/CD Pipeline",
-    "Infrastructure Analysis/Monitoring",
-    "General Infrastructure Tooling QA"
+    "CI/CD Pipeline"
   ],
   "wave": "P0",
   "training_quality": 9,
