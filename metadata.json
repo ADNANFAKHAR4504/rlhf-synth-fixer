@@ -6,15 +6,9 @@
   "po_id": "292064",
   "team": "synth-2",
   "startedAt": "2025-08-08T05:26:20.746Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "barun-turing",
-  "dockerS3Location": "",
   "aws_services": ["VPC", "EC2", "ELB", "AutoScaling", "RDS", "IAM", "SecretsManager"],
   "wave": "P1",
-  "subtask": "Core Services",
-  "subject_labels": ["networking", "compute", "database"],
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": ["Cloud Environment Setup", "Web Application Deployment"],
   "provider": "localstack"
 }
