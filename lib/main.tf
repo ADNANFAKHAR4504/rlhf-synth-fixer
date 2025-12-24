@@ -247,32 +247,36 @@ resource "aws_kms_key_policy" "primary" {
   })
 }
 
-# Replica KMS key in eu-west-1
-resource "aws_kms_replica_key" "secondary" {
-  provider = aws.eu_west_1
+# Note: KMS replica key commented out due to LocalStack timeout issues
+# LocalStack does not properly support multi-region KMS replica keys with tag operations
+# Even with lifecycle ignore_changes, the ListResourceTags API times out
 
-  description             = "Secondary multi-region replica key-${var.environment_suffix}"
-  deletion_window_in_days = 7
-  primary_key_arn         = aws_kms_key.primary.arn
-
-  # Tags and lifecycle block to work around LocalStack tagging timeout
-  lifecycle {
-    ignore_changes = [tags, tags_all]
-  }
-
-  # Tags removed due to LocalStack timeout issues with KMS replica key tagging
-  # tags = {
-  #   Name   = "SecondaryKMSKey-${var.environment_suffix}"
-  #   Region = "eu-west-1"
-  # }
-}
-
-resource "aws_kms_alias" "secondary" {
-  provider = aws.eu_west_1
-
-  name          = "alias/secondary-key-${var.environment_suffix}"
-  target_key_id = aws_kms_replica_key.secondary.key_id
-}
+# # Replica KMS key in eu-west-1
+# resource "aws_kms_replica_key" "secondary" {
+#   provider = aws.eu_west_1
+#
+#   description             = "Secondary multi-region replica key-${var.environment_suffix}"
+#   deletion_window_in_days = 7
+#   primary_key_arn         = aws_kms_key.primary.arn
+#
+#   # Tags and lifecycle block to work around LocalStack tagging timeout
+#   lifecycle {
+#     ignore_changes = [tags, tags_all]
+#   }
+#
+#   # Tags removed due to LocalStack timeout issues with KMS replica key tagging
+#   # tags = {
+#   #   Name   = "SecondaryKMSKey-${var.environment_suffix}"
+#   #   Region = "eu-west-1"
+#   # }
+# }
+#
+# resource "aws_kms_alias" "secondary" {
+#   provider = aws.eu_west_1
+#
+#   name          = "alias/secondary-key-${var.environment_suffix}"
+#   target_key_id = aws_kms_replica_key.secondary.key_id
+# }
 
 #
 # 4. SERVICE CONTROL POLICIES (SCPs)

@@ -93,20 +93,21 @@ output "primary_kms_alias_name" {
   value       = aws_kms_alias.primary.name
 }
 
-output "secondary_kms_key_id" {
-  description = "The ID of the secondary KMS key in eu-west-1"
-  value       = aws_kms_replica_key.secondary.key_id
-}
-
-output "secondary_kms_key_arn" {
-  description = "The ARN of the secondary KMS key in eu-west-1"
-  value       = aws_kms_replica_key.secondary.arn
-}
-
-output "secondary_kms_alias_name" {
-  description = "The alias name of the secondary KMS key"
-  value       = aws_kms_alias.secondary.name
-}
+# Note: Secondary KMS key outputs commented out due to LocalStack limitations
+# output "secondary_kms_key_id" {
+#   description = "The ID of the secondary KMS key in eu-west-1"
+#   value       = aws_kms_replica_key.secondary.key_id
+# }
+#
+# output "secondary_kms_key_arn" {
+#   description = "The ARN of the secondary KMS key in eu-west-1"
+#   value       = aws_kms_replica_key.secondary.arn
+# }
+#
+# output "secondary_kms_alias_name" {
+#   description = "The alias name of the secondary KMS key"
+#   value       = aws_kms_alias.secondary.name
+# }
 
 #
 # SERVICE CONTROL POLICY OUTPUTS
