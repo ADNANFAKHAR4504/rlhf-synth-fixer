@@ -87,7 +87,7 @@ class TapStack(Stack):
     master_key = kms.Key(
       self, "MasterKey",
       enable_key_rotation=True,
-      removal_policy=RemovalPolicy.RETAIN
+      removal_policy=RemovalPolicy.DESTROY
     )
 
     # Add policy to allow CloudWatch Logs to use the key
@@ -146,7 +146,7 @@ class TapStack(Stack):
       self, "VPCFlowLogsGroup",
       retention=logs.RetentionDays.ONE_YEAR,
       encryption_key=master_key,
-      removal_policy=RemovalPolicy.RETAIN
+      removal_policy=RemovalPolicy.DESTROY
     )
 
     # 3. S3 Bucket for CloudTrail logs
@@ -156,7 +156,7 @@ class TapStack(Stack):
       encryption=s3.BucketEncryption.KMS,
       encryption_key=master_key,
       versioned=True,
-      removal_policy=RemovalPolicy.RETAIN
+      removal_policy=RemovalPolicy.DESTROY
     )
     cloudtrail_bucket.add_to_resource_policy(
       iam.PolicyStatement(
@@ -218,12 +218,12 @@ class TapStack(Stack):
       traffic_type=ec2.FlowLogTrafficType.ALL
     )
 
-    # 5. CloudTrail
+    # 5. CloudTrail (single region for LocalStack)
     cloudtrail.Trail(
       self, "TapCloudTrail",
       bucket=cloudtrail_bucket,
       include_global_service_events=True,
-      is_multi_region_trail=True,
+      is_multi_region_trail=False,
       enable_file_validation=True,
       encryption_key=master_key,
       send_to_cloud_watch_logs=True,
@@ -231,88 +231,73 @@ class TapStack(Stack):
     )
 
     # 6. IAM Role for AWS Config
-    config_role = iam.Role(
-      self, "ConfigRole",
-      assumed_by=iam.ServicePrincipal("config.amazonaws.com"),
-    )
-    config_role.add_to_policy(iam.PolicyStatement(
-      actions=[
-        "s3:PutObject",
-        "s3:GetBucketAcl",
-        "s3:GetBucketLocation",
-        "sns:Publish",
-        "config:Put*",
-        "config:Get*",
-        "config:Describe*",
-        "config:Deliver*"
-      ],
-      resources=["*"]
-    ))
+    # NOTE: AWS Config has limited support in LocalStack Community - commented out for LocalStack deployment
+    # config_role = iam.Role(
+    #   self, "ConfigRole",
+    #   assumed_by=iam.ServicePrincipal("config.amazonaws.com"),
+    # )
+    # config_role.add_to_policy(iam.PolicyStatement(
+    #   actions=[
+    #     "s3:PutObject",
+    #     "s3:GetBucketAcl",
+    #     "s3:GetBucketLocation",
+    #     "sns:Publish",
+    #     "config:Put*",
+    #     "config:Get*",
+    #     "config:Describe*",
+    #     "config:Deliver*"
+    #   ],
+    #   resources=["*"]
+    # ))
 
     # 7. S3 Bucket for AWS Config
-    config_bucket = s3.Bucket(
-      self, "ConfigBucket",
-      block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-      encryption=s3.BucketEncryption.KMS,
-      encryption_key=master_key,
-      versioned=True
-    )
-    config_bucket.add_to_resource_policy(
-      iam.PolicyStatement(
-        sid="AWSConfigBucketPermissionsCheck",
-        effect=iam.Effect.ALLOW,
-        principals=[iam.ServicePrincipal("config.amazonaws.com")],
-        actions=["s3:GetBucketAcl", "s3:GetBucketLocation"],
-        resources=[config_bucket.bucket_arn]
-      )
-    )
-    config_bucket.add_to_resource_policy(
-      iam.PolicyStatement(
-        sid="AWSConfigBucketExistenceCheck", 
-        effect=iam.Effect.ALLOW,
-        principals=[iam.ServicePrincipal("config.amazonaws.com")],
-        actions=["s3:ListBucket"],
-        resources=[config_bucket.bucket_arn]
-      )
-    )
-    config_bucket.add_to_resource_policy(
-      iam.PolicyStatement(
-        sid="AWSConfigBucketDelivery",
-        effect=iam.Effect.ALLOW,
-        principals=[iam.ServicePrincipal("config.amazonaws.com")],
-        actions=["s3:PutObject"],
-        resources=[f"{config_bucket.bucket_arn}/*"],
-        conditions={
-          "StringEquals": {
-            "s3:x-amz-acl": "bucket-owner-full-control"
-          }
-        }
-      )
-    )
-
-    # 8. AWS Config Recorder and Delivery Channel
-    config_recorder = config.CfnConfigurationRecorder(
-      self, "ConfigRecorder",
-      role_arn=config_role.role_arn,
-      recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
-        all_supported=True,
-        include_global_resource_types=True
-      )
-    )
-    delivery_channel = config.CfnDeliveryChannel(
-      self, "ConfigDeliveryChannel",
-      s3_bucket_name=config_bucket.bucket_name
-    )
+    # NOTE: AWS Config has limited support in LocalStack Community - commented out for LocalStack deployment
+    # config_bucket = s3.Bucket(
+    #   self, "ConfigBucket",
+    #   block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+    #   encryption=s3.BucketEncryption.KMS,
+    #   encryption_key=master_key,
+    #   versioned=True
+    # )
+    # config_bucket.add_to_resource_policy(
+    #   iam.PolicyStatement(
+    #     sid="AWSConfigBucketPermissionsCheck",
+    #     effect=iam.Effect.ALLOW,
+    #     principals=[iam.ServicePrincipal("config.amazonaws.com")],
+    #     actions=["s3:GetBucketAcl", "s3:GetBucketLocation"],
+    #     resources=[config_bucket.bucket_arn]
+    #   )
+    # )
+    # config_bucket.add_to_resource_policy(
+    #   iam.PolicyStatement(
+    #     sid="AWSConfigBucketExistenceCheck",
+    #     effect=iam.Effect.ALLOW,
+    #     principals=[iam.ServicePrincipal("config.amazonaws.com")],
+    #     actions=["s3:ListBucket"],
+    #     resources=[config_bucket.bucket_arn]
+    #   )
+    # )
+    # config_bucket.add_to_resource_policy(
+    #   iam.PolicyStatement(
+    #     sid="AWSConfigBucketDelivery",
+    #     effect=iam.Effect.ALLOW,
+    #     principals=[iam.ServicePrincipal("config.amazonaws.com")],
+    #     actions=["s3:PutObject"],
+    #     resources=[f"{config_bucket.bucket_arn}/*"],
+    #     conditions={
+    #       "StringEquals": {
+    #         "s3:x-amz-acl": "bucket-owner-full-control"
+    #       }
+    #     }
+    #   )
+    # )
 
     # 9. AWS Config Managed Rules (example: S3 public access prohibited)
-    config_rule = config.ManagedRule(
-      self, "S3BucketPublicAccessProhibited",
-      identifier=config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED
-    )
-
-    # Ensure the rule is created after the recorder and delivery channel
-    config_rule.node.add_dependency(config_recorder)
-    config_rule.node.add_dependency(delivery_channel)
+    # NOTE: AWS Config has limited support in LocalStack Community - commented out for LocalStack deployment
+    # config_rule = config.ManagedRule(
+    #   self, "S3BucketPublicAccessProhibited",
+    #   identifier=config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED
+    # )
 
     # 10. Security Group with restricted SSH
     secure_sg = ec2.SecurityGroup(
@@ -411,11 +396,11 @@ class TapStack(Stack):
       value=vpc.vpc_id,
       description="VPC ID"
     )
-    CfnOutput(
-      self, "ConfigBucketName",
-      value=config_bucket.bucket_name,
-      description="S3 bucket for AWS Config"
-    )
+    # CfnOutput(
+    #   self, "ConfigBucketName",
+    #   value=config_bucket.bucket_name,
+    #   description="S3 bucket for AWS Config"
+    # )
     CfnOutput(
       self, "RdsEndpointAddress",
       value=secure_db.db_instance_endpoint_address,
