@@ -810,6 +810,18 @@
         }
       }
     },
+    "SecurityGroupId": {
+      "Description": "Web Security Group ID (alias)",
+      "Value": {
+        "Ref": "WebSecurityGroup"
+      }
+    },
+    "InternetGatewayId": {
+      "Description": "Internet Gateway ID",
+      "Value": {
+        "Ref": "InternetGateway"
+      }
+    },
     "DatabaseEndpoint": {
       "Description": "RDS Database Endpoint",
       "Value": {
