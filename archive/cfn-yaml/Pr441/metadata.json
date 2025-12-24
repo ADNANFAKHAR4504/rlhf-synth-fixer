@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291480",
+  "team": "3",
+  "startedAt": "2025-08-04T13:16:52.709Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Serverless Infrastructure"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "localstack-migration",
+  "dockerS3Location": "",
+  "localstack_compatible": true,
+  "migrated_from_pr": 441
+}
