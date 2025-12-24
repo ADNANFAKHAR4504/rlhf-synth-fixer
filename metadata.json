@@ -6,13 +6,11 @@
   "po_id": "291571",
   "team": "synth-2",
   "startedAt": "2025-08-18T11:46:51.380Z",
-  "subtask": "Security and Compliance Implementation",
+  "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Security Configuration",
-    "Network Configuration",
-    "Access Control",
-    "Monitoring Setup"
+    "Security Configuration as Code",
+    "Infrastructure Analysis/Monitoring",
+    "General Infrastructure Tooling QA"
   ],
   "aws_services": [
     "VPC",
