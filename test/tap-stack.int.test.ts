@@ -40,7 +40,8 @@ import {
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
-const stackName = `TapStack${environmentSuffix}`;
+// Stack name format matches what LocalStack deployment script creates
+const stackName = `localstack-stack-${environmentSuffix}`;
 
 // Initialize AWS SDK clients
 const ec2Client = new EC2Client({ region });
