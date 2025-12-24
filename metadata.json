@@ -13,18 +13,11 @@
   ],
   "aws_services": [
     "S3",
-    "KMS",
     "IAM",
     "EventBridge",
     "Lambda",
     "CloudWatch"
   ],
   "wave": "P0",
-  "training_quality": 8,
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "rahulpatil118",
-  "dockerS3Location": ""
+  "training_quality": 8
 }
