@@ -26,7 +26,7 @@ import path from "path";
 
 const REGION = process.env.AWS_REGION || "us-east-1"; // template enforces us-east-1
 const baseDir = path.dirname(__filename);
-const flatOutputsPath = path.resolve(baseDir, "..", "..", "cfn-outputs", "flat-outputs.json");
+const flatOutputsPath = path.resolve(baseDir, "..", "cfn-outputs", "flat-outputs.json");
 
 // LocalStack endpoint configuration
 const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes("localhost") || process.env.AWS_ENDPOINT_URL?.includes("4566");

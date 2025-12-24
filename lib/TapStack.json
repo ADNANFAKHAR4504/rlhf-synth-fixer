@@ -1,115 +1,91 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TAP Stack - Task Assignment Platform CloudFormation Template",
+    "Description": "Production-ready app environment in AWS (us-east-1). Uses the specified existing VPC, creates a dedicated secondary CIDR and subnet (no IAM roles), launches an EC2 instance on the latest Amazon Linux 2 AMI (via SSM), allows only SSH/HTTPS inbound, and provisions an S3 bucket with server-side encryption. All resources tagged Environment: Production.\n",
     "Metadata": {
-        "AWS::CloudFormation::Interface": {
-            "ParameterGroups": [
+        "ProvidedData": {
+            "ExistingVpcIdLiteral": "vpc-771f647e30a422d4f"
+        }
+    },
+    "Rules": {
+        "MustBeUsEast1": {
+            "Assertions": [
                 {
-                    "Label": {
-                        "default": "Environment Configuration"
+                    "Assert": {
+                        "Fn::Equals": [
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            "us-east-1"
+                        ]
                     },
-                    "Parameters": [
-                        "EnvironmentSuffix"
-                    ]
-                },
-                {
-                    "Label": {
-                        "default": "Infrastructure Settings"
-                    },
-                    "Parameters": [
-                        "VpcId",
-                        "SubnetId",
-                        "InstanceType",
-                        "IngressCidrSsh",
-                        "IngressCidrHttps"
-                    ]
+                    "AssertDescription": "This stack must be deployed in us-east-1."
                 }
             ]
         }
     },
     "Parameters": {
-        "EnvironmentSuffix": {
-            "Type": "String",
-            "Default": "dev",
-            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
-            "AllowedPattern": "^[a-zA-Z0-9]+$",
-            "ConstraintDescription": "Must contain only alphanumeric characters"
-        },
         "VpcId": {
             "Type": "AWS::EC2::VPC::Id",
-            "Default": "vpc-12345abcde",
-            "Description": "Existing VPC ID - must be vpc-12345abcde"
-        },
-        "SubnetId": {
-            "Type": "AWS::EC2::Subnet::Id",
-            "Description": "Subnet ID that belongs to vpc-12345abcde"
+            "Description": "Existing VPC ID in us-east-1.",
+            "Default": "vpc-771f647e30a422d4f"
         },
         "InstanceType": {
             "Type": "String",
             "Default": "t3.micro",
-            "Description": "EC2 instance type",
-            "AllowedValues": [
-                "t3.micro",
-                "t3.small",
-                "t3.medium",
-                "t3.large"
-            ]
+            "AllowedPattern": "^[a-z0-9]+\\.[a-z0-9]+$",
+            "Description": "EC2 instance type."
         },
         "IngressCidrSsh": {
             "Type": "String",
             "Default": "0.0.0.0/0",
-            "Description": "CIDR block for SSH access"
+            "AllowedPattern": "^((25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1?\\d?\\d)\\/(3[0-2]|[12]?\\d)$",
+            "Description": "IPv4 CIDR for SSH ingress (port 22)."
         },
         "IngressCidrHttps": {
             "Type": "String",
             "Default": "0.0.0.0/0",
-            "Description": "CIDR block for HTTPS access"
+            "AllowedPattern": "^((25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1?\\d?\\d)\\/(3[0-2]|[12]?\\d)$",
+            "Description": "IPv4 CIDR for HTTPS ingress (port 443)."
         },
         "LatestAmiId": {
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
             "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
-            "Description": "Latest Amazon Linux 2 AMI ID"
+            "Description": "SSM public parameter for latest Amazon Linux 2 AMI (us-east-1)."
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Optional pipeline suffix (not used by resources)."
+        },
+        "SecondaryVpcCidr": {
+            "Type": "String",
+            "Default": "172.31.0.0/16",
+            "AllowedPattern": "^((25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1?\\d?\\d)\\/(3[0-2]|[12]?\\d)$",
+            "Description": "Secondary IPv4 CIDR to associate to the VPC for this stack."
+        },
+        "AppSubnetCidr": {
+            "Type": "String",
+            "Default": "172.31.96.0/20",
+            "AllowedPattern": "^((25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1?\\d?\\d)\\/(3[0-2]|[12]?\\d)$",
+            "Description": "Subnet CIDR carved from SecondaryVpcCidr."
         }
     },
     "Resources": {
-        "TurnAroundPromptTable": {
-            "Type": "AWS::DynamoDB::Table",
-            "DeletionPolicy": "Delete",
-            "UpdateReplacePolicy": "Delete",
+        "AppVpcCidrAssociation": {
+            "Type": "AWS::EC2::VPCCidrBlock",
             "Properties": {
-                "TableName": {
-                    "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+                "VpcId": {
+                    "Ref": "VpcId"
                 },
-                "BillingMode": "PAY_PER_REQUEST",
-                "DeletionProtectionEnabled": false,
-                "AttributeDefinitions": [
-                    {
-                        "AttributeName": "id",
-                        "AttributeType": "S"
-                    }
-                ],
-                "KeySchema": [
-                    {
-                        "AttributeName": "id",
-                        "KeyType": "HASH"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
+                "CidrBlock": {
+                    "Ref": "SecondaryVpcCidr"
+                }
             }
         },
-        "ApplicationSecurityGroup": {
+        "AppSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
-            "DeletionPolicy": "Delete",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "ApplicationSecurityGroup${EnvironmentSuffix}"
-                },
-                "GroupDescription": "Security group allowing SSH and HTTPS traffic only",
+                "GroupDescription": "Allow SSH (22) and HTTPS (443) only",
                 "VpcId": {
                     "Ref": "VpcId"
                 },
@@ -120,8 +96,7 @@
                         "ToPort": 22,
                         "CidrIp": {
                             "Ref": "IngressCidrSsh"
-                        },
-                        "Description": "SSH access"
+                        }
                     },
                     {
                         "IpProtocol": "tcp",
@@ -129,70 +104,45 @@
                         "ToPort": 443,
                         "CidrIp": {
                             "Ref": "IngressCidrHttps"
-                        },
-                        "Description": "HTTPS access"
+                        }
                     }
                 ],
                 "SecurityGroupEgress": [
                     {
                         "IpProtocol": -1,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "All outbound traffic"
+                        "CidrIp": "0.0.0.0/0"
                     }
                 ],
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": "Production"
-                    },
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "ApplicationSecurityGroup${EnvironmentSuffix}"
-                        }
                     }
                 ]
             }
         },
-        "ApplicationInstance": {
-            "Type": "AWS::EC2::Instance",
-            "DeletionPolicy": "Delete",
+        "AppSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "DependsOn": "AppVpcCidrAssociation",
             "Properties": {
-                "ImageId": {
-                    "Ref": "LatestAmiId"
+                "VpcId": {
+                    "Ref": "VpcId"
                 },
-                "InstanceType": {
-                    "Ref": "InstanceType"
+                "CidrBlock": {
+                    "Ref": "AppSubnetCidr"
                 },
-                "SubnetId": {
-                    "Ref": "SubnetId"
-                },
-                "SecurityGroupIds": [
-                    {
-                        "Ref": "ApplicationSecurityGroup"
-                    }
-                ],
+                "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": "Production"
-                    },
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "ApplicationInstance${EnvironmentSuffix}"
-                        }
                     }
                 ]
             }
         },
-        "ApplicationBucket": {
+        "AppBucket": {
             "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Delete",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "application-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
-                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
@@ -202,114 +152,78 @@
                         }
                     ]
                 },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": "Production"
-                    },
+                    }
+                ]
+            }
+        },
+        "AppInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SubnetId": {
+                    "Ref": "AppSubnet"
+                },
+                "SecurityGroupIds": [
                     {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "ApplicationBucket${EnvironmentSuffix}"
-                        }
+                        "Ref": "AppSecurityGroup"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
                     }
                 ]
             }
         }
     },
     "Outputs": {
-        "TurnAroundPromptTableName": {
-            "Description": "Name of the DynamoDB table",
-            "Value": {
-                "Ref": "TurnAroundPromptTable"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
-                }
-            }
-        },
-        "TurnAroundPromptTableArn": {
-            "Description": "ARN of the DynamoDB table",
-            "Value": {
-                "Fn::GetAtt": [
-                    "TurnAroundPromptTable",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
-                }
-            }
-        },
         "SecurityGroupId": {
-            "Description": "ID of the created security group",
+            "Description": "ID of the security group allowing SSH/HTTPS.",
             "Value": {
-                "Ref": "ApplicationSecurityGroup"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-SecurityGroupId"
-                }
+                "Ref": "AppSecurityGroup"
             }
         },
         "InstanceId": {
-            "Description": "ID of the created EC2 instance",
+            "Description": "ID of the EC2 instance.",
             "Value": {
-                "Ref": "ApplicationInstance"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-InstanceId"
-                }
+                "Ref": "AppInstance"
             }
         },
         "InstancePublicIp": {
-            "Description": "Public IP address of the EC2 instance",
+            "Description": "Public IPv4 of the EC2 instance (if assigned).",
             "Value": {
                 "Fn::GetAtt": [
-                    "ApplicationInstance",
+                    "AppInstance",
                     "PublicIp"
                 ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-InstancePublicIp"
-                }
             }
         },
         "BucketName": {
-            "Description": "Name of the created S3 bucket",
+            "Description": "Name of the S3 bucket with SSE enabled.",
             "Value": {
-                "Ref": "ApplicationBucket"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-BucketName"
-                }
+                "Ref": "AppBucket"
             }
         },
-        "StackName": {
-            "Description": "Name of this CloudFormation stack",
-            "Value": {
-                "Ref": "AWS::StackName"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-StackName"
-                }
-            }
-        },
-        "EnvironmentSuffix": {
-            "Description": "Environment suffix used for this deployment",
+        "EnvironmentSuffixEcho": {
+            "Description": "Echo of the pipeline-provided EnvironmentSuffix parameter.",
             "Value": {
                 "Ref": "EnvironmentSuffix"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
-                }
             }
         }
     }
