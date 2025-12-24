@@ -169,7 +169,7 @@ describe('TapStack CloudFormation Template', () => {
       const bucket = template.Resources.MyAppS3AccessLogsBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.DeletionPolicy).toBe('Delete');
-      expect(bucket.UpdateReplacePolicy).toBe('Retain');
+      expect(bucket.UpdateReplacePolicy).toBe('Delete'); // LocalStack testing - easy cleanup
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
       expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
     });
@@ -179,7 +179,7 @@ describe('TapStack CloudFormation Template', () => {
       const bucket = template.Resources.MyAppS3Bucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.DeletionPolicy).toBe('Delete');
-      expect(bucket.UpdateReplacePolicy).toBe('Retain');
+      expect(bucket.UpdateReplacePolicy).toBe('Delete'); // LocalStack testing - easy cleanup
       expect(bucket.Properties.LoggingConfiguration.DestinationBucketName).toEqual({ Ref: 'MyAppS3AccessLogsBucket' });
     });
 
