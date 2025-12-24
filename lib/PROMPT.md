@@ -1,13 +1,19 @@
 You are an expert AWS CloudFormation engineer.
-Your task is to write a single, production-ready CloudFormation template in YAML that configures a secure and compliant web application environment according to the following strict requirements.
+Your task is to write a single, production-ready CloudFormation template in YAML that configures a secure and compliant web application environment.
 
 Language & Platform
 
 Language: YAML
 
-Platform: AWS CloudFormation (no SAM, no CDK)
+Platform: AWS CloudFormation - no SAM, no CDK
 
 Reference: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html
+
+Service Architecture & Data Flow
+
+The web application infrastructure connects services in this pattern:
+
+API Gateway routes incoming requests to Lambda functions deployed in private VPC subnets. Lambda functions query the RDS database for application data and send processing results to SNS topics for downstream notification. S3 buckets store application assets with KMS encryption, while CloudWatch logs capture API Gateway access logs and Lambda execution logs for monitoring. EC2 instances in an Auto Scaling Group handle additional compute workloads and scale based on CPU utilization alarms. AWS WAF protects the API Gateway endpoints with custom security rules. CloudTrail monitors API calls and triggers SNS notifications on potential policy violations. All sensitive configuration values are retrieved from SSM Parameter Store.
 
 Environment & Constraints
 
@@ -15,65 +21,37 @@ All resources must deploy to us-east-1.
 
 IAM Roles must follow the principle of least privilege.
 
-All resources must be tagged with:
+All resources must be tagged with Environment and ProjectName.
 
-Environment
+All S3 buckets must enable server-side encryption with KMS managed keys and versioning.
 
-ProjectName
+API Gateway must enable access logging and execution logging to a CloudWatch log group.
 
-All S3 buckets:
+Lambda functions must run inside a VPC and use environment variables for configuration.
 
-Enable server-side encryption with KMS managed keys.
+SNS topic must integrate with CloudTrail to send notifications on potential policy violations.
 
-Enable versioning.
+RDS instances must not be publicly accessible.
 
-API Gateway:
+Security groups must allow inbound access only from specific IP ranges.
 
-Enable access logging and execution logging to a CloudWatch log group.
+Sensitive values must be stored in SSM Parameter Store.
 
-Lambda functions:
+AWS WAF must include custom rules to protect against common threats.
 
-Must run inside a VPC.
-
-Must use environment variables for configuration.
-
-SNS topic:
-
-Integrate with CloudTrail to send notifications on potential policy violations.
-
-RDS instances:
-
-Must not be publicly accessible.
-
-Security groups:
-
-Allow inbound access only from specific IP ranges (parameterized).
-
-Sensitive values:
-
-Store in SSM Parameter Store.
-
-AWS WAF:
-
-Include custom rules to protect against common threats.
-
-EC2 instances:
-
-Include an auto-scaling group for high availability.
-
-Attach CloudWatch alarms for high CPU utilization.
+EC2 instances must include an auto-scaling group for high availability with CloudWatch alarms for high CPU utilization.
 
 Resources to Include
 
-API Gateway (with logging)
+API Gateway with logging enabled
 
-Multiple Lambda functions (in VPC, with env variables, least-privilege IAM role)
+Multiple Lambda functions deployed in VPC with environment variables and least-privilege IAM roles
 
-RDS instance (private)
+RDS instance in private subnet
 
-SNS topic (CloudTrail integrated)
+SNS topic integrated with CloudTrail
 
-Multiple S3 buckets (encrypted with KMS, versioning enabled, secure transport enforced)
+Multiple S3 buckets with KMS encryption, versioning, and secure transport enforced
 
 Parameter Store parameters for sensitive values
 
@@ -87,19 +65,9 @@ Security groups with restricted CIDR ranges
 
 Additional Implementation Notes
 
-Use Parameters for:
+Use Parameters for Environment, ProjectName, Allowed IP ranges, Sensitive parameter names, and KMS key ARN.
 
-Environment
-
-ProjectName
-
-Allowed IP ranges
-
-Sensitive parameter names (SSM)
-
-KMS key ARN
-
-Apply Conditions where appropriate (e.g., optional resources or encryption methods).
+Apply Conditions where appropriate for optional resources or encryption methods.
 
 Ensure least-privilege IAM policies for Lambda and EC2 roles.
 
