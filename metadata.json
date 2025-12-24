@@ -6,9 +6,9 @@
   "po_id": "ls-291422",
   "team": "synth-2",
   "startedAt": "2025-08-06T14:26:00.585Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
-  "subject_labels": ["General Infrastructure Tooling QA"],
+  "subject_labels": ["Cloud Environment Setup"],
   "aws_services": ["CloudFormation", "VPC", "EC2", "RDS", "ELB", "S3", "IAM", "SNS", "CloudWatch", "AutoScaling"],
   "wave": "P1",
   "migrated_from": {
