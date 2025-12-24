@@ -1,0 +1,23 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912717",
+  "team": "synth",
+  "startedAt": "2025-11-26T00:00:00Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "RDS Aurora",
+    "Lambda",
+    "Route 53",
+    "KMS",
+    "CloudWatch",
+    "VPC"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}

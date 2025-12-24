@@ -1,0 +1,457 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Aurora MySQL Global Database - Secondary Cluster (eu-west-1)",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming uniqueness",
+      "Default": "prod"
+    },
+    "GlobalClusterIdentifier": {
+      "Type": "String",
+      "Description": "Global Cluster Identifier from primary region"
+    },
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id",
+      "Description": "VPC ID for the Aurora cluster in eu-west-1"
+    },
+    "PrivateSubnetIds": {
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Description": "List of at least 3 private subnet IDs spanning different AZs"
+    }
+  },
+  "Resources": {
+    "SecondaryKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for Aurora encryption secondary - ${EnvironmentSuffix}"
+        },
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow RDS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "rds.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      }
+    },
+    "SecondaryKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/aurora-secondary-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "SecondaryKMSKey"
+        }
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "aurora-subnet-group-secondary-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for secondary Aurora cluster spanning 3+ AZs",
+        "SubnetIds": {
+          "Ref": "PrivateSubnetIds"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-subnet-group-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBClusterParameterGroup": {
+      "Type": "AWS::RDS::DBClusterParameterGroup",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "Aurora MySQL cluster parameter group secondary - ${EnvironmentSuffix}"
+        },
+        "Family": "aurora-mysql5.7",
+        "Parameters": {
+          "binlog_format": "OFF"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-cluster-params-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBParameterGroup": {
+      "Type": "AWS::RDS::DBParameterGroup",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "Aurora MySQL instance parameter group secondary - ${EnvironmentSuffix}"
+        },
+        "Family": "aurora-mysql5.7",
+        "Parameters": {
+          "slow_query_log": "1",
+          "long_query_time": "2"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-instance-params-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "aurora-sg-secondary-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for secondary Aurora cluster",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": "10.0.0.0/8",
+            "Description": "MySQL access from VPC"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-sg-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryDBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Fn::Sub": "aurora-secondary-cluster-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-mysql",
+        "EngineVersion": "5.7.mysql_aurora.2.11.2",
+        "GlobalClusterIdentifier": {
+          "Ref": "GlobalClusterIdentifier"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "DBClusterParameterGroupName": {
+          "Ref": "DBClusterParameterGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DBSecurityGroup"
+          }
+        ],
+        "StorageEncrypted": true,
+        "KmsKeyId": {
+          "Ref": "SecondaryKMSKey"
+        },
+        "EnableCloudwatchLogsExports": [
+          "slowquery",
+          "error"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-secondary-cluster-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryDBInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-secondary-instance-1-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "SecondaryDBCluster"
+        },
+        "DBInstanceClass": "db.r5.large",
+        "Engine": "aurora-mysql",
+        "DBParameterGroupName": {
+          "Ref": "DBParameterGroup"
+        },
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-secondary-instance-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryDBInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-secondary-instance-2-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "SecondaryDBCluster"
+        },
+        "DBInstanceClass": "db.r5.large",
+        "Engine": "aurora-mysql",
+        "DBParameterGroupName": {
+          "Ref": "DBParameterGroup"
+        },
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-secondary-instance-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryDBInstance3": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-secondary-instance-3-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "SecondaryDBCluster"
+        },
+        "DBInstanceClass": "db.r5.large",
+        "Engine": "aurora-mysql",
+        "DBParameterGroupName": {
+          "Ref": "DBParameterGroup"
+        },
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-secondary-instance-3-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SlowQueryLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/rds/cluster/aurora-secondary-cluster-${EnvironmentSuffix}/slowquery"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "ErrorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/rds/cluster/aurora-secondary-cluster-${EnvironmentSuffix}/error"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "aurora-health-check-role-secondary-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "RDSDescribeAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "rds:DescribeDBClusters",
+                    "rds:DescribeDBInstances"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "HealthCheckFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "aurora-health-check-secondary-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 5,
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "DBSecurityGroup"
+            }
+          ],
+          "SubnetIds": {
+            "Ref": "PrivateSubnetIds"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "CLUSTER_ENDPOINT": {
+              "Fn::GetAtt": [
+                "SecondaryDBCluster",
+                "Endpoint.Address"
+              ]
+            },
+            "CLUSTER_IDENTIFIER": {
+              "Ref": "SecondaryDBCluster"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\nrds_client = boto3.client('rds')\n\ndef lambda_handler(event, context):\n    cluster_id = os.environ['CLUSTER_IDENTIFIER']\n    \n    try:\n        response = rds_client.describe_db_clusters(\n            DBClusterIdentifier=cluster_id\n        )\n        \n        if response['DBClusters']:\n            cluster = response['DBClusters'][0]\n            status = cluster['Status']\n            \n            health_data = {\n                'timestamp': datetime.utcnow().isoformat(),\n                'cluster_id': cluster_id,\n                'status': status,\n                'endpoint': cluster.get('Endpoint', 'N/A'),\n                'reader_endpoint': cluster.get('ReaderEndpoint', 'N/A'),\n                'healthy': status == 'available'\n            }\n            \n            return {\n                'statusCode': 200 if health_data['healthy'] else 503,\n                'body': json.dumps(health_data)\n            }\n        else:\n            return {\n                'statusCode': 404,\n                'body': json.dumps({'error': 'Cluster not found'})\n            }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)})\n        }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-health-check-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "HealthCheckScheduleRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "aurora-health-check-schedule-secondary-${EnvironmentSuffix}"
+        },
+        "Description": "Trigger health check every 30 seconds",
+        "ScheduleExpression": "rate(2 minutes)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "HealthCheckFunction",
+                "Arn"
+              ]
+            },
+            "Id": "HealthCheckTarget"
+          }
+        ]
+      }
+    },
+    "HealthCheckPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "HealthCheckFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "HealthCheckScheduleRule",
+            "Arn"
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "SecondaryClusterEndpoint": {
+      "Description": "Secondary cluster endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "SecondaryDBCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "SecondaryClusterEndpoint-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "SecondaryClusterReaderEndpoint": {
+      "Description": "Secondary cluster reader endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "SecondaryDBCluster",
+          "ReadEndpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "SecondaryClusterReaderEndpoint-${EnvironmentSuffix}"
+        }
+      }
+    }
+  }
+}
