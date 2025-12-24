@@ -11,7 +11,7 @@ You are an expert AWS Solutions Architect. Your task is to generate a comprehens
 
 2.  **Multi-Environment Configuration:**
     * Use the `Parameters` section to accept an `EnvironmentName` parameter with allowed values of `dev`, `staging`, and `prod`. Also, accept an `ArtifactBucketName` parameter to specify the bucket for Lambda code.
-    * Create a `Mappings` section to define environment-specific constant values. The `EnvironmentName` parameter should be the primary key for the map. Use this map to set properties like the Lambda function's memory size and a prefix for resource names (e.g., `my-app-dev-lambda`).
+    * Create a `Mappings` section to define environment-specific constant values. The `EnvironmentName` parameter should be the primary key for the map. Use this map to set properties like the Lambda function's memory size and a prefix for resource names such as `my-app-dev-lambda`.
 
 3.  **Validation and Integrity:**
     * Implement a `Rules` section to perform automated validation on the `Parameters` before deployment. Specifically, create a rule to ensure that the `EnvironmentName` parameter's value is one of the allowed options.
