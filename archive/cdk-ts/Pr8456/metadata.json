@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr645",
+  "team": "synth-2",
+  "startedAt": "2025-08-12T10:20:55+01:00",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "s3",
+    "kms",
+    "vpc",
+    "rds",
+    "cloudtrail",
+    "elbv2",
+    "guardduty"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
