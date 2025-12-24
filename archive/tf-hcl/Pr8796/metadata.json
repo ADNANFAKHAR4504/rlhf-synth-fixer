@@ -18,5 +18,11 @@
   "po_id": "101912685",
   "provider": "localstack",
   "wave": "P0",
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
