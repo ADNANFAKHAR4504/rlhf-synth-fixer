@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "LS-291457",
+  "team": "synth-2",
+  "startedAt": "2025-12-24T00:00:00.000Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "Config",
+    "ALB",
+    "Auto Scaling"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291457",
+    "pr": "Pr426"
+  }
+}
