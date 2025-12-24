@@ -6,14 +6,9 @@
   "po_id": "trainr912",
   "team": "synth-2",
   "startedAt": "2025-08-20T12:59:17+00:00",
-  "subtask": "Security and Compliance Implementation",
+  "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Security Configuration",
-    "Access Control",
-    "Network Configuration",
-    "Monitoring Setup",
-    "Performance Optimization"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "AWS::KMS",
