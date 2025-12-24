@@ -857,7 +857,7 @@ Resources:
       AutoScalingGroupName: !Sub '${EnvironmentName}-ASG'
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
-        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
