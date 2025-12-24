@@ -14,9 +14,7 @@
   "aws_services": [],
   "wave": "P1",
   "migrated_from": {
-    "original_pr_id": "Pr1055",
-    "original_po_id": "291639",
-    "original_team": "3",
-    "migration_date": "2025-12-24"
+    "po_id": "291639",
+    "pr": "Pr1055"
   }
 }
