@@ -424,6 +424,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-VPCId'
 
+  SecurityGroup:
+    Description: Lambda Security Group ID
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroup'
+
   APIEndpoint:
     Description: API Gateway Endpoint
     Value: !Sub 'https://${PaymentAPI}.execute-api.${AWS::Region}.amazonaws.com/prod'
