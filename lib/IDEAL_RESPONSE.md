@@ -266,7 +266,6 @@ terraform validate
 terraform plan -out=us-west-2.tfplan \
   -var="environment_suffix=prod-usw2" \
   -var="aws_region=us-west-2" \
-  -var="db_password="${DB_PASSWORD}""
 
 # Review plan output
 terraform show us-west-2.tfplan

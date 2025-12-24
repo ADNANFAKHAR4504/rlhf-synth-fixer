@@ -858,7 +858,6 @@ app_instance_count = 2
 db_instance_class = "db.t3.small"
 db_name = "appdb"
 db_username = "dbadmin"
-db_password = "${DB_PASSWORD}"
 enable_nat_gateway = false
 EOF
 
@@ -1133,7 +1132,6 @@ terraform workspace select us-west-2
 # Set variables
 export TF_VAR_environment_suffix="prod-usw2"
 export TF_VAR_aws_region="us-west-2"
-export TF_VAR_db_password="${DB_PASSWORD}"
 
 # Plan deployment
 terraform plan -out=us-west-2.tfplan

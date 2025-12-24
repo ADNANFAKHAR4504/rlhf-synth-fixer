@@ -137,7 +137,6 @@ app_instance_count = 2
 db_instance_class = "db.t3.small"
 db_name = "appdb"
 db_username = "dbadmin"
-db_password = "${DB_PASSWORD}"
 enable_nat_gateway = false
 EOF
 
