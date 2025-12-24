@@ -111,7 +111,9 @@ export class TapStack extends cdk.Stack {
     s3Bucket.grantReadWrite(ec2Role);
 
     // Create S3 Access Point with ABAC tagging support (conditional for LocalStack)
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('4566');
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
     let s3AccessPoint: s3.CfnAccessPoint | undefined;
 
     if (!isLocalStack) {
