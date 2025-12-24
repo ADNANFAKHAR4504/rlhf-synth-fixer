@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudFormation Template to:
+    - Create a KMS Key
+    - Encrypt all S3 Buckets with the KMS Key
+    - Store a password securely in AWS Secrets Manager
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
+Resources:
+
+  ### 1. KMS Key for S3 encryption ###
+  S3KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'Key used to encrypt S3 buckets (${EnvironmentSuffix})'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowRootAccountFullAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+
+          - Sid: AllowAccountToUseKey
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:PutKeyPolicy
+              - kms:GetKeyPolicy
+              - kms:List*
+            Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub 'S3KMSKey-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+
+  S3KMSAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/s3-bucket-encryption-${EnvironmentSuffix}'
+      TargetKeyId: !Ref S3KMSKey
+
+  ### 2. Example S3 Bucket Encrypted with KMS ###
+  MyEncryptedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3KMSKey
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyEncryptedBucket-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  #### 3. Secret in AWS Secrets Manager ###
+  MyAppSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'MyAppPassword-${EnvironmentSuffix}'
+      Description: !Sub 'Password for my application (${EnvironmentSuffix})'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        ExcludeCharacters: '"@/''\'
+      Tags:
+        - Key: Name
+          Value: !Sub 'MyAppSecret-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+Outputs:
+
+  BucketName:
+    Description: Name of the encrypted S3 bucket
+    Value: !Ref MyEncryptedBucket
+
+  SecretArn:
+    Description: ARN of the stored secret
+    Value: !Ref MyAppSecret
+
+  KMSKeyArn:
+    Description: ARN of the KMS key used for encryption
+    Value: !GetAtt S3KMSKey.Arn
