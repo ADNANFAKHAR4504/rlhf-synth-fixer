@@ -30,11 +30,6 @@
       "Default": "",
       "AllowedPattern": "^$|^[a-z0-9][a-z0-9-]*[a-z0-9]$",
       "ConstraintDescription": "Must be lowercase letters, numbers, and hyphens only"
-    },
-    "LatestAmiId": {
-      "Type": "String",
-      "Description": "Latest Amazon Linux 2 AMI ID",
-      "Default": "ami-12345678"
     }
   },
   "Conditions": {

@@ -32,7 +32,7 @@
             "ConstraintDescription": "Must be lowercase letters, numbers, and hyphens only"
         },
         "LatestAmiId": {
-            "Type": "String",
+            "Type": "AWS::EC2::Image::Id",
             "Description": "Latest Amazon Linux 2 AMI ID (LocalStack uses a dummy AMI)",
             "Default": "ami-03cf127a"
         }
