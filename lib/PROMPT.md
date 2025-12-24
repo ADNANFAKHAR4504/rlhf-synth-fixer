@@ -1,89 +1,89 @@
-You are an expert in AWS serverless infrastructure using Pulumi with Python. Please generate a Pulumi Python program (**main**.py) that deploys the following architecture to us-east-1 using best practices for security, idempotency, observability, and scalability.
+Need a serverless infrastructure on AWS using Pulumi with Python. Should deploy to us-east-1 with production-ready security and observability.
 
 Infrastructure Requirements
-Build a secure, scalable serverless infrastructure on AWS with these specifications:
 
-1. Lambda Functions (Python Runtime)
-   Define AWS Lambda functions using the Python 3.9 runtime.
+Build a secure, scalable serverless setup with these components:
 
-Ensure they are idempotent (safe to invoke multiple times without side effects).
+1. Lambda Functions - Python Runtime
+   Use Python 3.9 runtime for AWS Lambda.
 
-Trigger functions on S3 bucket ObjectCreated:\* events.
+   Make them idempotent - safe to invoke multiple times without side effects.
 
-Add retry logic with exponential backoff (3 retries, exponential strategy).
+   Trigger on S3 bucket ObjectCreated:* events.
 
-Set timeout ≤ 5 seconds and memory ≤ 128MB to optimize for <300ms average execution time.
+   Add retry logic with exponential backoff - 3 retries, exponential strategy.
 
-Log all invocations and failures to CloudWatch Logs.
+   Set timeout at 5 seconds or less and memory at 128MB or less to optimize for under 300ms average execution time.
 
-2. API Gateway (REST API)
-   Use API Gateway v2 (REST) to expose Lambda functions via RESTful endpoints.
+   Log all invocations and failures to CloudWatch Logs.
 
-Route HTTP methods (e.g., GET, POST) to the corresponding Lambda functions.
+2. API Gateway REST API
+   Use API Gateway v2 REST to expose Lambda functions via RESTful endpoints.
 
-Enable access logging and request tracing.
+   Route HTTP methods like GET and POST to the corresponding Lambda functions.
 
-3.  IAM Roles & Policies
-    Create least-privilege IAM roles for:
+   Enable access logging and request tracing.
 
-Lambda execution (with permissions to read from S3, write to CloudWatch Logs).
+3. IAM Roles and Policies
+   Create least-privilege IAM roles for:
 
-Accessing AWS Secrets Manager for environment variables.
+   Lambda execution with permissions to read from S3 and write to CloudWatch Logs.
 
-Attach policies inline or managed where appropriate.
+   Accessing AWS Secrets Manager for environment variables.
 
-Use Pulumi's IAM constructs to manage trust and permissions.
+   Attach policies inline or managed where appropriate.
+
+   Use Pulumi's IAM constructs to manage trust and permissions.
 
 4. S3 Buckets
    Create at least one S3 bucket for:
 
-File uploads (trigger Lambda on object creation).
+   File uploads that trigger Lambda on object creation.
 
-Server-side encryption with SSE-S3 or SSE-KMS.
+   Server-side encryption with SSE-S3 or SSE-KMS.
 
-Deny public access using bucket policies.
+   Deny public access using bucket policies.
 
-Enable versioning (optional) for compliance.
+   Enable versioning for compliance if needed.
 
-5.  AWS Secrets Manager
-    Create a secret for storing sensitive config (e.g., API keys or DB credentials).
+5. AWS Secrets Manager
+   Create a secret for storing sensitive config like API keys or DB credentials.
 
-Ensure the Lambda function can access this secret securely at runtime.
+   Ensure the Lambda function can access this secret securely at runtime.
 
-Enable encryption-at-rest using AWS-managed KMS.
+   Enable encryption-at-rest using AWS-managed KMS.
 
-6.  CloudWatch Monitoring
-    Enable detailed logging for all Lambda functions.
+6. CloudWatch Monitoring
+   Enable detailed logging for all Lambda functions.
 
-Create CloudWatch Alarms:
+   Create CloudWatch Alarms:
 
-Monitor failed invocations (using Errors metric).
+   Monitor failed invocations using Errors metric.
 
-Set up threshold-based alerting (e.g., > 1 failure in 5 mins).
+   Set up threshold-based alerting - more than 1 failure in 5 mins.
 
-Optionally integrate with SNS/email for notifications.
+   Optionally integrate with SNS or email for notifications.
 
 Implementation Constraints
+
 Use Pulumi with Python.
 
-All infrastructure should be defined in a single Python script (**main**.py).
+All infrastructure should be defined in a single Python script - main.py.
 
 Target region: us-east-1.
 
-Avoid hardcoding secrets — use Pulumi Config or AWS Secrets Manager.
+Don't hardcode secrets - use Pulumi Config or AWS Secrets Manager.
 
 Clearly comment each section of code for clarity.
 
 Ensure the code:
-
-Synthesizes and deploys successfully (pulumi up).
-
-Follows Pulumi and AWS best practices.
-
-Passes basic functional tests for Lambda + API Gateway + S3 triggers.
+- Synthesizes and deploys successfully with pulumi up
+- Follows Pulumi and AWS best practices
+- Passes basic functional tests for Lambda + API Gateway + S3 triggers
 
 Expected Output
-A complete Pulumi Python script (**main**.py) that:
+
+A complete Pulumi Python script - main.py - that:
 
 Deploys the described architecture end-to-end.
 
