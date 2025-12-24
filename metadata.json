@@ -21,6 +21,7 @@
     "CloudFormation",
     "CodeCommit"
   ],
+  
   "provider": "localstack",
   "wave": "P1"
 }
