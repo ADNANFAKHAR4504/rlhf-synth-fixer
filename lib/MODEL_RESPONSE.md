@@ -722,7 +722,7 @@ Resources:
     Properties:
       BackupPlan:
         BackupPlanName: !Sub '${EnvironmentName}-meridian-backup-plan'
-        BackupPlanRule:
+        Rules:
           - RuleName: DailyBackups
             TargetBackupVault: !Ref BackupVault
             ScheduleExpression: 'cron(0 2 * * ? *)'
