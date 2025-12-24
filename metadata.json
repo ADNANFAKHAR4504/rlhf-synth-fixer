@@ -6,11 +6,15 @@
   "po_id": "LS-291350",
   "team": "synth-2",
   "startedAt": "2025-08-05T09:57:55.241Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Security Configuration as Code"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "EC2",
+    "IAM",
+    "KMS"
+  ],
   "wave": "P1"
 }
