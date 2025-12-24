@@ -10,7 +10,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "background": "Deploy a brand-new, production-grade ECS Fargate microservices stack in us-east-1 via a single TapStack.yml. Build a three-AZ VPC with public subnets for an internet-facing ALB and private subnets for services, plus NAT gateways for egress. Create an ECS cluster (container insights + ECS Exec) running three services—payment, fraud, reporting—each with its own task definition, security group, target group, autoscaling (CPU target 70%), and 7-day CloudWatch log group. Configure ALB path-based routing (/payment/*, /fraud/*, /reporting/*), optional HTTPS via ACM, and Cloud Map private DNS for inter-service discovery. Use private ECR repositories for images, least-privilege IAM roles, regex-validated EnvironmentSuffix naming, and comprehensive outputs for ALB, cluster, service discovery, target groups, and subnets.",
   "aws_services": [
     "Vpc",
     "InternetGateway",
