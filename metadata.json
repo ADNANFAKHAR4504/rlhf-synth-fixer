@@ -22,5 +22,6 @@
     "Elastic IP"
   ],
   "provider": "localstack",
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 9
 }
