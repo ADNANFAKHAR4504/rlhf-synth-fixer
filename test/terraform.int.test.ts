@@ -1,6 +1,7 @@
 // tests/terraform.int.test.ts
-// Live verification using Terraform structured outputs (cfn-outputs/all-outputs.json)
+// Live verification using Terraform structured outputs
 // Supports both LocalStack (ALB disabled) and real AWS (ALB enabled) deployments.
+// Looks for outputs in: cfn-outputs/flat-outputs.json, cfn-outputs/all-outputs.json, cdk-outputs/flat-outputs.json
 
 import * as fs from "fs";
 import * as path from "path";
@@ -37,11 +38,21 @@ type StructuredOutputs = {
 };
 
 function readStructuredOutputs(): StructuredOutputs {
-  const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
-  if (!fs.existsSync(p)) {
-    throw new Error(`Outputs file not found at ${p}`);
+  // Try multiple possible output file locations
+  const possiblePaths = [
+    "cfn-outputs/flat-outputs.json",
+    "cfn-outputs/all-outputs.json",
+    "cdk-outputs/flat-outputs.json",
+  ];
+
+  for (const relPath of possiblePaths) {
+    const p = path.resolve(process.cwd(), relPath);
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, "utf8")) as StructuredOutputs;
+    }
   }
-  return JSON.parse(fs.readFileSync(p, "utf8")) as StructuredOutputs;
+
+  throw new Error(`Outputs file not found. Tried: ${possiblePaths.join(", ")}`);
 }
 
 // Initialize AWS clients for LocalStack
