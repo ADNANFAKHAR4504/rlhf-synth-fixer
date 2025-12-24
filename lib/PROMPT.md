@@ -2,7 +2,7 @@
 
 ## The Business Challenge
 
-Imagine you're running a growing small business where paperwork is everything. Every day, your team generates around 500 important documents – invoices, contracts, receipts, reports, and memos. Losing these documents would be catastrophic for your business operations and compliance requirements.
+Imagine you're running a growing small business where paperwork is everything. Every day, your team generates around 500 important documents - invoices, contracts, receipts, reports, and memos. Losing these documents would be catastrophic for your business operations and compliance requirements.
 
 You need a backup solution that:
 
@@ -19,14 +19,14 @@ Think of this like setting up a digital filing cabinet that takes care of itself
 **For Daily Operations:**
 
 - Every night at 2 AM, automatically collect all the day's business documents
-- Encrypt everything before storing it (because security matters!)
+- Encrypt everything before storing it because security matters!
 - Organize files by date so they're easy to find later
 - Keep documents for exactly 30 days, then automatically delete them to save space
 
 **For Peace of Mind:**
 
 - Send alerts if a backup fails so you can fix it quickly
-- Track how long backups take (and warn if they're taking too long)
+- Track how long backups take and warn if they're taking too long
 - Log everything so you have a paper trail of what happened
 - Make sure only authorized systems can access your backup data
 
@@ -34,7 +34,7 @@ Think of this like setting up a digital filing cabinet that takes care of itself
 
 We'll use AWS services because they're reliable, secure, and you only pay for what you use:
 
-**Amazon S3** - Think of this as your digital vault. It's designed to be 99.999999999% durable, which means your files are incredibly safe.
+**Amazon S3** - Think of this as your digital vault. It's designed to be incredibly durable, which means your files are super safe.
 
 **AWS KMS** - This is like having a master key that encrypts all your documents. Even if someone somehow accessed your files, they couldn't read them without the key.
 
@@ -52,11 +52,11 @@ Picture this workflow happening automatically every night:
 
 1. **The Clock Strikes 2 AM** - EventBridge acts like a reliable alarm clock, triggering our backup process at the same time every night when your systems aren't busy.
 
-2. **The Assistant Gets to Work** - Lambda (your automated assistant) wakes up and starts collecting all the documents that were created or modified during the day.
+2. **The Assistant Gets to Work** - Lambda wakes up and starts collecting all the documents that were created or modified during the day.
 
 3. **Everything Gets Locked Away Safely** - Each document is encrypted using your unique KMS key and stored in your S3 vault. It's like putting each document in its own secure lockbox.
 
-4. **Organization Happens Automatically** - Files are organized by date (like `/backups/2025-10-15/documents/`) so you can easily find what you need later.
+4. **Organization Happens Automatically** - Files are organized by date like /backups/2025-10-15/documents/ so you can easily find what you need later.
 
 5. **Old Files Clean Themselves Up** - S3 automatically deletes files older than 30 days, so you never have to worry about running out of space or paying for storage you don't need.
 
@@ -79,21 +79,21 @@ I need you to create an AWS CloudFormation template that brings this vision to l
 
 **Storage Infrastructure:**
 
-- An S3 bucket that's locked down tight (no public access!)
+- An S3 bucket that's locked down tight with no public access
 - KMS encryption for all stored data
 - Automatic deletion of files after 30 days
-- A separate bucket for access logs (good security practice)
+- A separate bucket for access logs as a good security practice
 
 **The Backup Engine:**
 
 - A Python 3.9 Lambda function that processes up to 500 documents daily
 - Smart error handling and retry logic
 - Environment variables for easy configuration
-- Appropriate memory and timeout settings (this needs to handle lots of files!)
+- Appropriate memory and timeout settings since this needs to handle lots of files
 
 **Scheduling & Permissions:**
 
-- EventBridge rule for daily 2 AM triggers (with retry policy)
+- EventBridge rule for daily 2 AM triggers with retry policy
 - IAM roles following the principle of least privilege
 - Permissions only for what the Lambda actually needs to do
 
@@ -106,8 +106,9 @@ I need you to create an AWS CloudFormation template that brings this vision to l
 
 **Flexibility:**
 
-- Parameters for Environment (dev/staging/prod) and bucket naming
+- Parameters for Environment like dev/staging/prod and bucket naming
 - Proper resource tagging for cost tracking and organization
 - Outputs so other systems can reference these resources
 
-Make it production-ready, secure, and cost-optimized. This should be something a small business can deploy confidently and then forget about (until they need their backups!).
+Make it production-ready, secure, and cost-optimized. This should be something a small business can deploy confidently and then forget about until they need their backups!
+
