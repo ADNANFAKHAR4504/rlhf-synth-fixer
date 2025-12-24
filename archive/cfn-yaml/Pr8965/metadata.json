@@ -11,6 +11,17 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["VPC", "EC2", "Auto Scaling"],
-  "wave": "P1"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling"
+  ],
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "abubakarTuring",
+  "dockerS3Location": ""
 }
