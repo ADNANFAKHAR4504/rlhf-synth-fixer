@@ -6,11 +6,17 @@
   "po_id": "LS-291639",
   "team": "synth-2",
   "startedAt": "2025-08-12T18:40:59.057Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Security Configuration as Code"
   ],
   "aws_services": [],
-  "wave": "P1"
+  "wave": "P1",
+  "migrated_from": {
+    "original_pr_id": "Pr1055",
+    "original_po_id": "291639",
+    "original_team": "3",
+    "migration_date": "2025-12-24"
+  }
 }
