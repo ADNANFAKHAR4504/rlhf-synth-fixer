@@ -9,10 +9,8 @@
   "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "VPC and Networking",
-    "Storage Solutions",
-    "Security and Compliance",
-    "Compute Resources"
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "EC2",
