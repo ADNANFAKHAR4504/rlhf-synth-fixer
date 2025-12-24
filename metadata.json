@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291757",
+  "team": "synth-2",
+  "startedAt": "2025-08-20T12:37:46.425Z",
+  "subtask": "Web Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "Auto Scaling Group",
+    "RDS",
+    "KMS",
+    "SSM Parameter Store",
+    "IAM",
+    "CloudWatch",
+    "EBS",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Elastic IP",
+    "EFS",
+    "EventBridge"
+  ],
+  "wave": "P1"
+}
