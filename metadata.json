@@ -11,6 +11,10 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "Lambda",
+    "IAM",
+    "CloudWatch Logs"
+  ],
   "wave": "P1"
 }

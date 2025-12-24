@@ -1,92 +1,37 @@
-Overview
+# Model Failures
 
-This document outlines potential failure points when deploying the CloudFormation template for projectX, which provisions two AWS Lambda functions along with their IAM roles and CloudWatch log groups.
-Potential Failure Scenarios
-1. IAM Role Creation Failures
+## Shared IAM role instead of separate roles
 
-Resource: ProjectXDataProcessorRole, ProjectXResponseHandlerRole
-Causes:
+The prompt said each function should have its own IAM role, but the model created a single LambdaExecutionRole shared by both functions.
 
-    Role name already exists (RoleName must be unique across the account).
+Wrong:
+```yaml
+# Single role for both functions
+LambdaExecutionRole:
+  Type: AWS::IAM::Role
+```
 
-    Insufficient IAM permissions for the deploying user to create roles or attach policies.
+Should be:
+```yaml
+# Separate roles
+DataProcessorRole:
+  Type: AWS::IAM::Role
 
-Symptoms:
+ResponseHandlerRole:
+  Type: AWS::IAM::Role
+```
 
-    CREATE_FAILED status with message like:
-    EntityAlreadyExists: Role with name projectX-dataProcessor-role already exists
+This matters because the prompt specifically asked for "each function should have its own IAM role" for isolation. Sharing roles violates the least-privilege principle mentioned in the requirements.
 
-Resolution:
+## Missing function-specific permissions
 
-    Ensure RoleName values are unique, or remove RoleName property to let CloudFormation auto-generate.
+The single IAM role gives logging permissions for both functions, but doesn't follow least-privilege. Each function's role should only have access to its own log group.
 
-    Check IAM permissions of the deploying user.
+Current policy gives both functions access to both log groups:
+```yaml
+Resource:
+  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectXDataProcessorFunctionName}:*"
+  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectXResponseHandlerFunctionName}:*"
+```
 
-    Delete conflicting IAM roles manually if appropriate.
-
-2. Lambda Function Creation Failures
-
-Resources: ProjectXDataProcessorFunction, ProjectXResponseHandlerFunction
-Causes:
-
-    Referenced IAM Role (!GetAtt ProjectXDataProcessorRole.Arn) not available due to prior failure.
-
-    Incorrect IAM role permissions (missing lambda.amazonaws.com trust relationship).
-
-    Syntax errors in inline Lambda code.
-
-    Unsupported or unavailable runtime (e.g., python3.12 in some regions).
-
-Symptoms:
-
-    CREATE_FAILED on Lambda function resources.
-
-    Message like:
-    InvalidParameterValueException: The role defined for the function cannot be assumed by Lambda.
-
-Resolution:
-
-    Ensure IAM roles are created successfully before Lambda function creation.
-
-    Validate trust policy allows lambda.amazonaws.com.
-
-    Verify runtime support in target region.
-
-    Test Lambda code locally for syntax issues.
-
-3. Log Group Creation Failures
-
-Resources: DataProcessorLogGroup, ResponseHandlerLogGroup
-Causes:
-
-    Log group already exists with different configuration (e.g., different retention).
-
-    Insufficient permissions to create or modify log groups.
-
-Symptoms:
-
-    CREATE_FAILED status on LogGroup resource.
-
-    Message like:
-    ResourceAlreadyExistsException: The specified log group already exists
-
-Resolution:
-
-    Check for existing log groups manually and update or delete if needed.
-
-    Ensure CloudFormation stack has permission to manage logs (e.g., through IAM policies).
-
-4. Output Resolution Failures
-
-Resources: DataProcessorFunctionName, ResponseHandlerFunctionName
-Causes:
-
-    If Lambda function resources fail to create, outputs depending on them will also fail.
-
-Symptoms:
-
-    Stack rollback triggered due to output dependency errors.
-
-Resolution:
-
-    Focus on root-cause analysis of function creation failure, then reattempt deployment.
+Should be scoped per function - dataProcessor role should only access dataProcessor logs.

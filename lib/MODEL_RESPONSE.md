@@ -1,3 +1,7 @@
+Here's the CloudFormation template for the projectX serverless setup.
+
+It creates two Lambda functions (dataProcessor and responseHandler) with a shared IAM role that has logging permissions. Each function gets its own CloudWatch log group with 30-day retention.
+
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
