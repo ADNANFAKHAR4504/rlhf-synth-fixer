@@ -38,6 +38,11 @@ try {
     APIGatewayId: 'jqn7elwr7k',
     WebACLArn:
       'arn:aws:wafv2:us-west-2:***:regional/webacl/cfn-secure-project-pr1008-web-acl/825548c3-45ec-488f-a773-fe8953f49919',
+    SecureProcessorFunctionArn:
+      'arn:aws:lambda:us-west-2:***:function:cfn-secure-project-pr1008-secure-processor',
+    HealthCheckFunctionArn:
+      'arn:aws:lambda:us-west-2:***:function:cfn-secure-project-pr1008-health-check',
+    LambdaSecurityGroupId: 'sg-05b50bdedd813ac1e',
   };
 }
 
@@ -98,6 +103,9 @@ describe('CloudFormation Stack Integration Tests', () => {
         'S3VPCEndpointId',
         'APIGatewayVPCEndpointId',
         'LambdaExecutionRoleArn',
+        'SecureProcessorFunctionArn',
+        'HealthCheckFunctionArn',
+        'LambdaSecurityGroupId',
       ];
 
       requiredOutputs.forEach(output => {
@@ -153,6 +161,16 @@ describe('CloudFormation Stack Integration Tests', () => {
       // Updated regex to properly handle *** in the account ID position
       expect(outputs.LambdaExecutionRoleArn).toMatch(
         /^arn:aws:iam::(\d{12}|\*{3}):role\/.+$/
+      );
+    });
+
+    test('Lambda function ARNs should be valid', () => {
+      // Updated regex to properly handle *** in the account ID position
+      expect(outputs.SecureProcessorFunctionArn).toMatch(
+        /^arn:aws:lambda:[a-z0-9-]+:(\d{12}|\*{3}):function:.+$/
+      );
+      expect(outputs.HealthCheckFunctionArn).toMatch(
+        /^arn:aws:lambda:[a-z0-9-]+:(\d{12}|\*{3}):function:.+$/
       );
     });
 

@@ -479,6 +479,197 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   # ---------------------------------------------------------------------------
+  # LAMBDA FUNCTIONS
+  # Backend functions for API Gateway integration
+  # ---------------------------------------------------------------------------
+
+  # Security Group for Lambda functions in VPC
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Lambda functions in VPC'
+      VpcId: !Ref MainVPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS outbound access for S3 and AWS services'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-lambda-sg'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda function for secure endpoint processing
+  SecureDataProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-${EnvironmentSuffix}-secure-processor'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ApplicationDataBucket
+          LOG_LEVEL: INFO
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import logging
+          from datetime import datetime
+
+          logger = logging.getLogger()
+          logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
+
+          s3 = boto3.client('s3')
+
+          def lambda_handler(event, context):
+              try:
+                  # Log request details
+                  logger.info(f"Processing secure request: {json.dumps(event)}")
+                  
+                  bucket_name = os.environ['S3_BUCKET']
+                  
+                  # Example S3 operation - listing objects
+                  response = s3.list_objects_v2(
+                      Bucket=bucket_name,
+                      MaxKeys=5
+                  )
+                  
+                  object_count = response.get('KeyCount', 0)
+                  
+                  # Prepare response
+                  result = {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'X-Powered-By': 'AWS Lambda'
+                      },
+                      'body': json.dumps({
+                          'message': 'Secure data processing completed',
+                          'timestamp': datetime.utcnow().isoformat(),
+                          'requestId': context.aws_request_id,
+                          's3ObjectCount': object_count,
+                          'bucketName': bucket_name
+                      })
+                  }
+                  
+                  logger.info(f"Request processed successfully: {context.aws_request_id}")
+                  return result
+                  
+              except Exception as e:
+                  logger.error(f"Error processing request: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({
+                          'error': 'Internal server error',
+                          'requestId': context.aws_request_id
+                      })
+                  }
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-secure-processor'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda function for health check endpoint
+  HealthCheckFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-${EnvironmentSuffix}-health-check'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ApplicationDataBucket
+          LOG_LEVEL: INFO
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+
+          s3 = boto3.client('s3')
+
+          def lambda_handler(event, context):
+              try:
+                  bucket_name = os.environ['S3_BUCKET']
+                  
+                  # Simple health check - verify S3 bucket access
+                  s3.head_bucket(Bucket=bucket_name)
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({
+                          'status': 'healthy',
+                          'timestamp': datetime.utcnow().isoformat(),
+                          'version': '1.0.0',
+                          'services': {
+                              's3': 'available',
+                              'lambda': 'available'
+                          }
+                      })
+                  }
+                  
+              except Exception as e:
+                  return {
+                      'statusCode': 503,
+                      'headers': {
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({
+                          'status': 'unhealthy',
+                          'error': str(e),
+                          'timestamp': datetime.utcnow().isoformat()
+                      })
+                  }
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-health-check'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda permissions for API Gateway invocation
+  SecureProcessorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SecureDataProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPI}/*/*/*'
+
+  HealthCheckInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref HealthCheckFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestAPI}/*/*/*'
+
+  # ---------------------------------------------------------------------------
   # AWS WAF WEB ACL
   # Protection against common web exploits (SQL injection, XSS, etc.)
   # ---------------------------------------------------------------------------
@@ -610,25 +801,15 @@ Resources:
       HttpMethod: GET
       AuthorizationType: NONE
       Integration:
-        Type: MOCK
-        IntegrationResponses:
-          - StatusCode: '200'
-            ResponseTemplates:
-              application/json: |
-                {
-                  "message": "Secure API is working",
-                  "timestamp": "$context.requestTime",
-                  "requestId": "$context.requestId",
-                  "sourceIp": "$context.identity.sourceIp",
-                  "userAgent": "$context.identity.userAgent"
-                }
-        RequestTemplates:
-          application/json: |
-            {
-              "statusCode": 200
-            }
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SecureDataProcessorFunction.Arn}/invocations'
+        TimeoutInMillis: 29000
       MethodResponses:
         - StatusCode: '200'
+          ResponseModels:
+            application/json: Empty
+        - StatusCode: '500'
           ResponseModels:
             application/json: Empty
 
@@ -648,23 +829,15 @@ Resources:
       HttpMethod: GET
       AuthorizationType: NONE
       Integration:
-        Type: MOCK
-        IntegrationResponses:
-          - StatusCode: '200'
-            ResponseTemplates:
-              application/json: |
-                {
-                  "status": "healthy",
-                  "timestamp": "$context.requestTime",
-                  "version": "1.0.0"
-                }
-        RequestTemplates:
-          application/json: |
-            {
-              "statusCode": 200
-            }
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HealthCheckFunction.Arn}/invocations'
+        TimeoutInMillis: 29000
       MethodResponses:
         - StatusCode: '200'
+          ResponseModels:
+            application/json: Empty
+        - StatusCode: '503'
           ResponseModels:
             application/json: Empty
 
@@ -828,3 +1001,22 @@ Outputs:
     Value: !GetAtt APIGatewayCloudWatchRole.Arn
     Export:
       Name: !Sub '${ProjectName}-${EnvironmentSuffix}-apigateway-role-arn'
+
+  # Lambda Functions
+  SecureProcessorFunctionArn:
+    Description: 'Secure data processor Lambda function ARN'
+    Value: !GetAtt SecureDataProcessorFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-secure-processor-arn'
+
+  HealthCheckFunctionArn:
+    Description: 'Health check Lambda function ARN'
+    Value: !GetAtt HealthCheckFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-health-check-arn'
+
+  LambdaSecurityGroupId:
+    Description: 'Security Group ID for Lambda functions'
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-lambda-sg-id'

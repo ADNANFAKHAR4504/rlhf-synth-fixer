@@ -266,6 +266,67 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  describe('Lambda Functions', () => {
+    test('should have SecureDataProcessorFunction', () => {
+      expect(template.Resources.SecureDataProcessorFunction).toBeDefined();
+      expect(template.Resources.SecureDataProcessorFunction.Type).toBe('AWS::Lambda::Function');
+      
+      const lambda = template.Resources.SecureDataProcessorFunction.Properties;
+      expect(lambda.Runtime).toBe('python3.9');
+      expect(lambda.Handler).toBe('index.lambda_handler');
+    });
+
+    test('should have HealthCheckFunction', () => {
+      expect(template.Resources.HealthCheckFunction).toBeDefined();
+      expect(template.Resources.HealthCheckFunction.Type).toBe('AWS::Lambda::Function');
+      
+      const lambda = template.Resources.HealthCheckFunction.Properties;
+      expect(lambda.Runtime).toBe('python3.9');
+      expect(lambda.Handler).toBe('index.lambda_handler');
+    });
+
+    test('Lambda functions should be in VPC', () => {
+      const lambdas = ['SecureDataProcessorFunction', 'HealthCheckFunction'];
+      lambdas.forEach(lambdaName => {
+        const lambda = template.Resources[lambdaName].Properties;
+        expect(lambda.VpcConfig).toBeDefined();
+        expect(lambda.VpcConfig.SubnetIds).toBeDefined();
+        expect(lambda.VpcConfig.SecurityGroupIds).toBeDefined();
+      });
+    });
+
+    test('Lambda functions should have environment variables', () => {
+      const lambdas = ['SecureDataProcessorFunction', 'HealthCheckFunction'];
+      lambdas.forEach(lambdaName => {
+        const lambda = template.Resources[lambdaName].Properties;
+        expect(lambda.Environment.Variables.S3_BUCKET).toBeDefined();
+        expect(lambda.Environment.Variables.LOG_LEVEL).toBe('INFO');
+      });
+    });
+
+    test('should have Lambda security group', () => {
+      expect(template.Resources.LambdaSecurityGroup).toBeDefined();
+      expect(template.Resources.LambdaSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      
+      const sg = template.Resources.LambdaSecurityGroup.Properties;
+      expect(sg.SecurityGroupEgress).toBeDefined();
+      expect(sg.SecurityGroupEgress[0].FromPort).toBe(443);
+      expect(sg.SecurityGroupEgress[0].ToPort).toBe(443);
+    });
+
+    test('should have Lambda invoke permissions', () => {
+      expect(template.Resources.SecureProcessorInvokePermission).toBeDefined();
+      expect(template.Resources.HealthCheckInvokePermission).toBeDefined();
+      
+      const permissions = ['SecureProcessorInvokePermission', 'HealthCheckInvokePermission'];
+      permissions.forEach(permissionName => {
+        const permission = template.Resources[permissionName].Properties;
+        expect(permission.Action).toBe('lambda:InvokeFunction');
+        expect(permission.Principal).toBe('apigateway.amazonaws.com');
+      });
+    });
+  });
+
   describe('API Gateway', () => {
     test('should have RestAPI resource', () => {
       expect(template.Resources.RestAPI).toBeDefined();
@@ -282,6 +343,18 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.APIMethod).toBeDefined();
       expect(template.Resources.HealthResource).toBeDefined();
       expect(template.Resources.HealthMethod).toBeDefined();
+    });
+
+    test('API methods should use Lambda integration', () => {
+      const apiMethod = template.Resources.APIMethod.Properties.Integration;
+      expect(apiMethod.Type).toBe('AWS_PROXY');
+      expect(apiMethod.IntegrationHttpMethod).toBe('POST');
+      expect(apiMethod.Uri).toBeDefined();
+      
+      const healthMethod = template.Resources.HealthMethod.Properties.Integration;
+      expect(healthMethod.Type).toBe('AWS_PROXY');
+      expect(healthMethod.IntegrationHttpMethod).toBe('POST');
+      expect(healthMethod.Uri).toBeDefined();
     });
 
     test('should have API deployment and stage', () => {
@@ -322,6 +395,9 @@ describe('TapStack CloudFormation Template', () => {
         'S3VPCEndpointId',
         'APIGatewayVPCEndpointId',
         'LambdaExecutionRoleArn',
+        'SecureProcessorFunctionArn',
+        'HealthCheckFunctionArn',
+        'LambdaSecurityGroupId',
       ];
 
       requiredOutputs.forEach(output => {
@@ -352,6 +428,9 @@ describe('TapStack CloudFormation Template', () => {
         'S3VPCEndpointId',
         'APIGatewayVPCEndpointId',
         'LambdaExecutionRoleArn',
+        'SecureProcessorFunctionArn',
+        'HealthCheckFunctionArn',
+        'LambdaSecurityGroupId',
       ];
 
       exportsWithEnvSuffix.forEach(output => {
