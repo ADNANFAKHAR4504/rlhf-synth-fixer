@@ -2,7 +2,7 @@
 
 Hey team,
 
-We need to build a comprehensive disaster recovery solution for a financial services company that experienced a serious 6-hour outage last quarter. The business lost significant revenue during that incident, and leadership wants us to implement an active-passive multi-region setup with automated failover. I've been asked to create this using **CloudFormation with JSON** to ensure we have a robust, production-ready DR infrastructure.
+We need to build a comprehensive disaster recovery solution for a financial services company that experienced a serious 6-hour outage last quarter. The business lost significant revenue during that incident, and leadership wants us to implement an active-passive multi-region setup with automated failover. I've been asked to create this using CloudFormation with JSON to ensure we have a robust, production-ready DR infrastructure.
 
 The transaction processing system is critical to their operations, handling about 10,000 transactions per second with sub-second latency requirements. We need to set up infrastructure across two AWS regions with primary operations in us-east-1 and failover capabilities to us-west-2. The business has strict requirements around recovery objectives - RTO must be under 15 minutes and RPO under 5 minutes. This means our replication and failover mechanisms need to be tight.
 
@@ -10,7 +10,7 @@ The architecture needs to include global data replication through DynamoDB Globa
 
 ## What we need to build
 
-Create a multi-region disaster recovery infrastructure using **CloudFormation with JSON** for a transaction processing system spanning us-east-1 (primary) and us-west-2 (secondary).
+Create a multi-region disaster recovery infrastructure using CloudFormation with JSON for a transaction processing system spanning us-east-1 as primary and us-west-2 as secondary.
 
 ### Core Requirements
 
@@ -26,7 +26,7 @@ Create a multi-region disaster recovery infrastructure using **CloudFormation wi
    - Configure health checks monitoring both regions continuously
    - Set up DNS records pointing to primary region with automatic failover to secondary
 
-3. **Compute Layer - Transaction Processing**
+3. **Compute Layer for Processing Requests**
    - Create Lambda functions in both regions for transaction processing
    - Configure environment variables for region-specific configuration
    - Set reserved concurrency of at least 100 for Lambda functions
@@ -53,7 +53,7 @@ Create a multi-region disaster recovery infrastructure using **CloudFormation wi
 
 ### Technical Requirements
 
-- All infrastructure defined using **CloudFormation with JSON**
+- All infrastructure defined using CloudFormation with JSON
 - Use **DynamoDB** for global transaction data replication
 - Use **S3** with cross-region replication for document storage
 - Use **Route 53** for DNS failover routing
@@ -62,7 +62,7 @@ Create a multi-region disaster recovery infrastructure using **CloudFormation wi
 - Use **CloudWatch** for monitoring and log aggregation
 - Use **SNS** for alerting and notifications
 - Use **IAM** for cross-region access control
-- Resource names must include **environmentSuffix** parameter for uniqueness
+- Include environmentSuffix parameter in all resource names for uniqueness
 - Follow naming convention: resource-type-environment-suffix
 - Primary region: us-east-1
 - Secondary region: us-west-2
@@ -80,15 +80,15 @@ Create a multi-region disaster recovery infrastructure using **CloudFormation wi
 - VPCs in both regions required with private subnets and VPC peering connection
 - Support 10,000 TPS with sub-second latency requirements
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements
 
-- All resources must include **environmentSuffix** parameter in their names for environment isolation
-- All resources must have **DeletionPolicy set to Retain** to prevent accidental data loss during stack deletion
+- Include environmentSuffix parameter in all infrastructure names for environment isolation
+- Set DeletionPolicy to Retain for all infrastructure to prevent accidental data loss during stack deletion
 - Template must be valid JSON format with proper structure
 - Must support multi-region deployment (primary and secondary stacks)
 - Include comprehensive parameter definitions for customization
 - All Lambda functions must specify runtime, handler, and code locations
-- IAM roles must follow least privilege principle
+- IAM roles must grant specific permissions needed for each service
 - KMS keys must have appropriate key policies for service access
 
 ### Success Criteria
@@ -96,8 +96,8 @@ Create a multi-region disaster recovery infrastructure using **CloudFormation wi
 - **Functionality**: Complete disaster recovery solution with automated failover between regions
 - **Performance**: RTO under 15 minutes, RPO under 5 minutes, support 10,000 TPS
 - **Reliability**: Automatic health check monitoring and DNS failover without manual intervention
-- **Security**: All data encrypted at rest with KMS, IAM roles with appropriate cross-region permissions
-- **Resource Naming**: All resources include environmentSuffix for environment isolation
+- **Security**: Data encrypted at rest with KMS, IAM roles with appropriate cross-region access
+- **Naming Convention**: All resources include environmentSuffix for environment isolation
 - **Monitoring**: Comprehensive CloudWatch alarms and SNS notifications for all failure scenarios
 - **Code Quality**: Valid JSON CloudFormation template, well-structured, properly documented
 
