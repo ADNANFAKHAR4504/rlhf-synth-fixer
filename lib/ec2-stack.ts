@@ -77,6 +77,7 @@ export class Ec2Stack extends cdk.Stack {
     );
 
     // Auto Scaling Group
+    // Note: Using explicit version $Default instead of $Latest for LocalStack compatibility
     this.autoScalingGroup = new autoscaling.AutoScalingGroup(
       this,
       'WebServerAsg',
@@ -98,6 +99,12 @@ export class Ec2Stack extends cdk.Stack {
         }),
       }
     );
+
+    // LocalStack fix: Override LaunchTemplate Version to use $Default instead of LatestVersionNumber
+    // LocalStack doesn't properly handle Fn::GetAtt for LatestVersionNumber attribute
+    const cfnAsg = this.autoScalingGroup.node
+      .defaultChild as autoscaling.CfnAutoScalingGroup;
+    cfnAsg.addPropertyOverride('LaunchTemplate.Version', '$Default');
 
     // Application Load Balancer
     this.applicationLoadBalancer = new elbv2.ApplicationLoadBalancer(
