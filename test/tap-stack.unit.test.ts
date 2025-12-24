@@ -199,17 +199,19 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Secrets Manager Resources', () => {
-    test('should have database secret', () => {
-      expect(template.Resources.DatabaseSecret).toBeDefined();
-      expect(template.Resources.DatabaseSecret.Type).toBe('AWS::SecretsManager::Secret');
+  describe('SSM Parameter Resources (LocalStack-compatible)', () => {
+    test('should have database password parameter', () => {
+      expect(template.Resources.DatabasePasswordParameter).toBeDefined();
+      expect(template.Resources.DatabasePasswordParameter.Type).toBe('AWS::SSM::Parameter');
     });
 
-    test('database secret should generate password automatically', () => {
-      const secret = template.Resources.DatabaseSecret;
-      expect(secret.Properties.GenerateSecretString).toBeDefined();
-      expect(secret.Properties.GenerateSecretString.GenerateStringKey).toBe('password');
-      expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(16);
+    test('database password parameter should have correct properties', () => {
+      const param = template.Resources.DatabasePasswordParameter;
+      expect(param.Properties.Type).toBe('String');
+      expect(param.Properties.Value).toBeDefined();
+      expect(param.Properties.Name).toEqual({
+        'Fn::Sub': '/${AWS::StackName}/database/password'
+      });
     });
   });
 
@@ -224,15 +226,15 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.DatabaseInstance.Type).toBe('AWS::RDS::DBInstance');
     });
 
-    test('database should have Multi-AZ enabled', () => {
+    test('database should have Multi-AZ disabled (LocalStack limitation)', () => {
       const db = template.Resources.DatabaseInstance;
-      expect(db.Properties.MultiAZ).toBe(true);
+      expect(db.Properties.MultiAZ).toBe(false);
     });
 
-    test('database should have proper deletion policies', () => {
+    test('database should have proper deletion policies (testing environment)', () => {
       const db = template.Resources.DatabaseInstance;
-      expect(db.DeletionPolicy).toBe('Snapshot');
-      expect(db.UpdateReplacePolicy).toBe('Snapshot');
+      expect(db.DeletionPolicy).toBe('Delete');
+      expect(db.UpdateReplacePolicy).toBe('Delete');
     });
 
     test('database should be encrypted', () => {
@@ -251,11 +253,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(db.Properties.EngineVersion).toBe('8.0.42');
     });
 
-    test('database should use Secrets Manager for password', () => {
+    test('database should use SSM Parameter Store for password (LocalStack-compatible)', () => {
       const db = template.Resources.DatabaseInstance;
       expect(db.Properties.MasterUserPassword).toEqual({
-        'Fn::Sub': '{{resolve:secretsmanager:${AWS::StackName}-db-password:SecretString:password}}'
+        'Fn::Sub': '{{resolve:ssm:/${AWS::StackName}/database/password}}'
       });
+      expect(db.DependsOn).toBe('DatabasePasswordParameter');
     });
   });
 
