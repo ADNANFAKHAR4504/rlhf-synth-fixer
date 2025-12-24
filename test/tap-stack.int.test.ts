@@ -43,10 +43,25 @@ type OutputsShape =
   | { OutputKey: string; OutputValue: string }[];
 
 function loadOutputs(): Record<string, string> {
-  const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
-  if (!fs.existsSync(p)) {
-    throw new Error(`Expected outputs file at ${p} — create it before running integration tests.`);
+  // Try multiple possible output file locations
+  const paths = [
+    path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json"),
+    path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"),
+    path.resolve(process.cwd(), "outputs.json")
+  ];
+
+  let p: string | null = null;
+  for (const candidate of paths) {
+    if (fs.existsSync(candidate)) {
+      p = candidate;
+      break;
+    }
   }
+
+  if (!p) {
+    throw new Error(`Expected outputs file at one of: ${paths.join(", ")} — create it before running integration tests.`);
+  }
+
   const raw = JSON.parse(fs.readFileSync(p, "utf8"));
   // Support two common shapes:
   // 1) { StackName: [ { OutputKey, OutputValue }, ... ] }
