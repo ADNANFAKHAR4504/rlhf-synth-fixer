@@ -14,10 +14,17 @@
   "aws_services": [
     "Lambda",
     "IAM",
-    "CloudWatch Logs",
+    "CloudWatch",
     "KMS",
     "SQS",
-    "CloudWatch"
+    "CloudWatch Logs"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "abubakarTuring",
+  "dockerS3Location": ""
 }
