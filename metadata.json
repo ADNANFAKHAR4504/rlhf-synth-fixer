@@ -1,0 +1,34 @@
+{
+  "po_id": "trainr927",
+  "task_id": "trainr927",
+  "problem_id": "Serverless-Infrastructure_CloudFormation_YAML_7gH1cK2qR9fE",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "intermediate",
+  "startedAt": "2025-08-22T00:00:00Z",
+  "status": "completed",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "Serverless Infrastructure",
+    "API Gateway Configuration",
+    "Lambda Function Management",
+    "S3 Storage Setup",
+    "IAM Security",
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "S3",
+    "IAM",
+    "CloudFormation"
+  ],
+  "turn_type": "single",
+  "team": "synth-2",
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr2001"
+  }
+}
