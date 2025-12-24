@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr46",
+  "team": "synth-2",
+  "startedAt": "2025-08-11T11:41:03-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "IAM",
+    "KMS",
+    "SSM",
+    "CloudWatch",
+    "Logs"
+  ],
+  "wave": "P1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,1160 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  TapStack - Full new build of a production-ready, KMS-encrypted, VPC-based environment in us-east-1
+  with S3+Lifecycle, Lambda+S3 trigger+API Gateway, DynamoDB (auto-scaling), RDS Multi-AZ, SNS, CloudWatch
+  metrics/alarms, CloudTrail auditing, bastion host, and IAM least-privilege. All names include ENVIRONMENT_SUFFIX.
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W1028
+
+# =============================================================================
+# PARAMETERS (defaults provided so pipeline deploys without CLI inputs)
+# =============================================================================
+Parameters:
+  IsLocalStack:
+    Type: String
+    Default: "false"  # AWS by default; set true only for LocalStack runs
+    AllowedValues: ["true", "false"]
+    Description: Set true when deploying to LocalStack
+
+  ProjectName:
+    Type: String
+    Default: tapstack
+    Description: Project/system slug (lowercase, used in tags and names)
+    AllowedPattern: '^[a-z][a-z0-9-]{2,30}$'
+    ConstraintDescription: 3-31 chars, start with letter, lowercase letters/digits/hyphens.
+
+  EnvironmentSuffix:
+    Type: String
+    Default: dev-us
+    Description: Suffix appended to resource names to avoid collisions across environments
+    AllowedPattern: '^[a-z0-9-]{2,20}$'
+    ConstraintDescription: 2-20 chars, lowercase letters, digits, hyphens only.
+
+  VpcCidr:
+    Type: String
+    Default: 10.20.0.0/16
+    Description: CIDR block for VPC
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/(1[6-9]|2[0-8])$'
+
+  PublicSubnetACidr:
+    Type: String
+    Default: 10.20.10.0/24
+  PublicSubnetBCidr:
+    Type: String
+    Default: 10.20.11.0/24
+  PrivateSubnetACidr:
+    Type: String
+    Default: 10.20.20.0/24
+  PrivateSubnetBCidr:
+    Type: String
+    Default: 10.20.21.0/24
+
+  BastionAllowedCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR allowed to SSH to bastion (tighten in production)
+
+  AppHttpAllowedCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR allowed to reach application HTTP port 80
+
+  BastionInstanceType:
+    Type: String
+    Default: t3.micro
+  AppInstanceType:
+    Type: String
+    Default: t3.micro
+
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+  RDSEngine:
+    Type: String
+    Default: postgres
+    AllowedValues: [postgres, mysql]
+  RDSVersion:
+    Type: String
+    Default: '16.11'
+  RDSInstanceClass:
+    Type: String
+    Default: db.t3.micro
+  RDSAllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    MaxValue: 16384
+
+  DynamoReadMin:
+    Type: Number
+    Default: 1
+  DynamoReadMax:
+    Type: Number
+    Default: 10
+  DynamoWriteMin:
+    Type: Number
+    Default: 1
+  DynamoWriteMax:
+    Type: Number
+    Default: 10
+
+  EmailSubscription:
+    Type: String
+    Default: ''
+    Description: Optional email for SNS subscription (leave blank to skip)
+    AllowedPattern: '^$|^[^@]+@[^@]+\.[^@]+$'
+
+# =============================================================================
+# CONDITIONS
+# =============================================================================
+Conditions:
+  IsUSEast1: !Equals [!Ref 'AWS::Region', us-east-1]
+  HasEmailSubscription: !Not [!Equals [!Ref EmailSubscription, ""]]
+  UsePostgres: !Equals [!Ref RDSEngine, postgres]
+  IsAWS: !Not [!Equals [!Ref IsLocalStack, "true"]]
+  IsLocal: !Equals [!Ref IsLocalStack, "true"]
+
+# =============================================================================
+# RESOURCES
+# =============================================================================
+Resources:
+
+  # ----------------------------
+  # KMS (AWS-only encryption is applied via !If where needed to keep LocalStack stable)
+  # ----------------------------
+  PrimaryKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'Primary CMK for ${ProjectName}-${EnvironmentSuffix}'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowAccountRootAdmin
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+
+          - Sid: AllowCloudWatchLogsUse
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              ArnLike:
+                kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+
+          - Sid: AllowLambdaUse
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Sub '${AWS::AccountId}'
+              StringLike:
+                kms:ViaService: !Sub 'lambda.${AWS::Region}.amazonaws.com'
+
+          - Sid: AllowRDSUse
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Sub '${AWS::AccountId}'
+              StringLike:
+                kms:ViaService: !Sub 'rds.${AWS::Region}.amazonaws.com'
+
+          - Sid: AllowDynamoDBUse
+            Effect: Allow
+            Principal:
+              Service: dynamodb.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Sub '${AWS::AccountId}'
+              StringLike:
+                kms:ViaService: !Sub 'dynamodb.${AWS::Region}.amazonaws.com'
+
+          - Sid: AllowSNSUse
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Sub '${AWS::AccountId}'
+              StringLike:
+                kms:ViaService: !Sub 'sns.${AWS::Region}.amazonaws.com'
+
+          - Sid: AllowSecretsManagerUse
+            Effect: Allow
+            Principal:
+              Service: secretsmanager.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Sub '${AWS::AccountId}'
+              StringLike:
+                kms:ViaService: !Sub 'secretsmanager.${AWS::Region}.amazonaws.com'
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-primary-kms'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrimaryKmsAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ProjectName}-${EnvironmentSuffix}-primary'
+      TargetKeyId: !Ref PrimaryKmsKey
+
+  # ----------------------------
+  # NETWORKING
+  # ----------------------------
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-igw'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetACidr
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-a'
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetBCidr
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-b'
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnetACidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-a'
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnetBCidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-b'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-rt'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+    DependsOn: VPCGatewayAttachment
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  NatEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-eip'
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat'
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-rt'
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+
+  # ----------------------------
+  # SECURITY GROUPS
+  # ----------------------------
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bastion SSH
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref BastionAllowedCidr
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-bastion-sg'
+
+  ApplicationSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: App HTTP + SSH (restricted)
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AppHttpAllowedCidr
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref BastionSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app-sg'
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS access from app
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !If [UsePostgres, 5432, 3306]
+          ToPort: !If [UsePostgres, 5432, 3306]
+          SourceSecurityGroupId: !Ref ApplicationSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-sg'
+
+  # ----------------------------
+  # EC2: Bastion + Application instances
+  # NOTE: Removed RoleName/InstanceProfileName (pipeline-safe: avoids CAPABILITY_NAMED_IAM requirement)
+  # ----------------------------
+  BastionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  BastionInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref BastionRole]
+
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref BastionInstanceType
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref BastionInstanceProfile
+      SubnetId: !Ref PublicSubnetA
+      SecurityGroupIds: [!Ref BastionSecurityGroup]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-bastion'
+
+  AppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub '${ProjectName}-${EnvironmentSuffix}-app-inline'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: Logs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:CreateLogGroup
+                Resource: '*'
+              - Sid: S3Limited
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-data/*'
+              - Sid: KMSUse
+                Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt PrimaryKmsKey.Arn
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AppInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref AppRole]
+
+  ApplicationInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref AppInstanceType
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref AppInstanceProfile
+      SubnetId: !Ref PrivateSubnetA
+      SecurityGroupIds: [!Ref ApplicationSecurityGroup]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app'
+
+  # ----------------------------
+  # S3: Logging bucket + Data bucket (AWS vs LocalStack)
+  # NOTE: Removed BucketName to avoid global-name collisions in pipeline.
+  # ----------------------------
+  S3BucketLogging:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-logs'
+      BucketEncryption: !If
+        - IsAWS
+        - ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: aws:kms
+                KMSMasterKeyID: !Ref PrimaryKmsKey
+        - ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerPreferred }]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-logs'
+
+  S3BucketAWS:
+    Type: AWS::S3::Bucket
+    Condition: IsAWS
+    DependsOn:
+      - LambdaPermissionForS3
+    Properties:
+      BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-data'
+      VersioningConfiguration: { Status: Enabled }
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3BucketLogging
+        LogFilePrefix: !Sub 's3/${ProjectName}-${EnvironmentSuffix}/'
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionOldVersions
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+            NoncurrentVersionExpirationInDays: 365
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref PrimaryKmsKey
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerPreferred }]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt LambdaFunction.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-data'
+
+  S3BucketLocal:
+    Type: AWS::S3::Bucket
+    Condition: IsLocal
+    Properties:
+      BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-data'
+      VersioningConfiguration: { Status: Enabled }
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-data'
+
+  S3BucketPolicyAWS:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsAWS
+    Properties:
+      Bucket: !Ref S3BucketAWS
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnforceTLS
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt S3BucketAWS.Arn
+              - !Sub '${S3BucketAWS.Arn}/*'
+            Condition:
+              Bool: { aws:SecureTransport: 'false' }
+
+  S3BucketPolicyLocal:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsLocal
+    Properties:
+      Bucket: !Ref S3BucketLocal
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnforceTLS
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt S3BucketLocal.Arn
+              - !Sub '${S3BucketLocal.Arn}/*'
+            Condition:
+              Bool: { aws:SecureTransport: 'false' }
+
+  # ----------------------------
+  # LAMBDA + API GATEWAY (AWS only)
+  # NOTE: Entire chain is Condition:IsAWS to avoid LocalStack timeouts and cleanup validation issues.
+  # ----------------------------
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: IsAWS
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-${EnvironmentSuffix}-s3-handler'
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt PrimaryKmsKey.Arn
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Condition: IsAWS
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub '${ProjectName}-${EnvironmentSuffix}-lambda-inline'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: Logs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-${EnvironmentSuffix}-s3-handler:*'
+              - Sid: S3Access
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-data/*'
+              - Sid: KMSUse
+                Effect: Allow
+                Action: [kms:Encrypt, kms:Decrypt, kms:GenerateDataKey]
+                Resource: !GetAtt PrimaryKmsKey.Arn
+              - Sid: PublishSNS
+                Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref NotificationsTopic
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: IsAWS
+    Properties:
+      FunctionName: !Sub '${ProjectName}-${EnvironmentSuffix}-s3-handler'
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      Environment:
+        Variables:
+          TOPIC_ARN: !Ref NotificationsTopic
+      KmsKeyArn: !GetAtt PrimaryKmsKey.Arn
+      Code:
+        ZipFile: |
+          import json
+          def handler(event, context):
+              return {"statusCode": 200, "body": json.dumps(event)}
+
+  LambdaPermissionForS3:
+    Type: AWS::Lambda::Permission
+    Condition: IsAWS
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-data'
+
+
+  LambdaPermissionForApi:
+    Type: AWS::Lambda::Permission
+    Condition: IsAWS
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction
+      Principal: apigateway.amazonaws.com
+
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: IsAWS
+    Properties:
+      LogGroupName: !Sub '/aws/apigw/${ProjectName}-${EnvironmentSuffix}-api'
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt PrimaryKmsKey.Arn
+
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Condition: IsAWS
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-api'
+      EndpointConfiguration: { Types: [REGIONAL] }
+
+  ApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: IsAWS
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: status
+
+  ApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Condition: IsAWS
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${funArn}/invocations'
+          - { funArn: !GetAtt LambdaFunction.Arn }
+
+  ApiGatewayCWRole:
+    Type: AWS::IAM::Role
+    Condition: IsAWS
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Condition: IsAWS
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCWRole.Arn
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Condition: IsAWS
+    DependsOn: ApiGatewayMethod
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      Description: Initial deployment
+
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Condition: IsAWS
+    Properties:
+      StageName: v1
+      RestApiId: !Ref ApiGatewayRestApi
+      DeploymentId: !Ref ApiGatewayDeployment
+      MethodSettings:
+        - HttpMethod: "*"
+          ResourcePath: "/*"
+          MetricsEnabled: true
+          DataTraceEnabled: true
+          LoggingLevel: INFO
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status"}'
+
+  # ----------------------------
+  # DYNAMODB + APP AUTO SCALING
+  # NOTE: Removed RoleName (pipeline-safe)
+  # ----------------------------
+  DynamoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-${EnvironmentSuffix}-items'
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: !Ref DynamoReadMin
+        WriteCapacityUnits: !Ref DynamoWriteMin
+      SSESpecification: !If
+        - IsAWS
+        - { SSEEnabled: true, SSEType: KMS, KMSMasterKeyId: !Ref PrimaryKmsKey }
+        - !Ref "AWS::NoValue"
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-items'
+
+  AppScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: application-autoscaling.amazonaws.com }
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: dynamo-autoscaling
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:DescribeTable
+                  - dynamodb:UpdateTable
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DeleteAlarms
+                  - cloudwatch:DescribeAlarms
+                Resource: '*'
+
+  DynamoReadScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: !Ref DynamoReadMax
+      MinCapacity: !Ref DynamoReadMin
+      ResourceId: !Sub 'table/${ProjectName}-${EnvironmentSuffix}-items'
+      RoleARN: !GetAtt AppScalingRole.Arn
+      ScalableDimension: dynamodb:table:ReadCapacityUnits
+      ServiceNamespace: dynamodb
+
+  DynamoReadScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${ProjectName}-${EnvironmentSuffix}-dynamo-read-policy'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref DynamoReadScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBReadCapacityUtilization
+
+  DynamoWriteScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: !Ref DynamoWriteMax
+      MinCapacity: !Ref DynamoWriteMin
+      ResourceId: !Sub 'table/${ProjectName}-${EnvironmentSuffix}-items'
+      RoleARN: !GetAtt AppScalingRole.Arn
+      ScalableDimension: dynamodb:table:WriteCapacityUnits
+      ServiceNamespace: dynamodb
+
+  DynamoWriteScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${ProjectName}-${EnvironmentSuffix}-dynamo-write-policy'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref DynamoWriteScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBWriteCapacityUtilization
+
+  # ----------------------------
+  # RDS + Secrets Manager
+  # NOTE: Removed DBSubnetGroupName to avoid naming collisions
+  # ----------------------------
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub '${ProjectName}-${EnvironmentSuffix} DB subnets'
+      SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-db-secret'
+      Description: DB master credentials
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${ProjectName}_admin"}'
+        GenerateStringKey: password
+        ExcludeCharacters: "\"@/\\'"
+        PasswordLength: 20
+        ExcludePunctuation: true
+      KmsKeyId: !If [IsAWS, !Ref PrimaryKmsKey, !Ref "AWS::NoValue"]
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentSuffix}-rds'
+      Engine: !Ref RDSEngine
+      EngineVersion: !If [UsePostgres, !Ref RDSVersion, '8.0.35']
+      DBInstanceClass: !Ref RDSInstanceClass
+      AllocatedStorage: !Ref RDSAllocatedStorage
+      MultiAZ: true
+      StorageEncrypted: !If [IsAWS, true, false]
+      KmsKeyId: !If [IsAWS, !Ref PrimaryKmsKey, !Ref "AWS::NoValue"]
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+      VPCSecurityGroups: [!Ref RDSSecurityGroup]
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      PubliclyAccessible: false
+      DeletionProtection: false
+      BackupRetentionPeriod: 7
+
+  # ----------------------------
+  # SNS (encrypted in AWS; LocalStack-safe)
+  # ----------------------------
+  NotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-${EnvironmentSuffix}-notifications'
+      KmsMasterKeyId: !If [IsAWS, !Ref PrimaryKmsKey, !Ref "AWS::NoValue"]
+
+  NotificationsSubscriptionEmail:
+    Type: AWS::SNS::Subscription
+    Condition: HasEmailSubscription
+    Properties:
+      TopicArn: !Ref NotificationsTopic
+      Protocol: email
+      Endpoint: !Ref EmailSubscription
+
+  # ----------------------------
+  # CLOUDWATCH ALARMS
+  # ----------------------------
+  AlarmEC2StatusCheck:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2-statuscheck'
+      MetricName: StatusCheckFailed
+      Namespace: AWS/EC2
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref ApplicationInstance
+      AlarmActions: [!Ref NotificationsTopic]
+
+  AlarmLambdaErrors:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsAWS
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-lambda-errors'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunction
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: [!Ref NotificationsTopic]
+
+  # ----------------------------
+  # CLOUDTRAIL (AWS only)
+  # NOTE: Bucket name removed to avoid global collisions.
+  # ----------------------------
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref PrimaryKmsKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerPreferred }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-cloudtrail-logs'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsAWS
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+                aws:SourceArn: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${EnvironmentSuffix}-trail'
+
+  Trail:
+    Type: AWS::CloudTrail::Trail
+    Condition: IsAWS
+    DependsOn:
+      - CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub '${ProjectName}-${EnvironmentSuffix}-trail'
+      S3BucketName: !Ref CloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      EnableLogFileValidation: true
+      IsLogging: true
+      KMSKeyId: !Ref PrimaryKmsKey
+
+# =============================================================================
+# OUTPUTS
+# =============================================================================
+Outputs:
+  RegionAssert:
+    Description: Template is intended for us-east-1 (informational)
+    Value: !If [IsUSEast1, 'OK: us-east-1', !Sub 'Deployed in ${AWS::Region}']
+
+  VpcId:
+    Value: !Ref VPC
+  PublicSubnetAId:
+    Value: !Ref PublicSubnetA
+  PublicSubnetBId:
+    Value: !Ref PublicSubnetB
+  PrivateSubnetAId:
+    Value: !Ref PrivateSubnetA
+  PrivateSubnetBId:
+    Value: !Ref PrivateSubnetB
+
+  BastionInstanceId:
+    Value: !Ref BastionInstance
+  AppInstanceId:
+    Value: !Ref ApplicationInstance
+
+  DataBucketName:
+    Value: !If [IsAWS, !Ref S3BucketAWS, !Ref S3BucketLocal]
+  LogsBucketName:
+    Value: !Ref S3BucketLogging
+
+  LambdaName:
+    Value: !If [IsAWS, !Ref LambdaFunction, 'localstack:disabled']
+
+  ApiInvokeUrl:
+    Value: !If
+      - IsAWS
+      - !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiGatewayStage}'
+      - 'localstack:disabled'
+
+  DynamoTableName:
+    Value: !Ref DynamoTable
+
+  RDSEndpoint:
+    Value: !GetAtt RDSInstance.Endpoint.Address
+  RDSPort:
+    Value: !GetAtt RDSInstance.Endpoint.Port
+
+  SnsTopicArn:
+    Value: !Ref NotificationsTopic
+
+  KmsKeyArn:
+    Value: !GetAtt PrimaryKmsKey.Arn
+
+  CloudTrailBucketOut:
+    Value: !Ref CloudTrailBucket

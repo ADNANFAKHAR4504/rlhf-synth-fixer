@@ -33,6 +33,7 @@ ALLOWED_FILES=(
   "jest.config.ts"
   ".eslintrc.js"
   ".eslintrc.json"
+  "eslint.config.js"
   ".prettierrc"
   "setup.py"
   "pyproject.toml"

@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912462",
+  "team": "synth",
+  "wave": "P1",
+  "startedAt": "2025-11-18T11:25:33+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "X-Ray",
+    "CloudTrail",
+    "EventBridge",
+    "SNS",
+    "Systems Manager",
+    "Config",
+    "Security Hub",
+    "KMS",
+    "S3",
+    "IAM"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
