@@ -126,9 +126,9 @@ resource "aws_eks_node_group" "application" {
   subnet_ids      = aws_subnet.private_application[*].id
 
   scaling_config {
-    desired_size = 3
+    desired_size = 2
     max_size     = 10
-    min_size     = 3
+    min_size     = 2
   }
 
   instance_types = ["m5.large"]
