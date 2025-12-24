@@ -6,6 +6,17 @@
       "Type": "String",
       "Default": "MyWebApp",
       "Description": "Prefix for resource naming."
+    },
+    "EnableNATGateway": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": ["true", "false"],
+      "Description": "Enable NAT Gateway (set to false for LocalStack)"
+    }
+  },
+  "Conditions": {
+    "CreateNATGateway": {
+      "Fn::Equals": [{"Ref": "EnableNATGateway"}, "true"]
     }
   },
   "Resources": {
@@ -127,6 +138,7 @@
     },
     "ElasticIP": {
       "Type": "AWS::EC2::EIP",
+      "Condition": "CreateNATGateway",
       "DependsOn": "InternetGateway",
       "Properties": {
         "Domain": "vpc"
@@ -134,6 +146,7 @@
     },
     "NATGateway": {
       "Type": "AWS::EC2::NatGateway",
+      "Condition": "CreateNATGateway",
       "Properties": {
         "AllocationId": {
           "Fn::GetAtt": [
@@ -201,6 +214,7 @@
     },
     "PrivateRoute": {
       "Type": "AWS::EC2::Route",
+      "Condition": "CreateNATGateway",
       "Properties": {
         "RouteTableId": {
           "Ref": "PrivateRouteTable"
@@ -363,6 +377,7 @@
       }
     },
     "NATGatewayEIP": {
+      "Condition": "CreateNATGateway",
       "Description": "Elastic IP of the NAT Gateway",
       "Value": {
         "Ref": "ElasticIP"

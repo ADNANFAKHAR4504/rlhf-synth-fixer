@@ -1,97 +1,46 @@
-**Designation:** The designated role is that of a specialist in AWS CloudFormation Engineering, possessing profound expertise in the architecting of secure, scalable, and cost-optimized infrastructures.
+Create an AWS CloudFormation template in JSON format for a multi-AZ networking and compute environment in us-east-1. This needs to be production-grade with proper parameterization.
 
-**Objective:** The primary objective is the generation of a complete, production-grade AWS CloudFormation template composed in the **JSON** data-interchange format. This template is intended to provision a foundational, multi-Availability Zone networking and compute environment situated within the `us-east-1` region. The resultant artifact must be comprehensively documented, parameterized, and adhere strictly to established AWS best practices.
+**Parameters needed:**
 
-### **Enumerated Stipulations**
+- ProjectName: String prefix for naming all resources, default to MyWebApp
+- SshCidrBlock: CIDR block for SSH access, default to 203.0.113.0/24
+- InstanceType: EC2 instance type to use, default to t3.micro
 
-**1. Parameterization:**
-The template is mandated to incorporate the subsequent parameters to facilitate its reusability and modularity:
+**Networking Setup:**
 
-* `ProjectName`: A string value to be utilized as a prefix for the nomenclature of all instantiated resources, thereby ensuring coherent tagging and systematic identification. (Exemplar Default: `"MyWebApp"`)
+The VPC should use CIDR 10.0.0.0/16 and connect to the internet through an Internet Gateway.
 
-* `SshCidrBlock`: The specific Classless Inter-Domain Routing (CIDR) block from which Secure Shell (SSH) access is permissible. (Exemplar Default: `"203.0.113.0/24"`)
+Create three subnets spread across different Availability Zones using Fn::GetAZs:
+- Public Subnet at 10.0.1.0/24 that auto-assigns public IPs to launched instances
+- Private Subnet A at 10.0.2.0/24
+- Private Subnet B at 10.0.3.0/24
 
-* `InstanceType`: The classification of the EC2 instance to be deployed throughout the environment. (Exemplar Default: `"t3.micro"`)
+Deploy a NAT Gateway with an Elastic IP in the public subnet. The private subnets connect to the internet through this NAT Gateway.
 
-**2. Networking Infrastructure:**
-The following network topology is to be constructed:
+Route tables:
+- Public route table attached to the public subnet with default route pointing to the Internet Gateway
+- Private route table associated with both private subnets with default route directed to the NAT Gateway
 
-* **Virtual Private Cloud (VPC):**
+**Compute:**
 
-  * A singular VPC shall be established with the assigned CIDR block of `10.0.0.0/16`.
+Launch one EC2 instance in each subnet. Use the Amazon Linux 2 AMI retrieved from SSM Parameter Store at /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2.
 
-* **Subnetworks (Subnets):**
+**Security:**
 
-  * The instantiation of three distinct subnets is required, with the stipulation that each reside within a separate Availability Zone. This distribution shall be achieved through the dynamic application of the `Fn::GetAZs` intrinsic function.
+Create a single security group applied to all three EC2 instances:
+- Allow SSH on port 22 only from the SshCidrBlock parameter
+- Enable self-referencing rules so instances in the same security group can communicate with each other
 
-  * **Public Subnet:**
+**Monitoring:**
 
-    * CIDR: `10.0.1.0/24`.
+Enable VPC Flow Logs that capture ALL traffic types and publish to a CloudWatch Logs log group.
 
-    * This subnet must be configured for the automatic assignment of public IPv4 addresses to any instances launched therein.
+**Tagging:**
 
-  * **Private Subnet A:**
+Apply Name tags to all resources using the ProjectName parameter combined with a resource identifier, like MyWebApp-VPC or MyWebApp-Public-Subnet.
 
-    * CIDR: `10.0.2.0/24`.
+**Outputs:**
 
-  * **Private Subnet B:**
+Export VPCId, PublicInstanceId, and NATGatewayEIP.
 
-    * CIDR: `10.0.3.0/24`.
-
-* **Gateways and Routing Logic:**
-
-  * **Internet Gateway:** An Internet Gateway shall be created and subsequently attached to the VPC.
-
-  * **NAT Gateway:** A Network Address Translation (NAT) Gateway, accompanied by an associated Elastic IP address, is to be deployed within the Public Subnet.
-
-  * **Route Tables:**
-
-    * **Public Route Table:** This table must be associated with the Public Subnet and is required to contain a default route (`0.0.0.0/0`) directed to the Internet Gateway.
-
-    * **Private Route Table:** This table is to be associated with both Private Subnets and must contain a default route (`0.0.0.0/0`) directed to the NAT Gateway.
-
-**3. Compute Stratum:**
-The compute resources shall be provisioned as follows:
-
-* **EC2 Instances:**
-
-  * The deployment of one Elastic Compute Cloud (EC2) instance within each of the three aforementioned subnets is required.
-
-  * The Amazon Machine Image (AMI) to be utilized must be the latest available for Amazon Linux 2. The AMI identifier shall be retrieved dynamically via the SSM Parameter Store path: `/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2`.
-
-**4. Security and Monitoring Protocols:**
-The following security and monitoring configurations are mandated:
-
-* **EC2 Security Group:**
-
-  * A unitary security group is to be configured for application across all three EC2 instances.
-
-  * **Ingress Rules:**
-
-    * Ingress for SSH traffic on TCP port 22 shall be permitted exclusively from the CIDR block specified by the `SshCidrBlock` parameter.
-
-    * All network traffic originating from any resource within the same security group shall be permitted, thereby facilitating intra-VPC communication.
-
-* **VPC Flow Logs:**
-
-  * A CloudWatch Logs Log Group must be created for the purpose of storing flow log data.
-
-  * VPC Flow Logs are to be enabled for the entire VPC, configured to capture `ALL` traffic dispositions (`ACCEPT`, `REJECT`).
-
-  * The resultant logs must be configured for publication to the aforementioned CloudWatch Log Group.
-
-**5. Resource Metadata and Outputs:**
-The following conventions for metadata and stack outputs must be observed:
-
-* **Resource Tagging:**
-
-  * It is requisite that a `Name` tag be applied to all supported resources, including but not limited to the VPC, Subnets, Route Tables, Gateways, and EC2 Instances.
-
-  * The value assigned to the `Name` tag is to be dynamically constructed, concatenating the `ProjectName` parameter with a resource-specific identifier (e.g., `MyWebApp-VPC`, `MyWebApp-Public-Subnet-1a`, `MyWebApp-EC2-Private-A`).
-
-* **Outputs Section:**
-
-  * The template shall incorporate an `Outputs` section that exports the identifiers of key resources for external reference. This section must include, at a minimum, the `VPCId`, `PublicInstanceId`, and the `NATGatewayEIP`.
-
-**Terminal Deliverable:**
-The final deliverable shall be a singular, syntactically valid, and correctly formatted JSON file that constitutes the complete CloudFormation template. It is imperative that intrinsic functions (e.g., `!Ref`, `!GetAtt`, `!Sub`) are correctly utilized to establish dependencies and relationships between resources.
+Use CloudFormation intrinsic functions like Ref, GetAtt, and Sub to wire up the dependencies between resources.
