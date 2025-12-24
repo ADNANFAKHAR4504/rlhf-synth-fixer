@@ -604,18 +604,6 @@ deploy_cloudformation() {
     print_status $MAGENTA "🚀 Deploying CloudFormation ($language) to LocalStack..."
     echo ""
 
-    # Setup SSM parameters required by CloudFormation template
-    print_status $CYAN "🔧 Setting up required SSM parameters..."
-    awslocal ssm put-parameter \
-        --name "/myapp/database/password" \
-        --value "TestPassword123!" \
-        --type "SecureString" \
-        --description "Database password for LocalStack testing" \
-        --overwrite \
-        --region "${AWS_DEFAULT_REGION:-us-east-1}" \
-        2>/dev/null && print_status $GREEN "✅ SSM parameter created" || print_status $YELLOW "⚠️  SSM parameter may already exist"
-    echo ""
-
     cd "$PROJECT_ROOT/lib"
 
     # Find CloudFormation template based on language
