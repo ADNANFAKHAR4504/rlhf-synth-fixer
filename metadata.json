@@ -6,7 +6,7 @@
   "po_id": "LS-292003",
   "team": "synth-2",
   "startedAt": "2025-12-24T04:20:07.000Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
     "Web Application Deployment"
