@@ -1,7 +1,7 @@
 {
   "platform": "cdk",
   "language": "ts",
-  "complexity": "expert",
+  "complexity": "hard",
   "turn_type": "single",
   "po_id": "LS-291857",
   "team": "synth-2",
