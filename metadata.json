@@ -24,7 +24,7 @@
     "ALB",
     "Auto Scaling"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "291457",
     "pr": "Pr1861"
