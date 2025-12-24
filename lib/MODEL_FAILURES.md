@@ -118,7 +118,7 @@ E1029 Found an embedded parameter "${ProjectName}" outside of an "Fn::Sub" at Re
 
 ## Final Test Results
 
-### Unit Tests: 47/47 ✅ PASSED
+### Unit Tests: 47/47  PASSED
 - Template Structure validation
 - Parameters validation (updated for Secrets Manager)
 - Mappings and Conditions validation
@@ -126,7 +126,7 @@ E1029 Found an embedded parameter "${ProjectName}" outside of an "Fn::Sub" at Re
 - Outputs and Resource Tagging validation
 - Security Best Practices validation (updated)
 
-### Integration Tests: 29/29 ✅ PASSED
+### Integration Tests: 29/29  PASSED
 - Stack Outputs Validation
 - Load Balancer Health and Connectivity
 - Database Connectivity and Configuration

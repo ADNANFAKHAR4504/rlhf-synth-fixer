@@ -544,20 +544,20 @@ Outputs:
 
 ## Key Features:
 
-**🎯 Environment Abstraction**: Single template deploys to all environments (dev/test/stage/prod) with different configurations via `Parameters` and `Mappings`.
+** Environment Abstraction**: Single template deploys to all environments (dev/test/stage/prod) with different configurations via `Parameters` and `Mappings`.
 
-**🏗️ Modular Design**: Organized sections for networking, security, compute, and database components with clear separation of concerns.
+**️ Modular Design**: Organized sections for networking, security, compute, and database components with clear separation of concerns.
 
-**🏷️ Consistent Tagging**: All resources tagged with Environment, Owner, Project, and CostCenter for proper governance.
+**️ Consistent Tagging**: All resources tagged with Environment, Owner, Project, and CostCenter for proper governance.
 
-**📊 Environment-Specific Scaling**: 
+** Environment-Specific Scaling**: 
 - Dev: 1 micro instance, basic RDS
 - Test: 2 small instances, basic RDS  
 - Stage: 2-4 medium instances, Multi-AZ RDS
 - Prod: 3-6 large instances, Multi-AZ RDS with backups
 
-**🔒 Security Best Practices**: Layered security groups, private subnets for compute/database, NAT gateways for production-like environments.
+** Security Best Practices**: Layered security groups, private subnets for compute/database, NAT gateways for production-like environments.
 
-**🔄 Cross-Stack Integration**: Outputs enable stack composition and debugging.
+** Cross-Stack Integration**: Outputs enable stack composition and debugging.
 
 Deploy with different parameters to create environment-specific infrastructure while maintaining consistency and avoiding code duplication.
