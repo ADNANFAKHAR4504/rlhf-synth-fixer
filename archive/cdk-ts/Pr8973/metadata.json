@@ -18,5 +18,12 @@
     "API Gateway",
     "IAM"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
