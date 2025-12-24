@@ -16,7 +16,7 @@ S3 Bucket:
 
 IAM Roles:
 
-    Create IAM roles that grant the Lambda function permissions to interact with the S3 bucket (i.e., s3:GetObject).
+    Create IAM roles that grant the Lambda function permissions to interact with the S3 bucket (like s3:GetObject).
 
 CloudFormation Template:
 
