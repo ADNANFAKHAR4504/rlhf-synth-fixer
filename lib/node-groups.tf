@@ -219,7 +219,7 @@ resource "aws_eks_node_group" "spot" {
   }
 
   instance_types = ["m5.large"]
-  capacity_type  = "ON_DEMAND"  # Changed from SPOT for LocalStack compatibility
+  capacity_type  = "ON_DEMAND" # Changed from SPOT for LocalStack compatibility
 
   launch_template {
     id      = aws_launch_template.spot.id
