@@ -1,4 +1,4 @@
-```
+```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "AWS CloudFormation template to provision a secure development environment with networking, EC2, RDS PostgreSQL, and S3.",
