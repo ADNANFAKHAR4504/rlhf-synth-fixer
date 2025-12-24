@@ -73,54 +73,37 @@ detect_platform() {
 }
 
 # Function to verify deployment outputs exist
-# For AWS: Integration tests MUST have deployment outputs
-# For LocalStack Community Edition: Outputs may not be available, skip tests gracefully
+# This is required for all platforms - integration tests MUST have deployment outputs
 verify_deployment_outputs() {
     print_status $YELLOW "🔍 Verifying deployment outputs..."
     local outputs_file="$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
-
+    
     if [ ! -f "$outputs_file" ]; then
         print_status $RED "❌ Deployment outputs file not found: $outputs_file"
         print_status $RED "❌ Integration tests require deployment outputs to run"
         print_status $YELLOW "💡 Make sure deployment step completed successfully"
         exit 1
     fi
-
+    
     print_status $GREEN "✅ Deployment outputs file found"
-
+    
     # Verify outputs file is not empty
     local outputs_content
     outputs_content=$(cat "$outputs_file" 2>/dev/null)
-
+    
     if [ -z "$outputs_content" ] || [ "$outputs_content" = "{}" ]; then
-        # Check if this is LocalStack Community Edition deployment
-        if [ "${PROVIDER:-}" == "localstack" ] || [ -n "${AWS_ENDPOINT_URL:-}" ]; then
-            print_status $YELLOW "⚠️ Deployment outputs file is empty (LocalStack Community Edition limitation)"
-            print_status $YELLOW "ℹ️  Integration tests cannot run without outputs - skipping gracefully"
-            print_status $GREEN "✅ Test validation passed (no outputs available for LocalStack CE)"
-            exit 0
-        else
-            print_status $RED "❌ Deployment outputs file is empty!"
-            print_status $RED "❌ Integration tests require deployment outputs to run"
-            exit 1
-        fi
+        print_status $RED "❌ Deployment outputs file is empty!"
+        print_status $RED "❌ Integration tests require deployment outputs to run"
+        exit 1
     fi
-
+    
     local output_count=$(echo "$outputs_content" | jq 'keys | length' 2>/dev/null || echo "0")
     if [ "$output_count" -eq 0 ]; then
-        # Check if this is LocalStack Community Edition deployment
-        if [ "${PROVIDER:-}" == "localstack" ] || [ -n "${AWS_ENDPOINT_URL:-}" ]; then
-            print_status $YELLOW "⚠️ No deployment outputs found in file (LocalStack Community Edition limitation)"
-            print_status $YELLOW "ℹ️  Integration tests cannot run without outputs - skipping gracefully"
-            print_status $GREEN "✅ Test validation passed (no outputs available for LocalStack CE)"
-            exit 0
-        else
-            print_status $RED "❌ No deployment outputs found in file"
-            print_status $RED "❌ Integration tests require deployment outputs to run"
-            exit 1
-        fi
+        print_status $RED "❌ No deployment outputs found in file"
+        print_status $RED "❌ Integration tests require deployment outputs to run"
+        exit 1
     fi
-
+    
     print_status $GREEN "✅ Found $output_count deployment outputs"
     echo ""
 }
