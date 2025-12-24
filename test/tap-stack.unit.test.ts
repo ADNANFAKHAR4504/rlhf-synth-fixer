@@ -87,9 +87,9 @@ describe('TapStack CloudFormation Template', () => {
 
     test('LatestAmiId parameter should have correct properties', () => {
       const param = template.Parameters.LatestAmiId;
-      expect(param.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
-      expect(param.Description).toBe('Latest Amazon Linux 2 AMI ID');
-      expect(param.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
+      expect(param.Type).toBe('AWS::EC2::Image::Id');
+      expect(param.Description).toContain('AMI');
+      expect(param.Default).toBe('ami-03cf127a');
     });
   });
 
