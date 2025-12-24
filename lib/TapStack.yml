@@ -107,9 +107,6 @@ Resources:
   # S3 Bucket for CloudTrail logs
   CloudTrailBucket:
     Type: AWS::S3::Bucket
-    DependsOn:
-      - DataEncryptionKey
-      - DataEncryptionKeyAlias
     Properties:
       BucketName: !Sub '${BucketPrefix}-audit-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
@@ -212,9 +209,6 @@ Resources:
   # Primary S3 Bucket for sensitive data storage
   SensitiveDataBucket:
     Type: AWS::S3::Bucket
-    DependsOn:
-      - DataEncryptionKey
-      - DataEncryptionKeyAlias
     Properties:
       BucketName: !Sub '${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:

@@ -214,11 +214,7 @@
                         "Value": "Audit Logs"
                     }
                 ]
-            },
-            "DependsOn": [
-                "DataEncryptionKey",
-                "DataEncryptionKeyAlias"
-            ]
+            }
         },
         "CloudTrailBucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
@@ -463,11 +459,7 @@
                         "Value": "Required"
                     }
                 ]
-            },
-            "DependsOn": [
-                "DataEncryptionKey",
-                "DataEncryptionKeyAlias"
-            ]
+            }
         },
         "ReplicationBucket": {
             "Type": "AWS::S3::Bucket",
