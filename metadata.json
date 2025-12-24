@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291520",
+  "team": "synth-2",
+  "startedAt": "2025-08-18T16:37:28.301Z",
+  "subtask": "General Infrastructure Provisioning",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancer",
+    "NAT Gateway",
+    "Internet Gateway",
+    "CloudWatch",
+    "IAM",
+    "Security Groups",
+    "Route Tables",
+    "Subnets"
+  ],
+  "wave": "P1"
+}
