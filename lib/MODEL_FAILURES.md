@@ -3,7 +3,7 @@
 ## Overview
 This document outlines the critical differences between the AI model's response and the ideal CloudFormation template, categorizing issues by severity and impact on deployment, security, and performance.
 
-## 🚨 Critical Issues
+##  Critical Issues
 
 ### 1. **Syntax and Structure Failures**
 
@@ -14,10 +14,10 @@ This document outlines the critical differences between the AI model's response 
 
 #### **Hardcoded Availability Zones**
 ```json
-// ❌ Model Response (BROKEN)
+//  Model Response (BROKEN)
 "AvailabilityZone": "us-east-1a"
 
-// ✅ Ideal Response (FLEXIBLE)
+//  Ideal Response (FLEXIBLE)
 "AvailabilityZone": {
   "Fn::Select": [0, {"Fn::GetAZs": ""}]
 }
@@ -27,10 +27,10 @@ This document outlines the critical differences between the AI model's response 
 
 #### **Hardcoded AMI ID**
 ```json
-// ❌ Model Response (WILL FAIL)
+//  Model Response (WILL FAIL)
 "ImageId": "ami-0abcdef1234567890"
 
-// ✅ Ideal Response (DYNAMIC)
+//  Ideal Response (DYNAMIC)
 "ImageId": {"Ref": "LatestAmiId"}
 ```
 - **Impact**: Invalid AMI ID causes immediate deployment failure
@@ -38,10 +38,10 @@ This document outlines the critical differences between the AI model's response 
 
 #### **Hardcoded Key Pair**
 ```json
-// ❌ Model Response (INFLEXIBLE)
+//  Model Response (INFLEXIBLE)
 "KeyName": "your-key-pair"
 
-// ✅ Ideal Response (CONDITIONAL)
+//  Ideal Response (CONDITIONAL)
 "KeyName": {
   "Fn::If": ["HasKeyPair", {"Ref": "KeyPairName"}, {"Ref": "AWS::NoValue"}]
 }
@@ -53,14 +53,14 @@ This document outlines the critical differences between the AI model's response 
 
 #### **Overly Permissive IAM Policies**
 ```json
-// ❌ Model Response (DANGEROUS)
+//  Model Response (DANGEROUS)
 {
   "Effect": "Allow",
   "Action": ["logs:*", "s3:*"],
   "Resource": "*"
 }
 
-// ✅ Ideal Response (LEAST PRIVILEGE)
+//  Ideal Response (LEAST PRIVILEGE)
 {
   "Effect": "Allow",
   "Action": ["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
@@ -116,12 +116,12 @@ This document outlines the critical differences between the AI model's response 
 
 #### **Insufficient Parameters**
 ```json
-// ❌ Model Response (LIMITED)
+//  Model Response (LIMITED)
 "Parameters": {
   "Stage": {"Type": "String", "Default": "dev"}
 }
 
-// ✅ Ideal Response (COMPREHENSIVE)
+//  Ideal Response (COMPREHENSIVE)
 "Parameters": {
   "EnvironmentSuffix": {...},
   "KeyPairName": {...},
@@ -144,14 +144,14 @@ This document outlines the critical differences between the AI model's response 
 
 #### **Inadequate DynamoDB Configuration**
 ```json
-// ❌ Model Response (BASIC)
+//  Model Response (BASIC)
 "DynamoDBTable": {
   "AttributeDefinitions": [{"AttributeName": "Id", "AttributeType": "S"}],
   "KeySchema": [{"AttributeName": "Id", "KeyType": "HASH"}],
   "BillingMode": "PAY_PER_REQUEST"
 }
 
-// ✅ Ideal Response (PRODUCTION-READY)
+//  Ideal Response (PRODUCTION-READY)
 "DynamoDBTable": {
   "AttributeDefinitions": [...],
   "KeySchema": [...],
@@ -196,7 +196,7 @@ This document outlines the critical differences between the AI model's response 
 - **Missing**: Consistent tagging across resources
 - **Impact**: Poor resource management and cost tracking
 
-## 📊 Severity Summary
+##  Severity Summary
 
 | Category | Critical | High | Medium | Low | Total |
 |----------|----------|------|--------|-----|-------|
@@ -207,29 +207,29 @@ This document outlines the critical differences between the AI model's response 
 | Operations | 1 | 2 | 3 | 2 | 8 |
 | **TOTAL** | **8** | **8** | **9** | **4** | **29** |
 
-## 🎯 Impact Analysis
+##  Impact Analysis
 
 ### **Immediate Deployment Failures**
-1. Invalid AMI ID → Stack creation fails
-2. Hardcoded AZ → Fails in other regions
-3. Non-existent key pair → Instance launch fails
+1. Invalid AMI ID  Stack creation fails
+2. Hardcoded AZ  Fails in other regions
+3. Non-existent key pair  Instance launch fails
 
 ### **Security Risks**
-1. Overprivileged IAM roles → Data breach potential
-2. No encryption → Compliance violations
-3. Open SSH access → Unauthorized access
+1. Overprivileged IAM roles  Data breach potential
+2. No encryption  Compliance violations
+3. Open SSH access  Unauthorized access
 
 ### **Operational Challenges**
-1. No monitoring → Blind to issues
-2. Single instance → No redundancy
-3. Missing outputs → Cannot integrate with other systems
+1. No monitoring  Blind to issues
+2. Single instance  No redundancy
+3. Missing outputs  Cannot integrate with other systems
 
 ### **Long-term Issues**
-1. Poor scalability → Cannot handle growth
-2. Manual operations → High maintenance
-3. No disaster recovery → Data loss risk
+1. Poor scalability  Cannot handle growth
+2. Manual operations  High maintenance
+3. No disaster recovery  Data loss risk
 
-## 🛠️ Recommendations
+##  Recommendations
 
 ### **Immediate Fixes Required**
 1. Fix hardcoded values (AMI, AZ, KeyPair)
@@ -249,7 +249,7 @@ This document outlines the critical differences between the AI model's response 
 3. Add conditional SSH access controls
 4. Configure audit logging
 
-## 📈 Quality Metrics
+##  Quality Metrics
 
 | Metric | Model Response | Ideal Response | Gap |
 |--------|----------------|----------------|-----|
@@ -263,7 +263,7 @@ This document outlines the critical differences between the AI model's response 
 
 **Overall Quality Score: 32% (Model) vs 100% (Ideal)**
 
-## 🔍 Conclusion
+##  Conclusion
 
 The model response represents a basic, development-only template with significant security, availability, and operational deficiencies. The ideal response provides a production-ready, secure, highly available infrastructure suitable for enterprise deployment.
 

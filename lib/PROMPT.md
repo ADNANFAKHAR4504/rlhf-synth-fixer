@@ -3,7 +3,7 @@
 
 ---
 
-### 🧩 **Requirements Overview**:
+### **Requirements Overview**:
 
 You are setting up infrastructure for a **web application** that must meet **enterprise-grade cloud architecture standards**.
 
@@ -35,7 +35,7 @@ You are setting up infrastructure for a **web application** that must meet **ent
 
 ---
 
-### 🔐 **Compliance & Naming Constraints**:
+### **Compliance & Naming Constraints**:
 
 * Resources must be deployed in **`us-east-1`**.
 * **Resource names** must follow this pattern:
@@ -47,7 +47,7 @@ You are setting up infrastructure for a **web application** that must meet **ent
 
 ---
 
-### 📦 **Expected Output**:
+### **Expected Output**:
 
 A **CloudFormation template in valid JSON format** that:
 
