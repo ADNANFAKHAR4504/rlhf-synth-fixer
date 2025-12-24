@@ -1,80 +1,29 @@
-Functional scope (build everything new):
+Build a production Aurora MySQL 8.0 cluster in us-east-1 across three availability zones with automatic failover, read replica auto scaling, database activity streams, and CloudWatch monitoring.
 
-* Generate a single CloudFormation template named **TapStack.yml** that **creates** (does not reference) all infrastructure from scratch for a production-grade, highly available **Aurora MySQL 8.0** deployment in **us-east-1** spanning three AZs (**us-east-1a, us-east-1b, us-east-1c**).
-* All logical/resource names, identifiers, and exported names MUST include **`-${EnvironmentSuffix}`** to prevent collisions across environments.
-* The template MUST be **pure YAML** (no JSON), **no YAML anchors/aliases**, and use standard CloudFormation intrinsics (`!Ref`, `!Sub`, `!GetAtt`, etc.).
-* Enforce safe parameterization and idempotent updates with explicit **DeletionPolicy**/**UpdateReplacePolicy** (e.g., `Snapshot` on stateful data).
-* Include complete **Parameters**, **Conditions** (if any), **Metadata**, **Mappings** (only if truly needed), **Resources**, and **Outputs** sections.
+Create a CloudFormation template named TapStack.yml that provisions the following infrastructure:
 
-Core services (mandatory):
+Aurora MySQL cluster with one writer instance in us-east-1a and two reader instances in us-east-1b and us-east-1c. Configure promotion tiers so the writer has tier 0 and readers have tiers 1 and 2 for deterministic failover ordering.
 
-1. **Amazon Aurora MySQL** (RDS/Aurora Cluster + Instances + Parameter Groups)
-2. **Amazon CloudWatch** (Enhanced Monitoring + Alarms)
-3. **Amazon Kinesis** (Database Activity Streams destination)
+Enable Application Auto Scaling for read replicas targeting 70 percent CPU utilization with minimum 2 and maximum 5 instances.
 
-Mandatory requirements (implement all):
+Enable 72-hour backtrack window for point-in-time recovery without restoring from backup.
 
-1. **Aurora HA topology**: Create an **Aurora MySQL 8.0 cluster** with **one writer** and **two initial reader instances**, distributed across **us-east-1a / us-east-1b / us-east-1c**.
-2. **Automatic failover & promotion priorities**: Explicitly set **promotion tiers** so **writer = 0**, readers use **tiers 1–15** in ascending order for deterministic failover.
-3. **Aurora Auto Scaling for read replicas**: Target **CPUUtilization = 70%**, **MinCapacity = 2**, **MaxCapacity = 5** instances. Ensure scaling policies attach correctly to the **DB cluster** and govern **reader** instance count.
-4. **Backtrack**: Enable **BacktrackWindow = 72 hours** for near-instant rollback without downtime.
-5. **Enhanced monitoring**: Enable **EnhancedMonitoringInterval = 10 seconds** with metrics streaming to CloudWatch (include correct IAM role and permissions for RDS to publish EM metrics).
-6. **Database Activity Streams (DAS)**: Enable **synchronous** DAS on the cluster and stream to a **Kinesis Data Stream** created in this template (include all required roles/permissions, keys if needed).
-7. **CloudWatch alarms**:
+Configure enhanced monitoring with 10-second intervals. Create an IAM role that allows RDS to publish metrics to CloudWatch.
 
-   * **Replica lag** alarm when **`AuroraReplicaLag` > 1000 ms** across readers (statistic and period configured appropriately).
-   * **Writer CPU** alarm when **`CPUUtilization` > 80%** for the writer instance.
+Enable Database Activity Streams in synchronous mode. Create a Kinesis Data Stream to receive the activity data. Include the required IAM role with permissions scoped to the specific Kinesis stream ARN.
 
-Optional enhancement (choose and implement exactly one):
+Create CloudWatch alarms for replica lag exceeding 1000 milliseconds and writer CPU exceeding 80 percent. Configure an SNS topic with email subscription for alarm notifications.
 
-* **Automated backups**: **35-day** retention and **preferred backup window** of **03:00–04:00 UTC**, plus **Performance Insights** enabled with **7-day** retention; or
-* **SNS notifications**: An **SNS Topic** with an **email subscription** for automated failover/Alarm notifications.
+Create a custom cluster parameter group with binlog_format set to ROW to support future cross-region replication.
 
-Context and constraints:
+Security requirements: Create a security group that only allows MySQL port 3306 from the application tier security group passed as a parameter. Do not allow 0.0.0.0/0 ingress.
 
-* Production deployment in **us-east-1** across **three AZs** with **private DB subnets** and a **custom DB subnet group**.
-* Security group(s) must restrict access to the **application tier only** (ingress parameterized via SG IDs or CIDRs as parameters; default to no 0.0.0.0/0).
-* Prepare for **cross-region replication to us-west-2** by enabling **binary logging** via a **custom cluster parameter group** with `binlog_format=ROW` (parameter group created in-template and attached to the cluster). Full cross-region resources can be out of scope, but the cluster must be configured to allow it.
-* **Enhanced Monitoring** streams to CloudWatch with 10-second granularity as above.
-* **Zero-downtime tolerance** during **08:00–22:00 EST** business window drives the failover, scaling, and monitoring posture—ensure deterministic promotion priorities and healthy instance placement across all three AZs.
+Template parameters should include EnvironmentSuffix validated with pattern a-z0-9 and hyphens between 3 and 20 characters, VpcId, three private subnet IDs for each AZ, application security group ID, master username, master password with NoEcho, and optional KMS key ARN for encryption.
 
-Template authoring rules & best practices:
+All resource names must include the EnvironmentSuffix to prevent naming collisions across environments.
 
-* **All resource names include `-${EnvironmentSuffix}`** (example: `aurora-cluster-${EnvironmentSuffix}`, `db-sg-${EnvironmentSuffix}`, `kds-das-${EnvironmentSuffix}`).
-* **No hard AllowedValues** for `EnvironmentSuffix`. Instead, validate with a **safe regex**:
+Set DeletionPolicy and UpdateReplacePolicy to Snapshot on the cluster and instances to preserve data.
 
-  * `EnvironmentSuffix` **AllowedPattern**: `^[a-z0-9-]{3,20}$`
-  * Helpful **ConstraintDescription** explaining allowed characters/length.
-* Require explicit **Parameters** for VPC ID, **three** private **SubnetIds** (one per AZ), application-tier **SecurityGroupId(s)** permitted to access the DB, **MasterUsername**, **MasterPassword** (use `NoEcho: true`), KMS Key ARNs if encryption at rest is specified (OK to add sensible defaults/Condition).
-* Use **DeletionPolicy: Snapshot** and **UpdateReplacePolicy: Snapshot** on the DB cluster and instances.
-* Ensure **DependsOn** and ordering are correct (parameter groups, subnet group, roles/policies before cluster; cluster before instances; scaling and alarms after instances).
-* Avoid circular dependencies; keep IAM policies least-privilege (RDS Enhanced Monitoring role, DAS/Kinesis permissions).
-* No YAML anchors/aliases; keep the template **valid for cfn-lint** (no unsupported properties).
+Export the cluster writer endpoint, reader endpoint, and Kinesis stream ARN as stack outputs.
 
-Inputs (parameters to include):
-
-* `EnvironmentSuffix` (regex validated, included in every name)
-* `VpcId`, `DbSubnetIds` (exactly 3, mapped to the target AZs), `AppSecurityGroupId` (or list)
-* `DBEngineVersion` (default **8.0.mysql_aurora.3.x** family with sensible default), `DBInstanceClass` (e.g., `db.r6g.large`), `MasterUsername`, `MasterPassword` (`NoEcho`)
-* Optional: `KmsKeyId` for storage encryption (if specified, enable storage encryption), `MonitoringRoleExistingArn` (if not provided, create a role)
-
-Outputs (must provide):
-
-* **ClusterEndpoint** (writer endpoint)
-* **ReaderEndpoint** (read-only endpoint)
-* **KinesisStreamArn** (for Database Activity Streams)
-
-Acceptance criteria:
-
-* The template creates a writer and two readers across **us-east-1a/b/c** with the specified **promotion priorities** and **Auto Scaling** policy (2–5 readers, CPU target 70%).
-* **Backtrack** is enabled for **72 hours**.
-* **Enhanced Monitoring** at **10s** is active and publishing.
-* **DAS** is enabled in **synchronous mode** and producing to the provisioned **Kinesis stream**.
-* **CloudWatch alarms** exist for **replica lag > 1000ms** and **writer CPU > 80%**.
-* All stateful resources have **Snapshot** policies for delete/replace.
-* All names include **`-${EnvironmentSuffix}`**; template passes `cfn-lint` property validation.
-
-Deliverable:
-
-* A single file **TapStack.yml** (YAML) containing **all** parameters, resources, policies, scaling configurations, monitoring, alarms, and outputs as specified above—ready to deploy in a new account with no external dependencies.
-* The file must adhere strictly to CloudFormation YAML syntax and best practices, with clear in-line descriptions where helpful, and no usage of YAML anchors or JSON fragments.
+The template must be pure YAML with no anchors or aliases and must pass cfn-lint validation.
