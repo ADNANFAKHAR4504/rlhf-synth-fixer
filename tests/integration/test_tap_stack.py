@@ -22,13 +22,38 @@ class TestTapStackDeployedResources(unittest.TestCase):
 
         os.environ["AWS_REGION"] = cls.region
 
-        # NOTE: Do NOT change PULUMI_BACKEND_URL here!
-        # The tests need to read state from the same S3 backend that Deploy used.
-        # The PULUMI_BACKEND_URL environment variable should already be set by the CI/CD workflow.
+        # When running with LocalStack, the integration test script sets AWS_ACCESS_KEY_ID=test
+        # But Pulumi needs real AWS credentials to access the S3 backend where state is stored.
+        # We need to temporarily restore real credentials for Pulumi, then set LocalStack credentials for boto3 clients.
+
+        # Save LocalStack test credentials if present
+        localstack_access_key = os.getenv("AWS_ACCESS_KEY_ID", "")
+        localstack_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+
+        # Check if we're running with LocalStack test credentials
+        is_localstack = localstack_access_key == "test" and localstack_secret_key == "test"
+
+        if is_localstack:
+            # For LocalStack environments, we need real credentials for Pulumi S3 backend access
+            # The CI/CD workflow should set these as REAL_AWS_* environment variables
+            real_access_key = os.getenv("REAL_AWS_ACCESS_KEY_ID", "")
+            real_secret_key = os.getenv("REAL_AWS_SECRET_ACCESS_KEY", "")
+
+            if real_access_key and real_secret_key:
+                # Temporarily use real credentials for Pulumi backend access
+                os.environ["AWS_ACCESS_KEY_ID"] = real_access_key
+                os.environ["AWS_SECRET_ACCESS_KEY"] = real_secret_key
+                print("Using real AWS credentials for Pulumi S3 backend access")
 
         # Use Automation API to select the stack
         ws = auto.LocalWorkspace(work_dir=os.getcwd())
         cls.stack = auto.select_stack(stack_name=cls.stack_name, work_dir=os.getcwd())
+
+        # Restore LocalStack test credentials for boto3 clients
+        if is_localstack:
+            os.environ["AWS_ACCESS_KEY_ID"] = localstack_access_key
+            os.environ["AWS_SECRET_ACCESS_KEY"] = localstack_secret_key
+            print("Restored LocalStack test credentials for boto3 clients")
 
         # Fetch outputs
         outputs = cls.stack.outputs()
