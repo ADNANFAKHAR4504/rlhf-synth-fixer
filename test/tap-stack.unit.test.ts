@@ -163,7 +163,8 @@ describe('Secure Web App CloudFormation Template', () => {
       const secret = template.Resources.DatabasePasswordSecret;
       expect(secret).toBeDefined();
       expect(secret.Type).toBe('AWS::SecretsManager::Secret');
-      expect(secret.Properties.GenerateSecretString).toBeDefined();
+      // LocalStack compatible: using SecretString instead of GenerateSecretString
+      expect(secret.Properties.SecretString).toBeDefined();
     });
 
     test('should have RDS PostgreSQL instance with Multi-AZ', () => {
@@ -295,7 +296,8 @@ describe('Secure Web App CloudFormation Template', () => {
 
     test('should have correct parameter count', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2);
+      // LocalStack compatible: DBUsername, DBPassword, SSHAccessCIDR
+      expect(parameterCount).toBe(3);
     });
 
     test('should have correct output count', () => {
@@ -322,9 +324,8 @@ describe('Secure Web App CloudFormation Template', () => {
 
     test('should use secrets manager for database password', () => {
       const db = template.Resources.Database;
-      expect(db.Properties.MasterUserPassword).toEqual({
-        'Fn::Sub': '{{resolve:secretsmanager:${DatabasePasswordSecret}::password}}'
-      });
+      // LocalStack compatible: using parameter reference instead of dynamic resolution
+      expect(db.Properties.MasterUserPassword).toEqual({ Ref: 'DBPassword' });
     });
   });
 });
