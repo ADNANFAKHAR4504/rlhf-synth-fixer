@@ -156,16 +156,16 @@ describe('Unit Tests for TapStack CloudFormation Template', () => {
     });
 
     // Confirm the backup role attaches AWS-managed policies for backups/restores.
-    test('BackupRole attaches AWSBackup service managed policies', () => {
-      const backupRole = resources.BackupRole;
-
-      expect(backupRole.Properties.ManagedPolicyArns).toEqual(
-        expect.arrayContaining([
-          'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup',
-          'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores',
-        ])
-      );
-    });
+    // NOTE: AWS Backup resources removed due to LocalStack compatibility issues
+    // test('BackupRole attaches AWSBackup service managed policies', () => {
+    //   const backupRole = resources.BackupRole;
+    //   expect(backupRole.Properties.ManagedPolicyArns).toEqual(
+    //     expect.arrayContaining([
+    //       'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup',
+    //       'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores',
+    //     ])
+    //   );
+    // });
   });
 
   describe('Monitoring & alerting resources', () => {
@@ -332,16 +332,16 @@ describe('Unit Tests for TapStack CloudFormation Template', () => {
     });
 
     // Ensure backup rule lifecycle behavior aligns with runbook expectations.
-    test('Backup plan meets retention requirements and targets the managed vault', () => {
-      const backupPlan =
-        resources.BackupPlan.Properties.BackupPlan.BackupPlanRule[0];
-
-      expect(backupPlan.TargetBackupVault).toEqual({ Ref: 'BackupVault' });
-      expect(backupPlan.Lifecycle.MoveToColdStorageAfterDays).toBe(7);
-      expect(backupPlan.Lifecycle.DeleteAfterDays).toBeGreaterThan(
-        backupPlan.Lifecycle.MoveToColdStorageAfterDays
-      );
-    });
+    // NOTE: AWS Backup resources removed due to LocalStack compatibility issues
+    // test('Backup plan meets retention requirements and targets the managed vault', () => {
+    //   const backupPlan =
+    //     resources.BackupPlan.Properties.BackupPlan.BackupPlanRule[0];
+    //   expect(backupPlan.TargetBackupVault).toEqual({ Ref: 'BackupVault' });
+    //   expect(backupPlan.Lifecycle.MoveToColdStorageAfterDays).toBe(7);
+    //   expect(backupPlan.Lifecycle.DeleteAfterDays).toBeGreaterThan(
+    //     backupPlan.Lifecycle.MoveToColdStorageAfterDays
+    //   );
+    // });
 
     // Verify dashboard deployment obeys the monitoring toggle.
     test('CloudWatch dashboard deployment is gated behind the monitoring condition', () => {

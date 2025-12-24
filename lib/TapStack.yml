@@ -1146,7 +1146,7 @@ Resources:
     Properties:
       DBName: !Ref DatabaseName
       Engine: MySQL
-      EngineVersion: '8.0.43'
+      EngineVersion: '8.0'
       DBInstanceClass: !Ref DatabaseInstanceClass
       AllocatedStorage: 20
       MaxAllocatedStorage: 100
