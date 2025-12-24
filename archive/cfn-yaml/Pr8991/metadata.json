@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291426",
+  "team": "synth-2",
+  "startedAt": "2025-08-08T12:51:04.773Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "AutoScaling",
+    "SecretsManager"
+  ],
+  "wave": "P1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
