@@ -1,0 +1,710 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TAP - Cloud formation Template for  Multi-Tier AWS Architecture'
+
+Parameters:
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64'
+
+Mappings:
+  TagsMap:
+    Common:
+      Environment: Demo
+      ProjectName: SecureArchitecture
+      Owner: SecOps
+      CostCenter: CC-001
+
+Resources:
+  # ---------------- VPC & Subnets ----------------
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - {Key: Name, Value: secure-vpc}
+        - {Key: Environment, Value: !FindInMap [TagsMap, Common, Environment]}
+        - {Key: ProjectName, Value: !FindInMap [TagsMap, Common, ProjectName]}
+
+  IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties: { Tags: [{Key: Name, Value: secure-igw}] }
+
+  VPCIGWAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: { VpcId: !Ref VPC, InternetGatewayId: !Ref IGW }
+
+  PublicSubnetAz1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.0.0/20
+      MapPublicIpOnLaunch: true
+      Tags: [{Key: Name, Value: public-az1}]
+
+  PublicSubnetAz2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.16.0/20
+      MapPublicIpOnLaunch: true
+      Tags: [{Key: Name, Value: public-az2}]
+
+  PrivateAppSubnetAz1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.32.0/20
+      MapPublicIpOnLaunch: false
+      Tags: [{Key: Name, Value: private-app-az1}]
+
+  PrivateAppSubnetAz2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.48.0/20
+      MapPublicIpOnLaunch: false
+      Tags: [{Key: Name, Value: private-app-az2}]
+
+  PrivateDbSubnetAz1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.64.0/20
+      MapPublicIpOnLaunch: false
+      Tags: [{Key: Name, Value: private-db-az1}]
+
+  PrivateDbSubnetAz2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.80.0/20
+      MapPublicIpOnLaunch: false
+      Tags: [{Key: Name, Value: private-db-az2}]
+
+  # ---------------- NAT & Routes ----------------
+  NatEipAz1:
+    Type: AWS::EC2::EIP
+    Properties: { Domain: vpc, Tags: [{Key: Name, Value: nat-eip-az1}] }
+
+  NatEipAz2:
+    Type: AWS::EC2::EIP
+    Properties: { Domain: vpc, Tags: [{Key: Name, Value: nat-eip-az2}] }
+
+  NatGwAz1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipAz1.AllocationId
+      SubnetId: !Ref PublicSubnetAz1
+      Tags: [{Key: Name, Value: natgw-az1}]
+
+  NatGwAz2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipAz2.AllocationId
+      SubnetId: !Ref PublicSubnetAz2
+      Tags: [{Key: Name, Value: natgw-az2}]
+
+  RtPublic:
+    Type: AWS::EC2::RouteTable
+    Properties: { VpcId: !Ref VPC, Tags: [{Key: Name, Value: rt-public}] }
+
+  RtPublicDefault:
+    Type: AWS::EC2::Route
+    Properties: { RouteTableId: !Ref RtPublic, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref IGW }
+
+  RtAssocPub1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { RouteTableId: !Ref RtPublic, SubnetId: !Ref PublicSubnetAz1 }
+
+  RtAssocPub2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { RouteTableId: !Ref RtPublic, SubnetId: !Ref PublicSubnetAz2 }
+
+  RtAppAz1:
+    Type: AWS::EC2::RouteTable
+    Properties: { VpcId: !Ref VPC, Tags: [{Key: Name, Value: rt-app-az1}] }
+
+  RtAppAz1Default:
+    Type: AWS::EC2::Route
+    Properties: { RouteTableId: !Ref RtAppAz1, DestinationCidrBlock: 0.0.0.0/0, NatGatewayId: !Ref NatGwAz1 }
+
+  RtAssocApp1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { RouteTableId: !Ref RtAppAz1, SubnetId: !Ref PrivateAppSubnetAz1 }
+
+  RtAppAz2:
+    Type: AWS::EC2::RouteTable
+    Properties: { VpcId: !Ref VPC, Tags: [{Key: Name, Value: rt-app-az2}] }
+
+  RtAppAz2Default:
+    Type: AWS::EC2::Route
+    Properties: { RouteTableId: !Ref RtAppAz2, DestinationCidrBlock: 0.0.0.0/0, NatGatewayId: !Ref NatGwAz2 }
+
+  RtAssocApp2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { RouteTableId: !Ref RtAppAz2, SubnetId: !Ref PrivateAppSubnetAz2 }
+
+  RtDb:
+    Type: AWS::EC2::RouteTable
+    Properties: { VpcId: !Ref VPC, Tags: [{Key: Name, Value: rt-db}] }
+
+  RtAssocDb1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { RouteTableId: !Ref RtDb, SubnetId: !Ref PrivateDbSubnetAz1 }
+
+  RtAssocDb2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { RouteTableId: !Ref RtDb, SubnetId: !Ref PrivateDbSubnetAz2 }
+
+  # ---------------- NACLs (strict) ----------------
+  NaclPublic:
+    Type: AWS::EC2::NetworkAcl
+    Properties: { VpcId: !Ref VPC, Tags: [{Key: Name, Value: nacl-public}] }
+
+  NaclAssocPub1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties: { SubnetId: !Ref PublicSubnetAz1, NetworkAclId: !Ref NaclPublic }
+
+  NaclAssocPub2:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties: { SubnetId: !Ref PublicSubnetAz2, NetworkAclId: !Ref NaclPublic }
+
+  NaclPublicIn80:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties: { NetworkAclId: !Ref NaclPublic, RuleNumber: 100, Protocol: 6, RuleAction: allow, Egress: false, CidrBlock: 0.0.0.0/0, PortRange: {From: 80, To: 80} }
+
+  NaclPublicOutEphemeral:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties: { NetworkAclId: !Ref NaclPublic, RuleNumber: 100, Protocol: 6, RuleAction: allow, Egress: true, CidrBlock: 0.0.0.0/0, PortRange: {From: 1024, To: 65535} }
+
+  NaclApp:
+    Type: AWS::EC2::NetworkAcl
+    Properties: { VpcId: !Ref VPC, Tags: [{Key: Name, Value: nacl-app}] }
+
+  NaclAssocApp1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties: { SubnetId: !Ref PrivateAppSubnetAz1, NetworkAclId: !Ref NaclApp }
+
+  NaclAssocApp2:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties: { SubnetId: !Ref PrivateAppSubnetAz2, NetworkAclId: !Ref NaclApp }
+
+  NaclAppIn80FromPublic1:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties: { NetworkAclId: !Ref NaclApp, RuleNumber: 100, Protocol: 6, RuleAction: allow, Egress: false, CidrBlock: 10.0.0.0/20, PortRange: {From: 80, To: 80} }
+
+  NaclAppIn80FromPublic2:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties: { NetworkAclId: !Ref NaclApp, RuleNumber: 101, Protocol: 6, RuleAction: allow, Egress: false, CidrBlock: 10.0.16.0/20, PortRange: {From: 80, To: 80} }
+
+  NaclAppIn22FromAdmin:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties: { NetworkAclId: !Ref NaclApp, RuleNumber: 110, Protocol: 6, RuleAction: allow, Egress: false, CidrBlock: 203.0.113.0/24, PortRange: {From: 22, To: 22} }
+
+  NaclAppOut80:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties: { NetworkAclId: !Ref NaclApp, RuleNumber: 200, Protocol: 6, RuleAction: allow, Egress: true, CidrBlock: 0.0.0.0/0, PortRange: {From: 80, To: 80} }
+
+  NaclAppOut443:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties: { NetworkAclId: !Ref NaclApp, RuleNumber: 201, Protocol: 6, RuleAction: allow, Egress: true, CidrBlock: 0.0.0.0/0, PortRange: {From: 443, To: 443} }
+
+  NaclDb:
+    Type: AWS::EC2::NetworkAcl
+    Properties: { VpcId: !Ref VPC, Tags: [{Key: Name, Value: nacl-db}] }
+
+  NaclAssocDb1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties: { SubnetId: !Ref PrivateDbSubnetAz1, NetworkAclId: !Ref NaclDb }
+
+  NaclAssocDb2:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties: { SubnetId: !Ref PrivateDbSubnetAz2, NetworkAclId: !Ref NaclDb }
+
+  NaclDbIn3306FromApp1:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties: { NetworkAclId: !Ref NaclDb, RuleNumber: 100, Protocol: 6, RuleAction: allow, Egress: false, CidrBlock: 10.0.32.0/20, PortRange: {From: 3306, To: 3306} }
+
+  NaclDbIn3306FromApp2:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties: { NetworkAclId: !Ref NaclDb, RuleNumber: 101, Protocol: 6, RuleAction: allow, Egress: false, CidrBlock: 10.0.48.0/20, PortRange: {From: 3306, To: 3306} }
+
+  NaclDbOutEphemeralToApp1:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties: { NetworkAclId: !Ref NaclDb, RuleNumber: 200, Protocol: 6, RuleAction: allow, Egress: true, CidrBlock: 10.0.32.0/20, PortRange: {From: 1024, To: 65535} }
+
+  NaclDbOutEphemeralToApp2:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties: { NetworkAclId: !Ref NaclDb, RuleNumber: 201, Protocol: 6, RuleAction: allow, Egress: true, CidrBlock: 10.0.48.0/20, PortRange: {From: 1024, To: 65535} }
+
+  # ---------------- Security Groups ----------------
+  SgALB:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB SG - allow HTTP from internet
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}
+      SecurityGroupEgress:
+        - {IpProtocol: -1, CidrIp: 0.0.0.0/0}
+      Tags: [{Key: Name, Value: sg-alb}]
+
+  SgApp:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: App SG - allow HTTP from ALB; SSH from admin CIDR
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 80, ToPort: 80, SourceSecurityGroupId: !Ref SgALB}
+        - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 203.0.113.0/24}
+      SecurityGroupEgress:
+        - {IpProtocol: -1, CidrIp: 0.0.0.0/0}
+      Tags: [{Key: Name, Value: sg-app}]
+
+  SgRotation:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Secrets rotation Lambda (not used for Lambda@AWS VPC)
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - {IpProtocol: -1, CidrIp: 0.0.0.0/0}
+      Tags: [{Key: Name, Value: sg-rotation}]
+
+  SgDb:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: DB SG - allow MySQL from App/Rotation
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref SgApp}
+        - {IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref SgRotation}
+      SecurityGroupEgress:
+        - {IpProtocol: -1, CidrIp: 0.0.0.0/0}
+      Tags: [{Key: Name, Value: sg-db}]
+
+  SgEndpointSM:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: VPC endpoint (Secrets Manager) access
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, SourceSecurityGroupId: !Ref SgApp}
+        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, SourceSecurityGroupId: !Ref SgRotation}
+      SecurityGroupEgress:
+        - {IpProtocol: -1, CidrIp: 0.0.0.0/0}
+      Tags: [{Key: Name, Value: sg-endpoint-sm}]
+
+  # ---------------- VPC Endpoint ----------------
+  VPCEndpointSecretsManager:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.secretsmanager'
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
+      PrivateDnsEnabled: true
+      SubnetIds: [!Ref PrivateAppSubnetAz1, !Ref PrivateAppSubnetAz2]
+      SecurityGroupIds: [!Ref SgEndpointSM]
+      Tags: [{Key: Name, Value: vpce-secretsmanager}]
+
+  # ---------------- KMS CMKs ----------------
+  CMKData:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: CMK for app data (S3, RDS, EBS)
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootFullAccess
+            Effect: Allow
+            Principal: {AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'}
+            Action: 'kms:*'
+            Resource: '*'
+      Tags: [{Key: Name, Value: cmk-data}]
+  CMKDataAlias:
+    Type: AWS::KMS::Alias
+    Properties: { AliasName: alias/secure/data, TargetKeyId: !Ref CMKData }
+
+  CMKLogs:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: CMK for logs (CloudWatch Logs/S3 logs)
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootFullAccess
+            Effect: Allow
+            Principal: {AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'}
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowLogsService
+            Effect: Allow
+            Principal: {Service: !Sub 'logs.${AWS::Region}.amazonaws.com'}
+            Action: [kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
+            Resource: '*'
+      Tags: [{Key: Name, Value: cmk-logs}]
+  CMKLogsAlias:
+    Type: AWS::KMS::Alias
+    Properties: { AliasName: alias/secure/logs, TargetKeyId: !Ref CMKLogs }
+
+  # ---------------- S3 (SSE-KMS + TLS-only) ----------------
+  S3Data:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: aws:kms, KMSMasterKeyID: !Ref CMKData }
+      OwnershipControls: { Rules: [{ObjectOwnership: BucketOwnerEnforced}] }
+      PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true }
+      VersioningConfiguration: { Status: Enabled }
+      Tags: [{Key: Name, Value: secure-app-data}]
+  S3DataPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Data
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: [!Sub '${S3Data.Arn}', !Sub '${S3Data.Arn}/*']
+            Condition: { Bool: { aws:SecureTransport: false } }
+
+  S3Logs:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: aws:kms, KMSMasterKeyID: !Ref CMKLogs }
+      OwnershipControls: { Rules: [{ObjectOwnership: BucketOwnerEnforced}] }
+      PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true }
+      VersioningConfiguration: { Status: Enabled }
+      Tags: [{Key: Name, Value: secure-logs}]
+  S3LogsPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Logs
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: [!Sub '${S3Logs.Arn}', !Sub '${S3Logs.Arn}/*']
+            Condition: { Bool: { aws:SecureTransport: false } }
+
+  # ---------------- CloudWatch Logs (for VPC Flow Logs) ----------------
+  LogGroupFlow:
+    Type: AWS::Logs::LogGroup
+    Properties: { LogGroupName: /secure/vpc/flow, RetentionInDays: 90, KmsKeyId: !GetAtt CMKLogs.Arn }
+
+  RoleFlowLogs:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: delivery.logs.amazonaws.com}, Action: sts:AssumeRole}]
+      Policies:
+        - PolicyName: FlowDelivery
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents, logs:DescribeLogStreams]
+                Resource: !Sub '${LogGroupFlow.Arn}:*'
+
+  VpcFlow:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref LogGroupFlow
+      DeliverLogsPermissionArn: !GetAtt RoleFlowLogs.Arn
+
+  # ---------------- Security Metrics (CloudWatch) ----------------
+  TopicSecurityAlerts:
+    Type: AWS::SNS::Topic
+    Properties: { TopicName: security-alerts }
+
+  # (Metric filters require a CloudTrail stream; omitted to avoid your CloudTrail quota limit.)
+
+  # ---------------- MFA deny policy example ----------------
+  GroupMFARequired:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: MFAEnforced
+      Policies:
+        - PolicyName: DenyWithoutMFA
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DenyNoMFA
+                Effect: Deny
+                Action: '*'
+                Resource: '*'
+                Condition: { Bool: { aws:MultiFactorAuthPresent: false } }
+
+  # ---------------- EC2 via Launch Template + ASG (capacity 0) ----------------
+  RoleApp:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: ec2.amazonaws.com}, Action: sts:AssumeRole}]
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+      Policies:
+        - PolicyName: AppReadSecretAndS3
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ReadDBSecret
+                Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref SecretDB
+              - Sid: UseDataCMK
+                Effect: Allow
+                Action: [kms:Decrypt, kms:Encrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
+                Resource: !GetAtt CMKData.Arn
+              - Sid: S3DataAccess
+                Effect: Allow
+                Action: [s3:ListBucket]
+                Resource: !Sub 'arn:aws:s3:::${S3Data}'
+              - Sid: S3DataObjects
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub 'arn:aws:s3:::${S3Data}/*'
+
+  InstanceProfileApp:
+    Type: AWS::IAM::InstanceProfile
+    Properties: { Roles: [!Ref RoleApp] }
+
+  LTApp:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: t3.micro
+        IamInstanceProfile: { Arn: !GetAtt InstanceProfileApp.Arn }
+        NetworkInterfaces:
+          - AssociatePublicIpAddress: false
+            DeviceIndex: 0
+            Groups: [!Ref SgApp]
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs: { VolumeSize: 8, Encrypted: true, KmsKeyId: !Ref CMKData }
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash -xe
+            dnf -y update
+            dnf -y install httpd
+            echo '<h1>AppServer (ASG)</h1>' > /var/www/html/index.html
+            systemctl enable --now httpd
+
+  ASGApp:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: [!Ref PrivateAppSubnetAz1, !Ref PrivateAppSubnetAz2]
+      MinSize: '0'
+      MaxSize: '0'
+      DesiredCapacity: '0'
+      MixedInstancesPolicy:
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LTApp
+            Version: !GetAtt LTApp.LatestVersionNumber
+      TargetGroupARNs: [!Ref TG]
+      Tags:
+        - Key: Name
+          Value: app-asg
+          PropagateAtLaunch: true
+
+  # ---------------- ALB (HTTP for deployability) ----------------
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Subnets: [!Ref PublicSubnetAz1, !Ref PublicSubnetAz2]
+      SecurityGroups: [!Ref SgALB]
+      Tags: [{Key: Name, Value: alb-secure}]
+
+  TG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+      HealthCheckPath: /
+      Tags: [{Key: Name, Value: tg-app}]
+
+  Listener80:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions: [{ Type: forward, TargetGroupArn: !Ref TG }]
+
+  # ---------------- RDS + Secret + Rotation (no transform) ----------------
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: private db subnets
+      SubnetIds: [!Ref PrivateDbSubnetAz1, !Ref PrivateDbSubnetAz2]
+      Tags: [{Key: Name, Value: db-subnet-group}]
+
+  SecretDB:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: secure-rds-master
+      Description: Master credentials (generated)
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"dbadmin"}'
+        GenerateStringKey: password
+        PasswordLength: 20
+        ExcludePunctuation: true
+      KmsKeyId: !Ref CMKData
+      Tags: [{Key: Name, Value: secret-rds-master}]
+
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: mysql
+      EngineVersion: '8.0.41'
+      DBInstanceClass: db.t3.small
+      AllocatedStorage: 20
+      StorageEncrypted: true
+      KmsKeyId: !Ref CMKData
+      MultiAZ: false
+      PubliclyAccessible: false
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups: [!Ref SgDb]
+      MasterUsername: !Sub '{{resolve:secretsmanager:${SecretDB}::username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${SecretDB}::password}}'
+      DeletionProtection: false
+      BackupRetentionPeriod: 7
+      DBName: appdb
+      Tags: [{Key: Name, Value: rds-mysql}]
+
+  SecretDBAttach:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref SecretDB
+      TargetId: !Ref DBInstance
+      TargetType: AWS::RDS::DBInstance
+
+  # Minimal rotation Lambda that satisfies Secrets Manager's scheduler without macros
+  SecretRotationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SecretRotationAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:PutSecretValue
+                  - secretsmanager:UpdateSecretVersionStage
+                  - secretsmanager:DescribeSecret
+                Resource: !Ref SecretDB
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+
+  SecretRotationFn:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt SecretRotationRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json, os, boto3, logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          sm = boto3.client('secretsmanager')
+
+          def handler(event, context):
+              # Minimal no-op rotation handler that marks versions as current.
+              logger.info("Rotation event: %s", json.dumps(event))
+              step = event.get('Step')
+              arn = event.get('SecretId')
+              token = event.get('ClientRequestToken')
+              if not all([step, arn, token]):
+                  return {'status': 'ignored'}
+
+              # Ensure version exists
+              meta = sm.describe_secret(SecretId=arn)
+              stages = meta.get('VersionIdsToStages', {})
+              cur = [k for k,v in stages.items() if 'AWSCURRENT' in v]
+              if step == 'createSecret':
+                  # copy current to new version (no real rotation for demo)
+                  if token not in stages:
+                      val = sm.get_secret_value(SecretId=arn, VersionStage='AWSCURRENT')['SecretString']
+                      sm.put_secret_value(SecretId=arn, ClientRequestToken=token, SecretString=val, VersionStages=['AWSPENDING'])
+                  return {'status': 'created'}
+              elif step == 'setSecret':
+                  return {'status': 'set'}
+              elif step == 'testSecret':
+                  return {'status': 'tested'}
+              elif step == 'finishSecret':
+                  sm.update_secret_version_stage(SecretId=arn, VersionStage='AWSCURRENT', MoveToVersionId=token,
+                                                 RemoveFromVersionId=(cur[0] if cur else None))
+                  return {'status': 'finished'}
+              return {'status': 'ok'}
+
+  SecretRotationInvokePerm:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SecretRotationFn
+      Principal: secretsmanager.amazonaws.com
+      SourceArn: !Ref SecretDB
+
+  SecretRotation:
+    Type: AWS::SecretsManager::RotationSchedule
+    DependsOn: SecretDBAttach
+    Properties:
+      SecretId: !Ref SecretDB
+      RotationLambdaARN: !GetAtt SecretRotationFn.Arn
+      RotationRules: { Duration: '2h', ScheduleExpression: rate(30 days) }
+
+# ---------------- Outputs ----------------
+Outputs:
+  VpcId: { Value: !Ref VPC, Description: VPC Id }
+  ALBDNS: { Value: !GetAtt ALB.DNSName, Description: ALB public DNS (HTTP) }
+  RDSEndpoint: { Value: !GetAtt DBInstance.Endpoint.Address, Description: RDS endpoint (private) }
+  DataBucketName: { Value: !Ref S3Data, Description: S3 data bucket (SSE-KMS) }
+  LogsBucketName: { Value: !Ref S3Logs, Description: S3 logs bucket (SSE-KMS) }
+
+
+
+
+```

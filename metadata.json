@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "provider": "localstack",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291917",
+  "team": "synth-2",
+  "wave": "P0",
+  "startedAt": "2025-08-21T03:26:12.756Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "KMS",
+    "SecretsManager",
+    "CloudWatchLogs",
+    "SNS",
+    "Lambda",
+    "AutoScaling",
+    "ElasticLoadBalancingV2",
+    "IAM"
+  ]
+}
