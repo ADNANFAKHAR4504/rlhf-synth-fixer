@@ -306,25 +306,23 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.DatabaseInstance.Type).toBe('AWS::RDS::DBInstance');
     });
 
-    test('database should have encryption enabled', () => {
+    test('database should have encryption disabled for LocalStack compatibility', () => {
       const db = template.Resources.DatabaseInstance.Properties;
-      expect(db.StorageEncrypted).toBe(true);
-      expect(db.KmsKeyId).toEqual({ Ref: 'RDSKMSKey' });
+      expect(db.StorageEncrypted).toBe(false);
+      // KmsKeyId not used for LocalStack compatibility
     });
 
-    test('database should use secrets manager for credentials', () => {
+    test('database should use static credentials for LocalStack compatibility', () => {
       const db = template.Resources.DatabaseInstance.Properties;
-      expect(db.MasterUsername).toEqual({
-        'Fn::Sub': '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
-      });
-      expect(db.MasterUserPassword).toEqual({
-        'Fn::Sub': '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
-      });
+      expect(db.MasterUsername).toBe('admin');
+      expect(db.MasterUserPassword).toBe('TempPassword123!');
+      // Using static credentials for LocalStack testing environment
     });
 
-    test('database should have backup configured', () => {
+    test('database should have backups disabled for LocalStack compatibility', () => {
       const db = template.Resources.DatabaseInstance.Properties;
-      expect(db.BackupRetentionPeriod).toBe(7);
+      expect(db.BackupRetentionPeriod).toBe(0);
+      // Backups disabled for LocalStack testing environment
     });
 
     test('database should not be publicly accessible', () => {
