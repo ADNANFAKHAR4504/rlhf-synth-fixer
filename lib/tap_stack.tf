@@ -374,6 +374,98 @@ resource "aws_cloudfront_origin_access_control" "frontend_oac" {
   signing_protocol                  = "sigv4"
 }
 
+# WAF WebACL for CloudFront protection
+resource "aws_wafv2_web_acl" "frontend_waf" {
+  name        = "tap-frontend-waf"
+  description = "WAF WebACL for frontend CloudFront distribution"
+  scope       = "CLOUDFRONT"
+
+  default_action {
+    allow {}
+  }
+
+  # Rate limiting rule - block IPs making more than 2000 requests in 5 minutes
+  rule {
+    name     = "RateLimitRule"
+    priority = 1
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 2000
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "RateLimitRule"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rules - Core Rule Set for common threats
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 2
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        vendor_name = "AWS"
+        name        = "AWSManagedRulesCommonRuleSet"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "AWSManagedRulesCommonRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rules - Known Bad Inputs
+  rule {
+    name     = "AWSManagedRulesKnownBadInputsRuleSet"
+    priority = 3
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        vendor_name = "AWS"
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "AWSManagedRulesKnownBadInputsRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "FrontendWAFMetric"
+    sampled_requests_enabled   = true
+  }
+
+  tags = {
+    Name        = "Frontend WAF"
+    Environment = var.environment
+    Owner       = var.owner
+  }
+}
+
 # CloudFront Distribution for frontend
 resource "aws_cloudfront_distribution" "frontend_distribution" {
   origin {
@@ -385,6 +477,7 @@ resource "aws_cloudfront_distribution" "frontend_distribution" {
   enabled             = true
   default_root_object = "index.html"
   is_ipv6_enabled     = true
+  web_acl_id          = aws_wafv2_web_acl.frontend_waf.arn
 
   default_cache_behavior {
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
@@ -504,4 +597,14 @@ output "cognito_user_pool_id" {
 output "cognito_user_pool_client_id" {
   description = "The ID of the Cognito User Pool Client."
   value       = aws_cognito_user_pool_client.tap_user_pool_client.id
+}
+
+output "waf_web_acl_id" {
+  description = "The ID of the WAF WebACL protecting the CloudFront distribution."
+  value       = aws_wafv2_web_acl.frontend_waf.id
+}
+
+output "waf_web_acl_arn" {
+  description = "The ARN of the WAF WebACL protecting the CloudFront distribution."
+  value       = aws_wafv2_web_acl.frontend_waf.arn
 }
