@@ -32,20 +32,12 @@ Your CloudFormation template must meet the following requirements:
 
    * Use **KMS encryption** for securing sensitive resources like S3 and Lambda environment variables.
 
-6. **AWS WAF**:
-
-   * Protect API Gateway from common web exploits like SQL injection and XSS attacks.
-
-7. **IAM Policies and Roles**:
+6. **IAM Policies and Roles**:
 
    * Follow **least privilege principle** throughout.
    * Define all required policies explicitly in the template.
 
-8. **EC2 Monitoring**:
-
-   * Enable **detailed monitoring** for any EC2 instances in the stack.
-
-9. **Tagging**:
+7. **Tagging**:
 
    * All AWS resources must include the tag:
 
@@ -55,7 +47,7 @@ Your CloudFormation template must meet the following requirements:
          Value: Production
      ```
 
-10. **Deployment**:
+8. **Deployment**:
 
     * The entire solution must be **deployed via CloudFormation YAML**.
 
