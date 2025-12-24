@@ -1,6 +1,6 @@
 Need to set up production-grade serverless infrastructure for projectX using CloudFormation with proper security controls.
 
-The architecture has two Lambda functions that work together in a pipeline. The dataProcessor Lambda is triggered first to receive and process incoming data, then it invokes the responseHandler Lambda which formats and returns the final response. Both functions write logs to CloudWatch Logs so we can monitor the complete data flow.
+The architecture has two Lambda functions that work together in a pipeline. The dataProcessor Lambda is triggered first to receive and process incoming data, then it invokes the responseHandler Lambda which formats and returns the final response. Both functions write logs to CloudWatch so we can track what's happening across the pipeline.
 
 Each function needs its own IAM role with least privilege permissions. The dataProcessor role gets permissions to invoke the responseHandler Lambda and write to its own CloudWatch log group. The responseHandler role just gets permissions to write to its log group. Both roles need permissions to send messages to their respective dead-letter queues for failed invocations.
 
