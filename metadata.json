@@ -17,9 +17,7 @@
   "wave": "P1",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
-    "Web Application Deployment",
-    "Failure Recovery Automation",
-    "Cloud Environment Setup"
+    "Failure Recovery Automation"
   ],
   "migrated_from": {
     "po_id": "291493",
