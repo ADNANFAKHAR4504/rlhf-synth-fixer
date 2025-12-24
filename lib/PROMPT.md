@@ -26,7 +26,7 @@ All resources must be tagged with the following key-value pairs:
 
 4. Security Groups
 
-Create security groups that allow necessary traffic between resources. Security groups attached to EC2 instances control inbound and outbound traffic. Security groups associated with load balancers allow traffic from the internet and forward it to application instances.
+Create security groups that follow least privilege principles. Security groups attached to EC2 instances control inbound and outbound traffic with specific port and protocol restrictions. Security groups associated with load balancers allow HTTP and HTTPS traffic from the internet on specific ports and forward it to application instances in private subnets.
 
 5. Load Balancer
 
