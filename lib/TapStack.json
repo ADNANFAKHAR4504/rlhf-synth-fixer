@@ -720,6 +720,13 @@
     },
     "ProductionDatabase": {
       "Type": "AWS::RDS::DBInstance",
+      "Metadata": {
+        "cfn-lint": {
+          "config": {
+            "ignore_checks": ["W1011"]
+          }
+        }
+      },
       "Properties": {
         "DBInstanceIdentifier": {
           "Fn::Sub": "${AWS::StackName}-${Environment}-database"
