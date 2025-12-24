@@ -1,6 +1,3 @@
-# Ideal Response
-
-```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Enterprise-ready foundational infrastructure for modern application deployment with comprehensive monitoring and security controls'
 
@@ -115,9 +112,9 @@ Parameters:
     ConstraintDescription: Must be between 50 and 100
   
   LatestAmiId:
-    Type: String
-    Default: 'ami-0abcdef1234567890'
-    Description: Amazon Linux 2 AMI ID for LocalStack deployment
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: Latest Amazon Linux 2 AMI ID from SSM Parameter Store
 
 # ==========================================
 # CONDITIONS
@@ -951,4 +948,4 @@ Outputs:
     Description: AWS Account ID
     Value: !Ref AWS::AccountId
     Export:
-      Name: !Sub '${AWS::StackName}-AccountId'```
+      Name: !Sub '${AWS::StackName}-AccountId'
