@@ -24,5 +24,11 @@
     "CloudTrail"
   ],
   "wave": "P0",
-  "training_quality": 8
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
 }
