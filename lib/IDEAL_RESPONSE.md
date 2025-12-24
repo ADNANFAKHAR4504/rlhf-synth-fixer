@@ -6,6 +6,15 @@ Parameters:
   LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64'
+  DBMasterPassword:
+    Type: String
+    NoEcho: true
+    Default: 'TestPassword123!'
+    Description: 'Master password for RDS instance (min 8 chars)'
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+=-]*$'
+    ConstraintDescription: 'Must contain only alphanumeric and special chars'
 
 Mappings:
   TagsMap:
@@ -583,6 +592,11 @@ Resources:
 
   DBInstance:
     Type: AWS::RDS::DBInstance
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1011  # Using parameter for LocalStack compatibility
     Properties:
       Engine: mysql
       EngineVersion: '8.0.41'
@@ -595,7 +609,7 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups: [!Ref SgDb]
       MasterUsername: dbadmin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${SecretDB}::password}}'
+      MasterUserPassword: !Ref DBMasterPassword
       DeletionProtection: false
       BackupRetentionPeriod: 7
       DBName: appdb
