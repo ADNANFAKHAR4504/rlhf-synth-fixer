@@ -1,7 +1,7 @@
 You are an expert AWS Infrastructure Engineer skilled in designing highly available and resilient architectures using CloudFormation in YAML. Your mission is to generate a comprehensive, production-ready CloudFormation template that provisions a failover-enabled EC2-based web application infrastructure, leveraging AWS Route 53 health checks for traffic redirection.
 
 ## Objective:
-Design an infrastructure that supports automated **failover and failback** between a primary EC2 instance and a standby EC2 instance using **Route 53 DNS health checks**. The system must detect primary instance failure and reroute traffic to the standby instance without manual intervention.
+Build a failover system where **Route 53 health checks continuously monitor the primary EC2 instance**. When the health check detects the primary instance is down, **Route 53 automatically redirects DNS traffic to the standby EC2 instance**. Once the primary recovers and the health check passes again, **Route 53 switches traffic back to the primary**. This entire failover and recovery process happens automatically through the Route 53-to-EC2 connection without any manual intervention.
 
 ## High-Level Requirements:
 1. **EC2 Instances**
@@ -11,12 +11,14 @@ Design an infrastructure that supports automated **failover and failback** betwe
    - Each must be placed in a **different Availability Zone** within the **same AWS Region**.
    - Use a publicly accessible **Amazon Linux 2 AMI** and ensure SSH access via a key pair parameter.
 
-2. **Route 53 DNS & Health Checks**
-   - Use **Route 53 failover routing policy** to manage traffic between primary and standby.
-   - Create a **Route 53 health check** to continuously monitor the health of the primary instance on HTTP port 80.
-   - Create two **Route 53 DNS records** pointing to the EC2 public IPs with the failover routing policy:
-     - Primary: SetIdentifier = Primary, Failover = PRIMARY
-     - Standby: SetIdentifier = Standby, Failover = SECONDARY, associated with health check
+2. **Route 53 DNS & Health Checks - Service Connectivity**
+   - **Route 53 health check monitors the primary EC2 instance** by sending HTTP requests to port 80 every 30 seconds
+   - **Route 53 DNS failover records connect to both EC2 instances** using their public IPs
+   - When health check fails, **Route 53 automatically updates DNS to point to the standby EC2 instance**
+   - When health check recovers, **Route 53 switches DNS back to the primary EC2 instance**
+   - Set up two DNS records with failover routing:
+     - Primary record: Points to primary EC2 public IP, associated with health check
+     - Standby record: Points to standby EC2 public IP, activates when primary health check fails
 
 3. **Automation**
    - Ensure **automatic failover** if the primary becomes unhealthy.
