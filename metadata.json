@@ -6,13 +6,9 @@
   "po_id": "trainr930",
   "team": "synth-2",
   "startedAt": "2025-08-22T08:59:26+00:00",
-  "subtask": "Security and Compliance Implementation",
+  "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Security Configuration",
-    "Network Configuration",
-    "Access Control",
-    "Infrastructure Provisioning"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "EC2",
