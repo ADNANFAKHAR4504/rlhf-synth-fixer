@@ -1,10 +1,10 @@
-We need a Terraform configuration that sets up a complete VPC environment with secure HTTP/HTTPS access through a security group.
+We need a Terraform configuration that deploys AWS VPC networking with EC2 Security Groups for controlling HTTP/HTTPS access.
 
 The provider config already exists in provider.tf and uses a variable called aws_region.
 
 Here's what we need:
 
-A VPC with public subnet, internet gateway, and route table that connects the subnet to the gateway for internet access. Then a security group in that VPC that only allows inbound traffic on port 80 for HTTP and port 443 for HTTPS from specified IP ranges. Everything else inbound should be blocked.
+Deploy an AWS VPC with an AWS Internet Gateway that connects to a public AWS Subnet through an AWS Route Table. The Route Table should route all outbound traffic from the Subnet through the Internet Gateway to enable external connectivity. Then create an AWS Security Group attached to this VPC that controls inbound access by allowing only port 80 for HTTP and port 443 for HTTPS from specified IP ranges. Everything else inbound should be blocked.
 
 The security group should:
 - Accept variables for allowed IPv4 and IPv6 CIDR blocks
@@ -13,11 +13,12 @@ The security group should:
 - Use sensible default name and description but make them configurable
 - Include default tags like Owner and Environment with override capability
 
-The VPC setup should:
-- Use a /16 CIDR block for the VPC
-- Create a /24 public subnet in the first availability zone
-- Attach an internet gateway to enable external connectivity
-- Set up route table with default route pointing to the gateway
+The AWS networking setup should:
+- Use a /16 CIDR block for the AWS VPC
+- Create a /24 AWS Subnet in the first availability zone with public IP mapping enabled
+- Attach an AWS Internet Gateway to the VPC
+- Create an AWS Route Table with a default route that directs traffic to the Internet Gateway
+- Associate the Route Table with the Subnet to enable internet access
 
 Outputs should include:
 - VPC ID and subnet ID
