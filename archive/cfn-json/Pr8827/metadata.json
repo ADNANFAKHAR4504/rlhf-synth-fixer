@@ -22,5 +22,12 @@
     "Elastic IP"
   ],
   "provider": "localstack",
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
