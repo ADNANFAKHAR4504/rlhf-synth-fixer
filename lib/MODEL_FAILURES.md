@@ -4,7 +4,7 @@
 
 Enhance the AWS CDK stack with the following security best practices:
 
-### ✅ Success Criteria
+### Success Criteria
 
 1. **S3 Buckets**
    - All S3 buckets use **AWS KMS encryption** for data at rest.
