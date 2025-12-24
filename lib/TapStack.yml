@@ -5,13 +5,21 @@ Description: >
     - Encrypt all S3 Buckets with the KMS Key
     - Store a password securely in AWS Secrets Manager
 
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
 Resources:
 
   ### 1. KMS Key for S3 encryption ###
   S3KMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: Key used to encrypt S3 buckets
+      Description: !Sub 'Key used to encrypt S3 buckets (${EnvironmentSuffix})'
       EnableKeyRotation: true
       KeyPolicy:
         Version: "2012-10-17"
@@ -39,9 +47,9 @@ Resources:
             Resource: "*"
       Tags:
         - Key: Name
-          Value: S3KMSKey
+          Value: !Sub 'S3KMSKey-${EnvironmentSuffix}'
         - Key: Environment
-          Value: production
+          Value: !Ref EnvironmentSuffix
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
 
@@ -49,7 +57,7 @@ Resources:
   S3KMSAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/s3-bucket-encryption
+      AliasName: !Sub 'alias/s3-bucket-encryption-${EnvironmentSuffix}'
       TargetKeyId: !Ref S3KMSKey
 
   ### 2. Example S3 Bucket Encrypted with KMS ###
@@ -65,25 +73,25 @@ Resources:
         Status: Enabled
       Tags:
         - Key: Name
-          Value: MyEncryptedBucket
+          Value: !Sub 'MyEncryptedBucket-${EnvironmentSuffix}'
         - Key: Environment
-          Value: production
+          Value: !Ref EnvironmentSuffix
 
   #### 3. Secret in AWS Secrets Manager ###
   MyAppSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: MyAppPassword
-      Description: Password for my application
+      Name: !Sub 'MyAppPassword-${EnvironmentSuffix}'
+      Description: !Sub 'Password for my application (${EnvironmentSuffix})'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: 'password'
         ExcludeCharacters: '"@/''\'
       Tags:
         - Key: Name
-          Value: MyAppSecret
+          Value: !Sub 'MyAppSecret-${EnvironmentSuffix}'
         - Key: Environment
-          Value: production
+          Value: !Ref EnvironmentSuffix
 
 Outputs:
 

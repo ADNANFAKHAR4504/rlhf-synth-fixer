@@ -1,11 +1,22 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "CloudFormation Template to:\n  - Create a KMS Key\n  - Encrypt all S3 Buckets with the KMS Key\n  - Store a password securely in AWS Secrets Manager\n",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        }
+    },
     "Resources": {
         "S3KMSKey": {
             "Type": "AWS::KMS::Key",
             "Properties": {
-                "Description": "Key used to encrypt S3 buckets",
+                "Description": {
+                    "Fn::Sub": "Key used to encrypt S3 buckets (${EnvironmentSuffix})"
+                },
                 "EnableKeyRotation": true,
                 "KeyPolicy": {
                     "Version": "2012-10-17",
@@ -46,11 +57,15 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "S3KMSKey"
+                        "Value": {
+                            "Fn::Sub": "S3KMSKey-${EnvironmentSuffix}"
+                        }
                     },
                     {
                         "Key": "Environment",
-                        "Value": "production"
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             },
@@ -60,7 +75,9 @@
         "S3KMSAlias": {
             "Type": "AWS::KMS::Alias",
             "Properties": {
-                "AliasName": "alias/s3-bucket-encryption",
+                "AliasName": {
+                    "Fn::Sub": "alias/s3-bucket-encryption-${EnvironmentSuffix}"
+                },
                 "TargetKeyId": {
                     "Ref": "S3KMSKey"
                 }
@@ -87,11 +104,15 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "MyEncryptedBucket"
+                        "Value": {
+                            "Fn::Sub": "MyEncryptedBucket-${EnvironmentSuffix}"
+                        }
                     },
                     {
                         "Key": "Environment",
-                        "Value": "production"
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
@@ -99,8 +120,12 @@
         "MyAppSecret": {
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
-                "Name": "MyAppPassword",
-                "Description": "Password for my application",
+                "Name": {
+                    "Fn::Sub": "MyAppPassword-${EnvironmentSuffix}"
+                },
+                "Description": {
+                    "Fn::Sub": "Password for my application (${EnvironmentSuffix})"
+                },
                 "GenerateSecretString": {
                     "SecretStringTemplate": "{\"username\": \"admin\"}",
                     "GenerateStringKey": "password",
@@ -109,11 +134,15 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "MyAppSecret"
+                        "Value": {
+                            "Fn::Sub": "MyAppSecret-${EnvironmentSuffix}"
+                        }
                     },
                     {
                         "Key": "Environment",
-                        "Value": "production"
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }

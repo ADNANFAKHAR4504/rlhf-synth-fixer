@@ -75,8 +75,17 @@ describe('CloudFormation Template Unit Tests', () => {
 
       const [__, secretResource] = secretEntry as [string, any];
 
-      // Your CFN template sets this exact name:
-      expect(secretResource.Properties.Name).toBe('MyAppPassword');
+      // Secret name now includes EnvironmentSuffix parameter
+      const secretName = secretResource.Properties.Name;
+      expect(secretName).toBeDefined();
+      // Check if it's a Fn::Sub with EnvironmentSuffix or contains MyAppPassword
+      if (typeof secretName === 'string') {
+        expect(secretName).toContain('MyAppPassword');
+      } else if (secretName && typeof secretName === 'object' && 'Fn::Sub' in secretName) {
+        const subValue = secretName['Fn::Sub'];
+        expect(subValue).toContain('MyAppPassword');
+        expect(subValue).toContain('EnvironmentSuffix');
+      }
     });
   });
 
