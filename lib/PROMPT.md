@@ -1,4 +1,4 @@
-### ✅ Prompt: Production-Grade Cloud Infrastructure Setup with CloudFormation (us-east-1)
+###  Prompt: Production-Grade Cloud Infrastructure Setup with CloudFormation (us-east-1)
 
 **Act as a Solution Architect.**
 
@@ -6,7 +6,7 @@ You are tasked with designing and implementing a production-grade, secure, and h
 
 ---
 
-### 🔧 Requirements
+###  Requirements
 
 1. **Region**
 
@@ -72,7 +72,7 @@ You are tasked with designing and implementing a production-grade, secure, and h
 
 ---
 
-### 📤 Expected Output
+###  Expected Output
 
 Submit a single **CloudFormation template in JSON format**, named:
 
