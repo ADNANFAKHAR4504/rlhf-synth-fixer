@@ -24,7 +24,7 @@ All EBS volumes should be encrypted by default.
 
 ## Security Groups
 
-No open ports to the public internet. Make sure SSH (port 22) and RDP (port 3389) are specifically closed. Security groups should only allow traffic between our own resources where needed.
+No open ports to the public internet. Make sure SSH port 22 and RDP port 3389 are specifically closed. Security groups should only allow traffic between our own resources where needed.
 
 ## Lambda Functions
 
@@ -49,7 +49,7 @@ WAF rules to protect against common web threats like SQL injection and XSS.
 ## Tagging
 
 Every resource needs these tags:
-- Environment: dev, staging, or prod
+- Environment: dev, staging or prod
 - Project: name of the project
 - Owner: team or person responsible
 
