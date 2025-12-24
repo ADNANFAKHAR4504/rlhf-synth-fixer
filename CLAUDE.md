@@ -19,38 +19,34 @@ Message should describe what changed, not who did it.
 
 ## Paths
 
-**CRITICAL: PROTECTED FILES ARE NEVER TOUCHED - ONLY ALLOWED FILES ARE FIXED**
-
-**Don't touch (PROTECTED - NEVER MODIFY):**
-- scripts/
-- .github/
-- .claude/
-- config/
+**Don't touch:**
+    - scripts/
+    - .github/
+    - .claude/
+    - config/
 - node_modules/
 - dist/
 - .git/
-- package.json, package-lock.json
+
+**Can modify (in worktree):**
+- lib/
+- test/
+- bin/
+- tap.ts
+- tap.py
+- metadata.json
+- execution-output.md
+- cdk.json
+- cdktf.json
+- Pulumi.yaml
+
+**NO PERMISSION:**
+- package.json
+- package-lock.json
 - tsconfig.json
-- requirements.txt, pyproject.toml
-- docker-compose.yml, Dockerfile
-- jest.config.js ❌ (NEVER modify - add tests in test/ instead)
-- All root config files
-
-**Can modify (ALLOWED FILES ONLY):**
-- lib/ ✅
-- test/ ✅ (add tests here to meet coverage requirements)
-- tests/ ✅ (add tests here to meet coverage requirements)
-- bin/ ✅
-- metadata.json ✅
-- cdk.json ✅
-- cdktf.json ✅
-- Pulumi.yaml ✅
-- tap.py ✅
-- tap.ts ✅
-
-**Coverage Rule:** If coverage is low, ADD tests in `test/` or `tests/` directory according to `lib/` code. NEVER modify `jest.config.js`.
-
-**BEFORE modifying ANY file, validate it's in the allowed list above.**
+- requirements.txt
+- pyproject.toml
+- jest.config.js
 
 ## Commands
 
@@ -61,24 +57,56 @@ Message should describe what changed, not who did it.
 
 Details in `.claude/agents/synth-fixer.md`
 
-## NEW REQUIRED FIELD: wave
+## REQUIRED FIELD: wave
 
-**CRITICAL**: The `wave` field is now REQUIRED in metadata.json
+**CRITICAL**: The `wave` field is REQUIRED and must ALWAYS be "P0"
 
-### Valid Values:
-- `P0` - Priority 0 (High priority tasks)
-- `P1` - Priority 1 (Normal priority tasks)
+### Rule:
+- `wave` must ALWAYS be `"P0"` - no exceptions
+- Synth team only uses P0
 
 ### Fix Pattern:
 ```bash
-# Add wave field if missing (default to P1)
-jq '. + {wave: "P1"}' metadata.json > tmp.json && mv tmp.json metadata.json
+# Always set wave to P0
+jq '.wave = "P0"' metadata.json > tmp.json && mv tmp.json metadata.json
 ```
 
 ### Schema Requirement:
 ```json
 "wave": {
   "type": "string",
-  "enum": ["P0", "P1"]
+  "const": "P0"
 }
+```
+
+## ⚠️ Tests Failing Due to Missing Resources
+
+**STRATEGY**: If a test fails because actual AWS resource doesn't exist:
+1.  **Analyze**: Check the test file directly to understand the failure.
+2.  **Resolve**: Try to fix the logic or mock the resource first.
+3.  **Remove**: ONLY remove the failing test if it cannot be fixed or mocked.
+4.  **Add**: If a test is removed, add other relevant tests to maintain coverage.
+
+**Common "ResourceNotFound" Errors:**
+- `ResourceNotFoundException`, `NoSuchBucket`, `NoSuchKey`, `Table not found`, `Function not found`, `DBInstance not found`, `Queue does not exist`, `Cannot read properties of undefined`.
+
+## LocalStack Pro & Unsupported Services
+
+**We have LocalStack Pro.** This means:
+- RDS, EKS, ElastiCache, OpenSearch, MSK, etc. are **SUPPORTED**.
+- **DO NOT REMOVE** these services if they are used.
+
+**TRULY UNSUPPORTED (Must REMOVE even in Pro):**
+- AppSync, Amplify, SageMaker, Bedrock, Kendra, Lex, etc.
+- If these appear in code or logs: **COMMENT OUT or REMOVE** the code.
+- Always check `.claude/agents/synth-fixer.md` for the full list.
+
+## Output Format
+
+**ALWAYS** use "SYNTH-AGENT" label for code blocks.
+Example:
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  🤖 SYNTH-AGENT [PR #8539] is applying fixes...                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 ```

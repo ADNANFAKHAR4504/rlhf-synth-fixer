@@ -146,54 +146,20 @@ git push
 
 ## Allowed Changes
 
-**CRITICAL: ONLY THESE FILES CAN BE MODIFIED - PROTECTED FILES ARE NEVER TOUCHED**
-
 ```
-✅ ALLOWED FILES ONLY:
-lib/              ← source code here
-test/             ← tests here
-tests/            ← tests here (alternative directory)
-bin/              ← bin directory
-metadata.json     ← task info
-cdk.json          ← CDK settings
-cdktf.json        ← CDKTF settings
-Pulumi.yaml      ← Pulumi settings
-tap.py            ← root level Python file
-tap.ts            ← root level TypeScript file
-*.tf, *.tfvars   ← Terraform files
-
-❌ PROTECTED - NEVER TOUCH IN ANY CONDITION:
-- package.json, package-lock.json
-- tsconfig.json
-- requirements.txt, pyproject.toml
-- scripts/, .github/, .claude/, config/
-- docker-compose.yml, Dockerfile
-- All root config files
-```
-
-**BEFORE ANY FILE MODIFICATION:**
-```bash
-# Validate file is allowed
-is_file_allowed() {
-  local file="$1"
-  [[ "$file" =~ ^lib/ ]] || \
-  [[ "$file" =~ ^test/ ]] || \
-  [[ "$file" =~ ^tests/ ]] || \
-  [[ "$file" =~ ^bin/ ]] || \
-  [[ "$file" == "metadata.json" ]] || \
-  [[ "$file" == "cdk.json" ]] || \
-  [[ "$file" == "cdktf.json" ]] || \
-  [[ "$file" == "Pulumi.yaml" ]] || \
-  [[ "$file" == "tap.py" ]] || \
-  [[ "$file" == "tap.ts" ]] || \
-  [[ "$file" =~ \.(tf|tfvars)$ ]]
-}
-
-# Use before modifying ANY file
-if ! is_file_allowed "$file"; then
-  echo "[SYNTH-AGENT] ❌ BLOCKED: $file is protected - SKIPPING"
-  continue
-fi
+lib/          ← source code here
+test/         ← tests here
+bin/          ← binaries here
+tap.ts        ← entry point
+tap.py        ← entry point
+metadata.json ← task info
+cdk.json      ← CDK settings
+cdktf.json    ← CDKTF settings
+Pulumi.yaml   ← Pulumi settings
+# ⚠️ PROTECTED - NO PERMISSION:
+# - package.json, package-lock.json
+# - tsconfig.json
+# - requirements.txt, pyproject.toml
 ```
 
 ## Metadata Rules
@@ -204,7 +170,7 @@ fi
 {
   "team": "synth",          // ⚠️ ONLY "synth" - nothing else!
   "provider": "localstack", // ALWAYS "localstack"
-  "wave": "P0"              // ⚠️ NEW! Required - P0 or P1
+  "wave": "P0"              // ⚠️ ALWAYS "P0" - required field
 }
 ```
 
@@ -223,38 +189,64 @@ fi
 
 ## Process
 
-**1. Setup**
+**1. Setup - Smart Repo Detection**
 ```bash
 PR="$1"
-REPO="/home/adnan/turing/iac-test-automations"
-WORK="${REPO}/worktree/synth-fixer-${PR}"
+GITHUB_REPO="TuringGpt/iac-test-automations"
 
-# ⚠️ ALWAYS cd to repo first!
+# ═══════════════════════════════════════════════════════════════════════════════
+# SMART REPO DETECTION - Works from ANY directory!
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Get PR branch info FIRST (works anywhere via GitHub API)
+echo "[SYNTH-AGENT] [PR #$PR] Getting PR info..."
+BRANCH=$(gh pr view "$PR" --repo "$GITHUB_REPO" --json headRefName -q '.headRefName')
+echo "[SYNTH-AGENT] [PR #$PR] Branch: $BRANCH"
+
+# Find the iac-test-automations repo
+find_repo() {
+  # Check REPO_PATH env var
+  [[ -n "$REPO_PATH" ]] && [[ -d "$REPO_PATH/.git" ]] && echo "$REPO_PATH" && return
+  
+  # Check current dir
+  if git rev-parse --git-dir &>/dev/null; then
+    local remote=$(git remote get-url origin 2>/dev/null)
+    echo "$remote" | grep -qi "iac-test-automations" && git rev-parse --show-toplevel && return
+  fi
+  
+  # Check common locations
+  for p in "$HOME/iac-test-automations" "$HOME/turing/iac-test-automations" "$HOME/Desktop/iac-test-automations"; do
+    [[ -d "$p/.git" ]] && echo "$p" && return
+  done
+}
+
+REPO=$(find_repo)
+if [[ -z "$REPO" ]]; then
+  echo "❌ ERROR: iac-test-automations repo not found!"
+  echo "Please set REPO_PATH or clone the repo first"
+  exit 1
+fi
+
+echo "[SYNTH-AGENT] [PR #$PR] Using repo: $REPO"
+WORK="${REPO}/worktree/synth-fixer-${PR}"
 cd "$REPO" || exit 1
 ```
 
-**2. FIRST: Pull main (BEFORE anything else!)**
+**2. Pull main (BEFORE anything else!)**
 ```bash
 echo "[SYNTH-AGENT] [PR #$PR] 🔄 Pulling latest main..."
-cd "$REPO"
 git checkout main
 git pull origin main
 echo "[SYNTH-AGENT] [PR #$PR] ✓ Main branch updated"
 ```
 
-**3. Get branch info**
-```bash
-cd "$REPO"
-BRANCH=$(gh pr view "$PR" --repo TuringGpt/iac-test-automations --json headRefName -q '.headRefName')
-echo "[SYNTH-AGENT] [PR #$PR] Branch: $BRANCH"
-```
-
-**4. Create worktree**
+**3. Create worktree**
 ```bash
 [ -d "$WORK" ] && git worktree remove "$WORK" --force
 git fetch origin "$BRANCH"
 git worktree add "$WORK" "origin/$BRANCH"
 cd "$WORK"
+echo "[SYNTH-AGENT] [PR #$PR] ✓ Worktree ready: $WORK"
 ```
 
 **5. Rebase on main (required)**
@@ -334,24 +326,25 @@ ERRORS=$(gh run view "$RUN" --log-failed 2>&1 | head -200)
 | **Claude Review: IDEAL_RESPONSE** (NEW!) | |
 | Archive Folders and Reset Repo | |
 
-**6. Apply fixes (ONLY ALLOWED FILES)**
+**6. Apply fixes**
 
-**CRITICAL: Before applying any fix, validate the file is allowed!**
+Based on error, apply appropriate fix:
+- metadata invalid → fix metadata.json
+- **Prompt Quality FAILED** → fix lib/PROMPT.md (see below)
+- build fail → fix code in lib/
+- lint error → fix formatting
+- test fail → fix in test/
+- **coverage low** → ADD tests (don't touch jest.config.js!)
+- **IDEAL_RESPONSE mismatch** → regenerate lib/IDEAL_RESPONSE.md
 
-Based on error, apply appropriate fix (ONLY to allowed files):
-- metadata invalid → fix metadata.json ✅ (allowed)
-- **Prompt Quality FAILED** → fix lib/PROMPT.md ✅ (allowed - in lib/)
-- build fail → fix code in lib/ ✅ (allowed)
-- lint error → fix formatting in lib/ or test/ ✅ (allowed)
-- test fail → fix in test/ ✅ (allowed)
-- **coverage low** → ADD tests in test/ or tests/ ✅ (allowed - don't touch jest.config.js!)
-- **IDEAL_RESPONSE mismatch** → regenerate lib/IDEAL_RESPONSE.md ✅ (allowed - in lib/)
-
-**NEVER modify:**
-- ❌ package.json, tsconfig.json, requirements.txt, pyproject.toml
-- ❌ jest.config.js (add tests in test/ instead)
-- ❌ scripts/, .github/, .claude/, config/
-- ❌ Any root config files
+**⚠️ STRATEGY: Tests Failing Due to Missing Resources**
+```
+If a test fails because actual AWS resource doesn't exist:
+1. Analyze the test file directly to understand the failure.
+2. Try to resolve the issue (fix logic, adjust assertions, or mock resources).
+3. ONLY remove the test if it's a "ResourceNotFound" error that cannot be resolved/mocked.
+4. If a test is removed, ADD other relevant tests to maintain coverage.
+```
 
 **Prompt Quality Fix (Claude Review: Prompt Quality job fail):**
 ```
@@ -381,61 +374,32 @@ All lib/ code should be in IDEAL_RESPONSE.md:
 **Coverage Fix Rule:**
 ```
 Coverage below threshold?
-  ❌ DONT: Modify jest.config.js (it's PROTECTED)
-  ✅ DO: Add tests in test/ or tests/ directory according to lib/ code
+  ❌ DONT: Modify jest.config.js
+  ✅ DO: Add tests in test/ directory
   
-  1. Read lib/ source code to understand what needs testing
-  2. Find uncovered functions/classes/methods
-  3. Add test cases in test/ directory matching lib/ structure
-  4. Match test file names to source files (e.g., lib/tap-stack.ts → test/tap-stack.unit.test.ts)
-  5. Increase actual coverage by adding more test cases
+  1. Read lib/ source code
+  2. Find uncovered functions
+  3. Add test cases in test/
+  4. Increase actual coverage
 ```
 
-**7. Show changes (informational only)**
+**7. Direct Commit & Push (NO Confirmation)**
 
-Before committing, show all changes (informational):
+The agent will automatically commit and push fixes:
 
-```
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    📋 CHANGES TO BE COMMITTED                                ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  Branch: feature/fix-pr-8543                                                 ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-
-Files changed: 5
-
-─────────────────────────────────────────────────────────────────────────────
-  ✎ Modified:  lib/tap-stack.ts
-  ✎ Modified:  metadata.json
-  ✚ Added:     lib/MODEL_RESPONSE.md
-  ✎ Modified:  test/tap-stack.unit.test.ts
-  ✖ Deleted:   lib/old-file.ts
-─────────────────────────────────────────────────────────────────────────────
-```
-
-**8. Commit automatically (no confirmation required)**
 ```bash
 git add -A
-git commit -m "fix: update files"  # auto-generated based on changes
+git commit -m "fix: update files"
 git push origin HEAD:"$BRANCH" --force-with-lease
 ```
 
-Commit message examples (auto-generated):
-- `fix: update metadata` (if metadata.json changed)
-- `fix: update tests` (if test/ changed)
-- `fix: update source` (if lib/ changed)
-- ~~`fix: update dependencies`~~ (package.json NOT allowed!)
-
-**8.5. Post-Commit Check (MANDATORY after every commit)**
+**8. Post-Commit Check (MANDATORY)**
 
 After EVERY commit, check for protected files in PR:
 
 ```bash
-# Get files changed in PR
 PR_FILES=$(gh pr view $PR --json files -q '.files[].path')
-
-# Check for protected files
-PROTECTED="docker-compose.yml|Dockerfile|build.gradle|scripts/|.github/|config/"
+PROTECTED="docker-compose|Dockerfile|package.json|package-lock|tsconfig.json|requirements.txt|pyproject.toml|scripts/|.github/|config/"
 
 for file in $PR_FILES; do
   if echo "$file" | grep -qE "$PROTECTED"; then
@@ -445,7 +409,6 @@ for file in $PR_FILES; do
   fi
 done
 
-# Push restoration if any
 git add -A && git diff --cached --quiet || {
   git commit -m "Restore protected files from main"
   git push origin HEAD:"$BRANCH"
@@ -506,6 +469,7 @@ If still failing, repeat steps 5-9 (max 3 times).
 | lint error | fix formatting |
 | unit test failed | fix unit test in test/ |
 | integration test failed | fix integration test |
+| **⚠️ Resource Not Found** | **Analyze & Resolve First (Remove if unfixable)** |
 | deploy error | fix localstack config |
 | **IDEAL_RESPONSE mismatch** | add lib/ code to IDEAL_RESPONSE.md |
 | **lib/ missing** | restore from archive |
@@ -601,24 +565,14 @@ Monitor multiple PRs simultaneously:
 2. Monitor all PRs simultaneously  
 3. When any PR fails → collect fixes (don't commit yet)
 4. Wait for all running PRs to complete
-5. When all statuses known → automatically commit all fixes
-
-**Batch Commit (Automatic):**
-```
-╔══════════════════════════════════════════════════════════════╗
-║        📦 BATCH COMMIT FOR 2 PRs                             ║
-╠══════════════════════════════════════════════════════════════╣
-║  PR #8543: 5 file(s) changed                                 ║
-║  PR #8544: 3 file(s) changed                                 ║
-╠══════════════════════════════════════════════════════════════╣
-║  [SYNTH-AGENT] Committing all fixes automatically...        ║
-╚══════════════════════════════════════════════════════════════╝
-```
+5. When all statuses known → **Direct Batch Commit** fixes for all failed PRs
+6. Push all changes to respective branches
 
 **Strategy:**
 - If PR #8543 fails and PR #8544 is still running → wait for #8544
-- When both fail → apply fixes to both, then automatically commit all
-- When one passes and one fails → only fix the failed one and commit automatically
+- When both fail → apply fixes to both, then commit both
+- When one passes and one fails → only fix and commit the failed one
+- **NO user input required** during the process
 
 ## Cleanup
 

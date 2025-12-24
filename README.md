@@ -1,113 +1,153 @@
 # 🤖 SYNTH-AGENT
 
-Automated PR fixer for IaC test automations powered by Claude Code. Follow the steps below for a clean setup without relying on legacy `./scripts` entrypoints.
+Automated PR Fixer for IAC Test Automations using Claude Code.
 
-> **Important:** The agent is always launched with `claude --dangerously-skip-permissions`. No other wrapper scripts are required. Inside that Claude session, trigger the fixer with `/synth-fixer <pr-number>` (example: `/synth-fixer 8543`) and supply whatever PR ID you want the agent to repair.
+## Smart Repo Detection
 
-## Features
+The agent automatically finds the `iac-test-automations` repository:
 
-- Autonomously fixes failing IaC PRs end-to-end.
-- Uses special worktrees so your main repo stays clean.
-- Monitors CI/CD jobs and retries safely.
-- Guards protected files from accidental edits.
+1. **REPO_PATH env var** → Uses if set in `config.env`
+2. **Current directory** → Uses if it's the correct repo
+3. **Common locations** → Checks `~/iac-test-automations`, `~/turing/iac-test-automations`, etc.
 
-## Requirements
+**No hardcoded paths!** Works from any directory.
 
-| Tool | Why it is needed | Install |
-|------|-----------------|---------|
-| Claude Code CLI | Runs the synth agent | `npm install -g @anthropic-ai/claude-code` |
-| GitHub CLI (`gh`) | Authenticates with GitHub for PR status + push | `sudo apt install gh` or `brew install gh` |
-| Node.js 18+ | Runtime for the Claude CLI | Use preferred Node installer |
+## Prerequisites
 
-After installing, verify the CLIs:
+### 1. Install Claude Code CLI
 
 ```bash
+# Install Claude Code CLI
+npm install -g @anthropic-ai/claude-code
+
+# Verify installation
 claude --version
+```
+
+### 2. Install GitHub CLI
+
+```bash
+# Ubuntu/Debian
+sudo apt install gh
+
+# macOS
+brew install gh
+
+# Verify installation
 gh --version
 ```
 
-Authenticate both before continuing:
+### 3. Configure Both CLIs
 
 ```bash
+# Login to GitHub CLI
 gh auth login
+
+# Set Anthropic API Key (for Claude)
 export ANTHROPIC_API_KEY="sk-ant-your-key-here"
 ```
 
-## Configure `config.env`
+### 4. Configure config.env
 
-Create or edit `config.env` in this folder:
+Edit the `config.env` file in the synth-agent folder:
 
 ```bash
-# File: /home/adnan/Desktop/turing/rlhf-synth-fixer/config.env
+# File: /home/adnan/Desktop/synth-agent/config.env
 
 # ═══════════════════════════════════════════════════════════════
 # AI API Keys
 # ═══════════════════════════════════════════════════════════════
+
+# Anthropic API Key (required for Claude)
+# Get it from: https://console.anthropic.com/
+# Format: sk-ant-api03-...
 ANTHROPIC_API_KEY="sk-ant-api03-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 
 # ═══════════════════════════════════════════════════════════════
 # Repository Settings
 # ═══════════════════════════════════════════════════════════════
+
+# Path to iac-test-automations repository
 REPO_PATH="/home/adnan/turing/iac-test-automations"
+
+# Worktree base directory (used for PR worktrees)
 WORKTREE_BASE="/home/adnan/turing/iac-test-automations/worktree"
+
+# Agent name
 AGENT_NAME="synth-agent"
+
+# CI/CD polling interval (seconds)
 POLL_INTERVAL=30
 ```
 
-> Replace the placeholder API key with your own Anthropic key from https://console.anthropic.com/.
+**Important:** Replace `XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` with your actual Anthropic API key.
 
-Load the file whenever you start a new shell:
+## Usage
+
+### Step 1: Navigate to synth-agent folder
 
 ```bash
-source ./config.env
+cd ~/Desktop/synth-agent
 ```
 
-## Run the Agent (no scripts required)
+### Step 2: Run Claude Code with permissions
 
-1. **Enter the project folder**
-   ```bash
-   cd /home/adnan/Desktop/turing/rlhf-synth-fixer
-   ```
-2. **Launch Claude in dangerous mode** – this is the only command you need to run locally:
-   ```bash
-   claude --dangerously-skip-permissions
-   ```
-3. **Inside Claude**, start the fixer command:
-   ```
-   /synth-fixer <pr-number>
-   ```
-   Example:
-   ```
-   /synth-fixer 8543
-   ```
-
-This replaces older instructions that relied on `./scripts/...` helpers.
-
-## What Happens During a Run
-
-```
-1. Create a fresh worktree for the PR.
-2. Rebase the PR on top of main.
-3. Restore protected files if needed.
-4. Watch CI/CD jobs in GitHub Actions.
-5. Detect failures, fix code, re-run tests.
-6. Commit and push changes automatically (no confirmation needed).
-7. Wait for CI/CD to pass.
+```bash
+claude --dangerously-skip-permissions
 ```
 
-You will see output similar to:
+### Step 3: Use the synth-fixer command
+
+Once Claude Code is running, use the `/synth-fixer` command:
 
 ```
-[SYNTH-AGENT] Checking CI/CD status...
-[SYNTH-AGENT] Found errors: Unit Testing failed
-[SYNTH-AGENT] ✓ Fixed: metadata.json
-[SYNTH-AGENT] ✓ Committing and pushing automatically...
+/synth-fixer 8543
+```
+
+Where `8543` is your PR number.
+
+### Examples
+
+```
+# Fix single PR
+/synth-fixer 8543
+
+# The agent will:
+# 1. Setup worktree for PR branch
+# 2. Pull latest main and rebase
+# 3. Check for protected files and restore them
+# 4. Monitor CI/CD status
+# 5. Detect and fix errors automatically
+# 6. Ask for confirmation before committing
+# 7. Push and wait for CI/CD to pass
+```
+
+## What the Agent Does
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  🤖 SYNTH-AGENT [PR #8543] is monitoring...                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+[SYNTH-AGENT] [PR #8543] Checking CI/CD status...
+[SYNTH-AGENT] [PR #8543] Found errors: Unit Testing failed
+[SYNTH-AGENT] [PR #8543] Applying fixes...
+[SYNTH-AGENT] [PR #8543] ✓ Fixed: metadata.json
+[SYNTH-AGENT] [PR #8543] ✓ Fixed: lib/tap-stack.ts
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  🤔 CONFIRM COMMIT & PUSH                                                    ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  [y/yes]  - Commit and push these changes                                    ║
+║  [n/no]   - Cancel and discard changes                                       ║
+║  [d/diff] - Show full diff                                                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
 ## CI/CD Jobs Monitored
 
 | ✅ Must Pass | ❌ Ignored |
-|-------------|-----------|
+|--------------|-----------|
 | Detect Project Files | Upload Task to S3 |
 | Validate Commit Message | Semantic Release |
 | Validate Jest Config | Debug Claude outputs |
@@ -119,10 +159,11 @@ You will see output similar to:
 | Claude Review: IDEAL_RESPONSE | |
 | Archive | |
 
-## Protected Files (never touched)
+## Protected Files (Never Modified)
 
 ```
-.github/            # GitHub workflows
+scripts/            # CI/CD scripts
+.github/            # Workflows
 .claude/            # Agent config
 config/             # Schemas
 package.json        # NO PERMISSION
@@ -134,71 +175,104 @@ pyproject.toml      # NO PERMISSION
 
 ## Metadata Rules
 
-`metadata.json` is always rewritten to:
+The agent automatically ensures `metadata.json` has correct values:
 
 ```json
 {
-  "team": "synth",
-  "provider": "localstack",
-  "wave": "P0"
+  "team": "synth",           // ALWAYS "synth"
+  "provider": "localstack",  // ALWAYS "localstack"
+  "wave": "P0"               // ALWAYS "P0" - required field
 }
 ```
 
-## Error Types Auto-Fixed
+## Error Types Fixed
 
-| Error | Action |
-|-------|--------|
-| Metadata validation | Rewrites `metadata.json` |
-| Prompt Quality FAILED | Cleans `PROMPT.md` |
-| TypeScript errors | Repairs `lib/` sources |
-| Lint errors | Applies formatting |
-| Unit/Integration failures | Updates code + tests |
-| Coverage low | Adds tests (never edits `jest.config.js`) |
-| IDEAL_RESPONSE mismatch | Regenerates from source |
-| Deploy errors | Adjusts LocalStack config |
-| Missing files | Restores from archive |
+| Error | Fix Applied |
+|-------|-------------|
+| Metadata validation | Fix metadata.json |
+| Prompt Quality FAILED | Remove emojis, dashes, brackets from PROMPT.md |
+| TypeScript errors | Fix code in lib/ |
+| Lint errors | Fix formatting |
+| Test failures | Fix tests in test/ |
+| Coverage low | Add more tests (not modify jest.config.js) |
+| IDEAL_RESPONSE mismatch | Regenerate from lib/ code |
+| Deploy errors | Fix LocalStack config |
+| Missing files | Restore from archive |
+| **⚠️ Resource Not Found** | **REMOVE failing test** (don't add resource) |
 
-## Success Criteria
+## Success Conditions
 
-| CI Result | Interpretation |
-|-----------|----------------|
-| Archive job pending/waiting | ✅ PR ready |
-| All jobs success | ✅ PR ready |
-| Any job failed | ❌ Needs more fixes |
+| Status | Result |
+|--------|--------|
+| Archive: pending/waiting | ✅ PR READY - all passed |
+| All jobs: success | ✅ PR READY |
+| Any job: failure | ❌ Needs fix |
 
-## File Layout
+## File Structure
 
 ```
-rlhf-synth-fixer/
-├── README.md
-├── CLAUDE.md
-├── config.env.example
+synth-agent/
+├── README.md                    # This file
+├── CLAUDE.md                    # Project context
+├── config.env                   # Configuration
 ├── logs/
+│   └── status.json              # Status tracking
 └── .claude/
+    ├── agents/
+    │   └── synth-fixer.md       # Agent definition
+    └── commands/
+        └── synth-fixer.md       # /synth-fixer command
 ```
 
 ## Troubleshooting
 
-- **GitHub CLI not authenticated**  
-  `gh auth login`
+### "GitHub CLI not authenticated"
+```bash
+gh auth login
+```
 
-- **`ANTHROPIC_API_KEY` empty**  
-  `source ./config.env`
+### "ANTHROPIC_API_KEY not set"
+```bash
+# Option 1: Load from config.env
+source ~/Desktop/synth-agent/config.env
 
-- **Permission errors inside Claude**  
-  Always start with `claude --dangerously-skip-permissions`.
+# Option 2: Export directly
+export ANTHROPIC_API_KEY="sk-ant-your-key-here"
+```
 
-- **Agent stops after max attempts**  
-  Review failing CI job logs directly in GitHub and re-run `/synth-fixer`.
+### "Permission denied"
+Run Claude with skip permissions flag:
+```bash
+claude --dangerously-skip-permissions
+```
 
-## Quick Reference
+### "Maximum attempts reached"
+PR needs manual fixing. Check CI/CD logs on GitHub.
+
+## Quick Start Summary
 
 ```bash
-cd /home/adnan/Desktop/turing/rlhf-synth-fixer
-source ./config.env
+# 1. Make sure prerequisites are installed and configured
+gh auth status           # Should show logged in
+
+# 2. Edit config.env with your API key and paths
+nano ~/Desktop/synth-agent/config.env
+
+# 3. Load the configuration
+source ~/Desktop/synth-agent/config.env
+echo $ANTHROPIC_API_KEY  # Should show your key
+
+# 4. Go to synth-agent folder
+cd ~/Desktop/synth-agent
+
+# 5. Run Claude Code
 claude --dangerously-skip-permissions
-# inside Claude:
+
+# 6. In Claude Code, run:
 /synth-fixer <pr-number>
+
+# Example:
+/synth-fixer 8543
 ```
 
 ## License

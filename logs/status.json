@@ -1,16 +1,14 @@
 {
-  "batch_id": "20251221-173524",
-  "started": "2025-12-21T17:35:24+05:00",
-  "total_prs": 1,
-  "max_concurrent": 3,
-  "prs": [
-    {
-      "pr": "8535",
-      "status": "running",
-      "started": "2025-12-21T19:29:49+05:00",
-      "completed": null,
-      "result": null,
-      "attempts": 15
-    }
-  ]
+  "pr_number": 8636,
+  "branch": "ls-synth-101912509",
+  "status": "blocked",
+  "unit_tests": "passing",
+  "deployment": "blocked_by_infrastructure",
+  "last_ci_run": 20455780637,
+  "infrastructure_issue": 8783,
+  "summary": "Unit tests passing (73/73). Deployment blocked by tflocal infrastructure bug where conflicting endpoint parameters are generated. Issue #8783 created for infrastructure team.",
+  "commits": [
+    "b3f129a648: fix: minimal backend configuration"
+  ],
+  "next_action": "Requires infrastructure fix in .github/workflows/ci-cd.yml or tflocal version update"
 }
