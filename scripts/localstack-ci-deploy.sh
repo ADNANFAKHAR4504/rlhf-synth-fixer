@@ -615,11 +615,12 @@ deploy_cloudformation() {
     cd "$PROJECT_ROOT/lib"
 
     # Find CloudFormation template based on language
+    # PRIORITY: LocalStack-specific templates first (LocalStack-compatible versions)
     local template=""
-    
+
     if [ "$language" == "yaml" ]; then
-        # Look for YAML templates
-        for name in "template.yaml" "template.yml" "TapStack.yaml" "TapStack.yml" "main.yaml" "main.yml" "stack.yaml" "stack.yml"; do
+        # Look for YAML templates - LocalStack versions first
+        for name in "TapStack-LocalStack.yml" "TapStack-LocalStack.yaml" "template-localstack.yml" "template-localstack.yaml" "template.yaml" "template.yml" "TapStack.yaml" "TapStack.yml" "main.yaml" "main.yml" "stack.yaml" "stack.yml"; do
             if [ -f "$name" ]; then
                 template="$name"
                 break
@@ -629,8 +630,8 @@ deploy_cloudformation() {
             template=$(find . -maxdepth 1 \( -name "*.yaml" -o -name "*.yml" \) 2>/dev/null | head -1)
         fi
     elif [ "$language" == "json" ]; then
-        # Look for JSON templates
-        for name in "template.json" "TapStack.json" "main.json" "stack.json"; do
+        # Look for JSON templates - LocalStack versions first
+        for name in "TapStack-LocalStack.json" "template-localstack.json" "template.json" "TapStack.json" "main.json" "stack.json"; do
             if [ -f "$name" ]; then
                 template="$name"
                 break
@@ -640,8 +641,8 @@ deploy_cloudformation() {
             template=$(find . -maxdepth 1 -name "*.json" 2>/dev/null | head -1)
         fi
     else
-        # Try both
-        for name in "template.yaml" "template.yml" "template.json" "TapStack.yaml" "TapStack.yml" "TapStack.json" "main.yaml" "main.yml" "main.json" "stack.yaml" "stack.yml" "stack.json"; do
+        # Try both - LocalStack versions first
+        for name in "TapStack-LocalStack.yml" "TapStack-LocalStack.yaml" "TapStack-LocalStack.json" "template-localstack.yml" "template-localstack.yaml" "template-localstack.json" "template.yaml" "template.yml" "template.json" "TapStack.yaml" "TapStack.yml" "TapStack.json" "main.yaml" "main.yml" "main.json" "stack.yaml" "stack.yml" "stack.json"; do
             if [ -f "$name" ]; then
                 template="$name"
                 break
