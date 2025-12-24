@@ -64,6 +64,12 @@ Parameters:
     Description: EC2 instance type for both primary and standby instances
     ConstraintDescription: Must be a valid EC2 instance type
 
+  ImageId:
+    Type: String
+    Default: ami-0bb84b8ffd87024d8
+    Description: AMI ID to use for EC2 instances (defaults to Amazon Linux 2023 in us-east-1)
+    ConstraintDescription: Must be a valid AMI ID
+
   HostedZoneId:
     Type: String
     Default: Z0909377OVFW706BZN9J
@@ -87,39 +93,6 @@ Parameters:
 Conditions:
   UseRoute53: !Equals [!Ref EnableRoute53, 'true']
   UseCloudWatch: !Equals [!Ref EnableCloudWatch, 'true']
-
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: ami-0bb84b8ffd87024d8  # Amazon Linux 2023 AMI
-    us-east-2:
-      AMI: ami-05692c5020146f5c8  # Amazon Linux 2023 AMI
-    us-west-1:
-      AMI: ami-02ea247e531eb3ce6  # Amazon Linux 2023 AMI
-    us-west-2:
-      AMI: ami-05134c8ef96964280  # Amazon Linux 2023 AMI
-    eu-central-1:
-      AMI: ami-0ab1a82de7ca5889c  # Amazon Linux 2023 AMI
-    eu-west-1:
-      AMI: ami-0c9c942bd7bf113a2  # Amazon Linux 2023 AMI
-    eu-west-2:
-      AMI: ami-0b2ed2c3df3b2d8b6  # Amazon Linux 2023 AMI
-    eu-west-3:
-      AMI: ami-0ec28fc9814fce254  # Amazon Linux 2023 AMI
-    ap-northeast-1:
-      AMI: ami-0e0820ad173f20fbb  # Amazon Linux 2023 AMI
-    ap-northeast-2:
-      AMI: ami-0f8dbbf156e3a5cc6  # Amazon Linux 2023 AMI
-    ap-southeast-1:
-      AMI: ami-0d07675d294f17973  # Amazon Linux 2023 AMI
-    ap-southeast-2:
-      AMI: ami-0146fc9ad419e2cfd  # Amazon Linux 2023 AMI
-    ap-south-1:
-      AMI: ami-0fd05997b4dff7aac  # Amazon Linux 2023 AMI
-    ca-central-1:
-      AMI: ami-0083d3f8b2a6c7a81  # Amazon Linux 2023 AMI
-    sa-east-1:
-      AMI: ami-0c2b8ca3dad447f8a  # Amazon Linux 2023 AMI
 
 Resources:
   # VPC and Networking Resources
@@ -292,7 +265,7 @@ Resources:
     Type: AWS::EC2::Instance
     DeletionPolicy: Delete
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      ImageId: !Ref ImageId
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnetAZ1
@@ -384,7 +357,7 @@ Resources:
     Type: AWS::EC2::Instance
     DeletionPolicy: Delete
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      ImageId: !Ref ImageId
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnetAZ2
