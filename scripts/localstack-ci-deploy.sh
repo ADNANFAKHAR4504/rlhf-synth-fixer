@@ -129,8 +129,7 @@ install_dependencies() {
 }
 
 # Function to save deployment outputs
-# Fails if no outputs are saved (output_count = 0) for AWS provider
-# For LocalStack Community Edition, output parsing may fail but deployment is still valid
+# Fails if no outputs are saved (output_count = 0)
 save_outputs() {
     local output_json=$1
 
@@ -142,19 +141,12 @@ save_outputs() {
     local output_count=$(echo "$output_json" | jq 'keys | length' 2>/dev/null || echo "0")
 
     if [ "$output_count" -eq 0 ]; then
-        # Check if this is LocalStack Community Edition deployment
-        if [ "${PROVIDER:-}" == "localstack" ] || [ -n "${AWS_ENDPOINT_URL:-}" ]; then
-            print_status $YELLOW "⚠️ No deployment outputs parsed (LocalStack Community Edition limitation)"
-            print_status $YELLOW "ℹ️  Stack deployment was successful - output parsing is not critical for LocalStack"
-            print_status $GREEN "✅ Deployment validated - proceeding without outputs"
-        else
-            print_status $RED "❌ No deployment outputs found!"
-            print_status $RED "❌ Deployment must produce at least one output"
-            exit 1
-        fi
-    else
-        print_status $GREEN "✅ Saved $output_count outputs to cdk-outputs/flat-outputs.json"
+        print_status $RED "❌ No deployment outputs found!"
+        print_status $RED "❌ Deployment must produce at least one output"
+        exit 1
     fi
+
+    print_status $GREEN "✅ Saved $output_count outputs to cdk-outputs/flat-outputs.json"
 }
 
 # Function to describe CDK/CloudFormation deployment failure
@@ -615,12 +607,11 @@ deploy_cloudformation() {
     cd "$PROJECT_ROOT/lib"
 
     # Find CloudFormation template based on language
-    # PRIORITY: LocalStack-specific templates first (LocalStack-compatible versions)
     local template=""
-
+    
     if [ "$language" == "yaml" ]; then
-        # Look for YAML templates - LocalStack versions first
-        for name in "TapStack-LocalStack.yml" "TapStack-LocalStack.yaml" "template-localstack.yml" "template-localstack.yaml" "template.yaml" "template.yml" "TapStack.yaml" "TapStack.yml" "main.yaml" "main.yml" "stack.yaml" "stack.yml"; do
+        # Look for YAML templates
+        for name in "template.yaml" "template.yml" "TapStack.yaml" "TapStack.yml" "main.yaml" "main.yml" "stack.yaml" "stack.yml"; do
             if [ -f "$name" ]; then
                 template="$name"
                 break
@@ -630,8 +621,8 @@ deploy_cloudformation() {
             template=$(find . -maxdepth 1 \( -name "*.yaml" -o -name "*.yml" \) 2>/dev/null | head -1)
         fi
     elif [ "$language" == "json" ]; then
-        # Look for JSON templates - LocalStack versions first
-        for name in "TapStack-LocalStack.json" "template-localstack.json" "template.json" "TapStack.json" "main.json" "stack.json"; do
+        # Look for JSON templates
+        for name in "template.json" "TapStack.json" "main.json" "stack.json"; do
             if [ -f "$name" ]; then
                 template="$name"
                 break
@@ -641,8 +632,8 @@ deploy_cloudformation() {
             template=$(find . -maxdepth 1 -name "*.json" 2>/dev/null | head -1)
         fi
     else
-        # Try both - LocalStack versions first
-        for name in "TapStack-LocalStack.yml" "TapStack-LocalStack.yaml" "TapStack-LocalStack.json" "template-localstack.yml" "template-localstack.yaml" "template-localstack.json" "template.yaml" "template.yml" "template.json" "TapStack.yaml" "TapStack.yml" "TapStack.json" "main.yaml" "main.yml" "main.json" "stack.yaml" "stack.yml" "stack.json"; do
+        # Try both
+        for name in "template.yaml" "template.yml" "template.json" "TapStack.yaml" "TapStack.yml" "TapStack.json" "main.yaml" "main.yml" "main.json" "stack.yaml" "stack.yml" "stack.json"; do
             if [ -f "$name" ]; then
                 template="$name"
                 break
