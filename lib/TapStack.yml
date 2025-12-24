@@ -259,7 +259,7 @@ Resources:
     Type: AWS::EC2::Instance
     DeletionPolicy: Delete
     Properties:
-      ImageId: "ami-0bb84b8ffd87024d8"
+      ImageId: ami-ff0000a1
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnetAZ1
@@ -351,7 +351,7 @@ Resources:
     Type: AWS::EC2::Instance
     DeletionPolicy: Delete
     Properties:
-      ImageId: "ami-0bb84b8ffd87024d8"
+      ImageId: ami-ff0000a1
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnetAZ2
