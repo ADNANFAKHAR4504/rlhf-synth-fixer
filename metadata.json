@@ -3,7 +3,7 @@
   "language": "py",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "291399",
+  "po_id": "LS-291399",
   "team": "synth-2",
   "startedAt": "2025-08-11T10:49:16.909Z",
   "subtask": "Infrastructure QA and Management",
@@ -11,5 +11,15 @@
   "subject_labels": [
     "General Infrastructure Tooling QA"
   ],
-  "aws_services": []
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "S3",
+    "KMS",
+    "RDS",
+    "CloudTrail",
+    "CloudWatch",
+    "IAM"
+  ],
+  "wave": "P1"
 }
