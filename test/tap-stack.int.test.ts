@@ -788,36 +788,47 @@ To clean up after testing:
       }
 
       // Check CloudTrail
-      const ctCommand = new ListEventDataStoresCommand({});
-      const { EventDataStores } = await cloudTrailClient.send(ctCommand);
+      // EventDataStores requires LocalStack Pro, gracefully handle if not available
+      try {
+        const ctCommand = new ListEventDataStoresCommand({});
+        const { EventDataStores } = await cloudTrailClient.send(ctCommand);
 
-      // Find EventDataStore from our TapStack first
-      let eventDataStore = EventDataStores?.find(eds =>
-        eds.Name?.includes('TapStack')
-      );
-
-      // If not found, try any with 'tap' in name
-      if (!eventDataStore) {
-        eventDataStore = EventDataStores?.find(eds =>
-          eds.Name?.toLowerCase().includes('tap')
+        // Find EventDataStore from our TapStack first
+        let eventDataStore = EventDataStores?.find(eds =>
+          eds.Name?.includes('TapStack')
         );
-      }
 
-      // If still not found, take the first one
-      if (!eventDataStore) {
-        eventDataStore = EventDataStores?.[0];
-      }
-
-      // Only check CloudTrail if it's configured
-      if (eventDataStore) {
-        // Only check status if it's defined
-        if (eventDataStore.Status) {
-          expect(eventDataStore.Status).toBe('ENABLED');
+        // If not found, try any with 'tap' in name
+        if (!eventDataStore) {
+          eventDataStore = EventDataStores?.find(eds =>
+            eds.Name?.toLowerCase().includes('tap')
+          );
         }
-      } else {
-        console.warn(
-          'No CloudTrail EventDataStore found - skipping CloudTrail health check'
-        );
+
+        // If still not found, take the first one
+        if (!eventDataStore) {
+          eventDataStore = EventDataStores?.[0];
+        }
+
+        // Only check CloudTrail if it's configured
+        if (eventDataStore) {
+          // Only check status if it's defined
+          if (eventDataStore.Status) {
+            expect(eventDataStore.Status).toBe('ENABLED');
+          }
+        } else {
+          console.warn(
+            'No CloudTrail EventDataStore found - skipping CloudTrail health check'
+          );
+        }
+      } catch (error) {
+        // ListEventDataStores requires LocalStack Pro
+        if (isLocalStack && error instanceof Error && error.message.includes('not available in your current license plan')) {
+          console.log('⏭️  CloudTrail EventDataStores requires LocalStack Pro - skipping check');
+        } else {
+          // Re-throw unexpected errors
+          throw error;
+        }
       }
     });
 
