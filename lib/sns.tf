@@ -75,21 +75,22 @@ resource "aws_sns_topic_subscription" "primary" {
   endpoint  = aws_sqs_queue.events_primary.arn
 }
 
-# RDS event subscription for primary
-resource "aws_db_event_subscription" "primary" {
-  provider    = aws.primary
-  name        = "aurora-events-primary-${var.environment_suffix}"
-  sns_topic   = aws_sns_topic.primary.arn
-  source_type = "db-cluster"
-  source_ids  = [aws_rds_cluster.primary.id]
-
-  event_categories = [
-    "failover",
-    "failure",
-    "notification",
-    "maintenance"
-  ]
-}
+# RDS event subscription for primary - disabled for LocalStack compatibility
+# LocalStack has a bug with aws_db_event_subscription that causes deployment failures
+# resource "aws_db_event_subscription" "primary" {
+#   provider    = aws.primary
+#   name        = "aurora-events-primary-${var.environment_suffix}"
+#   sns_topic   = aws_sns_topic.primary.arn
+#   source_type = "db-cluster"
+#   source_ids  = [aws_rds_cluster.primary.id]
+#
+#   event_categories = [
+#     "failover",
+#     "failure",
+#     "notification",
+#     "maintenance"
+#   ]
+# }
 
 # Dead Letter Queue for secondary SNS
 resource "aws_sqs_queue" "dlq_secondary" {
@@ -168,18 +169,19 @@ resource "aws_sns_topic_subscription" "secondary" {
   endpoint  = aws_sqs_queue.events_secondary.arn
 }
 
-# RDS event subscription for secondary
-resource "aws_db_event_subscription" "secondary" {
-  provider    = aws.secondary
-  name        = "aurora-events-secondary-${var.environment_suffix}"
-  sns_topic   = aws_sns_topic.secondary.arn
-  source_type = "db-cluster"
-  source_ids  = [aws_rds_cluster.secondary.id]
-
-  event_categories = [
-    "failover",
-    "failure",
-    "notification",
-    "maintenance"
-  ]
-}
+# RDS event subscription for secondary - disabled for LocalStack compatibility
+# LocalStack has a bug with aws_db_event_subscription that causes deployment failures
+# resource "aws_db_event_subscription" "secondary" {
+#   provider    = aws.secondary
+#   name        = "aurora-events-secondary-${var.environment_suffix}"
+#   sns_topic   = aws_sns_topic.secondary.arn
+#   source_type = "db-cluster"
+#   source_ids  = [aws_rds_cluster.secondary.id]
+#
+#   event_categories = [
+#     "failover",
+#     "failure",
+#     "notification",
+#     "maintenance"
+#   ]
+# }
