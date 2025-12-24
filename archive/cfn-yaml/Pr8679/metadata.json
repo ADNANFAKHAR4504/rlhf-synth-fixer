@@ -1,0 +1,27 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291431",
+  "team": "4",
+  "startedAt": "2025-08-05T12:06:51.284Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "provider": "localstack",
+  "aws_services": [
+    "EC2",
+    "IAM",
+    "Auto Scaling",
+    "Elastic Load Balancing v2"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

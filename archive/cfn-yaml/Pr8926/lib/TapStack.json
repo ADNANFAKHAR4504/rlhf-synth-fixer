@@ -1,0 +1,1128 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack.yml — Advanced observability for payment processing (YAML-only, build-everything-new, linter-safe).",
+    "Metadata": {
+        "Notes": [
+            "Pre-create the central SNS topic and OAM Sink in the central monitoring account; pass ARNs via parameters.",
+            "Central SNS topic policy must allow cloudwatch.amazonaws.com from this source account to Publish.",
+            {
+                "EnvironmentSuffix is validated via regex only (no AllowedValues). Examples": "prod-us, production, qa."
+            }
+        ]
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Suffix appended to all resource names (lowercase/digits/hyphen, 2–20 chars).",
+            "Default": "prod-us",
+            "MinLength": 2,
+            "MaxLength": 20,
+            "AllowedPattern": "^[a-z0-9-]{2,20}$",
+            "ConstraintDescription": "Only lowercase letters, digits, and hyphen; length 2–20."
+        },
+        "CentralMonitoringTopicArn": {
+            "Type": "String",
+            "Description": "ARN of central monitoring SNS Topic (for cross-account alarm actions). Leave blank to skip.",
+            "Default": ""
+        },
+        "OamSinkArn": {
+            "Type": "String",
+            "Description": "ARN of existing OAM Sink in the central monitoring account. Leave blank to skip OAM linking.",
+            "Default": ""
+        },
+        "OAMEnabled": {
+            "Type": "String",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Default": "true",
+            "Description": "If true and OamSinkArn provided, create an OAM Link for cross-account observability."
+        },
+        "RemediationEnabled": {
+            "Type": "String",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Default": "false",
+            "Description": "If true, create EventBridge rule and remediation Lambda for auto-actions."
+        },
+        "AlarmEmail": {
+            "Type": "String",
+            "Description": "Optional local email subscription for alarm validation in this account.",
+            "Default": "ops@example.com"
+        },
+        "ApiEndpointUrls": {
+            "Type": "List<String>",
+            "Description": "One or more HTTPS endpoints for Synthetics (comma-delimited string as default).",
+            "Default": "https://example.com/health"
+        },
+        "LogsRetentionDays": {
+            "Type": "Number",
+            "Description": "Retention for CloudWatch Log Groups (days).",
+            "Default": 30,
+            "MinValue": 7,
+            "MaxValue": 3650
+        },
+        "CanaryScheduleRateMinutes": {
+            "Type": "Number",
+            "Description": "Canary interval in minutes (1–15).",
+            "Default": 5,
+            "MinValue": 1,
+            "MaxValue": 15
+        },
+        "KmsKeyAdminsCsv": {
+            "Type": "String",
+            "Description": "Comma-separated IAM principal ARNs to grant admin on the CMK (optional). Example ARNs:\n  arn:aws:iam::111122223333:role/admin,\n  arn:aws:iam::444455556666:user/secops",
+            "Default": ""
+        }
+    },
+    "Conditions": {
+        "HasCentralTopic": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CentralMonitoringTopicArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateOAM": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "OAMEnabled"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "OamSinkArn"
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "EnableRemediation": {
+            "Fn::Equals": [
+                {
+                    "Ref": "RemediationEnabled"
+                },
+                "true"
+            ]
+        },
+        "HasKmsAdmins": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KmsKeyAdminsCsv"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "ObservabilityKmsKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS CMK for observability artifacts/logs - ${AWS::StackName}"
+                },
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "RootAdmin",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Fn::If": [
+                                "HasKmsAdmins",
+                                {
+                                    "Sid": "KmsAdditionalAdmins",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "AWS": {
+                                            "Fn::Split": [
+                                                ",",
+                                                {
+                                                    "Ref": "KmsKeyAdminsCsv"
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    "Action": [
+                                        "kms:DescribeKey",
+                                        "kms:EnableKeyRotation",
+                                        "kms:DisableKey",
+                                        "kms:ScheduleKeyDeletion",
+                                        "kms:CancelKeyDeletion",
+                                        "kms:CreateAlias",
+                                        "kms:DeleteAlias",
+                                        "kms:UpdateAlias",
+                                        "kms:CreateGrant",
+                                        "kms:RevokeGrant",
+                                        "kms:ListGrants",
+                                        "kms:PutKeyPolicy",
+                                        "kms:TagResource",
+                                        "kms:UntagResource",
+                                        "kms:UpdateKeyDescription"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Ref": "AWS::NoValue"
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "AllowServiceUse",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "logs.amazonaws.com",
+                                    "lambda.amazonaws.com",
+                                    "synthetics.amazonaws.com",
+                                    "s3.amazonaws.com",
+                                    "xray.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:GenerateDataKey*",
+                                "kms:Decrypt",
+                                "kms:Encrypt",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "ObservabilityKmsAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/payments-observability-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "ObservabilityKmsKey"
+                }
+            }
+        },
+        "ApiGatewayAccessLogs": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/apigateway/access/payments-${EnvironmentSuffix}"
+                },
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "ObservabilityKmsKey",
+                        "Arn"
+                    ]
+                },
+                "RetentionInDays": {
+                    "Ref": "LogsRetentionDays"
+                }
+            }
+        },
+        "LambdaAppLogs": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/payments-app-${EnvironmentSuffix}"
+                },
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "ObservabilityKmsKey",
+                        "Arn"
+                    ]
+                },
+                "RetentionInDays": {
+                    "Ref": "LogsRetentionDays"
+                }
+            }
+        },
+        "ApplicationLogs": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/payments/application-${EnvironmentSuffix}"
+                },
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "ObservabilityKmsKey",
+                        "Arn"
+                    ]
+                },
+                "RetentionInDays": {
+                    "Ref": "LogsRetentionDays"
+                }
+            }
+        },
+        "MfTransactionSuccess": {
+            "Type": "AWS::Logs::MetricFilter",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "ApplicationLogs"
+                },
+                "FilterPattern": "{ $.status = \"SUCCESS\" }",
+                "MetricTransformations": [
+                    {
+                        "MetricName": {
+                            "Fn::Sub": "TransactionSuccess-${EnvironmentSuffix}"
+                        },
+                        "MetricNamespace": {
+                            "Fn::Sub": "Payments/${EnvironmentSuffix}"
+                        },
+                        "MetricValue": "1",
+                        "Unit": "Count"
+                    }
+                ]
+            }
+        },
+        "MfTransactionFailureCode": {
+            "Type": "AWS::Logs::MetricFilter",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "ApplicationLogs"
+                },
+                "FilterPattern": "{ $.status = \"FAILURE\" && $.errorCode = * }",
+                "MetricTransformations": [
+                    {
+                        "MetricName": {
+                            "Fn::Sub": "TransactionFailures-${EnvironmentSuffix}"
+                        },
+                        "MetricNamespace": {
+                            "Fn::Sub": "Payments/${EnvironmentSuffix}"
+                        },
+                        "MetricValue": "1",
+                        "Unit": "Count"
+                    }
+                ]
+            }
+        },
+        "MfProcessingTimeMs": {
+            "Type": "AWS::Logs::MetricFilter",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "ApplicationLogs"
+                },
+                "FilterPattern": "{ $.durationMs = * }",
+                "MetricTransformations": [
+                    {
+                        "MetricName": {
+                            "Fn::Sub": "ProcessingTimeMs-${EnvironmentSuffix}"
+                        },
+                        "MetricNamespace": {
+                            "Fn::Sub": "Payments/${EnvironmentSuffix}"
+                        },
+                        "MetricValue": "$.durationMs",
+                        "Unit": "Milliseconds",
+                        "DefaultValue": 0
+                    }
+                ]
+            }
+        },
+        "ApiAccessContributorInsights": {
+            "Type": "AWS::CloudWatch::InsightRule",
+            "Properties": {
+                "RuleName": {
+                    "Fn::Sub": "api-top-consumers-${EnvironmentSuffix}"
+                },
+                "RuleState": "ENABLED",
+                "RuleBody": {
+                    "Fn::Sub": "{\n  \"Schema\": { \"Name\": \"CloudWatchLogRule\", \"Version\": 1 },\n  \"LogFormat\": \"JSON\",\n  \"LogGroupNames\": [\"${ApiGatewayAccessLogs}\"],\n  \"Contribution\": {\n    \"Keys\": [\"$.apiKeyId\", \"$.resourcePath\"],\n    \"Filters\": []\n  },\n  \"AggregateOn\": \"Count\"\n}\n"
+                }
+            }
+        },
+        "ErrorProneEndpointsInsights": {
+            "Type": "AWS::CloudWatch::InsightRule",
+            "Properties": {
+                "RuleName": {
+                    "Fn::Sub": "api-error-endpoints-${EnvironmentSuffix}"
+                },
+                "RuleState": "ENABLED",
+                "RuleBody": {
+                    "Fn::Sub": "{\n  \"Schema\": { \"Name\": \"CloudWatchLogRule\", \"Version\": 1 },\n  \"LogFormat\": \"JSON\",\n  \"LogGroupNames\": [\"${ApiGatewayAccessLogs}\"],\n  \"Contribution\": {\n    \"Keys\": [\"$.resourcePath\", \"$.status\"],\n    \"Filters\": [\n      { \"Match\": \"$.status\", \"In\": [\"500\",\"502\",\"503\",\"504\",\"429\",\"400\",\"401\",\"403\",\"404\"] }\n    ]\n  },\n  \"AggregateOn\": \"Count\"\n}\n"
+                }
+            }
+        },
+        "AdTransactionVolume": {
+            "Type": "AWS::CloudWatch::AnomalyDetector",
+            "Properties": {
+                "MetricName": {
+                    "Fn::Sub": "TransactionSuccess-${EnvironmentSuffix}"
+                },
+                "Namespace": {
+                    "Fn::Sub": "Payments/${EnvironmentSuffix}"
+                },
+                "Stat": "Sum"
+            }
+        },
+        "AdErrorRate": {
+            "Type": "AWS::CloudWatch::AnomalyDetector",
+            "Properties": {
+                "MetricName": {
+                    "Fn::Sub": "TransactionFailures-${EnvironmentSuffix}"
+                },
+                "Namespace": {
+                    "Fn::Sub": "Payments/${EnvironmentSuffix}"
+                },
+                "Stat": "Sum"
+            }
+        },
+        "CanaryArtifactsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "payments-canary-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Fn::GetAtt": [
+                                        "ObservabilityKmsKey",
+                                        "Arn"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerEnforced"
+                        }
+                    ]
+                }
+            }
+        },
+        "CanaryExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "payments-canary-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "synthetics.amazonaws.com",
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchSyntheticsFullAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "payments-canary-inline-${EnvironmentSuffix}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "LogsAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/cwsyn/*"
+                                    }
+                                },
+                                {
+                                    "Sid": "ArtifactsS3",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "CanaryArtifactsBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${CanaryArtifactsBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "UseKms",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Encrypt",
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey*",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ObservabilityKmsKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "XRay",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "xray:PutTraceSegments",
+                                        "xray:PutTelemetryRecords"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "PaymentsCanary": {
+            "Type": "AWS::Synthetics::Canary",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payments-canary-${EnvironmentSuffix}"
+                },
+                "ArtifactS3Location": {
+                    "Fn::Sub": "s3://${CanaryArtifactsBucket}"
+                },
+                "ExecutionRoleArn": {
+                    "Fn::GetAtt": [
+                        "CanaryExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "RuntimeVersion": "syn-nodejs-puppeteer-6.2",
+                "Schedule": {
+                    "Expression": {
+                        "Fn::Sub": "rate(${CanaryScheduleRateMinutes} minutes)"
+                    },
+                    "DurationInSeconds": 0
+                },
+                "StartCanaryAfterCreation": true,
+                "FailureRetentionPeriod": 31,
+                "SuccessRetentionPeriod": 7,
+                "RunConfig": {
+                    "ActiveTracing": true,
+                    "EnvironmentVariables": {
+                        "ENDPOINTS": {
+                            "Fn::Join": [
+                                ",",
+                                {
+                                    "Ref": "ApiEndpointUrls"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "Code": {
+                    "Handler": "index.handler",
+                    "Script": "const https = require('https');\nexports.handler = async () => {\n  const endpoints = (process.env.ENDPOINTS || '').split(',').filter(Boolean);\n  for (const u of endpoints) {\n    const ok = await new Promise((resolve, reject) => {\n      const req = https.get(u, (res) => {\n        res.on('data', () => {});\n        res.on('end', () => resolve(res.statusCode >= 200 && res.statusCode < 400));\n      });\n      req.on('error', reject);\n    });\n    if (!ok) throw new Error('Endpoint failed: ' + u);\n  }\n  return { ok: true };\n};\n"
+                }
+            }
+        },
+        "XraySamplingRule": {
+            "Type": "AWS::XRay::SamplingRule",
+            "Properties": {
+                "SamplingRule": {
+                    "Version": 1,
+                    "RuleName": {
+                        "Fn::Sub": "payments-${EnvironmentSuffix}"
+                    },
+                    "Priority": 100,
+                    "ReservoirSize": 5,
+                    "FixedRate": 0.05,
+                    "ServiceName": "*",
+                    "ServiceType": "*",
+                    "Host": "*",
+                    "HTTPMethod": "*",
+                    "URLPath": "*",
+                    "ResourceARN": "*",
+                    "Attributes": {}
+                }
+            }
+        },
+        "LocalAlarmsTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "payments-alarms-${EnvironmentSuffix}"
+                },
+                "KmsMasterKeyId": {
+                    "Fn::GetAtt": [
+                        "ObservabilityKmsKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "LocalAlarmsSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Protocol": "email",
+                "Endpoint": {
+                    "Ref": "AlarmEmail"
+                },
+                "TopicArn": {
+                    "Ref": "LocalAlarmsTopic"
+                }
+            }
+        },
+        "AlarmHighFailures": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "high-failures-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "High transaction failures detected",
+                "Namespace": {
+                    "Fn::Sub": "Payments/${EnvironmentSuffix}"
+                },
+                "MetricName": {
+                    "Fn::Sub": "TransactionFailures-${EnvironmentSuffix}"
+                },
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 5,
+                "DatapointsToAlarm": 3,
+                "Threshold": 50,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "TreatMissingData": "notBreaching",
+                "ActionsEnabled": true,
+                "AlarmActions": [
+                    {
+                        "Ref": "LocalAlarmsTopic"
+                    },
+                    {
+                        "Fn::If": [
+                            "HasCentralTopic",
+                            {
+                                "Ref": "CentralMonitoringTopicArn"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "AlarmHighLatency": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "high-latency-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "High p95 processing latency",
+                "Metrics": [
+                    {
+                        "Id": "m1",
+                        "MetricStat": {
+                            "Metric": {
+                                "Namespace": {
+                                    "Fn::Sub": "Payments/${EnvironmentSuffix}"
+                                },
+                                "MetricName": {
+                                    "Fn::Sub": "ProcessingTimeMs-${EnvironmentSuffix}"
+                                }
+                            },
+                            "Period": 60,
+                            "Stat": "p95"
+                        }
+                    }
+                ],
+                "EvaluationPeriods": 5,
+                "DatapointsToAlarm": 3,
+                "Threshold": 1200,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "TreatMissingData": "notBreaching",
+                "ActionsEnabled": true,
+                "AlarmActions": [
+                    {
+                        "Ref": "LocalAlarmsTopic"
+                    },
+                    {
+                        "Fn::If": [
+                            "HasCentralTopic",
+                            {
+                                "Ref": "CentralMonitoringTopicArn"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "CompositeErrorAndLatency": {
+            "Type": "AWS::CloudWatch::CompositeAlarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "composite-error-latency-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Triggers only when BOTH failure rate and latency are high",
+                "AlarmRule": {
+                    "Fn::Sub": "(ALARM(${AlarmHighFailures})) AND (ALARM(${AlarmHighLatency}))"
+                },
+                "ActionsEnabled": true,
+                "AlarmActions": [
+                    {
+                        "Ref": "LocalAlarmsTopic"
+                    },
+                    {
+                        "Fn::If": [
+                            "HasCentralTopic",
+                            {
+                                "Ref": "CentralMonitoringTopicArn"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "QdTopErrorCodes": {
+            "Type": "AWS::Logs::QueryDefinition",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payments-top-error-codes-${EnvironmentSuffix}"
+                },
+                "QueryString": "fields @timestamp, errorCode, message\n| filter status=\"FAILURE\" and ispresent(errorCode)\n| stats count(*) as errors by errorCode\n| sort errors desc\n| limit 50\n",
+                "LogGroupNames": [
+                    {
+                        "Ref": "ApplicationLogs"
+                    }
+                ]
+            }
+        },
+        "QdSlowestEndpoints": {
+            "Type": "AWS::Logs::QueryDefinition",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payments-slowest-endpoints-${EnvironmentSuffix}"
+                },
+                "QueryString": "fields @timestamp, @message, path, durationMs\n| filter ispresent(durationMs)\n| stats pct(durationMs, 50) as p50, pct(durationMs, 90) as p90, pct(durationMs, 99) as p99 by path\n| sort p99 desc\n| limit 30\n",
+                "LogGroupNames": [
+                    {
+                        "Ref": "ApplicationLogs"
+                    }
+                ]
+            }
+        },
+        "QdColdStarts": {
+            "Type": "AWS::Logs::QueryDefinition",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payments-cold-starts-${EnvironmentSuffix}"
+                },
+                "QueryString": "fields @timestamp, @message, coldStart\n| filter coldStart = true\n| stats count(*) as cold_starts by bin(5m)\n",
+                "LogGroupNames": [
+                    {
+                        "Ref": "LambdaAppLogs"
+                    }
+                ]
+            }
+        },
+        "RemediationRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "EnableRemediation",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "payments-remediation-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "payments-remediation-inline-${EnvironmentSuffix}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:DescribeAlarms",
+                                        "cloudwatch:GetMetricData"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "sns:Publish",
+                                    "Resource": [
+                                        {
+                                            "Ref": "LocalAlarmsTopic"
+                                        },
+                                        {
+                                            "Fn::If": [
+                                                "HasCentralTopic",
+                                                {
+                                                    "Ref": "CentralMonitoringTopicArn"
+                                                },
+                                                {
+                                                    "Ref": "AWS::NoValue"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "RemediationFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Condition": "EnableRemediation",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "payments-remediation-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "RemediationRole",
+                        "Arn"
+                    ]
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "KmsKeyArn": {
+                    "Fn::GetAtt": [
+                        "ObservabilityKmsKey",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "Environment": {
+                    "Variables": {
+                        "LOCAL_TOPIC_ARN": {
+                            "Ref": "LocalAlarmsTopic"
+                        },
+                        "CENTRAL_TOPIC_ARN": {
+                            "Fn::If": [
+                                "HasCentralTopic",
+                                {
+                                    "Ref": "CentralMonitoringTopicArn"
+                                },
+                                ""
+                            ]
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import os, json, boto3\nsns = boto3.client('sns')\ndef handler(event, context):\n    msg = \"[AUTO-REMEDIATION] Composite alarm triggered.\\nEvent: \" + json.dumps(event)\n    if os.environ.get('LOCAL_TOPIC_ARN'):\n        sns.publish(TopicArn=os.environ['LOCAL_TOPIC_ARN'], Message=msg, Subject=\"Auto-Remediation Notice\")\n    if os.environ.get('CENTRAL_TOPIC_ARN'):\n        sns.publish(TopicArn=os.environ['CENTRAL_TOPIC_ARN'], Message=msg, Subject=\"Auto-Remediation Notice\")\n    return {\"ok\": True}\n"
+                }
+            }
+        },
+        "RemediationPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Condition": "EnableRemediation",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Ref": "RemediationFunction"
+                },
+                "Principal": "events.amazonaws.com"
+            }
+        },
+        "RemediationRule": {
+            "Type": "AWS::Events::Rule",
+            "Condition": "EnableRemediation",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payments-remediation-rule-${EnvironmentSuffix}"
+                },
+                "Description": "Invoke remediation when composite alarm enters ALARM",
+                "State": "ENABLED",
+                "EventPattern": {
+                    "source": [
+                        "aws.cloudwatch"
+                    ],
+                    "detail-type": [
+                        "CloudWatch Alarm State Change"
+                    ],
+                    "detail": {
+                        "alarmName": [
+                            {
+                                "Ref": "CompositeErrorAndLatency"
+                            }
+                        ],
+                        "state": {
+                            "value": [
+                                "ALARM"
+                            ]
+                        }
+                    }
+                },
+                "Targets": [
+                    {
+                        "Id": "RemediationTarget",
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "RemediationFunction",
+                                "Arn"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "OamLink": {
+            "Type": "AWS::Oam::Link",
+            "Condition": "CreateOAM",
+            "Properties": {
+                "Label": {
+                    "Fn::Sub": "payments-observability-link-${EnvironmentSuffix}"
+                },
+                "ResourceTypes": [
+                    "AWS::CloudWatch::Metric",
+                    "AWS::XRay::Trace",
+                    "AWS::Logs::LogGroup"
+                ],
+                "SinkIdentifier": {
+                    "Ref": "OamSinkArn"
+                }
+            }
+        },
+        "ObservabilityDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "payments-observability-${EnvironmentSuffix}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0, \"y\": 0, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Business KPIs — Success/Failures/SuccessRate\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"metrics\": [\n          [ \"Payments/${EnvironmentSuffix}\", \"TransactionSuccess-${EnvironmentSuffix}\", { \"id\": \"su\", \"stat\": \"Sum\" } ],\n          [ \".\", \"TransactionFailures-${EnvironmentSuffix}\", { \"id\": \"fa\", \"stat\": \"Sum\" } ],\n          [ { \"expression\": \"100 * su/(su+fa)\", \"label\": \"SuccessRate %\", \"id\": \"sr\", \"region\": \"${AWS::Region}\" } ]\n        ],\n        \"region\": \"${AWS::Region}\",\n        \"period\": 60\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12, \"y\": 0, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Processing Latency (p50/p90/p99)\",\n        \"view\": \"timeSeries\",\n        \"metrics\": [\n          [ \"Payments/${EnvironmentSuffix}\", \"ProcessingTimeMs-${EnvironmentSuffix}\", { \"stat\": \"p50\", \"label\": \"p50\" } ],\n          [ \".\", \"ProcessingTimeMs-${EnvironmentSuffix}\", { \"stat\": \"p90\", \"label\": \"p90\" } ],\n          [ \".\", \"ProcessingTimeMs-${EnvironmentSuffix}\", { \"stat\": \"p99\", \"label\": \"p99\" } ]\n        ],\n        \"region\": \"${AWS::Region}\",\n        \"period\": 60\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0, \"y\": 6, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Lambda Invocations / Errors / Throttles\",\n        \"view\": \"timeSeries\",\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"payments-app-${EnvironmentSuffix}\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"Errors\", \"FunctionName\", \"payments-app-${EnvironmentSuffix}\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"Throttles\", \"FunctionName\", \"payments-app-${EnvironmentSuffix}\", { \"stat\": \"Sum\" } ]\n        ],\n        \"region\": \"${AWS::Region}\",\n        \"period\": 60\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12, \"y\": 6, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"DynamoDB Throttles\",\n        \"view\": \"timeSeries\",\n        \"metrics\": [\n          [ \"AWS/DynamoDB\", \"ReadThrottleEvents\", \"TableName\", \"payments-${EnvironmentSuffix}\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"WriteThrottleEvents\", \"TableName\", \"payments-${EnvironmentSuffix}\", { \"stat\": \"Sum\" } ]\n        ],\n        \"region\": \"${AWS::Region}\",\n        \"period\": 60\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0, \"y\": 12, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"SQS Queue Depth\",\n        \"view\": \"timeSeries\",\n        \"metrics\": [\n          [ \"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\", \"QueueName\", \"payments-${EnvironmentSuffix}\", { \"stat\": \"Average\" } ]\n        ],\n        \"region\": \"${AWS::Region}\",\n        \"period\": 60\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12, \"y\": 12, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Synthetics — Success & Duration\",\n        \"view\": \"timeSeries\",\n        \"metrics\": [\n          [ \"CloudWatchSynthetics\", \"SuccessPercent\", \"CanaryName\", \"payments-canary-${EnvironmentSuffix}\", { \"stat\": \"Average\" } ],\n          [ \".\", \"Duration\", \"CanaryName\", \"payments-canary-${EnvironmentSuffix}\", { \"stat\": \"p95\", \"label\": \"p95\" } ]\n        ],\n        \"region\": \"${AWS::Region}\",\n        \"period\": 300\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "DemoAppRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "payments-app-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "payments-app-kms-${EnvironmentSuffix}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:Encrypt",
+                                        "kms:GenerateDataKey*",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ObservabilityKmsKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "DemoAppFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "payments-app-${EnvironmentSuffix}"
+                },
+                "Runtime": "nodejs20.x",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "DemoAppRole",
+                        "Arn"
+                    ]
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Timeout": 10,
+                "Environment": {
+                    "Variables": {
+                        "LOG_GROUP": {
+                            "Ref": "LambdaAppLogs"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "exports.handler = async () => {\n  const ok = Math.random() > 0.05;\n  const status = ok ? \"SUCCESS\" : \"FAILURE\";\n  const durationMs = Math.floor(Math.random() * 1500);\n  const errorCode = ok ? null : \"PAYMENT_TIMEOUT\";\n  console.log(JSON.stringify({ status, errorCode, durationMs, path: \"/charge\" }));\n  if (!ok) throw new Error(errorCode || \"fail\");\n  return { statusCode: 200, body: JSON.stringify({ ok: true }) };\n};\n"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "DashboardName": {
+            "Description": "CloudWatch Dashboard name",
+            "Value": {
+                "Ref": "ObservabilityDashboard"
+            }
+        },
+        "KmsKeyArn": {
+            "Description": "KMS Key ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ObservabilityKmsKey",
+                    "Arn"
+                ]
+            }
+        },
+        "LogGroupNames": {
+            "Description": "Primary log groups (CSV)",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "ApplicationLogs"
+                        },
+                        {
+                            "Ref": "LambdaAppLogs"
+                        },
+                        {
+                            "Ref": "ApiGatewayAccessLogs"
+                        }
+                    ]
+                ]
+            }
+        },
+        "CanaryName": {
+            "Description": "Synthetics canary name",
+            "Value": {
+                "Ref": "PaymentsCanary"
+            }
+        },
+        "CompositeAlarmName": {
+            "Description": "Composite alarm name",
+            "Value": {
+                "Ref": "CompositeErrorAndLatency"
+            }
+        },
+        "CentralAlarmActionArn": {
+            "Description": "Echoes configured central SNS ARN (if any)",
+            "Value": {
+                "Fn::If": [
+                    "HasCentralTopic",
+                    {
+                        "Ref": "CentralMonitoringTopicArn"
+                    },
+                    "N/A"
+                ]
+            }
+        },
+        "OAMLinkArn": {
+            "Condition": "CreateOAM",
+            "Description": "OAM Link sink identifier (as provided)",
+            "Value": {
+                "Ref": "OamSinkArn"
+            }
+        }
+    }
+}
