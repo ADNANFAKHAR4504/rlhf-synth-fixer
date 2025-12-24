@@ -472,7 +472,7 @@ Outputs:
 
 ## Key Features and Best Practices Implemented
 
-### ✅ **Requirements Compliance**
+### **Requirements Compliance**
 
 1. **Region**: All resources explicitly deployed in `us-east-1`
 2. **Compute**: EC2 instances with Auto Scaling Group (2-5 instances)
@@ -480,14 +480,14 @@ Outputs:
 4. **Storage**: S3 bucket with public read access for static content
 5. **Monitoring**: CloudWatch alarms for CPU utilization > 80%
 
-### 🔧 **Architecture Highlights**
+### **Architecture Highlights**
 
 - **High Availability**: Multi-AZ deployment across `us-east-1a` and `us-east-1b`
 - **Security**: Least privilege IAM roles, security groups with minimal required access
 - **Scalability**: Auto Scaling policies triggered by CloudWatch alarms
 - **Monitoring**: Comprehensive CloudWatch monitoring with SNS notifications
 
-### 📋 **Deployment Instructions**
+### **Deployment Instructions**
 
 1. **Prerequisites**: Ensure you have an EC2 Key Pair in us-east-1
 2. **Deploy**: Use AWS CLI or Console to deploy this template
@@ -503,7 +503,7 @@ aws cloudformation create-stack \
   --region us-east-1
 ```
 
-### 🎯 **Post-Deployment**
+### **Post-Deployment**
 
 - Access your application via the ALB URL (provided in outputs)
 - Upload static content to the S3 bucket

@@ -1,10 +1,10 @@
-### ✅ Prompt: CloudFormation Template for Scalable Web Application Deployment (us-east-1)
+### Prompt: CloudFormation Template for Scalable Web Application Deployment (us-east-1)
 
 You are an experienced AWS Cloud Architect tasked with developing a **CloudFormation YAML template** to provision a scalable and secure web application infrastructure. The deployment must meet the following **explicit requirements and constraints**:
 
 ---
 
-### 🔧 Environment Specifications:
+### Environment Specifications:
 
 1. **Region**: All resources must be deployed in `us-east-1`.
 2. **Compute**:
@@ -29,7 +29,7 @@ You are an experienced AWS Cloud Architect tasked with developing a **CloudForma
 
 ---
 
-### ⚙️ Constraints:
+### Constraints:
 
 * **Region Constraint**: All resources must strictly reside in the `us-east-1` region.
 * **Scalability**: EC2 instances must scale between 2 and 5 nodes.
@@ -43,7 +43,7 @@ You are an experienced AWS Cloud Architect tasked with developing a **CloudForma
 
 ---
 
-### 📦 Expected Output:
+### Expected Output:
 
 * A **validated CloudFormation YAML template** that successfully deploys the above environment.
 * Deployment should complete **without errors** and meet **all specified constraints precisely**.
