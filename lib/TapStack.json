@@ -140,7 +140,8 @@
       }
     },
     "TransactionDynamoDBTable": {
-      "Type": "AWS::DynamoDB::GlobalTable",
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
       "Properties": {
         "TableName": {
           "Fn::Sub": "transactions-${EnvironmentSuffix}"
@@ -195,70 +196,25 @@
           "SSEEnabled": true,
           "SSEType": "KMS"
         },
-        "Replicas": [
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
           {
-            "Region": {
-              "Ref": "AWS::Region"
-            },
-            "PointInTimeRecoverySpecification": {
-              "PointInTimeRecoveryEnabled": true
-            },
-            "GlobalSecondaryIndexes": [
-              {
-                "IndexName": "CustomerIndex"
-              }
-            ],
-            "Tags": [
-              {
-                "Key": "Name",
-                "Value": {
-                  "Fn::Sub": "transactions-primary-${EnvironmentSuffix}"
-                }
-              },
-              {
-                "Key": "Environment",
-                "Value": {
-                  "Ref": "EnvironmentSuffix"
-                }
-              },
-              {
-                "Key": "Region",
-                "Value": "Primary"
-              }
-            ],
-            "TableClass": "STANDARD"
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transactions-${EnvironmentSuffix}"
+            }
           },
           {
-            "Region": {
-              "Ref": "SecondaryRegion"
-            },
-            "PointInTimeRecoverySpecification": {
-              "PointInTimeRecoveryEnabled": true
-            },
-            "GlobalSecondaryIndexes": [
-              {
-                "IndexName": "CustomerIndex"
-              }
-            ],
-            "Tags": [
-              {
-                "Key": "Name",
-                "Value": {
-                  "Fn::Sub": "transactions-secondary-${EnvironmentSuffix}"
-                }
-              },
-              {
-                "Key": "Environment",
-                "Value": {
-                  "Ref": "EnvironmentSuffix"
-                }
-              },
-              {
-                "Key": "Region",
-                "Value": "Secondary"
-              }
-            ],
-            "TableClass": "STANDARD"
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "ReplicationType",
+            "Value": "Global"
           }
         ]
       }
