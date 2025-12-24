@@ -50,8 +50,8 @@
 
 ## Infrastructure Quality Assessment
 
-**Security**: ✅ Good - All security requirements implemented with best practices  
-**Scalability**: ✅ Good - Auto Scaling and Load Balancer configured  
-**Reliability**: ⚠️ Partial - Single region deployment limits disaster recovery  
-**Monitoring**: ✅ Good - CloudWatch and AWS Config enabled  
-**Compliance**: ✅ Good - Config rules for compliance monitoring
+**Security**: [Good] - All security requirements implemented with best practices
+**Scalability**: [Good] - Auto Scaling and Load Balancer configured
+**Reliability**: [Partial] - Single region deployment limits disaster recovery
+**Monitoring**: [Good] - CloudWatch and AWS Config enabled
+**Compliance**: [Good] - Config rules for compliance monitoring
