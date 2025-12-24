@@ -6,11 +6,16 @@
   "po_id": "LS-291319",
   "team": "synth-2",
   "startedAt": "2025-08-15T12:48:04.363Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Failure Recovery and High Availability",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Failure Recovery Automation"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "rds",
+    "vpc",
+    "iam",
+    "ec2"
+  ],
   "wave": "P1"
 }
