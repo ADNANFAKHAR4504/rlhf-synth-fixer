@@ -77,7 +77,7 @@ describe('projectX Serverless Stack Integration Tests', () => {
   });
 
   test('API Gateway URL should start with https:// and contain execute-api', () => {
-    // LocalStack URLs include port :4566
-    expect(outputs.ApiGatewayUrl).toMatch(/^https:\/\/.+\.execute-api\..+\.amazonaws\.com(:\d+)?/);
+    // LocalStack URLs include port :4566 and trailing slash
+    expect(outputs.ApiGatewayUrl).toMatch(/^https:\/\/.+\.execute-api\..+\.amazonaws\.com(:\d+)?\/?$/);
   });
 });
