@@ -11,6 +11,20 @@
     "Cloud Environment Setup"
   ],
   "provider": "localstack",
-  "aws_services": [],
-  "wave": "P1"
+  "aws_services": [
+    "API Gateway",
+    "CloudWatch",
+    "EC2",
+    "IAM",
+    "S3",
+    "WAF"
+  ],
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
