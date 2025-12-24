@@ -12,20 +12,6 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Default: '/myapp/database/password'
-    Description: >-
-      SSM Parameter Store parameter name containing the database password
-
-  DBPasswordParameterName:
-    Type: String
-    Default: '/myapp/database/password'
-    Description: >-
-      Name of the SSM Parameter Store parameter containing the database password
-    AllowedPattern: '^[a-zA-Z0-9/_-]+$'
-
   AZ1:
     Type: String
     Default: us-west-2a
@@ -42,10 +28,6 @@ Parameters:
     AllowedValues: ['development', 'staging', 'production']
 
 Resources:
-  # Note: SSM Parameter /myapp/database/password must exist before deployment
-  # Created via: aws ssm put-parameter --name "/myapp/database/password" \
-  #   --value "SecurePassword123!" --type "SecureString" --region us-west-2
-
   # VPC Configuration
   MyAppVPC:
     Type: AWS::EC2::VPC
@@ -469,9 +451,3 @@ Outputs:
     Value: !GetAtt MyAppLambdaFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-LambdaFunction'
-
-  DatabasePasswordParameterName:
-    Description: 'SSM Parameter Store name for database password'
-    Value: !Ref DBPasswordParameterName
-    Export:
-      Name: !Sub '${AWS::StackName}-DBPasswordParameterName'
