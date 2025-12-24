@@ -1,0 +1,23 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291616",
+  "team": "synth-2",
+  "startedAt": "2025-08-20T12:43:55.411Z",
+  "subtask": "infrastructure_security",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "internet_gateway",
+    "route_tables",
+    "security_groups",
+    "subnets"
+  ],
+  "wave": "P1"
+}
