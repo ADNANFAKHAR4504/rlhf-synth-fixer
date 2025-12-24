@@ -34,7 +34,7 @@ describe('CloudFormation Template Optimization Tests', () => {
     test('should have subject labels for optimization requirements', () => {
       expect(metadata.subject_labels).toBeDefined();
       expect(metadata.subject_labels.length).toBeGreaterThanOrEqual(1);
-      expect(metadata.subject_labels).toContain('IaC Optimization');
+      expect(metadata.subject_labels).toContain('Cloud Environment Setup');
     });
   });
 
