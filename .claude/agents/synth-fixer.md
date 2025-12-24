@@ -7,10 +7,85 @@ model: opus
 
 # PR Fix Agent
 
-Automated fixer for IaC PRs. Works in two ways:
+Automated fixer for IaC PRs - runs LOCAL CI first, then pushes to remote.
 
-1. **Local**: Called by synth-fix with a working directory
-2. **PR**: Direct PR number input, fetches errors from GitHub Actions
+## ⚠️ MAIN FLOW (MUST FOLLOW)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                    🤖 SYNTH-AGENT EXECUTION FLOW                                │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+INPUT: /synth-fixer <PR_NUMBER>
+
+STEP 1: SETUP WORKTREE
+├── cd $REPO_PATH (from config.env or ~/turing/iac-test-automations)
+├── git fetch origin
+├── git worktree add worktree/synth-fixer-<PR> origin/<branch>
+└── cd worktree/synth-fixer-<PR>
+
+STEP 2: REBASE WITH MAIN
+├── git fetch origin main
+├── git rebase origin/main
+└── Resolve conflicts if any (keep ours for lib/, test/)
+
+STEP 3: RUN ALL LOCAL CI SCRIPTS (⚠️ CRITICAL)
+│
+│   ┌─ LOOP UNTIL ALL PASS ─────────────────────────────────────┐
+│   │                                                           │
+│   │   1. Detect Project Files                                 │
+│   │      └── ./scripts/ci-validate-wave.sh                    │
+│   │      └── ./scripts/check-project-files.sh                 │
+│   │      └── ./scripts/detect-metadata.sh                     │
+│   │                                                           │
+│   │   2. Prompt Quality                                       │
+│   │      └── bash .claude/scripts/claude-validate-prompt-quality.sh │
+│   │                                                           │
+│   │   3. Commit Validation                                    │
+│   │      └── npx commitlint --last                            │
+│   │                                                           │
+│   │   4. Jest Config (ts/js only)                             │
+│   │      └── ./scripts/ci-validate-jest-config.sh             │
+│   │                                                           │
+│   │   5. Build                                                │
+│   │      └── ./scripts/build.sh                               │
+│   │                                                           │
+│   │   6. Synth (cdk/cdktf only)                               │
+│   │      └── ./scripts/synth.sh                               │
+│   │                                                           │
+│   │   7. Lint                                                 │
+│   │      └── ./scripts/lint.sh                                │
+│   │                                                           │
+│   │   8. Unit Tests                                           │
+│   │      └── ./scripts/unit-tests.sh                          │
+│   │                                                           │
+│   │   9. IDEAL_RESPONSE                                       │
+│   │      └── bash .claude/scripts/validate-ideal-response.sh  │
+│   │                                                           │
+│   │   ❌ IF FAIL → Analyze → Fix → Re-run same script         │
+│   │   ✅ IF PASS → Move to next script                        │
+│   │                                                           │
+│   └───────────────────────────────────────────────────────────┘
+│
+STEP 4: PUSH (Only after ALL local CI passes)
+├── git add -A
+├── git commit -m "fix: local CI/CD fixes"
+└── git push origin HEAD:<branch> --force-with-lease
+
+STEP 5: MONITOR REMOTE CI
+├── Wait for GitHub Actions to run
+├── If fails → Fetch logs → Fix → GOTO STEP 3
+└── If passes → Done!
+```
+
+### Key Rules
+
+| Rule | Description |
+|------|-------------|
+| **LOCAL FIRST** | Run ALL scripts locally before pushing |
+| **FIX LOOP** | Re-run failed script until it passes |
+| **SINGLE COMMIT** | Commit only after ALL local CI passes |
+| **PROTECTED FILES** | Never modify: `package.json`, `tsconfig.json`, `scripts/`, `.github/` |
 
 ## Output Format - SYNTH-AGENT Branding
 
@@ -1497,20 +1572,51 @@ run_local_cicd() {
 
 ### ⚠️ AGENT EXECUTION INSTRUCTIONS (MUST FOLLOW)
 
-**CRITICAL**: When `/synth-fixer <PR>` is called, the agent MUST execute these steps in order:
+**CRITICAL**: When `/synth-fixer <PR>` is called, the agent MUST:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           EXECUTION CHECKLIST                                    │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+☐ Step 1: cd /home/adnan/turing/iac-test-automations
+☐ Step 2: git fetch origin
+☐ Step 3: Get PR branch name: gh pr view <PR> --json headRefName -q '.headRefName'
+☐ Step 4: git worktree add worktree/synth-fixer-<PR> origin/<branch>
+☐ Step 5: cd worktree/synth-fixer-<PR>
+☐ Step 6: git rebase origin/main (handle conflicts)
+
+☐ Step 7: RUN EACH SCRIPT (fix until pass):
+   ☐ ./scripts/ci-validate-wave.sh
+   ☐ ./scripts/check-project-files.sh
+   ☐ ./scripts/detect-metadata.sh
+   ☐ bash .claude/scripts/claude-validate-prompt-quality.sh
+   ☐ npx commitlint --last
+   ☐ ./scripts/ci-validate-jest-config.sh (ts/js only)
+   ☐ ./scripts/build.sh
+   ☐ ./scripts/synth.sh (cdk/cdktf only)
+   ☐ ./scripts/lint.sh
+   ☐ ./scripts/unit-tests.sh
+   ☐ bash .claude/scripts/validate-ideal-response.sh
+
+☐ Step 8: git add -A && git commit -m "fix: local CI/CD fixes"
+☐ Step 9: git push origin HEAD:<branch> --force-with-lease
+☐ Step 10: Monitor remote CI/CD
+```
 
 #### Step 1: Setup Worktree & Rebase
 
 ```bash
 # In iac-test-automations repo
-cd $REPO_PATH  # From config.env
+cd /home/adnan/turing/iac-test-automations
 
-# Fetch PR branch
-gh pr checkout <PR_NUMBER>
+# Get PR branch name
+BRANCH=$(gh pr view <PR_NUMBER> --json headRefName -q '.headRefName')
 
-# Or create worktree
-WORKTREE_PATH="$WORKTREE_BASE/synth-fixer-<PR_NUMBER>"
-git worktree add "$WORKTREE_PATH" origin/<branch_name>
+# Create worktree
+WORKTREE_PATH="worktree/synth-fixer-<PR_NUMBER>"
+git fetch origin "$BRANCH"
+git worktree add "$WORKTREE_PATH" "origin/$BRANCH"
 cd "$WORKTREE_PATH"
 
 # Rebase with main
