@@ -1,4 +1,10 @@
-```yml
+# CloudFormation Template for Serverless API
+
+Here's the complete CloudFormation YAML template that sets up the serverless API infrastructure.
+
+## TapStack.yml
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Serverless infrastructure for projectX using AWS Lambda and API Gateway with CloudWatch monitoring.'
 
@@ -172,3 +178,28 @@ Outputs:
     Description: ARN of the Lambda function
     Value: !GetAtt projectXLambdaFunction.Arn
 ```
+
+## Key Features
+
+This template includes:
+
+- **Configurable Parameters**: Function name, handler, runtime, and memory are all configurable
+- **Environment Support**: EnvironmentSuffix parameter enables multi-environment deployments
+- **Least Privilege IAM**: Lambda role is scoped to only the specific log group it needs
+- **CloudWatch Monitoring**: 7-day log retention for both Lambda and API Gateway
+- **Complete Outputs**: All important resource identifiers exported for integration
+- **Resource Tags**: Environment, Project, and Name tags on all resources
+- **Modern Runtime**: Defaults to nodejs18.x with validation for supported runtimes
+
+## Deployment
+
+Deploy using AWS CLI or CloudFormation console:
+
+```bash
+aws cloudformation create-stack --stack-name projectx-dev \
+  --template-body file://TapStack.yml \
+  --parameters ParameterKey=EnvironmentSuffix,ParameterValue=dev \
+  --capabilities CAPABILITY_NAMED_IAM
+```
+
+The API Gateway URL will be available in the stack outputs after deployment completes.
