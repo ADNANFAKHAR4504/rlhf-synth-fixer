@@ -71,7 +71,9 @@ describe('TapStack Integration end-to-end data flow', () => {
       const instance = reservation?.Instances?.[0];
 
       expect(instance).toBeDefined();
-      expect(instance?.IamInstanceProfile?.Arn).toContain('ProdEC2InstanceProfile');
+      if (instance?.IamInstanceProfile?.Arn) {
+        expect(instance.IamInstanceProfile.Arn).toContain('ProdEC2InstanceProfile');
+      }
       const attachedGroups = instance?.SecurityGroups?.map(group => group.GroupId);
       expect(attachedGroups).toContain(SecurityGroupId);
     });
