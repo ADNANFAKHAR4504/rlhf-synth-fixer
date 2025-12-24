@@ -22,13 +22,9 @@ class TestTapStackDeployedResources(unittest.TestCase):
 
         os.environ["AWS_REGION"] = cls.region
 
-        # Configure Pulumi to use local file backend when running with LocalStack
-        # Check if we're running against LocalStack
-        aws_endpoint = os.getenv("AWS_ENDPOINT_URL", "")
-        if "localhost" in aws_endpoint or "4566" in aws_endpoint or os.getenv("LOCALSTACK", "").lower() == "true":
-            # Use local file backend for LocalStack to avoid S3 backend credential issues
-            os.environ["PULUMI_BACKEND_URL"] = f"file://{os.getcwd()}/.pulumi-state"
-            print(f"Using local file backend: {os.environ['PULUMI_BACKEND_URL']}")
+        # NOTE: Do NOT change PULUMI_BACKEND_URL here!
+        # The tests need to read state from the same S3 backend that Deploy used.
+        # The PULUMI_BACKEND_URL environment variable should already be set by the CI/CD workflow.
 
         # Use Automation API to select the stack
         ws = auto.LocalWorkspace(work_dir=os.getcwd())
