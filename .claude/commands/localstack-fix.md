@@ -35,6 +35,22 @@ This command provides a simple interface to fix LocalStack PRs until they are **
 
 # Force retry all failed jobs
 /localstack-fix --retry-all 7179
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 🚀 LOCAL-FIRST MODE (Saves CI Credits!)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Fix entirely locally first, don't push until local CI passes
+/localstack-fix --local-first 7179
+
+# Run local CI simulation to check status
+/localstack-fix --simulate 7179
+
+# Fix locally with auto-fix, then push only when ready
+/localstack-fix --local-first --push-when-ready 7179
+
+# Dry-run: show what would be fixed without making changes
+/localstack-fix --dry-run 7179
 ```
 
 ## Arguments
@@ -45,6 +61,91 @@ This command provides a simple interface to fix LocalStack PRs until they are **
   - If branch name provided, checks out that branch
 - `--status`: Only show current CI/CD status, don't apply fixes
 - `--retry-all`: Force retry all failed CI/CD jobs after pushing fixes
+- `--local-first`: Fix entirely locally before pushing to CI (saves credits!)
+- `--simulate`: Run local CI simulation to check if fixes would pass
+- `--push-when-ready`: Combined with --local-first, only push when local CI passes
+- `--dry-run`: Show what would be fixed without making changes
+
+## 🚀 Local-First Workflow (CI Credit Saver!)
+
+**RECOMMENDED**: Always use `--local-first` mode to save CI credits and time!
+
+### Why Local-First?
+
+| Traditional Mode | Local-First Mode |
+|-----------------|------------------|
+| ❌ Push → Wait 15-30min → Check CI → Fix → Push → Repeat | ✅ Fix locally → Validate locally → Push once |
+| ❌ 5-10 CI iterations common | ✅ Usually 1-2 CI iterations |
+| ❌ Hard to debug CI failures | ✅ Full local debugging |
+| ❌ Consumes CI credits on each push | ✅ Zero CI credits until final push |
+
+### Local-First Workflow Steps
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  LOCAL-FIRST FIX WORKFLOW                                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  /localstack-fix --local-first 7179                                         │
+│                                                                             │
+│  Step 1: Setup worktree                                                     │
+│          ├── Create isolated worktree/localstack-Pr7179                     │
+│          └── Sync with latest main                                          │
+│                                                                             │
+│  Step 2: Analyze errors                                                     │
+│          ├── Fetch CI job logs (if available)                               │
+│          └── Analyze local execution-output.md                              │
+│                                                                             │
+│  Step 3: Apply batch fixes locally                                          │
+│          ├── Apply all known LocalStack fixes                               │
+│          └── Run local pre-validation                                       │
+│                                                                             │
+│  Step 4: Run LOCAL CI simulation                                            │
+│          ├── .claude/scripts/localstack-ci-simulate.sh                      │
+│          ├── Simulates ALL 14 CI jobs locally                               │
+│          └── If fails → Go to Step 3                                        │
+│                                                                             │
+│  Step 5: Push to CI (only when local passes)                                │
+│          ├── Commit fixes                                                   │
+│          ├── Push to branch                                                 │
+│          └── Usually passes on first try!                                   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Commands for Local-First Workflow
+
+```bash
+# Start local-first fixing
+/localstack-fix --local-first 7179
+
+# Run simulation only (check status)
+/localstack-fix --simulate 7179
+
+# Full automation: fix locally until passes, then push
+/localstack-fix --local-first --push-when-ready 7179
+```
+
+### Local CI Simulation Jobs
+
+The `localstack-ci-simulate.sh` script runs these jobs locally:
+
+| Job | Local | CI | Notes |
+|-----|-------|-----|-------|
+| detect-metadata | ✅ | ✅ | Same validation |
+| claude-review-prompt-quality | ✅ | ✅ | Basic check locally |
+| validate-commit-message | ✅ | ✅ | Same validation |
+| validate-jest-config | ✅ | ✅ | Same validation |
+| build | ✅ | ✅ | Same process |
+| synth | ✅ | ✅ | CDK/CDKTF synth |
+| deploy | ✅ | ✅ | LocalStack deploy |
+| lint | ✅ | ✅ | Same linting |
+| unit-tests | ✅ | ✅ | Same tests |
+| integration-tests-live | ✅ | ✅ | Against LocalStack |
+| claude-code-action | ⏭️ | ✅ | Claude review only in CI |
+| cleanup | ✅ | ✅ | Destroys resources |
+| claude-review-ideal-response | ✅ | ✅ | Validates file |
+| archive-folders | ⏭️ | ✅ | Only in CI |
 
 ## Workflow
 
