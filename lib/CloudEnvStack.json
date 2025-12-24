@@ -1,0 +1,402 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Automated Daily Backup System with S3, Lambda, and EventBridge - LocalStack Compatible",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "Default": "dev",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "BackupBucketName": {
+            "Type": "String",
+            "Description": "Name for the S3 backup bucket (must be globally unique)",
+            "Default": "backup-system-prod-12345",
+            "AllowedPattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+            "ConstraintDescription": "Must be a valid S3 bucket name",
+            "MinLength": 3,
+            "MaxLength": 63
+        }
+    },
+    "Mappings": {
+        "EnvironmentConfig": {
+            "dev": {
+                "RetentionDays": 7
+            },
+            "staging": {
+                "RetentionDays": 14
+            },
+            "prod": {
+                "RetentionDays": 30
+            }
+        }
+    },
+    "Resources": {
+        "BackupS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${BackupBucketName}-${EnvironmentSuffix}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldBackups",
+                            "Status": "Enabled",
+                            "ExpirationInDays": {
+                                "Fn::FindInMap": [
+                                    "EnvironmentConfig",
+                                    {
+                                        "Ref": "EnvironmentSuffix"
+                                    },
+                                    "RetentionDays"
+                                ]
+                            }
+                        },
+                        {
+                            "Id": "AbortIncompleteMultipartUploads",
+                            "Status": "Enabled",
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 1
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "DailyBackups"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "BackupLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-backup-lambda-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "BackupS3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:PutObjectAcl",
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${BackupS3Bucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "BackupS3Bucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "BackupLambdaExecution"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "BackupLambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${EnvironmentSuffix}-backup-function"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "BackupLogs"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "BackupLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-backup-function"
+                },
+                "Description": "Daily backup function to upload documents to S3",
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "BackupLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 900,
+                "MemorySize": 512,
+                "Environment": {
+                    "Variables": {
+                        "BACKUP_BUCKET": {
+                            "Ref": "BackupS3Bucket"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nimport logging\nfrom botocore.exceptions import ClientError\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ns3_client = boto3.client('s3')\ncloudwatch = boto3.client('cloudwatch')\n\ndef send_metric(metric_name, value, unit='Count'):\n    \"\"\"Send custom metric to CloudWatch\"\"\"\n    try:\n        cloudwatch.put_metric_data(\n            Namespace='BackupSystem',\n            MetricData=[\n                {\n                    'MetricName': metric_name,\n                    'Value': value,\n                    'Unit': unit,\n                    'Dimensions': [\n                        {\n                            'Name': 'Environment',\n                            'Value': os.environ['ENVIRONMENT']\n                        }\n                    ]\n                }\n            ]\n        )\n    except Exception as e:\n        logger.error(f\"Failed to send metric: {e}\")\n\ndef generate_sample_documents(count=500):\n    \"\"\"Generate sample business documents for backup\"\"\"\n    documents = []\n    document_types = ['invoice', 'receipt', 'contract', 'report', 'memo']\n    \n    for i in range(count):\n        doc_type = document_types[i % len(document_types)]\n        document = {\n            'document_id': f'{doc_type}_{i:04d}',\n            'type': doc_type,\n            'content': f'Sample {doc_type} content for document {i}',\n            'created_date': datetime.utcnow().isoformat(),\n            'file_size': len(f'Sample {doc_type} content for document {i}'),\n            'checksum': f'md5_{i:04d}',\n            'metadata': {\n                'department': ['finance', 'hr', 'operations', 'sales'][i % 4],\n                'priority': ['low', 'medium', 'high'][i % 3],\n                'confidential': i % 5 == 0\n            }\n        }\n        documents.append(document)\n    \n    return documents\n\ndef lambda_handler(event, context):\n    \"\"\"Main handler for backup processing\"\"\"\n    bucket_name = os.environ['BACKUP_BUCKET']\n    \n    backup_date = datetime.utcnow().strftime('%Y-%m-%d')\n    documents_uploaded = 0\n    \n    try:\n        logger.info(f\"Starting backup process for {backup_date}\")\n        \n        # Generate sample documents for backup (in real scenario, fetch from business systems)\n        sample_documents = generate_sample_documents(500)\n        \n        # Create daily backup manifest with business context\n        manifest = {\n            'backup_date': backup_date,\n            'backup_timestamp': datetime.utcnow().isoformat(),\n            'total_documents': len(sample_documents),\n            'backup_summary': {\n                'document_types': {},\n                'departments': {},\n                'total_size_bytes': 0\n            },\n            'documents': sample_documents\n        }\n        \n        # Calculate summary statistics\n        for doc in sample_documents:\n            doc_type = doc['type']\n            department = doc['metadata']['department']\n            \n            manifest['backup_summary']['document_types'][doc_type] = \\\n                manifest['backup_summary']['document_types'].get(doc_type, 0) + 1\n            manifest['backup_summary']['departments'][department] = \\\n                manifest['backup_summary']['departments'].get(department, 0) + 1\n            manifest['backup_summary']['total_size_bytes'] += doc['file_size']\n        \n        # Upload manifest to S3 (simplified for LocalStack - no KMS)\n        manifest_key = f'backups/{backup_date}/manifest.json'\n        \n        s3_client.put_object(\n            Bucket=bucket_name,\n            Key=manifest_key,\n            Body=json.dumps(manifest, indent=2),\n            ContentType='application/json',\n            Metadata={\n                'backup-date': backup_date,\n                'document-count': str(len(sample_documents)),\n                'backup-type': 'daily-business-documents',\n                'environment': os.environ['ENVIRONMENT']\n            }\n        )\n        \n        # Upload individual document samples (simulate business document backup)\n        for i, doc in enumerate(sample_documents[:10]):  # Upload first 10 as samples\n            doc_key = f'backups/{backup_date}/documents/{doc[\"document_id\"]}.json'\n            \n            s3_client.put_object(\n                Bucket=bucket_name,\n                Key=doc_key,\n                Body=json.dumps(doc, indent=2),\n                ContentType='application/json',\n                Metadata={\n                    'document-type': doc['type'],\n                    'department': doc['metadata']['department'],\n                    'backup-date': backup_date\n                }\n            )\n        \n        documents_uploaded = len(sample_documents)\n        logger.info(f\"Successfully uploaded backup for {backup_date} with {documents_uploaded} documents\")\n        \n        # Send success metrics to CloudWatch\n        send_metric('BackupSuccess', 1)\n        send_metric('DocumentsBackedUp', documents_uploaded)\n        send_metric('BackupSizeBytes', manifest['backup_summary']['total_size_bytes'], 'Bytes')\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Backup completed successfully',\n                'backup_date': backup_date,\n                'documents_uploaded': documents_uploaded,\n                'total_size_bytes': manifest['backup_summary']['total_size_bytes'],\n                'manifest_key': manifest_key\n            })\n        }\n        \n    except ClientError as e:\n        logger.error(f\"AWS Client Error during backup: {e}\")\n        send_metric('BackupFailure', 1)\n        raise e\n    except Exception as e:\n        logger.error(f\"Unexpected error during backup: {e}\")\n        send_metric('BackupFailure', 1)\n        raise e\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "DailyBackupProcessor"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DailyBackupRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-daily-backup-trigger"
+                },
+                "Description": "Triggers daily backup at 2 AM UTC",
+                "ScheduleExpression": "cron(0 2 * * ? *)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "BackupLambdaFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "1"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "BackupScheduler"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LambdaInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "BackupLambdaFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "DailyBackupRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "BackupFailureAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-backup-failures"
+                },
+                "AlarmDescription": "Alert when backup fails",
+                "MetricName": "BackupFailure",
+                "Namespace": "BackupSystem",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaDurationAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-backup-duration-high"
+                },
+                "AlarmDescription": "Alert when backup takes too long",
+                "MetricName": "Duration",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 600000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "BackupLambdaFunction"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        }
+    },
+    "Outputs": {
+        "BackupBucketName": {
+            "Description": "Name of the S3 backup bucket",
+            "Value": {
+                "Ref": "BackupS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-backup-bucket"
+                }
+            }
+        },
+        "BackupLambdaArn": {
+            "Description": "ARN of the backup Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "BackupLambdaFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-backup-lambda-arn"
+                }
+            }
+        },
+        "EventBridgeRuleName": {
+            "Description": "Name of the EventBridge rule for daily backups",
+            "Value": {
+                "Ref": "DailyBackupRule"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-daily-backup-rule"
+                }
+            }
+        }
+    }
+}
