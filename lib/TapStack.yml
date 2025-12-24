@@ -23,10 +23,6 @@ Parameters:
     Default: 't3.micro'
     AllowedValues: ['t3.micro', 't3.small', 't3.medium']
     Description: 'EC2 instance type'
-  ImageId:
-    Type: String
-    Default: 'ami-12345678'
-    Description: 'AMI ID for EC2 instances (LocalStack uses generic AMI)'
   CreateTrail:
     Type: String
     Default: "false"   # 👈 Default is now 'false'
@@ -879,7 +875,7 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref ImageId
+      ImageId: ami-12345678
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
