@@ -3,16 +3,14 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "trainr907",
+  "po_id": "LS-trainr907",
   "team": "synth-2",
-  "provider": "aws",
-  "wave": "P1",
   "startedAt": "2025-08-20T11:37:35+00:00",
   "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "training_quality": 9,
   "aws_services": [
     "S3",
     "Lambda",
@@ -22,5 +20,6 @@
     "VPC",
     "EC2",
     "CloudWatch Logs"
-  ]
+  ],
+  "wave": "P0"
 }
