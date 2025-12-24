@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'LocalStack Community Edition compatible version - Secure web application environment (simplified)'
+Description: 'LocalStack-compatible secure web application infrastructure with Lambda, RDS, S3, and VPC'
 
 Parameters:
   Environment:
@@ -39,7 +39,19 @@ Resources:
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
             Resource: '*'
           - Sid: Allow use of the key for S3
             Effect: Allow
@@ -217,6 +229,21 @@ Resources:
         - { Key: Environment, Value: !Ref Environment }
         - { Key: ProjectName, Value: !Ref ProjectName }
 
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref LambdaSecurityGroup, Description: 'Allow Lambda access to RDS' }
+        - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref EC2SecurityGroup, Description: 'Allow EC2 access to RDS' }
+      SecurityGroupEgress:
+        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-rds-sg' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
   # -------------------- SSM Parameters --------------------
   DBPasswordParameter:
     Type: AWS::SSM::Parameter
@@ -266,7 +293,10 @@ Resources:
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: '*'
-            Action: 's3:*'
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
             Resource:
               - !GetAtt ApplicationBucket.Arn
               - !Sub '${ApplicationBucket.Arn}/*'
@@ -308,7 +338,10 @@ Resources:
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: '*'
-            Action: 's3:*'
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
             Resource:
               - !GetAtt LogsBucket.Arn
               - !Sub '${LogsBucket.Arn}/*'
@@ -324,6 +357,49 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ProjectName}-process-file-${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
+
+  AuthLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-auth-${Environment}'
+      RetentionInDays: !If [IsProduction, 365, 30]
+
+  # -------------------- RDS Database --------------------
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${ProjectName}-db-subnet-group'
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub '${ProjectName}-db-${Environment}'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0'
+      MasterUsername: admin
+      MasterUserPassword: !Sub '{{resolve:ssm:${DBPasswordParameter}:1}}'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      KmsKeyId: !Ref ApplicationKMSKey
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      PubliclyAccessible: false
+      BackupRetentionPeriod: !If [IsProduction, 7, 1]
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      Tags:
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   # -------------------- REMOVED SERVICES --------------------
   # The following services are NOT available in LocalStack Community Edition:
@@ -363,10 +439,200 @@ Resources:
   # 8. Auth Lambda Log Group (auth lambda not needed without API Gateway)
   #    - AuthLambdaLogGroup
 
-  # -------------------- Simple Lambda Function (Optional) --------------------
-  # This is a basic Lambda to demonstrate working resources
-  # Note: We're not creating actual Lambda function code, just the IAM role
+  # -------------------- Lambda Functions --------------------
 
+  ProcessFileLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-process-file-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt ApplicationBucket.Arn
+                  - !Sub '${ApplicationBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt ApplicationKMSKey.Arn
+        - PolicyName: SSMAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMParameterPrefix}/*'
+        - PolicyName: LogsAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-process-file-${Environment}:*'
+      Tags:
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  ProcessFileFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-process-file-${Environment}'
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt ProcessFileLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          from botocore.exceptions import ClientError
+
+          s3_client = boto3.client('s3')
+
+          def handler(event, context):
+              bucket_name = os.environ.get('BUCKET_NAME')
+              db_endpoint = os.environ.get('DB_ENDPOINT')
+
+              print(f"Processing files from bucket: {bucket_name}")
+              print(f"Database endpoint: {db_endpoint}")
+
+              try:
+                  response = s3_client.list_objects_v2(Bucket=bucket_name, MaxKeys=10)
+                  files = []
+                  if 'Contents' in response:
+                      files = [obj['Key'] for obj in response['Contents']]
+
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'File processing complete',
+                          'files_found': len(files),
+                          'files': files[:5]
+                      })
+                  }
+              except ClientError as e:
+                  print(f"Error: {e}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref ApplicationBucket
+          DB_ENDPOINT: !GetAtt DatabaseInstance.Endpoint.Address
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Timeout: 30
+      MemorySize: 256
+      Tags:
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  AuthLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-auth-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SSMAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMParameterPrefix}/api/key'
+        - PolicyName: LogsAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-auth-${Environment}:*'
+      Tags:
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  AuthFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-auth-${Environment}'
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt AuthLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import os
+
+          def handler(event, context):
+              api_key_param = os.environ.get('API_KEY_PARAM')
+              token = event.get('authorizationToken', '')
+              method_arn = event.get('methodArn', '')
+
+              print(f"Authorizing request with token: {token[:10]}...")
+
+              effect = 'Allow' if token and token.startswith('Bearer ') else 'Deny'
+
+              return {
+                  'principalId': 'user',
+                  'policyDocument': {
+                      'Version': '2012-10-17',
+                      'Statement': [{
+                          'Action': 'execute-api:Invoke',
+                          'Effect': effect,
+                          'Resource': method_arn
+                      }]
+                  }
+              }
+      Environment:
+        Variables:
+          API_KEY_PARAM: !Sub '${SSMParameterPrefix}/api/key'
+      Timeout: 10
+      MemorySize: 128
+      Tags:
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+
+  # Maintain backward compatibility with original role name
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -458,3 +724,27 @@ Outputs:
     Value: !Ref PrivateSubnet2
     Export:
       Name: !Sub '${ProjectName}-${Environment}-PRIVATE-SUBNET-2'
+
+  ProcessFileFunctionArn:
+    Description: Process File Lambda Function ARN
+    Value: !GetAtt ProcessFileFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-PROCESS-FILE-FUNCTION'
+
+  AuthFunctionArn:
+    Description: Auth Lambda Function ARN
+    Value: !GetAtt AuthFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-AUTH-FUNCTION'
+
+  DatabaseEndpoint:
+    Description: RDS Database Endpoint
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-DB-ENDPOINT'
+
+  DatabasePort:
+    Description: RDS Database Port
+    Value: !GetAtt DatabaseInstance.Endpoint.Port
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-DB-PORT'

@@ -18,7 +18,9 @@
     "KMS",
     "IAM",
     "SSM",
-    "CloudWatch Logs"
+    "CloudWatch Logs",
+    "Lambda",
+    "RDS"
   ],
   "wave": "P1"
 }
