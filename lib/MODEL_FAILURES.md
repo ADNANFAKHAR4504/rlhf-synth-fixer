@@ -208,8 +208,8 @@ SecurityStatus:
   Description: Security Configuration Status Summary
   Value: !Sub |
     Security Baseline Status for ${EnvironmentName}:
-    ✓ Multi-AZ VPC with subnets in ${PrivateSubnet1.AvailabilityZone} and ${PrivateSubnet2.AvailabilityZone}
-    ✓ KMS encryption enabled for all storage services
+    * Multi-AZ VPC with subnets in ${PrivateSubnet1.AvailabilityZone} and ${PrivateSubnet2.AvailabilityZone}
+    * KMS encryption enabled for all storage services
     # ... comprehensive status
 ```
 

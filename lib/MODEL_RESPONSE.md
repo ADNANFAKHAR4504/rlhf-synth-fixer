@@ -1115,32 +1115,32 @@ Outputs:
   SecurityStatus:
     Description: Security Configuration Status
     Value: |
-      ✓ Multi-AZ VPC configured
-      ✓ KMS encryption enabled for all storage
-      ✓ WAF protecting CloudFront
-      ✓ CloudTrail audit logging active
-      ✓ Least privilege IAM roles
-      ✓ Security groups minimized
-      ✓ S3 versioning enabled
-      ✓ RDS encryption at rest
-      ✓ Automated backups configured
+      * Multi-AZ VPC configured
+      * KMS encryption enabled for all storage
+      * WAF protecting CloudFront
+      * CloudTrail audit logging active
+      * Least privilege IAM roles
+      * Security groups minimized
+      * S3 versioning enabled
+      * RDS encryption at rest
+      * Automated backups configured
 ```
 
 ## Key Security Features Implemented
 
-### 🔐 **Data Protection**
+### **Data Protection**
 - **KMS Encryption**: Master key with automatic rotation for all data at rest
 - **S3 Versioning**: Prevents accidental data loss with full version history
 - **RDS Encryption**: Database encrypted at rest with automated backups (30-day retention)
 - **EBS Encryption**: All EC2 volumes encrypted by default
 
-### 🌐 **High Availability**
+### **High Availability**
 - **Multi-AZ Architecture**: Resources span across 2 availability zones
 - **Auto Scaling**: Maintains minimum 2 instances, scales to 6
 - **NAT Gateway Redundancy**: Separate NAT gateway per AZ
 - **RDS Multi-AZ**: Automatic failover for database
 
-### 🛡️ **Threat Protection**
+### **Threat Protection**
 - **WAF Rules**: Protection against OWASP Top 10, SQL injection, XSS
 - **Rate Limiting**: 2000 requests per 5-minute window per IP
 - **Security Groups**: Minimal port exposure (only SSH from specific IP, HTTP/HTTPS from ALB)

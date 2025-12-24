@@ -1442,18 +1442,18 @@ Outputs:
     Description: Security Configuration Status Summary
     Value: !Sub |
       Security Baseline Status for ${EnvironmentName}:
-      ✓ Multi-AZ VPC with subnets in ${PrivateSubnet1.AvailabilityZone} and ${PrivateSubnet2.AvailabilityZone}
-      ✓ KMS encryption enabled for all storage services
-      ✓ WAF WebACL configured for web protection
-      ✓ CloudTrail multi-region logging enabled
-      ✓ IAM roles with permission boundaries and least privilege
-      ✓ Security groups with minimal ingress rules
-      ✓ S3 versioning enabled on all buckets
-      ✓ RDS encryption at rest with KMS
-      ✓ Lambda dead letter queue configured
-      ✓ API Gateway request validation enabled
-      ✓ CloudWatch monitoring active for critical resources
-      ✓ Resource tagging compliant with security policy
+      * Multi-AZ VPC with subnets in ${PrivateSubnet1.AvailabilityZone} and ${PrivateSubnet2.AvailabilityZone}
+      * KMS encryption enabled for all storage services
+      * WAF WebACL configured for web protection
+      * CloudTrail multi-region logging enabled
+      * IAM roles with permission boundaries and least privilege
+      * Security groups with minimal ingress rules
+      * S3 versioning enabled on all buckets
+      * RDS encryption at rest with KMS
+      * Lambda dead letter queue configured
+      * API Gateway request validation enabled
+      * CloudWatch monitoring active for critical resources
+      * Resource tagging compliant with security policy
     Export:
       Name: !Sub '${EnvironmentName}-security-status'
 ```
