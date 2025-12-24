@@ -296,7 +296,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(db.DeletionPolicy).toBe('Snapshot');
       expect(db.UpdateReplacePolicy).toBe('Snapshot');
       expect(db.Properties.Engine).toBe('mysql');
-      expect(db.Properties.EngineVersion).toBe('8.0.35');
+      expect(db.Properties.EngineVersion).toBe('8.0.40');
       expect(db.Properties.MasterUsername).toBe('admin');
       expect(db.Properties.StorageType).toBe('gp2');
     });

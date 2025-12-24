@@ -1117,6 +1117,17 @@
                 }
             }
         },
+        "InstanceSecurityGroup": {
+            "Description": "Web Server Security Group ID",
+            "Value": {
+                "Ref": "WebServerSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-SG-${Environment}"
+                }
+            }
+        },
         "Environment": {
             "Description": "Deployed Environment",
             "Value": {

@@ -595,7 +595,7 @@ Resources:
         - Ref: Environment
         - DBInstanceClass
       Engine: mysql
-      EngineVersion: 8.0.35
+      EngineVersion: 8.0.40
       AllocatedStorage:
         Fn::FindInMap:
         - EnvironmentConfig
@@ -674,6 +674,13 @@ Outputs:
     Export:
       Name:
         Fn::Sub: ${ProjectName}-DB-Endpoint-${Environment}
+  InstanceSecurityGroup:
+    Description: Web Server Security Group ID
+    Value:
+      Ref: WebServerSecurityGroup
+    Export:
+      Name:
+        Fn::Sub: ${ProjectName}-SG-${Environment}
   Environment:
     Description: Deployed Environment
     Value:
