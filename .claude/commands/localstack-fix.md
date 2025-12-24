@@ -17,8 +17,14 @@ This command provides a simple interface to fix LocalStack PRs until they are **
 
 ## Usage
 
+**DEFAULT: Local-first mode** - All fixes run locally first. Use `--push` or `--ci` to push to GitHub CI/CD.
+
 ```bash
-# Fix PR by number (various formats supported)
+# ═══════════════════════════════════════════════════════════════════════════════
+# 🚀 DEFAULT: LOCAL-FIRST MODE (No CI/CD until you're ready!)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Fix PR locally (DEFAULT - no CI/CD push)
 /localstack-fix 7179
 /localstack-fix Pr7179
 /localstack-fix #7179
@@ -30,27 +36,34 @@ This command provides a simple interface to fix LocalStack PRs until they are **
 # Fix current branch (if on a LocalStack branch)
 /localstack-fix
 
-# Check status only (no fixes)
-/localstack-fix --status 7179
-
-# Force retry all failed jobs
-/localstack-fix --retry-all 7179
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# 🚀 LOCAL-FIRST MODE (Saves CI Credits!)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# Fix entirely locally first, don't push until local CI passes
-/localstack-fix --local-first 7179
-
 # Run local CI simulation to check status
 /localstack-fix --simulate 7179
 
-# Fix locally with auto-fix, then push only when ready
-/localstack-fix --local-first --push-when-ready 7179
-
 # Dry-run: show what would be fixed without making changes
 /localstack-fix --dry-run 7179
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 📤 PUSH TO CI/CD (Only when local validation passes!)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Push fixes to CI after local validation passes
+/localstack-fix --push 7179
+
+# Fix locally, then push only when ready
+/localstack-fix --push-when-ready 7179
+
+# Force push to CI without local validation (NOT recommended)
+/localstack-fix --ci 7179
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OTHER OPTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Check CI/CD status only (no fixes)
+/localstack-fix --status 7179
+
+# Force retry all failed CI jobs after pushing fixes
+/localstack-fix --retry-all 7179
 ```
 
 ## Arguments
@@ -59,16 +72,22 @@ This command provides a simple interface to fix LocalStack PRs until they are **
   - If not provided, uses current branch
   - If number provided, fetches PR details from GitHub
   - If branch name provided, checks out that branch
+
+### Mode Flags (DEFAULT: local-first)
+- **No flag**: Fix locally only (DEFAULT - saves CI credits!)
+- `--push`: Push fixes to CI after local validation passes
+- `--push-when-ready`: Auto-push when local CI simulation passes
+- `--ci`: Force push to CI without local validation (NOT recommended)
+
+### Other Flags
+- `--simulate`: Run local CI simulation to check if fixes would pass
+- `--dry-run`: Show what would be fixed without making changes
 - `--status`: Only show current CI/CD status, don't apply fixes
 - `--retry-all`: Force retry all failed CI/CD jobs after pushing fixes
-- `--local-first`: Fix entirely locally before pushing to CI (saves credits!)
-- `--simulate`: Run local CI simulation to check if fixes would pass
-- `--push-when-ready`: Combined with --local-first, only push when local CI passes
-- `--dry-run`: Show what would be fixed without making changes
 
-## 🚀 Local-First Workflow (CI Credit Saver!)
+## 🚀 Local-First Workflow (DEFAULT!)
 
-**RECOMMENDED**: Always use `--local-first` mode to save CI credits and time!
+**Local-first is now the DEFAULT behavior** - no flag needed! Saves CI credits and time.
 
 ### Why Local-First?
 
@@ -79,14 +98,14 @@ This command provides a simple interface to fix LocalStack PRs until they are **
 | ❌ Hard to debug CI failures | ✅ Full local debugging |
 | ❌ Consumes CI credits on each push | ✅ Zero CI credits until final push |
 
-### Local-First Workflow Steps
+### Default Local-First Workflow Steps
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  LOCAL-FIRST FIX WORKFLOW                                                   │
+│  DEFAULT FIX WORKFLOW (Local-First)                                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  /localstack-fix --local-first 7179                                         │
+│  /localstack-fix 7179  (local by default - no CI push)                      │
 │                                                                             │
 │  Step 1: Setup worktree                                                     │
 │          ├── Create isolated worktree/localstack-Pr7179                     │
@@ -105,25 +124,28 @@ This command provides a simple interface to fix LocalStack PRs until they are **
 │          ├── Simulates ALL 14 CI jobs locally                               │
 │          └── If fails → Go to Step 3                                        │
 │                                                                             │
-│  Step 5: Push to CI (only when local passes)                                │
-│          ├── Commit fixes                                                   │
-│          ├── Push to branch                                                 │
+│  Step 5: Push to CI (only when you run --push)                              │
+│          ├── /localstack-fix --push 7179                                    │
+│          ├── Commit and push fixes                                          │
 │          └── Usually passes on first try!                                   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Commands for Local-First Workflow
+### Commands
 
 ```bash
-# Start local-first fixing
-/localstack-fix --local-first 7179
+# Fix locally (DEFAULT - no CI push)
+/localstack-fix 7179
 
 # Run simulation only (check status)
 /localstack-fix --simulate 7179
 
+# Push to CI after local validation
+/localstack-fix --push 7179
+
 # Full automation: fix locally until passes, then push
-/localstack-fix --local-first --push-when-ready 7179
+/localstack-fix --push-when-ready 7179
 ```
 
 ### Local CI Simulation Jobs

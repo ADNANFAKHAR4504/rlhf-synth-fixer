@@ -46,9 +46,9 @@ This command uses modular shell scripts in `.claude/scripts/` for better maintai
 
 All scripts use `set -euo pipefail` for strict error handling and trap handlers for cleanup.
 
-## 🚀 LOCAL-ONLY MODE (No CI/CD Until Ready)
+## 🚀 LOCAL-ONLY MODE (DEFAULT!)
 
-**NEW FEATURE**: Run the entire workflow locally without touching CI/CD until you're 100% confident.
+**Local-only is now the DEFAULT behavior** - no flag needed! Run the entire workflow locally without touching CI/CD until you're 100% confident.
 
 ### Why Use Local-Only Mode?
 
@@ -96,27 +96,30 @@ The `localstack-ci-simulate.sh` script runs ALL CI/CD jobs locally:
 | claude-review-ideal-response | ✅ Basic | Validates IDEAL_RESPONSE.md |
 | archive-folders | ⏭️ Skip | Only in CI |
 
-### Usage: Local-Only Migration
+### Usage (Local is DEFAULT)
 
 ```bash
-# Migrate and validate locally, don't create PR yet
-/localstack-migrate --local-only Pr7179
+# Migrate and validate locally (DEFAULT - no CI/CD)
+/localstack-migrate Pr7179
 
-# Migrate, fix all issues locally, then create PR when ready
-/localstack-migrate --local-only --fix Pr7179
+# Migrate with auto-fix enabled
+/localstack-migrate --fix Pr7179
 
 # After local validation passes, push to CI
 /localstack-migrate --push Pr7179
+
+# Or combine: fix locally until ready, then auto-push
+/localstack-migrate --fix --push-when-ready Pr7179
 ```
 
-### Local-Only Workflow
+### Default Local-Only Workflow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  LOCAL-ONLY WORKFLOW (Saves CI Credits!)                                    │
+│  DEFAULT WORKFLOW (Local-Only - Saves CI Credits!)                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Step 1: /localstack-migrate --local-only Pr7179                            │
+│  Step 1: /localstack-migrate Pr7179  (or --fix Pr7179)                      │
 │          ├── Copy files to worktree                                         │
 │          ├── Run localstack-ci-simulate.sh (ALL jobs)                       │
 │          ├── Fix issues with localstack-fixer                               │
@@ -246,12 +249,41 @@ Fixes are automatically ordered based on error analysis. See `intelligent_fixes`
 
 ## Usage
 
+**DEFAULT: Local-only mode** - All migrations run locally first. Use `--push` or `--ci` to push to GitHub CI/CD.
+
 ```bash
+# ═══════════════════════════════════════════════════════════════════════════════
+# 🚀 DEFAULT: LOCAL-ONLY MODE (No CI/CD until you're ready!)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Migrate task locally (DEFAULT - no CI/CD)
+/localstack-migrate Pr7179
+
+# Migrate with auto-fix enabled
+/localstack-migrate --fix Pr7179
+
 # Migrate a specific task by path
 /localstack-migrate ./archive/cdk-ts/Pr7179
 
-# Migrate by PR number (auto-detects platform, fetches from GitHub if not in archive)
-/localstack-migrate Pr7179
+# Run local CI simulation on existing worktree
+/localstack-migrate --simulate ./worktree/localstack-Pr7179
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 📤 PUSH TO CI/CD (Only when local validation passes!)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Push to CI after local validation passes
+/localstack-migrate --push Pr7179
+
+# Full workflow: migrate, fix, validate locally, then push to CI
+/localstack-migrate --fix --push-when-ready Pr7179
+
+# Force push to CI without local validation (NOT recommended)
+/localstack-migrate --ci Pr7179
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OTHER OPTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
 
 # Migrate by PR number with explicit GitHub fetch
 /localstack-migrate --github Pr2077
@@ -274,41 +306,17 @@ Fixes are automatically ordered based on error analysis. See `intelligent_fixes`
 # PARALLEL EXECUTION: Skip LocalStack reset (for running multiple agents)
 /localstack-migrate --no-reset Pr7179
 
-# PARALLEL EXECUTION: Multiple agents on different PRs
-# Terminal 1: /localstack-migrate --no-reset Pr7179
-# Terminal 2: /localstack-migrate --no-reset Pr7180
-# Terminal 3: /localstack-migrate --no-reset Pr7181
-
-# NEW: Pre-migration compatibility check
+# Pre-migration compatibility check
 /localstack-migrate --check Pr7179
 
-# NEW: Show real-time dashboard
+# Show real-time dashboard
 /localstack-migrate --dashboard
 
-# NEW: Enhance tests for LocalStack
+# Enhance tests for LocalStack
 /localstack-migrate --enhance-tests Pr7179
 
-# NEW: Rollback a failed migration
+# Rollback a failed migration
 /localstack-migrate --rollback Pr7179
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# 🚀 LOCAL-ONLY MODE (Saves CI Credits!)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# Run entire migration locally without CI/CD (recommended!)
-/localstack-migrate --local-only Pr7179
-
-# Local-only with auto-fix enabled
-/localstack-migrate --local-only --fix Pr7179
-
-# Run local CI simulation on existing worktree
-/localstack-migrate --simulate ./worktree/localstack-Pr7179
-
-# Push to CI after local validation passes
-/localstack-migrate --push Pr7179
-
-# Full local workflow: migrate, fix, validate, then push
-/localstack-migrate --local-only --fix --push-when-ready Pr7179
 ```
 
 ## Workflow
