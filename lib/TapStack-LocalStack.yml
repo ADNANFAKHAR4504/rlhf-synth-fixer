@@ -1,5 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'LocalStack-compatible secure web application infrastructure with Lambda, RDS, S3, and VPC'
+Description: >
+  LocalStack-compatible secure web application infrastructure featuring:
+  - Multi-AZ VPC with public/private subnets across 2 availability zones
+  - Two Lambda functions (file processing and authentication) with VPC integration
+  - MySQL RDS database with KMS encryption and automated backups
+  - KMS-encrypted S3 buckets with versioning and lifecycle policies
+  - IAM roles with least-privilege permissions and explicit KMS actions
+  - CloudWatch Logs integration for Lambda and RDS monitoring
+  - SSM Parameter Store for secure credential management
+  - Comprehensive resource tagging for governance and cost tracking
+  - Environment-specific configurations (development/staging/production)
 
 Parameters:
   Environment:
@@ -101,6 +111,8 @@ Resources:
         - { Key: Name, Value: !Sub '${ProjectName}-vpc' }
         - { Key: Environment, Value: !Ref Environment }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: Service, Value: Networking }
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -301,9 +313,20 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionOldVersions
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+            NoncurrentVersionExpirationInDays: 365
       Tags:
         - { Key: Environment, Value: !Ref Environment }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: Service, Value: Storage }
+        - { Key: DataClassification, Value: Confidential }
 
   ApplicationBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -346,9 +369,15 @@ Resources:
             Status: Enabled
             ExpirationInDays: !If [IsProduction, 2555, 365]
             NoncurrentVersionExpirationInDays: 30
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: !If [IsProduction, 90, 30]
       Tags:
         - { Key: Environment, Value: !Ref Environment }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: Service, Value: Logging }
+        - { Key: DataClassification, Value: Internal }
 
   LogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -418,9 +447,19 @@ Resources:
       BackupRetentionPeriod: !If [IsProduction, 7, 1]
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+        - slowquery
+      DeletionProtection: !If [IsProduction, true, false]
+      CopyTagsToSnapshot: true
+      EnableIAMDatabaseAuthentication: false
       Tags:
         - { Key: Environment, Value: !Ref Environment }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: Service, Value: Database }
+        - { Key: BackupSchedule, Value: Daily }
 
   # -------------------- REMOVED SERVICES --------------------
   # The following services are NOT available in LocalStack Community Edition:
@@ -521,6 +560,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${ProjectName}-process-file-${Environment}'
+      Description: Processes files from S3 bucket and interacts with RDS database
       Runtime: python3.9
       Handler: index.handler
       Role: !GetAtt ProcessFileLambdaRole.Arn
@@ -564,6 +604,8 @@ Resources:
         Variables:
           BUCKET_NAME: !Ref ApplicationBucket
           DB_ENDPOINT: !GetAtt DatabaseInstance.Endpoint.Address
+          ENVIRONMENT: !Ref Environment
+          LOG_LEVEL: !If [IsProduction, 'INFO', 'DEBUG']
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -572,9 +614,12 @@ Resources:
           - !Ref PrivateSubnet2
       Timeout: 30
       MemorySize: 256
+      ReservedConcurrentExecutions: !If [IsProduction, 10, 5]
       Tags:
         - { Key: Environment, Value: !Ref Environment }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: Service, Value: FileProcessing }
 
   AuthLambdaRole:
     Type: AWS::IAM::Role
@@ -616,6 +661,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${ProjectName}-auth-${Environment}'
+      Description: Custom authorizer for API authentication and authorization
       Runtime: python3.9
       Handler: index.handler
       Role: !GetAtt AuthLambdaRole.Arn
@@ -647,11 +693,15 @@ Resources:
       Environment:
         Variables:
           API_KEY_PARAM: !Sub '${SSMParameterPrefix}/api/key'
+          ENVIRONMENT: !Ref Environment
       Timeout: 10
       MemorySize: 128
+      ReservedConcurrentExecutions: !If [IsProduction, 20, 10]
       Tags:
         - { Key: Environment, Value: !Ref Environment }
         - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: Service, Value: Authentication }
 
   # Maintain backward compatibility with original role name
   LambdaExecutionRole:
