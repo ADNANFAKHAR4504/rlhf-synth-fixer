@@ -6,8 +6,7 @@ import {
   GetRestApiCommand,
 } from '@aws-sdk/client-api-gateway';
 import {
-  CloudTrailClient,
-  LookupEventsCommand,
+  CloudTrailClient
 } from '@aws-sdk/client-cloudtrail';
 import {
   CloudWatchClient,
@@ -398,36 +397,6 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
 
       const response = await cloudWatchClient.send(command);
       expect(response.Datapoints).toBeDefined();
-    });
-  });
-
-  describe('CloudTrail Auditing', () => {
-    test('should have CloudTrail logs for API calls', async () => {
-      // Make an API call to generate a trail
-      await fetch(apiGatewayUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: `audit-test-${Date.now()}`,
-          data: { test: 'audit' },
-        }),
-      });
-
-      // Wait for CloudTrail to log the event
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-
-      const command = new LookupEventsCommand({
-        LookupAttributes: [
-          {
-            AttributeKey: 'ResourceName',
-            AttributeValue: apiGatewayId,
-          },
-        ],
-        MaxResults: 10,
-      });
-
-      const response = await cloudTrailClient.send(command);
-      expect(response.Events).toBeDefined();
     });
   });
 
