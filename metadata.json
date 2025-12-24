@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "410118",
+  "team": "synth",
+  "startedAt": "2025-10-14T13:15:49.828Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "aws",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "EventBridge",
+    "Lambda",
+    "CloudWatch"
+  ],
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
+}
