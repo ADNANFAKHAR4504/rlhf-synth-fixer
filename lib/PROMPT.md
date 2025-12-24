@@ -28,7 +28,7 @@ Create a migration infrastructure using **CloudFormation with JSON** that enable
    - Gradual traffic shifting capability for controlled rollover
 
 4. **Network Architecture**
-   - VPC peering connection between migration VPC (10.0.0.0/16) and production VPC (10.1.0.0/16)
+   - VPC peering connection between migration VPC 10.0.0.0/16 and production VPC 10.1.0.0/16
    - Proper subnet configuration across 3 availability zones with public and private subnets
    - Security groups configured for database, application, and load balancer tiers
 
@@ -58,7 +58,7 @@ Create a migration infrastructure using **CloudFormation with JSON** that enable
 - Use **Systems Manager Parameter Store** with **KMS** encryption for secrets
 - Use **CloudWatch** for monitoring and dashboards
 - Use **AWS Config** for compliance validation
-- Resource names must include **EnvironmentSuffix** parameter for uniqueness
+- All named resources must include the EnvironmentSuffix parameter for uniqueness
 - Follow naming convention using CloudFormation Fn::Sub intrinsic function
 - Deploy to **us-east-1** region
 - All resources must be destroyable after testing (no Retain deletion policies)
@@ -66,7 +66,7 @@ Create a migration infrastructure using **CloudFormation with JSON** that enable
 ### Deployment Requirements
 
 - All named resources must use EnvironmentSuffix parameter for uniqueness
-- Use CloudFormation Fn::Sub function: !Sub "resource-name-${EnvironmentSuffix}"
+- Use CloudFormation Fn::Sub function with the resource name followed by hyphen and EnvironmentSuffix variable
 - No DeletionPolicy: Retain or UpdateReplacePolicy: Retain allowed
 - No DeletionProtection enabled on any resources
 - All resources must be fully destroyable for testing and validation
@@ -88,7 +88,7 @@ Create a migration infrastructure using **CloudFormation with JSON** that enable
 - Performance: Database replication lag under 5 seconds, load balancer health checks passing
 - Reliability: Multi-AZ Aurora cluster providing automatic failover
 - Security: All secrets encrypted in Parameter Store with KMS, no hardcoded credentials
-- Resource Naming: All resources include EnvironmentSuffix parameter for uniqueness
+- Naming Convention: All named items include EnvironmentSuffix parameter for uniqueness
 - Code Quality: Valid JSON CloudFormation template, well-structured, properly documented
 - Destroyability: All resources can be deleted cleanly without retention policies blocking cleanup
 
