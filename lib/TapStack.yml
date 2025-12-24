@@ -1408,3 +1408,28 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
 
+  # Standard outputs for LocalStack post-deployment fixes
+  VpcId:
+    Description: 'Primary VPC ID for LocalStack fixes'
+    Value: !Ref HubVpc
+    Export:
+      Name: !Sub '${AWS::StackName}-VpcId'
+
+  SecurityGroupId:
+    Description: 'Primary Security Group ID for LocalStack fixes'
+    Value: !Ref HttpsSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'
+
+  InternetGatewayId:
+    Description: 'Internet Gateway ID for LocalStack fixes'
+    Value: !Ref HubInternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGatewayId'
+
+  NatGatewayId:
+    Description: 'Primary NAT Gateway ID for LocalStack fixes'
+    Value: !Ref HubNatGateway1
+    Export:
+      Name: !Sub '${AWS::StackName}-NatGatewayId'
+
