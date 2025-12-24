@@ -700,7 +700,7 @@ Outputs:
 
 ## Key Features and Security Implementations
 
-### 🔐 Security Best Practices
+### Security Best Practices
 
 1. **Least Privilege IAM**: EC2 instances only have read-only access to a specific S3 bucket
 2. **Encryption at Rest**: 
@@ -712,7 +712,7 @@ Outputs:
    - Security groups with minimal required access
    - No public access to database layer
 
-### 🏗️ High Availability Architecture
+### High Availability Architecture
 
 1. **Multi-AZ Deployment**: 
    - EC2 instances across 2 availability zones
@@ -721,7 +721,7 @@ Outputs:
 2. **Auto Scaling**: Minimum 2 instances, scales based on CPU utilization
 3. **Health Checks**: ELB health checks with automatic instance replacement
 
-### 📊 Monitoring and Observability
+### Monitoring and Observability
 
 1. **CloudWatch Alarms**: 
    - EC2 CPU utilization monitoring
@@ -730,7 +730,7 @@ Outputs:
 2. **SNS Notifications**: Email alerts for critical events
 3. **CloudWatch Agent**: Detailed instance metrics collection
 
-### 🚀 Deployment Instructions
+### Deployment Instructions
 
 1. **Prerequisites**:
    ```bash
@@ -755,7 +755,7 @@ Outputs:
    aws cloudformation describe-stacks --stack-name secure-webapp --region us-west-2
    ```
 
-### 🔧 Configuration Notes
+### Configuration Notes
 
 - **Database Credentials**: Stored securely as CloudFormation parameters (consider AWS Secrets Manager for production)
 - **SSL/TLS**: Template includes HTTPS listener configuration (certificate would need to be added)
