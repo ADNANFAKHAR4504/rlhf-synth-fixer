@@ -57,13 +57,13 @@ jobs:
     runs-on: ubuntu-24.04
     if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     outputs:
-      platform: ${{ steps.metadata.outputs.platform }}
-      language: ${{ steps.metadata.outputs.language }}
-      po_id: ${{ steps.metadata.outputs.po_id }}
-      team: ${{ steps.metadata.outputs.team }}
-      provider: ${{ steps.metadata.outputs.provider }}
-      subtask: ${{ steps.metadata.outputs.subtask }}
-      subject_labels: ${{ steps.metadata.outputs.subject_labels }}
+      platform: ${{ steps.metadata.outputs.platform || steps.archive-metadata.outputs.platform }}
+      language: ${{ steps.metadata.outputs.language || steps.archive-metadata.outputs.language }}
+      po_id: ${{ steps.metadata.outputs.po_id || steps.archive-metadata.outputs.po_id }}
+      team: ${{ steps.metadata.outputs.team || steps.archive-metadata.outputs.team }}
+      provider: ${{ steps.metadata.outputs.provider || steps.archive-metadata.outputs.provider }}
+      subtask: ${{ steps.metadata.outputs.subtask || steps.archive-metadata.outputs.subtask }}
+      subject_labels: ${{ steps.metadata.outputs.subject_labels || steps.archive-metadata.outputs.subject_labels }}
       analysis_subject_label: ${{ env.IAC_ANALYSIS_SUBJECT_LABEL }}
       cicd_pipeline_subject_label: ${{ env.CICD_PIPELINE_SUBJECT_LABEL }}
     steps:
@@ -103,7 +103,20 @@ jobs:
 
       - name: Detect metadata and validate project
         id: metadata
+        if: steps.check-archive-only.outputs.archive_only != 'true'
         run: ./scripts/detect-metadata.sh
+
+      - name: Set default metadata for archive-only PRs
+        id: archive-metadata
+        if: steps.check-archive-only.outputs.archive_only == 'true'
+        run: |
+          echo "platform=archive" >> $GITHUB_OUTPUT
+          echo "language=multi" >> $GITHUB_OUTPUT
+          echo "po_id=archive-migration" >> $GITHUB_OUTPUT
+          echo "team=localstack" >> $GITHUB_OUTPUT
+          echo "provider=aws" >> $GITHUB_OUTPUT
+          echo "subtask=archive" >> $GITHUB_OUTPUT
+          echo "subject_labels=archive" >> $GITHUB_OUTPUT
 
   claude-review-prompt-quality:
     runs-on: ubuntu-24.04
