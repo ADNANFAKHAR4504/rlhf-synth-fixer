@@ -161,8 +161,8 @@ class TapStack(TerraformStack):
 
     def _create_subnets(self, create_tags) -> None:
         """Create public and private subnets across 2 availability zones."""
-        # Get available AZs
-        self.availability_zones = DataAwsAvailabilityZones(
+        # Get available AZs (for validation)
+        self.availability_zones_data = DataAwsAvailabilityZones(
             self, "available_azs", state="available"
         )
 
@@ -469,3 +469,9 @@ class TapStack(TerraformStack):
     def allowed_ssh_cidr(self) -> str:
         """Get allowed SSH CIDR from configuration."""
         return self.config["allowed_ssh_cidr"]
+
+    @property
+    def availability_zones(self) -> List[str]:
+        """Get list of availability zones used for subnets."""
+        # Return the AZs that are actually used for subnet creation
+        return [f"{self.aws_region}a", f"{self.aws_region}b"]
