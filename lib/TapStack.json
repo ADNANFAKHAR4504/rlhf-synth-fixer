@@ -1545,6 +1545,7 @@
         },
         "DBInstance": {
             "Type": "AWS::RDS::DBInstance",
+            "DependsOn": "SecretDB",
             "Properties": {
                 "Engine": "mysql",
                 "EngineVersion": "8.0.41",
@@ -1564,9 +1565,7 @@
                         "Ref": "SgDb"
                     }
                 ],
-                "MasterUsername": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${SecretDB}::username}}"
-                },
+                "MasterUsername": "dbadmin",
                 "MasterUserPassword": {
                     "Fn::Sub": "{{resolve:secretsmanager:${SecretDB}::password}}"
                 },

@@ -582,6 +582,7 @@ Resources:
 
   DBInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn: SecretDB
     Properties:
       Engine: mysql
       EngineVersion: '8.0.41'
@@ -593,7 +594,7 @@ Resources:
       PubliclyAccessible: false
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups: [!Ref SgDb]
-      MasterUsername: !Sub '{{resolve:secretsmanager:${SecretDB}::username}}'
+      MasterUsername: dbadmin
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${SecretDB}::password}}'
       DeletionProtection: false
       BackupRetentionPeriod: 7
