@@ -75,7 +75,22 @@ jobs:
       - name: Fetch base branch
         run: git fetch origin main:main
 
+      - name: Check if PR only modifies archive folder
+        id: check-archive-only
+        run: |
+          changed_files=$(git diff --name-only origin/main...HEAD)
+          archive_only=true
+          while IFS= read -r file; do
+            if [[ ! "$file" =~ ^archive/ ]]; then
+              archive_only=false
+              break
+            fi
+          done <<< "$changed_files"
+          echo "archive_only=$archive_only" >> $GITHUB_OUTPUT
+          echo "Archive only PR: $archive_only"
+
       - name: Validate metadata.json
+        if: steps.check-archive-only.outputs.archive_only != 'true'
         uses: cardinalby/schema-validator-action@v3
         with:
           file: 'metadata.json'
