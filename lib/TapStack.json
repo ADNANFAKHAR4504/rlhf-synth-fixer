@@ -1,889 +1,783 @@
 {
-    "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Robust and secure AWS environment with VPC, S3, Lambda, and RDS PostgreSQL",
-    "Parameters": {
-        "DBUsername": {
-            "Type": "String",
-            "Default": "postgres",
-            "Description": "Database master username",
-            "MinLength": 1,
-            "MaxLength": 16,
-            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
-        },
-        "DBPassword": {
-            "Type": "String",
-            "NoEcho": true,
-            "Default": "/myapp/database/password",
-            "Description": "SSM Parameter Store parameter name containing the database password"
-        },
-        "DBPasswordParameterName": {
-            "Type": "String",
-            "Default": "/myapp/database/password",
-            "Description": "Name of the SSM Parameter Store parameter containing the database password",
-            "AllowedPattern": "^[a-zA-Z0-9/_-]+$"
-        },
-        "AZ1": {
-            "Type": "String",
-            "Default": "us-west-2a",
-            "Description": "Primary AZ"
-        },
-        "AZ2": {
-            "Type": "String",
-            "Default": "us-west-2b",
-            "Description": "Secondary AZ (set same as AZ1 if only one AZ is enabled)"
-        },
-        "Environment": {
-            "Type": "String",
-            "Default": "production",
-            "Description": "Environment name for resource naming",
-            "AllowedValues": [
-                "development",
-                "staging",
-                "production"
-            ]
-        }
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Robust and secure AWS environment with VPC, S3, Lambda, and RDS PostgreSQL",
+  "Parameters": {
+    "DBUsername": {
+      "Type": "String",
+      "Default": "postgres",
+      "Description": "Database master username",
+      "MinLength": 1,
+      "MaxLength": 16,
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
     },
-    "Resources": {
-        "MyAppVPC": {
-            "Type": "AWS::EC2::VPC",
-            "Properties": {
-                "CidrBlock": "10.0.0.0/16",
-                "EnableDnsHostnames": true,
-                "EnableDnsSupport": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-VPC-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "MyAppInternetGateway": {
-            "Type": "AWS::EC2::InternetGateway",
-            "Properties": {
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-IGW-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "AttachGateway": {
-            "Type": "AWS::EC2::VPCGatewayAttachment",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "MyAppVPC"
-                },
-                "InternetGatewayId": {
-                    "Ref": "MyAppInternetGateway"
-                }
-            }
-        },
-        "PublicSubnet1": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "MyAppVPC"
-                },
-                "CidrBlock": "10.0.1.0/24",
-                "AvailabilityZone": {
-                    "Ref": "AZ1"
-                },
-                "MapPublicIpOnLaunch": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-Public-Subnet-1-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "PublicSubnet2": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "MyAppVPC"
-                },
-                "CidrBlock": "10.0.2.0/24",
-                "AvailabilityZone": {
-                    "Ref": "AZ2"
-                },
-                "MapPublicIpOnLaunch": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-Public-Subnet-2-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateSubnet1": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "MyAppVPC"
-                },
-                "CidrBlock": "10.0.3.0/24",
-                "AvailabilityZone": {
-                    "Ref": "AZ1"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-Private-Subnet-1-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateSubnet2": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "MyAppVPC"
-                },
-                "CidrBlock": "10.0.4.0/24",
-                "AvailabilityZone": {
-                    "Ref": "AZ2"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-Private-Subnet-2-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "NATGateway1EIP": {
-            "Type": "AWS::EC2::EIP",
-            "DependsOn": "AttachGateway",
-            "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-NAT-EIP-1-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "NATGateway2EIP": {
-            "Type": "AWS::EC2::EIP",
-            "DependsOn": "AttachGateway",
-            "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-NAT-EIP-2-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "PublicRouteTable": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "MyAppVPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-Public-RT-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateRouteTable1": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "MyAppVPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-Private-RT-1-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateRouteTable2": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "MyAppVPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-Private-RT-2-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "PublicSubnet1RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PublicSubnet1"
-                },
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                }
-            }
-        },
-        "PublicSubnet2RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PublicSubnet2"
-                },
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                }
-            }
-        },
-        "PrivateSubnet1RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet1"
-                },
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable1"
-                }
-            }
-        },
-        "PrivateSubnet2RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet2"
-                },
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable2"
-                }
-            }
-        },
-        "NATGateway1": {
-            "Type": "AWS::EC2::NatGateway",
-            "DependsOn": [
-                "PublicSubnet1RouteTableAssociation",
-                "PublicSubnet2RouteTableAssociation"
-            ],
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NATGateway1EIP",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet1"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-NAT-Gateway-1-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "NATGateway2": {
-            "Type": "AWS::EC2::NatGateway",
-            "DependsOn": [
-                "PublicSubnet1RouteTableAssociation",
-                "PublicSubnet2RouteTableAssociation"
-            ],
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NATGateway2EIP",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet2"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-NAT-Gateway-2-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "PublicRoute": {
-            "Type": "AWS::EC2::Route",
-            "DependsOn": "AttachGateway",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "GatewayId": {
-                    "Ref": "MyAppInternetGateway"
-                }
-            }
-        },
-        "PrivateRoute1": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable1"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NATGateway1"
-                }
-            }
-        },
-        "PrivateRoute2": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable2"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NATGateway2"
-                }
-            }
-        },
-        "MyAppS3AccessLogsBucket": {
-            "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Delete",
-            "UpdateReplacePolicy": "Retain",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "myapp-access-logs-${Environment}-${AWS::AccountId}"
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "LambdaExecutionRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "lambda.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "CloudWatchLogsPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogGroup",
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "PolicyName": "S3AccessPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetObject",
-                                        "s3:PutObject"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}/*"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "LambdaSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "MyApp-Lambda-SG-${Environment}"
-                },
-                "GroupDescription": "Security group for Lambda function",
-                "VpcId": {
-                    "Ref": "MyAppVPC"
-                },
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": -1,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-Lambda-SG-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "MyAppLambdaFunction": {
-            "Type": "AWS::Lambda::Function",
-            "Properties": {
-                "FunctionName": {
-                    "Fn::Sub": "MyApp-S3-Event-Handler-${Environment}"
-                },
-                "Runtime": "python3.9",
-                "Handler": "index.lambda_handler",
-                "Role": {
-                    "Fn::GetAtt": [
-                        "LambdaExecutionRole",
-                        "Arn"
-                    ]
-                },
-                "VpcConfig": {
-                    "SecurityGroupIds": [
-                        {
-                            "Ref": "LambdaSecurityGroup"
-                        }
-                    ],
-                    "SubnetIds": [
-                        {
-                            "Ref": "PrivateSubnet1"
-                        },
-                        {
-                            "Ref": "PrivateSubnet2"
-                        }
-                    ]
-                },
-                "Code": {
-                    "ZipFile": "import json\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Received S3 event: {json.dumps(event)}\")\n\n    for record in event['Records']:\n        bucket = record['s3']['bucket']['name']\n        key = record['s3']['object']['key']\n        logger.info(f\"Object {key} was created in bucket {bucket}\")\n\n    return {\n        'statusCode': 200,\n        'body': json.dumps('Successfully processed S3 event')\n    }\n"
-                },
-                "Timeout": 60,
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "MyAppS3Bucket": {
-            "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Delete",
-            "UpdateReplacePolicy": "Retain",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "myapp-primary-${Environment}-${AWS::AccountId}"
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
-                "LoggingConfiguration": {
-                    "DestinationBucketName": {
-                        "Ref": "MyAppS3AccessLogsBucket"
-                    },
-                    "LogFilePrefix": "access-logs/"
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "LambdaInvokePermission": {
-            "Type": "AWS::Lambda::Permission",
-            "Properties": {
-                "Action": "lambda:InvokeFunction",
-                "FunctionName": {
-                    "Ref": "MyAppLambdaFunction"
-                },
-                "Principal": "s3.amazonaws.com",
-                "SourceAccount": {
-                    "Ref": "AWS::AccountId"
-                },
-                "SourceArn": {
-                    "Fn::GetAtt": [
-                        "MyAppS3Bucket",
-                        "Arn"
-                    ]
-                }
-            }
-        },
-        "DBSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Properties": {
-                "DBSubnetGroupName": {
-                    "Fn::Sub": "myapp-db-subnet-group-${Environment}"
-                },
-                "DBSubnetGroupDescription": "Subnet group for RDS database",
-                "SubnetIds": [
-                    {
-                        "Ref": "PrivateSubnet1"
-                    },
-                    {
-                        "Ref": "PrivateSubnet2"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-DB-Subnet-Group-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "DatabaseSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "MyApp-Database-SG-${Environment}"
-                },
-                "GroupDescription": "Security group for RDS PostgreSQL database",
-                "VpcId": {
-                    "Ref": "MyAppVPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 5432,
-                        "ToPort": 5432,
-                        "SourceSecurityGroupId": {
-                            "Ref": "LambdaSecurityGroup"
-                        },
-                        "Description": "Allow access from Lambda security group"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-Database-SG-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "MyAppRDSInstance": {
-            "Type": "AWS::RDS::DBInstance",
-            "DeletionPolicy": "Delete",
-            "UpdateReplacePolicy": "Retain",
-            "Properties": {
-                "DBInstanceIdentifier": {
-                    "Fn::Sub": "myapp-postgres-db-${Environment}"
-                },
-                "DBInstanceClass": "db.t3.medium",
-                "Engine": "postgres",
-                "EngineVersion": "16.6",
-                "MasterUsername": {
-                    "Ref": "DBUsername"
-                },
-                "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:ssm-secure:${DBPassword}}}"
-                },
-                "AllocatedStorage": 20,
-                "StorageType": "gp2",
-                "StorageEncrypted": true,
-                "MultiAZ": true,
-                "VPCSecurityGroups": [
-                    {
-                        "Ref": "DatabaseSecurityGroup"
-                    }
-                ],
-                "DBSubnetGroupName": {
-                    "Ref": "DBSubnetGroup"
-                },
-                "BackupRetentionPeriod": 7,
-                "PreferredBackupWindow": "03:00-04:00",
-                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-                "DeletionProtection": false,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "MyApp-PostgreSQL-DB-${Environment}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        }
+    "DBPassword": {
+      "Type": "String",
+      "NoEcho": true,
+      "Default": "/myapp/database/password",
+      "Description": "SSM Parameter Store parameter name containing the database password"
     },
-    "Outputs": {
-        "PrimaryS3BucketName": {
-            "Description": "Name of the primary S3 bucket",
-            "Value": {
-                "Ref": "MyAppS3Bucket"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-PrimaryS3Bucket"
-                }
-            }
-        },
-        "AccessLogsS3BucketName": {
-            "Description": "Name of the S3 access logs bucket",
-            "Value": {
-                "Ref": "MyAppS3AccessLogsBucket"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-AccessLogsS3Bucket"
-                }
-            }
-        },
-        "RDSInstanceEndpoint": {
-            "Description": "RDS PostgreSQL instance endpoint",
-            "Value": {
-                "Fn::GetAtt": [
-                    "MyAppRDSInstance",
-                    "Endpoint.Address"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-RDSEndpoint"
-                }
-            }
-        },
-        "VPCId": {
-            "Description": "VPC ID",
-            "Value": {
-                "Ref": "MyAppVPC"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-VPC"
-                }
-            }
-        },
-        "LambdaFunctionArn": {
-            "Description": "Lambda function ARN",
-            "Value": {
-                "Fn::GetAtt": [
-                    "MyAppLambdaFunction",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-LambdaFunction"
-                }
-            }
-        },
-        "DatabasePasswordParameterName": {
-            "Description": "SSM Parameter Store name for database password",
-            "Value": {
-                "Ref": "DBPasswordParameterName"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-DBPasswordParameterName"
-                }
-            }
-        }
+    "DBPasswordParameterName": {
+      "Type": "String",
+      "Default": "/myapp/database/password",
+      "Description": "Name of the SSM Parameter Store parameter containing the database password",
+      "AllowedPattern": "^[a-zA-Z0-9/_-]+$"
+    },
+    "AZ1": {
+      "Type": "String",
+      "Default": "us-west-2a",
+      "Description": "Primary AZ"
+    },
+    "AZ2": {
+      "Type": "String",
+      "Default": "us-west-2b",
+      "Description": "Secondary AZ (set same as AZ1 if only one AZ is enabled)"
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "production",
+      "Description": "Environment name for resource naming",
+      "AllowedValues": [
+        "development",
+        "staging",
+        "production"
+      ]
     }
+  },
+  "Resources": {
+    "MyAppVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-VPC-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "MyAppInternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-IGW-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MyAppVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "MyAppInternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MyAppVPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Ref": "AZ1"
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-Public-Subnet-1-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MyAppVPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Ref": "AZ2"
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-Public-Subnet-2-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MyAppVPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Ref": "AZ1"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-Private-Subnet-1-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MyAppVPC"
+        },
+        "CidrBlock": "10.0.4.0/24",
+        "AvailabilityZone": {
+          "Ref": "AZ2"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-Private-Subnet-2-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MyAppVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-Public-RT-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRouteTable1": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MyAppVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-Private-RT-1-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRouteTable2": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "MyAppVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-Private-RT-2-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        }
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "MyAppInternetGateway"
+        }
+      }
+    },
+    "PrivateRoute1": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "MyAppInternetGateway"
+        }
+      }
+    },
+    "PrivateRoute2": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "MyAppInternetGateway"
+        }
+      }
+    },
+    "MyAppS3AccessLogsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "myapp-access-logs-${Environment}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "CloudWatchLogsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "S3AccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "MyApp-Lambda-SG-${Environment}"
+        },
+        "GroupDescription": "Security group for Lambda function",
+        "VpcId": {
+          "Ref": "MyAppVPC"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": -1,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-Lambda-SG-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "MyAppLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "MyApp-S3-Event-Handler-${Environment}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            }
+          ]
+        },
+        "Code": {
+          "ZipFile": "import json\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Received S3 event: {json.dumps(event)}\")\n\n    for record in event['Records']:\n        bucket = record['s3']['bucket']['name']\n        key = record['s3']['object']['key']\n        logger.info(f\"Object {key} was created in bucket {bucket}\")\n\n    return {\n        'statusCode': 200,\n        'body': json.dumps('Successfully processed S3 event')\n    }\n"
+        },
+        "Timeout": 60,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "MyAppS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "myapp-primary-${Environment}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LoggingConfiguration": {
+          "DestinationBucketName": {
+            "Ref": "MyAppS3AccessLogsBucket"
+          },
+          "LogFilePrefix": "access-logs/"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "MyAppLambdaFunction"
+        },
+        "Principal": "s3.amazonaws.com",
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        },
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "MyAppS3Bucket",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "myapp-db-subnet-group-${Environment}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for RDS database",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-DB-Subnet-Group-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "MyApp-Database-SG-${Environment}"
+        },
+        "GroupDescription": "Security group for RDS PostgreSQL database",
+        "VpcId": {
+          "Ref": "MyAppVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "SourceSecurityGroupId": {
+              "Ref": "LambdaSecurityGroup"
+            },
+            "Description": "Allow access from Lambda security group"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-Database-SG-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "MyAppRDSInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "myapp-postgres-db-${Environment}"
+        },
+        "DBInstanceClass": "db.t3.medium",
+        "Engine": "postgres",
+        "EngineVersion": "16.6",
+        "MasterUsername": {
+          "Ref": "DBUsername"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:ssm-secure:${DBPassword}}}"
+        },
+        "AllocatedStorage": 20,
+        "StorageType": "gp2",
+        "StorageEncrypted": true,
+        "MultiAZ": false,
+        "VPCSecurityGroups": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "DeletionProtection": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "MyApp-PostgreSQL-DB-${Environment}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "PrimaryS3BucketName": {
+      "Description": "Name of the primary S3 bucket",
+      "Value": {
+        "Ref": "MyAppS3Bucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrimaryS3Bucket"
+        }
+      }
+    },
+    "AccessLogsS3BucketName": {
+      "Description": "Name of the S3 access logs bucket",
+      "Value": {
+        "Ref": "MyAppS3AccessLogsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AccessLogsS3Bucket"
+        }
+      }
+    },
+    "RDSInstanceEndpoint": {
+      "Description": "RDS PostgreSQL instance endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "MyAppRDSInstance",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSEndpoint"
+        }
+      }
+    },
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "MyAppVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPC"
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "MyAppLambdaFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaFunction"
+        }
+      }
+    },
+    "DatabasePasswordParameterName": {
+      "Description": "SSM Parameter Store name for database password",
+      "Value": {
+        "Ref": "DBPasswordParameterName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBPasswordParameterName"
+        }
+      }
+    }
+  }
 }

@@ -126,24 +126,12 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('NAT Gateway Resources', () => {
-    test('should have NAT Gateway EIPs', () => {
-      expect(template.Resources.NATGateway1EIP).toBeDefined();
-      expect(template.Resources.NATGateway2EIP).toBeDefined();
-      
-      const eip1 = template.Resources.NATGateway1EIP;
-      expect(eip1.Type).toBe('AWS::EC2::EIP');
-      expect(eip1.Properties.Domain).toBe('vpc');
-      expect(eip1.DependsOn).toBe('AttachGateway');
-    });
-
-    test('should have NAT Gateways with proper dependencies', () => {
-      expect(template.Resources.NATGateway1).toBeDefined();
-      expect(template.Resources.NATGateway2).toBeDefined();
-      
-      const nat1 = template.Resources.NATGateway1;
-      expect(nat1.Type).toBe('AWS::EC2::NatGateway');
-      expect(nat1.DependsOn).toContain('PublicSubnet1RouteTableAssociation');
-      expect(nat1.DependsOn).toContain('PublicSubnet2RouteTableAssociation');
+    test('should not have NAT Gateway resources (LocalStack compatibility)', () => {
+      // NAT Gateways and EIPs removed for LocalStack Community compatibility
+      expect(template.Resources.NATGateway1EIP).toBeUndefined();
+      expect(template.Resources.NATGateway2EIP).toBeUndefined();
+      expect(template.Resources.NATGateway1).toBeUndefined();
+      expect(template.Resources.NATGateway2).toBeUndefined();
     });
   });
 
@@ -165,13 +153,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.PublicRoute).toBeDefined();
       expect(template.Resources.PrivateRoute1).toBeDefined();
       expect(template.Resources.PrivateRoute2).toBeDefined();
-      
+
       const privateRoute1 = template.Resources.PrivateRoute1;
       const privateRoute2 = template.Resources.PrivateRoute2;
-      
-      // Routes reference NAT Gateways directly, no explicit DependsOn needed
-      expect(privateRoute1.Properties.NatGatewayId).toEqual({ Ref: 'NATGateway1' });
-      expect(privateRoute2.Properties.NatGatewayId).toEqual({ Ref: 'NATGateway2' });
+
+      // Private routes use Internet Gateway for LocalStack compatibility
+      expect(privateRoute1.Properties.GatewayId).toEqual({ Ref: 'MyAppInternetGateway' });
+      expect(privateRoute2.Properties.GatewayId).toEqual({ Ref: 'MyAppInternetGateway' });
     });
   });
 
@@ -286,12 +274,12 @@ describe('TapStack CloudFormation Template', () => {
       const rds = template.Resources.MyAppRDSInstance;
       expect(rds.Type).toBe('AWS::RDS::DBInstance');
       expect(rds.DeletionPolicy).toBe('Delete');
-      expect(rds.UpdateReplacePolicy).toBe('Retain');
+      expect(rds.UpdateReplacePolicy).toBe('Delete'); // LocalStack compatibility
       expect(rds.Properties.Engine).toBe('postgres');
-      expect(rds.Properties.EngineVersion).toBe('13.15');
+      expect(rds.Properties.EngineVersion).toBe('16.6');
       expect(rds.Properties.DBInstanceClass).toBe('db.t3.medium');
       expect(rds.Properties.StorageEncrypted).toBe(true);
-      expect(rds.Properties.MultiAZ).toBe(true);
+      expect(rds.Properties.MultiAZ).toBe(false); // LocalStack compatibility
       expect(rds.Properties.DeletionProtection).toBe(false);
     });
 
@@ -430,23 +418,20 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resource Dependencies', () => {
-    test('should have proper dependency chain for NAT Gateways', () => {
-      const nat1 = template.Resources.NATGateway1;
-      const nat2 = template.Resources.NATGateway2;
-      
-      expect(nat1.DependsOn).toContain('PublicSubnet1RouteTableAssociation');
-      expect(nat1.DependsOn).toContain('PublicSubnet2RouteTableAssociation');
-      expect(nat2.DependsOn).toContain('PublicSubnet1RouteTableAssociation');
-      expect(nat2.DependsOn).toContain('PublicSubnet2RouteTableAssociation');
+    test('should not have NAT Gateways (LocalStack compatibility)', () => {
+      // NAT Gateways removed for LocalStack Community compatibility
+      // LocalStack Community does not fully support EIP AllocationId
+      expect(template.Resources.NATGateway1).toBeUndefined();
+      expect(template.Resources.NATGateway2).toBeUndefined();
     });
 
     test('should have proper dependency chain for routes', () => {
       const privateRoute1 = template.Resources.PrivateRoute1;
       const privateRoute2 = template.Resources.PrivateRoute2;
-      
-      // Routes reference NAT Gateways directly, no explicit DependsOn needed
-      expect(privateRoute1.Properties.NatGatewayId).toEqual({ Ref: 'NATGateway1' });
-      expect(privateRoute2.Properties.NatGatewayId).toEqual({ Ref: 'NATGateway2' });
+
+      // Private routes use Internet Gateway for LocalStack compatibility
+      expect(privateRoute1.Properties.GatewayId).toEqual({ Ref: 'MyAppInternetGateway' });
+      expect(privateRoute2.Properties.GatewayId).toEqual({ Ref: 'MyAppInternetGateway' });
     });
 
     test('should have proper dependency for Lambda permission', () => {
