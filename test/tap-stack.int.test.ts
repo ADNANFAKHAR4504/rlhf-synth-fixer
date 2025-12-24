@@ -165,13 +165,13 @@ describe('VPC Infrastructure Integration Tests', () => {
         expect(response.SecurityGroups?.length).toBe(1);
         const sg = response.SecurityGroups?.[0];
         expect(sg?.VpcId).toBe(outputs.VPCId);
-        expect(sg?.Description).toBe('Allow SSH access from anywhere');
+        expect(sg?.Description).toBe('Allow SSH access from office IP range');
 
         const sshRule = sg?.IpPermissions?.find(
           rule => rule.IpProtocol === 'tcp' && rule.FromPort === 22 && rule.ToPort === 22
         );
         expect(sshRule).toBeDefined();
-        expect(sshRule?.IpRanges).toContainEqual({ CidrIp: '0.0.0.0/0' });
+        expect(sshRule?.IpRanges).toContainEqual({ CidrIp: '203.0.113.0/24' });
       } catch (error) {
         console.log(`Security Group test failed: ${error}`);
         throw error;
