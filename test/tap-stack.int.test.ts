@@ -39,15 +39,26 @@ import {
 
 /* ---------------------------- Setup / Helpers --------------------------- */
 
+// Load outputs - handle both all-outputs.json and flat-outputs.json formats
 const outputsPath = path.resolve(process.cwd(), "cfn-outputs", "all-outputs.json");
-if (!fs.existsSync(outputsPath)) {
-  throw new Error(`Expected outputs file at ${outputsPath} — create it before running integration tests.`);
+const flatOutputsPath = path.resolve(process.cwd(), "cfn-outputs", "flat-outputs.json");
+
+let outputs: Record<string, string> = {};
+
+if (fs.existsSync(outputsPath)) {
+  // Format: {stackName: [{OutputKey: "...", OutputValue: "..."}]}
+  const raw = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+  const firstTopKey = Object.keys(raw)[0];
+  const outputsArray: { OutputKey: string; OutputValue: string }[] = raw[firstTopKey];
+  for (const o of outputsArray) outputs[o.OutputKey] = o.OutputValue;
+} else if (fs.existsSync(flatOutputsPath)) {
+  // Format: {key: value, key2: value2, ...}
+  outputs = JSON.parse(fs.readFileSync(flatOutputsPath, "utf8"));
+} else {
+  throw new Error(
+    `Expected outputs file at ${outputsPath} or ${flatOutputsPath} — create it before running integration tests.`
+  );
 }
-const raw = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
-const firstTopKey = Object.keys(raw)[0];
-const outputsArray: { OutputKey: string; OutputValue: string }[] = raw[firstTopKey];
-const outputs: Record<string, string> = {};
-for (const o of outputsArray) outputs[o.OutputKey] = o.OutputValue;
 
 // deduce region from ARNs/endpoints or env
 function deduceRegion(): string {
