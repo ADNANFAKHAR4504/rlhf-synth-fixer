@@ -873,9 +873,9 @@ describe('TapStack CloudFormation Template - Cryptocurrency Webhook Processing S
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly 23 resources', () => {
+    test('should have exactly 25 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(23);
+      expect(resourceCount).toBe(25);
     });
 
     test('should have exactly 1 parameter', () => {
@@ -883,9 +883,9 @@ describe('TapStack CloudFormation Template - Cryptocurrency Webhook Processing S
       expect(parameterCount).toBe(1);
     });
 
-    test('should have exactly 7 outputs', () => {
+    test('should have exactly 9 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(7);
+      expect(outputCount).toBe(9);
     });
 
     test('all resources should have DeletionPolicy Delete or be API Gateway child resources', () => {
