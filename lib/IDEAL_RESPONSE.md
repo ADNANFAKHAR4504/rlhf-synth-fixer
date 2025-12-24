@@ -1186,7 +1186,7 @@ Resources:
     Type: AWS::RDS::DBClusterParameterGroup
     Properties:
       Description: Custom cluster parameter group for Aurora PostgreSQL
-      Family: aurora-postgresql14
+      Family: aurora-postgresql17
       Parameters:
         shared_preload_libraries: 'pg_stat_statements,pgaudit'
         log_statement: 'all'
@@ -1207,7 +1207,7 @@ Resources:
     Type: AWS::RDS::DBParameterGroup
     Properties:
       Description: Custom parameter group for Aurora PostgreSQL instances
-      Family: aurora-postgresql14
+      Family: aurora-postgresql17
       Parameters:
         max_connections: !If [IsProduction, '1000', '500']
         shared_buffers: !If [IsProduction, '2097152', '1048576']  # 16GB/8GB in 8KB pages
@@ -1226,7 +1226,7 @@ Resources:
     Type: AWS::RDS::DBCluster
     Properties:
       Engine: aurora-postgresql
-      EngineVersion: '14.6'
+      EngineVersion: '17'
       DBClusterIdentifier: !Sub '${EnvironmentName}-meridian-aurora-cluster'
       MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
