@@ -1119,7 +1119,7 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-rds-kms-key-${Environment}'
 
-  WebServerSecurityGroupId:
+  SecurityGroupId:
     Description: 'Security Group ID for web server EC2 instances'
     Value: !Ref WebServerSecurityGroup
     Export:
