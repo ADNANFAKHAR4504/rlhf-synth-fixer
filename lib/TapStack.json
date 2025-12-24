@@ -1565,9 +1565,7 @@
                     }
                 ],
                 "MasterUsername": "dbadmin",
-                "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${SecretDB}::password}}"
-                },
+                "MasterUserPassword": "TestPassword123!",
                 "DeletionProtection": false,
                 "BackupRetentionPeriod": 7,
                 "DBName": "appdb",
