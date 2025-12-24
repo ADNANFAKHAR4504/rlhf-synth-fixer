@@ -10,10 +10,7 @@
   "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup",
-    "General Infrastructure Tooling QA",
-    "IaC Optimization",
-    "Infrastructure Analysis/Monitoring",
-    "Security Configuration as Code"
+    "Multi-Environment Consistency"
   ],
   "aws_services": [
     "VPC",
