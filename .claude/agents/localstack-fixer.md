@@ -1651,6 +1651,8 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
     #
     # METADATA FIXES (CRITICAL)
     # Uses the centralized sanitization script to avoid code duplication
+    # The sanitization script now includes wave lookup from P0.csv/P1.csv
+    # to ensure correct wave assignment based on the original task's wave
     #
     metadata_fix|metadata_subtask_fix|metadata_labels_fix)
       if [[ -f "metadata.json" ]]; then
@@ -1696,6 +1698,8 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
             # Set required fields
             .provider = "localstack" |
             .team = "synth-2" |
+            # NOTE: wave should be looked up from P0.csv/P1.csv using wave-lookup.sh
+            # Fallback to existing wave or "P1" if lookup not available
             .wave = (.wave // "P1") |
             .startedAt = (.startedAt // (now | todate)) |
             # Remove disallowed fields

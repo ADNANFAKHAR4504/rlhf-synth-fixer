@@ -1,0 +1,43 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291580",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T13:05:47.580Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "Auto Scaling",
+    "ELB",
+    "KMS",
+    "Secrets Manager",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr1903"
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}
