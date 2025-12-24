@@ -317,7 +317,7 @@ Outputs:
 
   EC2SecurityGroupId:
     Description: 'Security Group ID for the EC2 instance'
-    Value: !Ref EC2SecurityGroup
+    Value: !GetAtt EC2SecurityGroup.GroupId
     Export:
       Name: !Sub '${AWS::StackName}-SecurityGroupId'
 
