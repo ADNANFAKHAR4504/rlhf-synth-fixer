@@ -274,13 +274,25 @@ mkdir -p cfn-outputs
 # Get stack outputs
 OUTPUT_JSON=$(pulumi stack output --json 2>/dev/null || echo '{}')
 
-echo "$OUTPUT_JSON" > cfn-outputs/flat-outputs.json
-log_output "${GREEN}✅ Outputs saved to cfn-outputs/flat-outputs.json${NC}"
+# Use the export script to flatten outputs for integration tests
+if [ -f "cli/export-pulumi-outputs.py" ]; then
+    log_output "${CYAN}📤 Exporting flattened outputs for integration tests...${NC}"
+    if python3 cli/export-pulumi-outputs.py 2>&1 | tee -a "$OUTPUT_FILE"; then
+        log_output "${GREEN}✅ Outputs exported to cfn-outputs/flat-outputs.json${NC}"
+    else
+        log_output "${YELLOW}⚠️  Warning: Could not export flattened outputs, using raw outputs${NC}"
+        echo "$OUTPUT_JSON" > cfn-outputs/flat-outputs.json
+    fi
+else
+    # Fallback: use raw outputs
+    echo "$OUTPUT_JSON" > cfn-outputs/flat-outputs.json
+    log_output "${GREEN}✅ Outputs saved to cfn-outputs/flat-outputs.json${NC}"
+fi
 
 echo "## Stack Outputs" >> "$OUTPUT_FILE"
 if [ "$OUTPUT_JSON" != "{}" ]; then
     log_output "${BLUE}📋 Stack Outputs:${NC}"
-    echo "$OUTPUT_JSON" | python -c "
+    echo "$OUTPUT_JSON" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)

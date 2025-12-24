@@ -28,7 +28,11 @@ stack_args = TapStackArgs(
 stack = TapStack("tap-stack", stack_args)
 
 # Export stack outputs
-pulumi.export("api_gateway_url", stack.api_gateway.api_endpoint if stack.api_gateway else None)
+pulumi.export("api_gateway_url",
+    pulumi.Output.concat(
+        stack.api_gateway.api_endpoint, "/", stack_args.environment
+    ) if stack.api_gateway else None
+)
 pulumi.export("lambda_functions", {
     name: func.arn for name, func in stack.lambda_functions.items()
 })

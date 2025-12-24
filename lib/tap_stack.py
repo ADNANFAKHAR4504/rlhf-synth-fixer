@@ -104,7 +104,9 @@ class TapStack(ComponentResource):
         # Register stack outputs
         self.register_outputs({
             "api_gateway_url": (
-                self.api_gateway.api_endpoint if self.api_gateway else None
+                pulumi.Output.concat(
+                    self.api_gateway.api_endpoint, "/", args.environment
+                ) if self.api_gateway else None
             ),
             "lambda_functions": {
                 name: func.arn for name, func in self.lambda_functions.items()
