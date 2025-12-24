@@ -3,7 +3,7 @@ Design an AWS CloudFormation template in YAML named `secure_infrastructure.yml` 
 ## Requirements
 
 1. **EC2**
-   - Provision an EC2 instance using security team–approved AMI IDs.  
+   - Provision an EC2 instance using security team-approved AMI IDs.  
    - Restrict SSH access.  
    - The Application Load Balancer forwards HTTPS traffic to EC2 instances.  
 
@@ -40,7 +40,9 @@ Design an AWS CloudFormation template in YAML named `secure_infrastructure.yml` 
    - Lambda functions read from and write to DynamoDB tables.  
 
 9. **Security Best Practices**
-   - Ensure security groups do not allow ingress from `0.0.0.0/0` except for port **443**.  
+   - Security groups must follow least privilege access.  
+   - Only the Application Load Balancer security group may accept HTTPS traffic from the internet on port 443.  
+   - All other security groups must restrict access to internal VPC resources only.  
    - Apply all recommended AWS security configurations.  
 
 ## Constraints
@@ -50,7 +52,7 @@ Design an AWS CloudFormation template in YAML named `secure_infrastructure.yml` 
 - EC2 instances must use **approved AMI IDs**.  
 - All Lambda functions must enforce **VPC configuration**.  
 - CloudFront distributions must log to the designated S3 bucket.  
-- Security groups must only allow ingress on **port 443** from the internet.  
+- Application Load Balancer accepts HTTPS from the internet; all other resources restricted to VPC internal traffic.  
 
 ## Expected Output
 
