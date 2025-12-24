@@ -129,7 +129,7 @@
             "MinValue": 50,
             "MaxValue": 100,
             "ConstraintDescription": "Must be between 50 and 100"
-        },
+        }
     },
     "Conditions": {
         "HasKeyPair": {
