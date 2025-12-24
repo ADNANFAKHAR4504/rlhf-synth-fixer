@@ -33,6 +33,47 @@ The migration strategy uses Terraform workspaces to manage separate state files 
 5. **id-mapping.csv** - Sample resource ID mapping template for tracking
 6. **runbook.md** - Complete operational runbook with timelines, rollback, and validation
 
+## Infrastructure Code Overview
+
+### Core Terraform Configuration
+
+```hcl
+terraform{
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws"{
+  region = var.aws_region
+}
+
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+}
+
+resource "aws_subnet" "public" {
+  count             = length(var.availability_zones)
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone = var.availability_zones[count.index]
+}
+
+resource "aws_db_instance" "main" {
+  identifier              = "${var.db_name}-${var.environment_suffix}"
+  engine                  = "postgres"
+  instance_class          = var.db_instance_class
+  allocated_storage       = 20
+  storage_encrypted       = true
+}
+```
+
 ## Resource Coverage
 
 ### Networking (Multi-AZ, High Availability)
