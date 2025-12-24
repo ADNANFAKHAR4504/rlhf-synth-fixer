@@ -1,4 +1,4 @@
-```
+```json
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "CloudFormation template for a secure, highly available web application environment",
