@@ -322,8 +322,14 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: !If [UseCustomerKms, !Ref KmsKeyId, !Ref "AWS::NoValue"]
       DeletionProtection: false
+      BacktrackWindow: 259200
       DBClusterParameterGroupName: !Ref ClusterParameterGroup
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      EnableCloudwatchLogsExports:
+        - audit
+        - error
+        - general
+        - slowquery
       Tags:
         - Key: Name
           Value: !Sub aurora-cluster-${EnvironmentSuffix}
