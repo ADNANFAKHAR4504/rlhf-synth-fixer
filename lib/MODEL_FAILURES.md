@@ -1,4 +1,4 @@
-❌ What Needs Improvement:
+What Needs Improvement:
 1. Security & Compliance Gaps
 RDS Credentials: MasterUsername and MasterUserPassword are set to AWS::NoValue. You should use Secrets Manager and pass the secret ARN to Lambda and RDS.
 S3 CloudFront OAI: S3 bucket access via CloudFront OAI is missing.

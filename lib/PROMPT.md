@@ -1,11 +1,11 @@
 As an expert in AWS CloudFormation and security architecture, your task is to generate a secure and compliant infrastructure definition for a financial services application using AWS CloudFormation in **YAML format**.
 
-### ✅ Objective:
+###  Objective:
 Create a single, well-commented CloudFormation template (`infrastructure.yaml`) to define the **core infrastructure** for a **financial services application**. The stack must adhere to **financial-grade security**, **internal compliance rules**, and **AWS best practices**. It should be deployable in a testing AWS account and pass tools like **cfn-lint** or **cfn-nag**.
 
 ---
 
-### 🛠️ Core Components and Constraints:
+### ️ Core Components and Constraints:
 
 #### 1. **Networking (VPC & Subnets)**
 - Set up VPC with **2 public and 2 private subnets** across AZs.
@@ -52,7 +52,7 @@ Create a single, well-commented CloudFormation template (`infrastructure.yaml`) 
 
 ---
 
-### 🏷️ Tagging Requirements:
+### ️ Tagging Requirements:
 - All resources must include:
   - `Environment`: One of `dev`, `staging`, or `prod`
   - `Project`
@@ -60,7 +60,7 @@ Create a single, well-commented CloudFormation template (`infrastructure.yaml`) 
 
 ---
 
-### ✅ Output Requirements:
+###  Output Requirements:
 - A **single YAML file**: `infrastructure.yaml`
 - Modular sections (Networking, IAM, Storage, etc.)
 - **Inline comments** explaining major resource blocks
