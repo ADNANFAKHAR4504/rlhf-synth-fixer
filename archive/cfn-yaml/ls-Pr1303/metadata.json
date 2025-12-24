@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "provider": "aws",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291445",
+  "team": "synth-2",
+  "wave": "P1",
+  "subtask": "iac_generation",
+  "subject_labels": ["serverless", "api_gateway", "lambda", "dynamodb"],
+  "aws_services": ["API Gateway", "Lambda", "DynamoDB", "CloudWatch", "IAM", "KMS", "Config", "WAFv2"],
+  "startedAt": "2025-08-15T07:11:03.975Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "shreyaspturing",
+  "dockerS3Location": "",
+  "localstack_migration": {
+    "original_pr": "1303",
+    "migrated_at": "$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")",
+    "fixes_applied": ["remove_deployment_preference", "remove_auto_publish_alias", "remove_alarm_references"],
+    "iterations": 1
+  }
+}
