@@ -1,20 +1,22 @@
-Generate a single AWS CloudFormation template in **YAML** that sets up secure AWS infrastructure in the **us-east-1** region, following best practices and meeting the following requirements:
+Need a CloudFormation template in YAML that sets up secure AWS infrastructure in us-east-1. This needs to follow security best practices for a production environment.
 
-- **IAM**: Implement IAM roles and policies using the least privilege principle, attach policies to roles (not users), and require MFA for all IAM users accessing the AWS Management Console. Use condition keys to restrict requests based on AWS attributes.
-- **Storage Security**: Encrypt all S3 buckets, RDS instances, and EBS volumes at rest (AWS KMS or managed keys). Enable logging for all S3 buckets, storing logs in a dedicated logging bucket.
-- **Secrets & Keys**: Use AWS Secrets Manager for key rotation and secret storage; automatically rotate API credentials.
-- **Networking**: Deploy all EC2 instances inside a specific VPC and block default VPC creation. Restrict traffic with security groups, blocking all traffic except explicitly allowed ports. Ensure environment isolation between development and production.
-- **Monitoring & Logging**: Enable audit logging for all infrastructure, CloudWatch detailed monitoring for EC2, and enforce least privilege access for Lambda functions.
-- **Policies**: Create a least privilege IAM policy for applications accessing S3 buckets.
+Requirements:
 
-**Constraints**:
-- All resources must be declared in YAML format within a single CloudFormation template.
-- Disallow creation of default VPC.
-- Tag all resources with `env` (environment), `owner` (team ownership), and `project` (project name).
-- All EC2 and RDS resources must be launched only in the `us-east-1` region.
-- Include Outputs for key resources and identifiers.
+IAM: Set up IAM roles and policies using least privilege. Attach policies to roles, not users. Require MFA for console access. Use condition keys to restrict requests based on AWS attributes.
 
-**Output**:
-- A complete, deployable CloudFormation YAML file that passes AWS compliance checks.
-- Use `Parameters`, `Mappings`, `Resources`, and `Outputs` sections where applicable.
-- Include inline comments explaining how each security requirement is satisfied.
+Storage Security: Encrypt all S3 buckets, RDS instances, and EBS volumes at rest using KMS or AWS-managed keys. Enable S3 bucket logging with a dedicated logging bucket.
+
+Secrets Management: Use AWS Secrets Manager for storing credentials and enable automatic rotation for API keys.
+
+Networking: All EC2 instances must run inside a custom VPC - block the default VPC. Security groups should deny all traffic except explicitly allowed ports. Keep dev and prod environments isolated.
+
+Monitoring: Enable CloudTrail for audit logging, CloudWatch detailed monitoring for EC2, and make sure Lambda functions have least privilege IAM permissions.
+
+Constraints:
+- Single YAML CloudFormation template
+- No default VPC allowed
+- Tag everything with env, owner, and project tags
+- EC2 and RDS only in us-east-1
+- Include outputs for key resource IDs
+
+The template should use Parameters for configuration, Mappings for environment-specific values, and include comments showing how each security control is implemented.
