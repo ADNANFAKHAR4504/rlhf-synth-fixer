@@ -1,4 +1,4 @@
-I'll create a comprehensive, production-ready Pulumi program that demonstrates advanced security practices and dynamic infrastructure management. Here's the complete solution:
+Here's the complete Pulumi setup for the secure web app:
 
 ## Project Structure
 
@@ -17,7 +17,7 @@ Create or update `Pulumi.yaml`:
 ```yaml
 name: secure-web-app
 runtime: python
-description: Production-ready secure web application infrastructure
+description: Secure web application infrastructure
 ```
 
 Update `Pulumi.dev.yaml` with configuration:
@@ -50,16 +50,13 @@ Here's the complete `__main__.py` file:
 
 ```python
 """
-Production-Ready Secure Web Application Infrastructure
-=====================================================
+Secure Web Application Infrastructure
 
-This Pulumi program demonstrates advanced security practices including:
-- Dynamic VPC discovery and security group management
-- Time-based IAM access key rotation enforcement
-- KMS-based secret management with cross-resource dependencies
-- Modular and scalable infrastructure as code patterns
-
-Author: Senior Security Automation Engineer
+Pulumi program that sets up:
+- Dynamic VPC discovery and security groups
+- Time-based IAM access key rotation
+- KMS secret management with proper key policies
+- Dynamic infrastructure as code
 """
 
 import json
@@ -90,10 +87,7 @@ ACCESS_KEY_MAX_AGE_DAYS = 90
 # =============================================================================
 
 def get_default_vpc() -> aws.ec2.AwaitableGetVpcResult:
-    """
-    Dynamically discover the default VPC in the specified region.
-    This makes the code portable and resilient to infrastructure changes.
-    """
+    """Get the default VPC in the region - no hardcoding."""
     return aws.ec2.get_vpc(default=True)
 
 # Get the default VPC
@@ -104,10 +98,7 @@ default_vpc = get_default_vpc()
 # =============================================================================
 
 def create_ingress_rules(allowed_cidrs: List[str]) -> List[Dict[str, Any]]:
-    """
-    Dynamically create ingress rules for allowed CIDR blocks.
-    Demonstrates modular rule creation and parameterization.
-    """
+    """Create ingress rules for allowed CIDR blocks (HTTP and HTTPS)."""
     return [
         {
             "protocol": "tcp",
@@ -129,10 +120,7 @@ def create_ingress_rules(allowed_cidrs: List[str]) -> List[Dict[str, Any]]:
     ]
 
 def create_egress_rules(trusted_ips: List[str], allowed_ports: List[int]) -> List[Dict[str, Any]]:
-    """
-    Create restrictive egress rules following principle of least privilege.
-    Only allows traffic to specific ports and trusted external services.
-    """
+    """Restrictive egress - only specific ports to trusted IPs."""
     egress_rules = []
     
     # Allow outbound traffic to trusted external IPs on specific ports
@@ -183,10 +171,7 @@ web_security_group = aws.ec2.SecurityGroup(
 # =============================================================================
 
 def create_time_based_rotation_policy(max_age_days: int) -> str:
-    """
-    Create a complex IAM policy that enforces access key rotation based on time conditions.
-    This policy denies all actions if the access key is older than the specified number of days.
-    """
+    """IAM policy that denies everything if the key is older than max_age_days."""
     policy_document = {
         "Version": "2012-10-17",
         "Statement": [
@@ -273,10 +258,7 @@ web_app_access_key = aws.iam.AccessKey(
 # =============================================================================
 
 def create_kms_key_policy(user_arn: pulumi.Output[str]) -> pulumi.Output[str]:
-    """
-    Create a KMS key policy that restricts access to specific IAM principals.
-    Demonstrates cross-resource dependency and secure key management.
-    """
+    """KMS key policy that restricts access to the IAM user."""
     def build_policy(arn: str) -> str:
         # Get current AWS account ID and region
         current = aws.get_caller_identity()
