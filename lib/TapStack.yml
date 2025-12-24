@@ -1411,24 +1411,24 @@ Outputs:
   # Standard outputs for LocalStack post-deployment fixes
   VpcId:
     Description: 'Primary VPC ID for LocalStack fixes'
-    Value: !Ref HubVpc
+    Value: !GetAtt HubVpc.VpcId
     Export:
       Name: !Sub '${AWS::StackName}-VpcId'
 
   SecurityGroupId:
     Description: 'Primary Security Group ID for LocalStack fixes'
-    Value: !Ref HttpsSecurityGroup
+    Value: !GetAtt HttpsSecurityGroup.GroupId
     Export:
       Name: !Sub '${AWS::StackName}-SecurityGroupId'
 
   InternetGatewayId:
     Description: 'Internet Gateway ID for LocalStack fixes'
-    Value: !Ref HubInternetGateway
+    Value: !GetAtt HubInternetGateway.InternetGatewayId
     Export:
       Name: !Sub '${AWS::StackName}-InternetGatewayId'
 
   NatGatewayId:
     Description: 'Primary NAT Gateway ID for LocalStack fixes'
-    Value: !Ref HubNatGateway1
+    Value: !GetAtt HubNatGateway1.NatGatewayId
     Export:
       Name: !Sub '${AWS::StackName}-NatGatewayId'
