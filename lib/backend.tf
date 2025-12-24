@@ -1,5 +1,4 @@
-# Backend is configured via CLI flags in deploy scripts
-# For linting, local backend is used by default
+# No backend block - Terraform will use local backend by default
+# Deploy scripts configure S3 backend via -backend-config CLI flags
 terraform {
-  backend "local" {}
 }
