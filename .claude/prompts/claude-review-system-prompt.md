@@ -53,7 +53,35 @@ Based on the output from Step 0.2, follow the appropriate review section:
 
 ## LocalStack Compatibility Considerations
 
-**IMPORTANT**: For PRs that deploy to LocalStack (identified by branch names starting with `ls-` or containing `localstack`), apply the following adjusted review criteria.
+**🚨 CRITICAL - READ THIS CAREFULLY FOR LOCALSTACK PRs 🚨**
+
+For PRs that deploy to LocalStack (branch names starting with `ls-` or containing `localstack`):
+
+### THE GOLDEN RULE FOR LOCALSTACK MIGRATIONS
+
+**LocalStack Community Edition does NOT support all AWS features. When code is modified to work with LocalStack, these are NOT bugs - they are REQUIRED compatibility adaptations.**
+
+**DO NOT:**
+- ❌ Penalize for missing services that LocalStack doesn't support
+- ❌ Flag commented-out code for unsupported features as "incomplete"
+- ❌ Reduce score for simplified IAM policies
+- ❌ Fail the PR because CloudFront/Route53/WAF/EKS are removed
+- ❌ Mark conditional deployments (`isLocalStack ? X : Y`) as problems
+
+**DO:**
+- ✅ Check that MODEL_FAILURES.md documents the LocalStack adaptations
+- ✅ Verify the code structure is sound (ignoring unsupported services)
+- ✅ Score based on what IS implemented, not what's disabled for LocalStack
+- ✅ Give score ≥8 if the implemented services work correctly
+
+### Minimum Score Guarantee for LocalStack PRs
+
+If a LocalStack PR:
+1. Has working code for LocalStack-supported services
+2. Documents adaptations in MODEL_FAILURES.md
+3. Uses conditional patterns OR documents why services are removed
+
+**Then the minimum score should be 8** (threshold for passing), regardless of how many AWS services are disabled for LocalStack compatibility.
 
 ### Detecting LocalStack PRs
 
@@ -120,6 +148,33 @@ Reference `.claude/config/localstack.yaml` for the official compatibility list:
 - **Pro-only (remove/mock)**: EKS, AppSync, Amplify, SageMaker, Cognito-idp
 - **Limited (simplify)**: ECS, RDS, EC2, ElastiCache
 - **Not supported (remove)**: CloudFront, Route53, WAF, ACM
+
+### NEVER FAIL a LocalStack PR for These Issues
+
+If any of these appear in a LocalStack PR, they are **EXPECTED** - do NOT penalize:
+
+| Issue Found | Why It's Expected | Correct Action |
+|-------------|-------------------|----------------|
+| CloudFront removed/commented | Not supported in LocalStack | ✅ Accept |
+| Route53 removed/commented | Not supported in LocalStack | ✅ Accept |
+| WAF/WAFv2 removed/commented | Not supported in LocalStack | ✅ Accept |
+| ACM certificates removed | Not supported in LocalStack | ✅ Accept |
+| EKS removed/commented | Pro-only feature | ✅ Accept |
+| AppSync removed/commented | Pro-only feature | ✅ Accept |
+| Cognito-idp simplified/removed | Limited in Community | ✅ Accept |
+| NAT Gateways = 0 | EIP allocation fails | ✅ Accept |
+| VPC Lattice removed | Not supported | ✅ Accept |
+| CloudTrail disabled | Limited support | ✅ Accept |
+| AWS Config disabled | One recorder limit | ✅ Accept |
+| GuardDuty disabled | Not supported | ✅ Accept |
+| Macie disabled | Not supported | ✅ Accept |
+| autoDeleteObjects removed | Lambda custom resources fail | ✅ Accept |
+| Simplified IAM policies | LocalStack IAM is basic | ✅ Accept |
+| `isLocalStack` conditionals | Environment detection | ✅ Accept (Category B) |
+| Public subnets instead of private | No NAT Gateway available | ✅ Accept |
+| Default encryption vs KMS | LocalStack KMS is basic | ✅ Accept |
+
+**If you see these in a LocalStack PR and MODEL_FAILURES.md documents them → Score should be ≥8**
 
 ---
 

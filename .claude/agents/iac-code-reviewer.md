@@ -332,7 +332,9 @@ Final Score = Base(8) + MODEL_FAILURES_Adjustment + Complexity_Adjustment
 
 **Step-by-step Process**:
 
-**Step 0.5: LocalStack Migration Detection**
+**Step 0.5: LocalStack Migration Detection (CRITICAL)**
+
+**🚨 STOP: LocalStack PRs require different evaluation criteria 🚨**
 
 Before checking critical blockers, determine if this is a LocalStack migration:
 
@@ -342,9 +344,30 @@ BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 IS_LOCALSTACK_MIGRATION=false
 if [[ "$BRANCH_NAME" == ls-* ]] || [[ "$BRANCH_NAME" == *localstack* ]]; then
   IS_LOCALSTACK_MIGRATION=true
-  echo "LocalStack migration detected - applying adjusted review criteria"
+  echo "🔧 LocalStack migration detected - ADJUSTED REVIEW MODE ACTIVE"
 fi
 ```
+
+**If LocalStack migration (`IS_LOCALSTACK_MIGRATION=true`) - MANDATORY RULES:**
+
+**RULE 1: DO NOT FAIL for LocalStack Limitations**
+LocalStack Community Edition does not support many AWS services. The following are NOT failures:
+- CloudFront, Route53, WAF, ACM → Not supported, removal is correct
+- EKS, AppSync, Amplify, SageMaker, Cognito-idp → Pro-only, removal is correct
+- NAT Gateways disabled → EIP issues in LocalStack, correct decision
+- Simplified IAM → LocalStack IAM is basic, simplification is correct
+- autoDeleteObjects removed → Lambda custom resources fail, removal is correct
+
+**RULE 2: Score Based on What Works, Not What's Disabled**
+- Only evaluate services that LocalStack actually supports
+- If S3, Lambda, DynamoDB, SQS, SNS work correctly → That's success
+- Do not penalize for "missing" services that can't work in LocalStack
+
+**RULE 3: Minimum Score = 8 for Documented LocalStack PRs**
+If MODEL_FAILURES.md has a "LocalStack Compatibility" section documenting the adaptations:
+- Start with score = 8 (not base 8 with penalties)
+- Only deduct for actual code quality issues in SUPPORTED services
+- LocalStack adaptations are Category B (±0) or better
 
 **If LocalStack migration (`IS_LOCALSTACK_MIGRATION=true`)**:
 
