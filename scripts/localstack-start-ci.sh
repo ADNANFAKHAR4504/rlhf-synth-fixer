@@ -66,9 +66,8 @@ if [ -n "$LOCALSTACK_SERVICES" ]; then
 else
     # Default services for CDK/CFN/Terraform/Pulumi deployments
     # Include all commonly needed services to avoid "service not enabled" errors
-    # Note: elasticloadbalancing is separate from elb and elbv2 in LocalStack
-    # CRITICAL: RDS, backup, config, elasticache added for full CloudFormation support
-    SERVICES="acm,apigateway,cloudformation,cloudfront,cloudtrail,cloudwatch,dynamodb,ec2,ecr,ecs,elb,elbv2,events,iam,kms,lambda,logs,rds,route53,s3,secretsmanager,sns,sqs,ssm,sts,autoscaling,wafv2,backup,config,elasticache"
+    # elasticloadbalancing is separate from elb and elbv2 in LocalStack
+    SERVICES="acm,apigateway,cloudformation,cloudfront,cloudtrail,cloudwatch,dynamodb,ec2,ecr,ecs,elb,elbv2,events,iam,kms,lambda,logs,rds,route53,s3,secretsmanager,sns,sqs,ssm,sts,autoscaling,wafv2"
     echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
     echo -e "${YELLOW}💡 To customize, set LOCALSTACK_SERVICES environment variable${NC}"
 fi
@@ -104,12 +103,6 @@ DOCKER_CMD="docker run -d \
   -e EC2_DOWNLOAD_DEFAULT_IMAGES=0 \
   -e DISABLE_CORS_CHECKS=1 \
   -e SKIP_INFRA_DOWNLOADS=1"
-
-# Add SERVICES only if explicitly set
-if [ -n "$SERVICES" ]; then
-    DOCKER_CMD="$DOCKER_CMD \
-  -e SERVICES=\"${SERVICES}\""
-fi
 
 # Add API key if available (required for Pro features)
 if [ -n "$LOCALSTACK_API_KEY" ]; then

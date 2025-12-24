@@ -1,0 +1,82 @@
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:31: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  self.timestamp = datetime.utcnow().isoformat()
+Error checking S3 buckets: <botocore.errorfactory.S3Exceptions object at 0x7f76ffb4bf80> object has no attribute ServerSideEncryptionConfigurationNotFoundError. Valid exceptions are: BucketAlreadyExists, BucketAlreadyOwnedByYou, EncryptionTypeMismatch, IdempotencyParameterMismatch, InvalidObjectState, InvalidRequest, InvalidWriteOffset, NoSuchBucket, NoSuchKey, NoSuchUpload, ObjectAlreadyInActiveTierError, ObjectNotInActiveTierError, TooManyParts
+Error checking SSM agent status: An error occurred (500) when calling the DescribeInstanceInformation operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:375: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'scanTimestamp': datetime.utcnow().isoformat(),
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:398: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'Timestamp': datetime.utcnow()
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:404: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'Timestamp': datetime.utcnow()
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:410: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'Timestamp': datetime.utcnow()
+=== AWS Infrastructure Compliance Analysis ===
+
+Region: us-east-1
+Environment Suffix: pr8475
+Approved AMIs: ami-0c55b159cbfafe1f0, ami-0574da719dca65348
+
+Starting compliance scan...
+Checking EBS encryption...
+Checking S3 buckets...
+Checking security groups...
+Checking required tags...
+Checking approved AMIs...
+Checking SSM agent status...
+Checking VPC flow logs...
+Exporting CloudWatch metrics...
+CloudWatch metrics exported successfully
+
+=== Compliance Scan Results ===
+
+Scan Timestamp: 2025-12-23T00:37:19.947462
+Region: us-east-1
+Environment: pr8475
+
+Summary:
+  Total Resources Scanned: 4
+  Total Violations: 5
+  Compliance Rate: -25.0%
+
+Violations by Type:
+  UnencryptedEBSVolume: 1
+  UnrestrictedInboundRule: 1
+  MissingRequiredTags: 1
+  UnapprovedAMI: 1
+  FlowLogsDisabled: 1
+
+Detailed Violations:
+
+[HIGH] UnencryptedEBSVolume
+  Resource: EC2::Instance - i-97d10aa5d2252cce9
+  Details: Instance has unencrypted EBS volume: vol-e616ac33c00594e94
+  Timestamp: 2025-12-23T00:37:10.348558
+
+[HIGH] UnrestrictedInboundRule
+  Resource: EC2::SecurityGroup - sg-af0f8867d57d7cbd2
+  Details: Security group test-sg-public allows unrestricted access (0.0.0.0/0) on port 22
+  Timestamp: 2025-12-23T00:37:10.376470
+
+[MEDIUM] MissingRequiredTags
+  Resource: EC2::Instance - i-97d10aa5d2252cce9
+  Details: Instance missing required tags: Environment, Owner, CostCenter
+  Timestamp: 2025-12-23T00:37:10.384451
+
+[MEDIUM] UnapprovedAMI
+  Resource: EC2::Instance - i-97d10aa5d2252cce9
+  Details: Instance using unapproved AMI: ami-12345678
+  Timestamp: 2025-12-23T00:37:10.392336
+
+[MEDIUM] FlowLogsDisabled
+  Resource: EC2::VPC - vpc-da3ebd811a3a2b1da
+  Details: VPC does not have flow logs enabled
+  Timestamp: 2025-12-23T00:37:19.929603
+
+Full report saved to: ./compliance-report.json
+
+⚠️  Analysis completed with violations found.

@@ -25,6 +25,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/localstack-common.sh"
 
+# Source wave lookup utilities for P0/P1 wave determination
+if [ -f "$SCRIPT_DIR/wave-lookup.sh" ]; then
+  source "$SCRIPT_DIR/wave-lookup.sh"
+  WAVE_LOOKUP_AVAILABLE=true
+else
+  log_warn "wave-lookup.sh not found - will use default wave"
+  WAVE_LOOKUP_AVAILABLE=false
+fi
+
 # Setup error handling
 setup_error_handling
 
@@ -74,6 +83,47 @@ VALID_TURN_TYPES='["single","multi"]'
 VALID_TEAMS='["2","3","4","5","6","synth","synth-1","synth-2","stf"]'
 
 # ═══════════════════════════════════════════════════════════════════════════
+# WAVE LOOKUP - Determine correct wave from P0/P1 CSV files
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Look up the correct wave from CSV reference files
+LOOKED_UP_WAVE=""
+if [ "$WAVE_LOOKUP_AVAILABLE" = "true" ]; then
+  log_info "Looking up wave from P0.csv/P1.csv reference files..."
+  
+  # Try to get wave from existing metadata info
+  if LOOKED_UP_WAVE=$(get_wave_for_task "$METADATA_FILE" 2>/dev/null); then
+    log_success "Wave found in CSV: $LOOKED_UP_WAVE"
+  else
+    # If metadata doesn't have migration info, try extracting PR from directory path
+    DIR_NAME=$(basename "$(dirname "$METADATA_FILE")")
+    if [[ "$DIR_NAME" =~ ^Pr[0-9]+$ ]]; then
+      if LOOKED_UP_WAVE=$(get_wave_for_pr "$DIR_NAME" 2>/dev/null); then
+        log_success "Wave found for $DIR_NAME: $LOOKED_UP_WAVE"
+      fi
+    fi
+    
+    # If still not found, check if we have original_pr_id in metadata
+    if [ -z "$LOOKED_UP_WAVE" ]; then
+      ORIGINAL_PR=$(jq -r '.original_pr_id // .migrated_from.pr // ""' "$METADATA_FILE" 2>/dev/null)
+      if [ -n "$ORIGINAL_PR" ] && [ "$ORIGINAL_PR" != "null" ]; then
+        if LOOKED_UP_WAVE=$(get_wave_for_pr "$ORIGINAL_PR" 2>/dev/null); then
+          log_success "Wave found for original PR $ORIGINAL_PR: $LOOKED_UP_WAVE"
+        fi
+      fi
+    fi
+  fi
+fi
+
+# Set default wave if lookup failed
+if [ -z "$LOOKED_UP_WAVE" ]; then
+  log_warn "Wave not found in CSV files - using existing wave or default 'P1'"
+  LOOKED_UP_WAVE=$(jq -r '.wave // "P1"' "$METADATA_FILE" 2>/dev/null || echo "P1")
+fi
+
+log_info "Using wave: $LOOKED_UP_WAVE"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SANITIZE METADATA
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -82,6 +132,7 @@ cp "$METADATA_FILE" "${METADATA_FILE}.backup"
 
 # Apply comprehensive sanitization with jq
 jq --argjson valid_subtasks "$VALID_SUBTASKS" \
+   --arg looked_up_wave "$LOOKED_UP_WAVE" \
    --argjson valid_labels "$VALID_LABELS" \
    --argjson valid_platforms "$VALID_PLATFORMS" \
    --argjson valid_languages "$VALID_LANGUAGES" \
@@ -175,29 +226,131 @@ jq --argjson valid_subtasks "$VALID_SUBTASKS" \
   # Only include fields allowed by schema (additionalProperties: false)
   # ═══════════════════════════════════════════════════════════════════════
   
+  # Capture original po_id before transformation for migration tracking
+  (.po_id // .task_id // "unknown") as $orig_po_id |
+  
+  # Check if this is already a migrated task (po_id starts with LS-)
+  (if ($orig_po_id | startswith("LS-")) then true else false end) as $already_migrated |
+  
+  # Determine the original po_id (for tracking lineage)
+  (if $already_migrated then
+    (.migrated_from.po_id // .original_po_id // ($orig_po_id | ltrimstr("LS-")))
+  else
+    $orig_po_id
+  end) as $final_original_po_id |
+  
+  # Determine the original PR (for tracking lineage)
+  (.migrated_from.pr // .original_pr_id // null) as $final_original_pr |
+  
+  # Build the new po_id with LS- prefix (if not already migrated)
+  (if $already_migrated then
+    $orig_po_id
+  else
+    "LS-" + $orig_po_id
+  end) as $new_po_id |
+  
+  # Build base object
   {
     platform: (.platform | validate_platform),
     language: (.language | validate_language),
     complexity: (.complexity | validate_complexity),
     turn_type: (.turn_type | validate_turn_type),
-    po_id: (.po_id // .task_id // "unknown"),
+    po_id: $new_po_id,
     team: "synth-2",
     startedAt: (.startedAt | validate_started_at),
     subtask: (.subtask | enforce_subtask_string),
     provider: "localstack",
     subject_labels: (
-      [.subject_labels[]? | map_label]
+      # Handle both array and string types for subject_labels
+      (if (.subject_labels | type) == "array" then
+        .subject_labels
+      elif (.subject_labels | type) == "string" then
+        [.subject_labels]
+      else
+        []
+      end)
+      | map(map_label)
       | unique
       | map(select(. as $l | $valid_labels | index($l)))
       | if length == 0 then ["General Infrastructure Tooling QA"] else . end
     ),
-    aws_services: (.aws_services // [])
+    aws_services: (
+      # Handle both array and string types for aws_services
+      if (.aws_services | type) == "array" then
+        .aws_services
+      elif (.aws_services | type) == "string" then
+        # Split comma-separated string into array
+        (.aws_services | split(",") | map(gsub("^\\s+|\\s+$"; "")))
+      else
+        []
+      end
+    ),
+    wave: $looked_up_wave
   }
+  # Add migrated_from object only if we have the original PR reference
+  + (if $final_original_pr != null then
+      {
+        migrated_from: {
+          po_id: $final_original_po_id,
+          pr: $final_original_pr
+        }
+      }
+    else
+      {}
+    end)
 ' "$METADATA_FILE" > "${METADATA_FILE}.tmp"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VALIDATE SANITIZATION RESULT
+# ═══════════════════════════════════════════════════════════════════════════
 
 # Validate the result is valid JSON
 if ! jq empty "${METADATA_FILE}.tmp" 2>/dev/null; then
   log_error "Sanitization produced invalid JSON"
+  log_error "Original metadata was:"
+  cat "${METADATA_FILE}.backup" 2>/dev/null || true
+  mv "${METADATA_FILE}.backup" "$METADATA_FILE"
+  rm -f "${METADATA_FILE}.tmp"
+  exit 1
+fi
+
+# Validate all required fields are present
+REQUIRED_FIELDS=("platform" "language" "complexity" "turn_type" "po_id" "team" "startedAt" "subtask" "provider" "subject_labels" "aws_services" "wave")
+MISSING_FIELDS=()
+
+for field in "${REQUIRED_FIELDS[@]}"; do
+  if ! jq -e ".$field" "${METADATA_FILE}.tmp" &>/dev/null; then
+    MISSING_FIELDS+=("$field")
+  fi
+done
+
+if [ ${#MISSING_FIELDS[@]} -gt 0 ]; then
+  log_error "Sanitization failed: missing required fields: ${MISSING_FIELDS[*]}"
+  log_error "Original metadata was:"
+  cat "${METADATA_FILE}.backup" 2>/dev/null || true
+  log_error "Sanitized result was:"
+  cat "${METADATA_FILE}.tmp" 2>/dev/null || true
+  mv "${METADATA_FILE}.backup" "$METADATA_FILE"
+  rm -f "${METADATA_FILE}.tmp"
+  exit 1
+fi
+
+# Validate that no disallowed fields are present (schema has additionalProperties: false)
+# Note: training_quality IS allowed by schema as an optional field, so it's not in this list
+DISALLOWED_FIELDS=("coverage" "author" "dockerS3Location" "task_id" "pr_id" "localstack_migration" "original_po_id" "original_pr_id" "testDependencies" "background" "training_quality_justification")
+FOUND_DISALLOWED=()
+
+for field in "${DISALLOWED_FIELDS[@]}"; do
+  if jq -e ".$field" "${METADATA_FILE}.tmp" &>/dev/null; then
+    FOUND_DISALLOWED+=("$field")
+  fi
+done
+
+if [ ${#FOUND_DISALLOWED[@]} -gt 0 ]; then
+  log_error "Sanitization failed: disallowed fields still present: ${FOUND_DISALLOWED[*]}"
+  log_error "These fields must be removed to pass schema validation (additionalProperties: false)"
+  log_error "Sanitized result was:"
+  cat "${METADATA_FILE}.tmp" 2>/dev/null || true
   mv "${METADATA_FILE}.backup" "$METADATA_FILE"
   rm -f "${METADATA_FILE}.tmp"
   exit 1
@@ -220,5 +373,16 @@ echo "  Team:           $(jq -r '.team' "$METADATA_FILE")"
 echo "  Subtask:        $(jq -r '.subtask' "$METADATA_FILE")"
 echo "  Provider:       $(jq -r '.provider' "$METADATA_FILE")"
 echo "  Subject Labels: $(jq -r '.subject_labels | length' "$METADATA_FILE") items"
+echo "  Wave:           $(jq -r '.wave // "not set"' "$METADATA_FILE")"
+echo ""
+echo "  Migration Tracking:"
+echo "    PO ID:              $(jq -r '.po_id' "$METADATA_FILE")"
+if jq -e '.migrated_from' "$METADATA_FILE" &>/dev/null; then
+  echo "    migrated_from:"
+  echo "      po_id:          $(jq -r '.migrated_from.po_id // "N/A"' "$METADATA_FILE")"
+  echo "      pr:             $(jq -r '.migrated_from.pr // "N/A"' "$METADATA_FILE")"
+else
+  echo "    migrated_from:      (not set - provide original_pr_id to enable)"
+fi
 echo ""
 
