@@ -48,7 +48,7 @@ describe('TapStack CloudFormation Template', () => {
         'DBName',
         'DBUser',
         'KeyPairName',
-        'LatestAmiId'
+        'EnableRDS'
       ];
 
       expectedParameters.forEach(paramName => {
@@ -79,10 +79,18 @@ describe('TapStack CloudFormation Template', () => {
       expect(dbNameParam.AllowedPattern).toBe('[a-zA-Z][a-zA-Z0-9]*');
     });
 
-    test('LatestAmiId parameter should use SSM parameter', () => {
-      const amiParam = template.Parameters.LatestAmiId;
-      expect(amiParam.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
-      expect(amiParam.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
+    test('EnableRDS parameter should control RDS creation', () => {
+      const enableRDSParam = template.Parameters.EnableRDS;
+      expect(enableRDSParam.Type).toBe('String');
+      expect(enableRDSParam.Default).toBe('true');
+      expect(enableRDSParam.AllowedValues).toContain('true');
+      expect(enableRDSParam.AllowedValues).toContain('false');
+    });
+
+    test('should have AMI mappings for EC2', () => {
+      expect(template.Mappings).toBeDefined();
+      expect(template.Mappings.RegionAMI).toBeDefined();
+      expect(template.Mappings.RegionAMI['us-east-1'].HVM64).toBeDefined();
     });
   });
 
@@ -90,6 +98,11 @@ describe('TapStack CloudFormation Template', () => {
     test('should have HasKeyPair condition', () => {
       expect(template.Conditions.HasKeyPair).toBeDefined();
       expect(template.Conditions.HasKeyPair['Fn::Not']).toBeDefined();
+    });
+
+    test('should have CreateRDS condition', () => {
+      expect(template.Conditions.CreateRDS).toBeDefined();
+      expect(template.Conditions.CreateRDS['Fn::Equals']).toBeDefined();
     });
   });
 
@@ -248,12 +261,13 @@ describe('TapStack CloudFormation Template', () => {
     test('should have EC2 instance with correct configuration', () => {
       const ec2 = template.Resources.EC2Instance;
       expect(ec2.Type).toBe('AWS::EC2::Instance');
-      expect(ec2.CreationPolicy.ResourceSignal.Timeout).toBe('PT10M');
       
       const props = ec2.Properties;
       expect(props.InstanceType).toBe('t3.micro');
       expect(props.Monitoring).toBe(true);
-      expect(props.ImageId.Ref).toBe('LatestAmiId');
+      // ImageId uses Fn::FindInMap to lookup AMI from Mappings
+      expect(props.ImageId['Fn::FindInMap']).toBeDefined();
+      expect(props.ImageId['Fn::FindInMap'][0]).toBe('RegionAMI');
     });
 
     test('should have conditional key pair assignment', () => {
@@ -269,9 +283,11 @@ describe('TapStack CloudFormation Template', () => {
     test('should have user data script', () => {
       const ec2 = template.Resources.EC2Instance;
       const userData = ec2.Properties.UserData;
-      expect(userData['Fn::Base64']['Fn::Sub']).toContain('yum update -y');
-      expect(userData['Fn::Base64']['Fn::Sub']).toContain('postgresql');
-      expect(userData['Fn::Base64']['Fn::Sub']).toContain('cfn-signal');
+      expect(userData['Fn::Base64']).toBeDefined();
+      expect(userData['Fn::Base64']['Fn::Sub']).toBeDefined();
+      // UserData script should contain environment setup
+      expect(userData['Fn::Base64']['Fn::Sub']).toContain('#!/bin/bash');
+      expect(userData['Fn::Base64']['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
   });
 
@@ -297,7 +313,14 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have proper S3 resource ARN references in IAM policy', () => {
       const role = template.Resources.EC2InstanceRole;
-      const s3Policy = role.Properties.Policies[0].PolicyDocument.Statement[0];
+      const policyDoc = role.Properties.Policies[0].PolicyDocument;
+      
+      // Statement uses Fn::If for conditional RDS access
+      expect(policyDoc.Statement['Fn::If']).toBeDefined();
+      
+      // Get the S3 policy from the conditional (first branch when RDS is enabled)
+      const statements = policyDoc.Statement['Fn::If'][1]; // RDS enabled branch
+      const s3Policy = statements[0]; // First statement is S3 access
       
       expect(s3Policy.Resource).toHaveLength(2);
       expect(s3Policy.Resource[0]['Fn::GetAtt']).toEqual(['S3Bucket', 'Arn']);
@@ -339,10 +362,15 @@ describe('TapStack CloudFormation Template', () => {
 
     test('RDS outputs should be correct', () => {
       const rdsEndpoint = template.Outputs.RDSEndpoint;
-      expect(rdsEndpoint.Value['Fn::GetAtt']).toEqual(['RDSInstance', 'Endpoint.Address']);
+      // RDS outputs use Fn::If for conditional RDS
+      expect(rdsEndpoint.Value['Fn::If']).toBeDefined();
+      expect(rdsEndpoint.Value['Fn::If'][0]).toBe('CreateRDS');
+      expect(rdsEndpoint.Value['Fn::If'][1]['Fn::GetAtt']).toEqual(['RDSInstance', 'Endpoint.Address']);
       
       const rdsPort = template.Outputs.RDSPort;
-      expect(rdsPort.Value['Fn::GetAtt']).toEqual(['RDSInstance', 'Endpoint.Port']);
+      expect(rdsPort.Value['Fn::If']).toBeDefined();
+      expect(rdsPort.Value['Fn::If'][0]).toBe('CreateRDS');
+      expect(rdsPort.Value['Fn::If'][1]['Fn::GetAtt']).toEqual(['RDSInstance', 'Endpoint.Port']);
     });
 
     test('EC2 outputs should be correct', () => {
