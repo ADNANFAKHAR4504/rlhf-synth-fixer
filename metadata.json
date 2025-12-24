@@ -1,0 +1,19 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291814",
+  "team": "synth-2",
+  "startedAt": "2025-08-03T06:31:24.685Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2"
+  ],
+  "wave": "P1"
+}

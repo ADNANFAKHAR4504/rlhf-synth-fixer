@@ -1,0 +1,349 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Simplified multi-environment infrastructure template for LocalStack Community Edition - VPC, EC2'
+
+# ============================================================================
+# PARAMETERS - Environment-specific inputs
+# ============================================================================
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, test, stage, prod]
+    Description: 'Target deployment environment'
+
+  ProjectName:
+    Type: String
+    Default: 'MyApp'
+    Description: 'Project name for resource naming and tagging'
+
+  Owner:
+    Type: String
+    Default: 'DevOps-Team'
+    Description: 'Resource owner for tagging'
+
+  CostCenter:
+    Type: String
+    Default: 'Engineering'
+    Description: 'Cost center for billing allocation'
+
+  LatestAmiId:
+    Type: String
+    Default: 'ami-0abcdef1234567890'
+    Description: AMI ID for EC2 instances (hardcoded for LocalStack)
+
+# ============================================================================
+# MAPPINGS - Environment-specific configurations
+# ============================================================================
+Mappings:
+  EnvironmentConfig:
+    dev:
+      VpcCidr: '10.0.0.0/16'
+      PublicSubnet1Cidr: '10.0.1.0/24'
+      PublicSubnet2Cidr: '10.0.2.0/24'
+      PrivateSubnet1Cidr: '10.0.3.0/24'
+      PrivateSubnet2Cidr: '10.0.4.0/24'
+      InstanceType: 't3.micro'
+    test:
+      VpcCidr: '10.1.0.0/16'
+      PublicSubnet1Cidr: '10.1.1.0/24'
+      PublicSubnet2Cidr: '10.1.2.0/24'
+      PrivateSubnet1Cidr: '10.1.3.0/24'
+      PrivateSubnet2Cidr: '10.1.4.0/24'
+      InstanceType: 't3.small'
+    stage:
+      VpcCidr: '10.2.0.0/16'
+      PublicSubnet1Cidr: '10.2.1.0/24'
+      PublicSubnet2Cidr: '10.2.2.0/24'
+      PrivateSubnet1Cidr: '10.2.3.0/24'
+      PrivateSubnet2Cidr: '10.2.4.0/24'
+      InstanceType: 't3.medium'
+    prod:
+      VpcCidr: '10.3.0.0/16'
+      PublicSubnet1Cidr: '10.3.1.0/24'
+      PublicSubnet2Cidr: '10.3.2.0/24'
+      PrivateSubnet1Cidr: '10.3.3.0/24'
+      PrivateSubnet2Cidr: '10.3.4.0/24'
+      InstanceType: 't3.large'
+
+# ============================================================================
+# RESOURCES - Infrastructure components (LocalStack Community compatible)
+# ============================================================================
+Resources:
+  # VPC and Networking
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, VpcCidr]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-VPC-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-IGW-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PublicSubnet1Cidr]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Public-Subnet-AZ1-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PublicSubnet2Cidr]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Public-Subnet-AZ2-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PrivateSubnet1Cidr]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Private-Subnet-AZ1-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PrivateSubnet2Cidr]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Private-Subnet-AZ2-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Public-Routes-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Private-Routes-AZ1-${Environment}'
+
+  # For LocalStack Community, private subnets route through IGW (no NAT Gateway)
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet2
+
+  # Security Groups
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-WebServer-SG-${Environment}'
+      GroupDescription: 'Security group for web servers'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-WebServer-SG-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Simple EC2 Instance (replaces ALB + ASG + RDS)
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !FindInMap [EnvironmentConfig, !Ref Environment, InstanceType]
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<h1>Hello from ${Environment} environment!</h1>" > /var/www/html/index.html
+          echo "<p>Simplified LocalStack Community Edition deployment</p>" >> /var/www/html/index.html
+          echo "OK" > /var/www/html/health
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-WebServer-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+# ============================================================================
+# OUTPUTS - Cross-stack references and debugging
+# ============================================================================
+Outputs:
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${ProjectName}-VPC-${Environment}'
+
+  PublicSubnet1Id:
+    Description: 'Public Subnet 1 ID'
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${ProjectName}-PublicSubnet1-${Environment}'
+
+  PublicSubnet2Id:
+    Description: 'Public Subnet 2 ID'
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${ProjectName}-PublicSubnet2-${Environment}'
+
+  PrivateSubnet1Id:
+    Description: 'Private Subnet 1 ID'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${ProjectName}-PrivateSubnet1-${Environment}'
+
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${ProjectName}-PrivateSubnet2-${Environment}'
+
+  WebServerInstanceId:
+    Description: 'Web Server Instance ID'
+    Value: !Ref WebServerInstance
+    Export:
+      Name: !Sub '${ProjectName}-WebServer-${Environment}'
+
+  WebServerPublicIP:
+    Description: 'Web Server Public IP'
+    Value: !GetAtt WebServerInstance.PublicIp
+    Export:
+      Name: !Sub '${ProjectName}-WebServer-IP-${Environment}'
+
+  WebServerURL:
+    Description: 'Web Server URL'
+    Value: !Sub 'http://${WebServerInstance.PublicIp}'
+    Export:
+      Name: !Sub '${ProjectName}-WebServer-URL-${Environment}'
+
+  Environment:
+    Description: 'Deployed Environment'
+    Value: !Ref Environment
+
+  SecurityGroupId:
+    Description: 'Web Server Security Group ID'
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-WebServerSG-${Environment}'
+
+# ============================================================================
+# NOTES:
+#
+# LocalStack Community Edition Simplifications:
+# - Removed RDS (Pro-only) - no database in this version
+# - Removed Secrets Manager GenerateSecretString (Pro-only)
+# - Removed Application Load Balancer (Pro-only)
+# - Removed Auto Scaling Group (Pro-only)
+# - Removed NAT Gateway (using IGW for all subnets)
+# - Added simple EC2 instance with public IP instead
+#
+# This provides basic infrastructure for testing:
+# - VPC with public and private subnets
+# - Internet Gateway for connectivity
+# - Single EC2 instance with web server
+# - Security groups for access control
+# ============================================================================
