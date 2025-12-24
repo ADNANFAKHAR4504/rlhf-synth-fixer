@@ -1,0 +1,9 @@
+We’re doing this one in Terraform. Single file, named tap_stack.tf. When the model responds, it should return only the code for that file—no explanations, no comments, nothing extra.
+
+Target is a multi-region setup that runs in both us-east-1 and us-west-2. Follow the company naming rule <Service>-<Environment>-<Region> and tag everything with Environment, Project, and Owner. Use the default VPCs in each region; if peering won’t work because the default CIDRs overlap, create the smallest non-overlapping pair just to enable inter-region peering and keep the rest of the plan the same.
+
+What needs to exist: EC2 application layer in both regions behind an Application Load Balancer, with Auto Scaling handling traffic swings. Centralized logging to a single S3 bucket in the primary region with KMS encryption; send ALB access logs and app logs there. Networking should include inter-region VPC peering, route tables that allow the two VPCs to talk, and tight security groups (public traffic on 80/443 only to the ALBs). Databases: RDS in the primary region with Multi-AZ and encrypted storage; a read replica in the secondary region if the engine supports it. DynamoDB tables with point-in-time recovery turned on and cross-region protection via global tables or backup copy policies. IAM roles and policies must be least-privilege—just what autoscaling, logging, replication, backup, and S3 access need.
+
+Add a variable called environment to flip between staging and production (it should drive names, tags, and any right-sized defaults). Use KMS for at-rest encryption across S3, RDS, and DynamoDB. Providers should be set up for both regions with aliases and used consistently.
+
+Final reminder: the output must be a single valid Terraform configuration in tap_stack.tf, ready to apply with terraform apply. Only the code, no extra text.

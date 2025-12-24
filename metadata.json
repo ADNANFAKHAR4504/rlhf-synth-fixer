@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-292003",
+  "team": "synth-2",
+  "startedAt": "2025-12-24T04:20:07.000Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ELB",
+    "Auto Scaling",
+    "RDS",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "292003",
+    "pr": "Pr1897"
+  }
+}
