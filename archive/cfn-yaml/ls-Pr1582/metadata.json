@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291493",
+  "team": "synth-2",
+  "startedAt": "2025-08-18T15:31:38.419Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sreeni-ops",
+  "dockerS3Location": "",
+  "provider": "localstack",
+  "aws_services": [
+    "AutoScaling",
+    "EC2",
+    "ElasticLoadBalancingV2",
+    "S3"
+  ],
+  "wave": "P1",
+  "subtask": "Multi-Tier-Architecture",
+  "subject_labels": [
+    "High-Availability",
+    "Auto-Scaling",
+    "Load-Balancing"
+  ]
+}
