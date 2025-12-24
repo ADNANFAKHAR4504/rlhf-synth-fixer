@@ -11,11 +11,6 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch",
     "VPC",
     "EC2",
     "Internet Gateway",
@@ -25,8 +20,18 @@
     "Security Group",
     "VPC Flow Logs",
     "IAM",
-    "Network ACL"
+    "Network ACL",
+    "S3",
+    "DynamoDB",
+    "CloudWatch"
   ],
   "provider": "localstack",
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
