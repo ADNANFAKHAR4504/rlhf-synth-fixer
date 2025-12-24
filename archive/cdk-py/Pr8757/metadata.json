@@ -1,0 +1,39 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291355",
+  "team": "synth-2",
+  "startedAt": "2025-08-07T11:20:02.616Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "Secrets Manager",
+    "IAM",
+    "VPC"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291355",
+    "pr": "Pr687"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
+}
