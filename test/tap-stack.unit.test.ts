@@ -284,6 +284,13 @@ describe('Route53 Failover CloudFormation Template', () => {
       expect(healthCheckOutput.Description).toBe('Route53 Health Check ID for the primary instance (only available if Route53 is enabled)');
       expect(healthCheckOutput.Value).toEqual({ Ref: 'PrimaryHealthCheck' });
     });
+
+    test('should have InstanceSecurityGroup output', () => {
+      const sgOutput = template.Outputs.InstanceSecurityGroup;
+      expect(sgOutput).toBeDefined();
+      expect(sgOutput.Description).toBe('Web Server Security Group ID');
+      expect(sgOutput.Value).toEqual({ Ref: 'WebServerSecurityGroup' });
+    });
   });
 
   describe('Template Validation', () => {
@@ -312,7 +319,7 @@ describe('Route53 Failover CloudFormation Template', () => {
 
     test('should have expected number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(12);
+      expect(outputCount).toBe(13);
     });
   });
 

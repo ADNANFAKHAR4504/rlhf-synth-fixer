@@ -584,6 +584,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-WebServer-SG-Id'
 
+  InstanceSecurityGroup:
+    Description: Web Server Security Group ID
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Instance-SG'
+
   PrimaryAvailabilityZone:
     Description: Availability Zone of the primary instance
     Value: !GetAtt PrimaryEC2Instance.AvailabilityZone
