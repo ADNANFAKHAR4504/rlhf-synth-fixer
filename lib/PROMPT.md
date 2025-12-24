@@ -2,7 +2,7 @@
 
 > **CRITICAL REQUIREMENT: This task MUST be implemented using CloudFormation with JSON**
 >
-> Platform: **CloudFormation (cfn)**
+> Platform: **CloudFormation / cfn**
 > Language: **JSON**
 > Region: **ap-southeast-1**
 >
@@ -16,7 +16,7 @@ A fintech startup needs to establish a secure network foundation in AWS for thei
 
 ## Problem Statement
 
-Create a CloudFormation template (JSON format) to deploy a production-ready VPC with proper network segmentation. The configuration must:
+Create a CloudFormation template in JSON format to deploy a production-ready VPC with proper network segmentation. The configuration must:
 
 1. Create a VPC with CIDR 10.0.0.0/16 and enable DNS hostnames and DNS support
 2. Deploy 2 public subnets across 2 availability zones using 10.0.1.0/24 and 10.0.2.0/24
@@ -35,7 +35,7 @@ Create a CloudFormation template (JSON format) to deploy a production-ready VPC 
 AWS VPC infrastructure in ap-southeast-1 region with multi-AZ deployment across 2 availability zones. Creates a standard 3-tier network architecture with:
 - Public subnets for load balancers
 - Private subnets for application servers
-- Database subnets for RDS instances (implied for future use)
+- Database subnets for RDS instances, implied for future use
 
 Infrastructure includes:
 - NAT Gateways in each AZ for high availability outbound internet access from private subnets
@@ -45,11 +45,11 @@ Infrastructure includes:
 ## Constraints and Requirements
 
 1. VPC CIDR must be 10.0.0.0/16 to align with corporate network standards
-2. Public subnets must use the first /24 blocks in each AZ (10.0.1.0/24, 10.0.2.0/24)
-3. Private subnets must use /24 blocks starting from 10.0.10.0/24 (10.0.10.0/24, 10.0.11.0/24)
+2. Public subnets must use the first /24 blocks in each AZ: 10.0.1.0/24 and 10.0.2.0/24
+3. Private subnets must use /24 blocks starting from 10.0.10.0/24: 10.0.10.0/24 and 10.0.11.0/24
 4. All resources must be tagged with Environment, Project, and ManagedBy tags
 5. NAT Gateways must have Elastic IPs with specific Name tags
-6. Route tables must have explicit names following the pattern: {vpc-name}-{public|private}-rt-{az}
+6. Route tables must have explicit names following the pattern: vpc-name-public-rt-az or vpc-name-private-rt-az
 
 ## Project-Specific Conventions
 
