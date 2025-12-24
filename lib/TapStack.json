@@ -629,19 +629,19 @@
         },
         "VPC": {
             "Description": "VPC ID (not applicable - no VPC resources)",
-            "Value": ""
+            "Value": "N/A"
         },
         "SecurityGroup": {
             "Description": "Security Group ID (not applicable - no VPC resources)",
-            "Value": ""
+            "Value": "N/A"
         },
         "InternetGateway": {
             "Description": "Internet Gateway ID (not applicable - no VPC resources)",
-            "Value": ""
+            "Value": "N/A"
         },
         "NATGateway": {
             "Description": "NAT Gateway ID (not applicable - no VPC resources)",
-            "Value": ""
+            "Value": "N/A"
         }
     },
     "Metadata": {

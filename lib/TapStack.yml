@@ -326,18 +326,19 @@ Outputs:
       Name: !Sub "${AWS::StackName}-TableDetails"
 
   # Placeholder outputs for post-deployment fix script (no VPC resources in this template)
+  # Using "N/A" instead of empty string so CloudFormation includes them in stack outputs
   VPC:
     Description: "VPC ID (not applicable - no VPC resources)"
-    Value: ""
+    Value: "N/A"
   SecurityGroup:
     Description: "Security Group ID (not applicable - no VPC resources)"
-    Value: ""
+    Value: "N/A"
   InternetGateway:
     Description: "Internet Gateway ID (not applicable - no VPC resources)"
-    Value: ""
+    Value: "N/A"
   NATGateway:
     Description: "NAT Gateway ID (not applicable - no VPC resources)"
-    Value: ""
+    Value: "N/A"
 
 Metadata:
   AWS::CloudFormation::Interface:
