@@ -138,9 +138,7 @@ describe('Route53 Failover CloudFormation Template', () => {
       expect(template.Resources.PrimaryEC2Instance).toBeDefined();
       const instance = template.Resources.PrimaryEC2Instance;
       expect(instance.Type).toBe('AWS::EC2::Instance');
-      expect(instance.Properties.ImageId).toEqual({
-        'Fn::FindInMap': ['RegionMap', { Ref: 'AWS::Region' }, 'AMI']
-      });
+      expect(instance.Properties.ImageId).toEqual({ Ref: 'LatestAmiId' });
       expect(instance.Properties.InstanceType).toEqual({ Ref: 'InstanceType' });
     });
 
@@ -148,9 +146,7 @@ describe('Route53 Failover CloudFormation Template', () => {
       expect(template.Resources.StandbyEC2Instance).toBeDefined();
       const instance = template.Resources.StandbyEC2Instance;
       expect(instance.Type).toBe('AWS::EC2::Instance');
-      expect(instance.Properties.ImageId).toEqual({
-        'Fn::FindInMap': ['RegionMap', { Ref: 'AWS::Region' }, 'AMI']
-      });
+      expect(instance.Properties.ImageId).toEqual({ Ref: 'LatestAmiId' });
       expect(instance.Properties.InstanceType).toEqual({ Ref: 'InstanceType' });
     });
 
