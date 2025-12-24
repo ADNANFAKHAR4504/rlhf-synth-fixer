@@ -79,9 +79,11 @@ class DataProtectionInfrastructure(pulumi.ComponentResource, BaseInfrastructureC
             f"secure-s3-encryption-{self.region.replace('-', '')}",
             bucket=self.secure_s3_bucket.id,
             rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                    sse_algorithm="aws:kms",
-                    kms_master_key_id=self.kms_key_arn
+                apply_server_side_encryption_by_default=(
+                    aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="aws:kms",
+                        kms_master_key_id=self.kms_key_arn
+                    )
                 )
             )],
             opts=ResourceOptions(parent=self, depends_on=[self.secure_s3_bucket])
