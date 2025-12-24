@@ -10,8 +10,8 @@
   "provider": "localstack",
   "subject_labels": [
     "CI/CD Pipeline",
-    "Container Orchestration",
-    "Deployment Automation"
+    "Infrastructure Analysis/Monitoring",
+    "General Infrastructure Tooling QA"
   ],
   "wave": "P1",
   "training_quality": 9,
@@ -27,11 +27,5 @@
     "Secrets Manager",
     "IAM",
     "Auto Scaling"
-  ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "mayanksethi-turing",
-  "dockerS3Location": ""
+  ]
 }
