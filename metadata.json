@@ -9,8 +9,18 @@
   "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Cloud Environment Setup"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "AutoScaling",
+    "SecretsManager"
+  ],
   "wave": "P1"
 }
