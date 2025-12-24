@@ -2,7 +2,7 @@ This AWS CloudFormation template has several significant failures and deviates f
 
 -----
 
-### 1\. Fatal Circular Dependency in Security Group 🛑
+### 1\. Fatal Circular Dependency in Security Group
 
 The most critical failure is a **circular reference** within the `EC2SecurityGroup` resource, which will prevent the stack from ever deploying successfully.
 
@@ -27,7 +27,7 @@ The most critical failure is a **circular reference** within the `EC2SecurityGro
 
 -----
 
-### 2\. Insecure IAM Permissions 🔓
+### 2\. Insecure IAM Permissions
 
 The template violates the principle of least privilege by granting overly permissive access to the VPC Flow Logs role.
 
@@ -59,7 +59,7 @@ The template hardcodes the selection of Availability Zones (AZs), making it pron
 
 -----
 
-### 4\. Non-Unique and Incomplete CloudFormation Outputs 📤
+### 4\. Non-Unique and Incomplete CloudFormation Outputs
 
 The template's outputs are not unique, which will cause deployment collisions, and they are missing key information.
 
@@ -68,7 +68,7 @@ The template's outputs are not unique, which will cause deployment collisions, a
 
 -----
 
-### 5\. Lack of Parameter Validation and Constraints 📝
+### 5\. Lack of Parameter Validation and Constraints
 
 The template's parameters are overly permissive, inviting user error that can cause the stack to fail during resource creation.
 
