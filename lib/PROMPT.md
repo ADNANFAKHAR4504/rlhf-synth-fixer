@@ -3,7 +3,7 @@ You are an expert AWS Solutions Architect. Your task is to generate a comprehens
 
 **Mission Requirements:**
 
-1.  **Core Resources:** Define a complete set of resources including:
+1.  **Core Infrastructure:** Define a complete set of components including:
     * An S3 bucket to store Lambda deployment packages. The bucket name should be unique and environment-specific.
     * An AWS Lambda function with a Node.js runtime. Its code should be sourced from the S3 bucket defined above.
     * An API Gateway REST API with a single `/hello` path. This path should be configured with a proxy integration that forwards all requests to the Lambda function.
@@ -17,7 +17,7 @@ You are an expert AWS Solutions Architect. Your task is to generate a comprehens
     * Implement a `Rules` section to perform automated validation on the `Parameters` before deployment. Specifically, create a rule to ensure that the `EnvironmentName` parameter's value is one of the allowed options.
     * Use a `Conditions` section to conditionally create or configure resources. For example, create an additional S3 bucket for access logs, but only when the `EnvironmentName` is `prod`.
 
-4.  **Resource Interconnections:**
+4.  **Service Interconnections:**
     * Ensure all resources are correctly linked. The Lambda function's code should reference the `ArtifactBucketName` parameter.
     * The API Gateway's integration must reference the Lambda function's ARN.
     * The Lambda function's `Environment` variables should be set using values from the `Mappings` section.
