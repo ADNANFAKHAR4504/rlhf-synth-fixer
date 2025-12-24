@@ -12,6 +12,18 @@ This solution implements a three-tier web application architecture with:
 - **EventBridge event-driven architecture** for monitoring and automation
 - **Comprehensive security** with KMS encryption, IAM roles, and security groups
 
+## LocalStack Compatibility
+
+This configuration supports deployment to both AWS and LocalStack. For LocalStack Community edition, the following features require LocalStack Pro and are controlled by the `enable_pro_features` variable:
+
+- Application Load Balancer (ALB)
+- Auto Scaling Groups (ASG)
+- RDS Database instances
+- EFS File Systems
+- EventBridge ASG events rules
+
+When deploying to LocalStack Community (enable_pro_features=false), the networking layer, security groups, IAM roles, KMS keys, SSM parameters, CloudWatch Logs, and basic EventBridge resources are deployed.
+
 ## File Structure
 
 The solution consists of two main files:

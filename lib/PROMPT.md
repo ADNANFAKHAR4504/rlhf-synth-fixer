@@ -1,14 +1,31 @@
-I need your help creating a single, comprehensive Terraform configuration file for a new AWS stack.
+Create a Terraform configuration for a highly available web application deployment in AWS.
 
-Please generate the entire configuration in one file located at `./lib/tap_stack.tf`. This file should contain everything: all **variable declarations**, **locals**, the **resource definitions**, and any **outputs**.
+**Networking Layer:**
 
-A few important guidelines:
+Set up a VPC with public and private subnets spread across multiple availability zones. The public subnets connect to the internet through an Internet Gateway, while private subnets route outbound traffic through a NAT Gateway with an Elastic IP.
 
-* **Build from Scratch:** Please define all the resources directly in this file. **Do not use any external modules.**
-* **Best Practices are Key:**
-    * **Security:** Stick to **least-privilege IAM** policies, enable **encryption** wherever applicable, and configure **secure security groups** with minimal ingress rules.
-    * **Tagging:** Apply a consistent set of tags to all resources.
-* **CI/CD Friendly Outputs:** The outputs should expose useful information for automation and testing (like ARNs, IDs, or DNS names), but please **make sure not to include any secrets**.
-* **Provider Configuration:** You don't need to write the `provider.tf` file, but you should **declare the `aws_region` variable** in your `tap_stack.tf` file. You can assume that if multiple regions are needed, the necessary provider aliases are already defined elsewhere and are available for you to use.
+**Application Layer:**
 
-Essentially, I'm looking for a clean, secure, and self-contained Terraform file that sets up a new stack following modern IaC standards.
+Deploy an Application Load Balancer in the public subnets that distributes traffic to an Auto Scaling Group of EC2 instances running in the private subnets. The ALB performs health checks on the EC2 instances and routes requests only to healthy targets. The Auto Scaling Group scales based on CPU utilization metrics published to CloudWatch.
+
+**Storage Layer:**
+
+Create an EFS file system that mounts to all EC2 instances in the Auto Scaling Group, providing shared storage for application data. The EFS mount targets are deployed in each private subnet and secured by a security group that only allows NFS traffic from the EC2 instances.
+
+**Database Layer:**
+
+Provision an RDS MySQL database in a Multi-AZ configuration within the private subnets. The database security group accepts connections only from the EC2 instances. Store the database credentials securely in SSM Parameter Store as SecureString parameters.
+
+**Security and Encryption:**
+
+Use KMS customer managed keys to encrypt the RDS database storage and EFS file system. Configure IAM roles for EC2 instances with permissions to read from SSM Parameter Store and write logs to CloudWatch.
+
+**Event Monitoring:**
+
+Set up EventBridge rules that capture Auto Scaling Group lifecycle events and send notifications to CloudWatch Logs. This enables monitoring of instance launches and terminations.
+
+**Tagging:**
+
+Apply consistent tags to all resources including Environment, Application, and ManagedBy tags.
+
+Generate everything in a single tap_stack.tf file with variables, locals, resources, and outputs. Follow least-privilege security principles throughout.

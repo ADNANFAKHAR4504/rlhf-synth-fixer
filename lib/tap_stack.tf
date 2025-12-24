@@ -76,6 +76,12 @@ variable "db_username" {
   default     = "admin"
 }
 
+variable "enable_pro_features" {
+  description = "Enable features requiring LocalStack Pro (ALB, RDS, EFS)"
+  type        = bool
+  default     = false
+}
+
 # Locals
 locals {
   environment_suffix = var.environment_suffix != "" ? var.environment_suffix : "dev"
@@ -96,6 +102,10 @@ locals {
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24"]
   db_subnet_cidrs      = ["10.0.21.0/24", "10.0.22.0/24"]
+
+  # Conditional EFS values for user_data
+  efs_file_system_id  = var.enable_pro_features ? aws_efs_file_system.main[0].id : ""
+  efs_access_point_id = var.enable_pro_features ? aws_efs_access_point.app_data[0].id : ""
 }
 
 # Data Sources
@@ -490,14 +500,18 @@ resource "aws_launch_template" "main" {
 yum update -y
 yum install -y httpd mysql amazon-efs-utils aws-cli
 
-# Mount EFS file system
-mkdir -p /mnt/efs
-echo "${aws_efs_file_system.main.id}.efs.${var.aws_region}.amazonaws.com:/ /mnt/efs efs defaults,_netdev,tls,accesspoint=${aws_efs_access_point.app_data.id}" >> /etc/fstab
-mount -a
+# Conditionally mount EFS file system if enabled
+EFS_FILE_SYSTEM_ID="${local.efs_file_system_id}"
+EFS_ACCESS_POINT_ID="${local.efs_access_point_id}"
 
-# Create shared application data directory
-mkdir -p /mnt/efs/shared-data
-mkdir -p /mnt/efs/logs
+if [ -n "$EFS_FILE_SYSTEM_ID" ] && [ -n "$EFS_ACCESS_POINT_ID" ]; then
+  mkdir -p /mnt/efs
+  echo "$EFS_FILE_SYSTEM_ID.efs.${var.aws_region}.amazonaws.com:/ /mnt/efs efs defaults,_netdev,tls,accesspoint=$EFS_ACCESS_POINT_ID" >> /etc/fstab
+  mount -a
+  # Create shared application data directory
+  mkdir -p /mnt/efs/shared-data
+  mkdir -p /mnt/efs/logs
+fi
 
 # Start and enable Apache HTTP server
 systemctl start httpd
@@ -506,7 +520,7 @@ systemctl enable httpd
 # Create a simple health check endpoint
 echo "OK" > /var/www/html/health
 
-# Create a basic index page with EFS integration
+# Create a basic index page
 cat > /var/www/html/index.html << 'HTML'
 <!DOCTYPE html>
 <html>
@@ -575,8 +589,9 @@ EOF
   }
 }
 
-# Application Load Balancer
+# Application Load Balancer (requires LocalStack Pro)
 resource "aws_lb" "main" {
+  count              = var.enable_pro_features ? 1 : 0
   name               = substr("${local.name_prefix}-alb-v2", 0, 32)
   internal           = false
   load_balancer_type = "application"
@@ -588,8 +603,9 @@ resource "aws_lb" "main" {
   tags = local.common_tags
 }
 
-# ALB Target Group
+# ALB Target Group (requires LocalStack Pro)
 resource "aws_lb_target_group" "main" {
+  count    = var.enable_pro_features ? 1 : 0
   name     = substr("${local.name_prefix}-tg", 0, 32)
   port     = 80
   protocol = "HTTP"
@@ -610,23 +626,25 @@ resource "aws_lb_target_group" "main" {
   tags = local.common_tags
 }
 
-# ALB Listener
+# ALB Listener (requires LocalStack Pro)
 resource "aws_lb_listener" "main" {
-  load_balancer_arn = aws_lb.main.arn
+  count             = var.enable_pro_features ? 1 : 0
+  load_balancer_arn = aws_lb.main[0].arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
+    target_group_arn = aws_lb_target_group.main[0].arn
   }
 }
 
-# Auto Scaling Group
+# Auto Scaling Group (requires LocalStack Pro)
 resource "aws_autoscaling_group" "main" {
+  count                     = var.enable_pro_features ? 1 : 0
   name                      = "${local.name_prefix}-asg"
   vpc_zone_identifier       = aws_subnet.private[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
+  target_group_arns         = [aws_lb_target_group.main[0].arn]
   health_check_type         = "ELB"
   health_check_grace_period = 300
 
@@ -659,8 +677,9 @@ resource "aws_autoscaling_group" "main" {
   }
 }
 
-# RDS Subnet Group
+# RDS Subnet Group (requires LocalStack Pro)
 resource "aws_db_subnet_group" "main" {
+  count      = var.enable_pro_features ? 1 : 0
   name       = substr(lower("${local.name_prefix}-db-subnet"), 0, 255)
   subnet_ids = aws_subnet.database[*].id
 
@@ -669,8 +688,9 @@ resource "aws_db_subnet_group" "main" {
   })
 }
 
-# RDS Parameter Group
+# RDS Parameter Group (requires LocalStack Pro)
 resource "aws_db_parameter_group" "main" {
+  count  = var.enable_pro_features ? 1 : 0
   family = "mysql8.0"
   name   = substr(lower("${local.name_prefix}-db-params"), 0, 255)
 
@@ -706,8 +726,9 @@ resource "aws_ssm_parameter" "db_password" {
   tags = local.common_tags
 }
 
-# RDS Instance
+# RDS Instance (requires LocalStack Pro)
 resource "aws_db_instance" "main" {
+  count      = var.enable_pro_features ? 1 : 0
   identifier = substr(lower("${local.name_prefix}-db"), 0, 63)
 
   allocated_storage     = 20
@@ -725,8 +746,8 @@ resource "aws_db_instance" "main" {
   password = random_password.db_password.result
 
   vpc_security_group_ids = [aws_security_group.rds.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  parameter_group_name   = aws_db_parameter_group.main.name
+  db_subnet_group_name   = aws_db_subnet_group.main[0].name
+  parameter_group_name   = aws_db_parameter_group.main[0].name
 
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
@@ -743,8 +764,9 @@ resource "aws_db_instance" "main" {
   })
 }
 
-# EFS File System
+# EFS File System (requires LocalStack Pro)
 resource "aws_efs_file_system" "main" {
+  count          = var.enable_pro_features ? 1 : 0
   creation_token = "${local.name_prefix}-efs"
   encrypted      = true
   kms_key_id     = aws_kms_key.efs.arn
@@ -781,18 +803,19 @@ resource "aws_kms_alias" "efs" {
   target_key_id = aws_kms_key.efs.key_id
 }
 
-# EFS Mount Targets
+# EFS Mount Targets (requires LocalStack Pro)
 resource "aws_efs_mount_target" "main" {
-  count = length(aws_subnet.private)
+  count = var.enable_pro_features ? length(aws_subnet.private) : 0
 
-  file_system_id  = aws_efs_file_system.main.id
+  file_system_id  = aws_efs_file_system.main[0].id
   subnet_id       = aws_subnet.private[count.index].id
   security_groups = [aws_security_group.efs.id]
 }
 
-# EFS Access Point for application data
+# EFS Access Point for application data (requires LocalStack Pro)
 resource "aws_efs_access_point" "app_data" {
-  file_system_id = aws_efs_file_system.main.id
+  count          = var.enable_pro_features ? 1 : 0
+  file_system_id = aws_efs_file_system.main[0].id
 
   posix_user {
     gid = 1000
@@ -820,8 +843,9 @@ resource "aws_cloudwatch_event_bus" "app_events" {
   tags = local.common_tags
 }
 
-# EventBridge Rule - ASG Events
+# EventBridge Rule - ASG Events (requires LocalStack Pro)
 resource "aws_cloudwatch_event_rule" "asg_events" {
+  count          = var.enable_pro_features ? 1 : 0
   name           = "${local.name_prefix}-asg-events"
   description    = "Capture Auto Scaling Group events"
   event_bus_name = aws_cloudwatch_event_bus.app_events.name
@@ -830,7 +854,7 @@ resource "aws_cloudwatch_event_rule" "asg_events" {
     source      = ["aws.autoscaling"]
     detail-type = ["EC2 Instance Launch Successful", "EC2 Instance Terminate Successful"]
     detail = {
-      AutoScalingGroupName = [aws_autoscaling_group.main.name]
+      AutoScalingGroupName = [aws_autoscaling_group.main[0].name]
     }
   })
 
@@ -858,9 +882,10 @@ resource "aws_cloudwatch_log_group" "eventbridge_logs" {
   tags = local.common_tags
 }
 
-# EventBridge Target - CloudWatch Logs for ASG Events
+# EventBridge Target - CloudWatch Logs for ASG Events (requires LocalStack Pro)
 resource "aws_cloudwatch_event_target" "asg_logs" {
-  rule           = aws_cloudwatch_event_rule.asg_events.name
+  count          = var.enable_pro_features ? 1 : 0
+  rule           = aws_cloudwatch_event_rule.asg_events[0].name
   event_bus_name = aws_cloudwatch_event_bus.app_events.name
   target_id      = "ASGEventsLogTarget"
   arn            = aws_cloudwatch_log_group.eventbridge_logs.arn
@@ -952,42 +977,42 @@ output "database_subnet_ids" {
 
 output "load_balancer_arn" {
   description = "ARN of the load balancer"
-  value       = aws_lb.main.arn
+  value       = var.enable_pro_features ? aws_lb.main[0].arn : ""
 }
 
 output "load_balancer_dns_name" {
   description = "DNS name of the load balancer"
-  value       = aws_lb.main.dns_name
+  value       = var.enable_pro_features ? aws_lb.main[0].dns_name : ""
 }
 
 output "load_balancer_zone_id" {
   description = "Zone ID of the load balancer"
-  value       = aws_lb.main.zone_id
+  value       = var.enable_pro_features ? aws_lb.main[0].zone_id : ""
 }
 
 output "autoscaling_group_arn" {
   description = "ARN of the Auto Scaling Group"
-  value       = aws_autoscaling_group.main.arn
+  value       = var.enable_pro_features ? aws_autoscaling_group.main[0].arn : ""
 }
 
 output "autoscaling_group_name" {
   description = "Name of the Auto Scaling Group"
-  value       = aws_autoscaling_group.main.name
+  value       = var.enable_pro_features ? aws_autoscaling_group.main[0].name : ""
 }
 
 output "rds_endpoint" {
   description = "RDS instance endpoint"
-  value       = aws_db_instance.main.endpoint
+  value       = var.enable_pro_features ? aws_db_instance.main[0].endpoint : ""
 }
 
 output "rds_port" {
   description = "RDS instance port"
-  value       = aws_db_instance.main.port
+  value       = var.enable_pro_features ? aws_db_instance.main[0].port : 0
 }
 
 output "rds_instance_id" {
   description = "RDS instance ID"
-  value       = aws_db_instance.main.id
+  value       = var.enable_pro_features ? aws_db_instance.main[0].id : ""
 }
 
 output "security_group_alb_id" {
@@ -1027,22 +1052,22 @@ output "db_parameter_ssm_name" {
 
 output "efs_file_system_id" {
   description = "ID of the EFS file system"
-  value       = aws_efs_file_system.main.id
+  value       = var.enable_pro_features ? aws_efs_file_system.main[0].id : ""
 }
 
 output "efs_file_system_dns_name" {
   description = "DNS name of the EFS file system"
-  value       = aws_efs_file_system.main.dns_name
+  value       = var.enable_pro_features ? aws_efs_file_system.main[0].dns_name : ""
 }
 
 output "efs_access_point_id" {
   description = "ID of the EFS access point"
-  value       = aws_efs_access_point.app_data.id
+  value       = var.enable_pro_features ? aws_efs_access_point.app_data[0].id : ""
 }
 
 output "efs_mount_target_ids" {
   description = "IDs of the EFS mount targets"
-  value       = aws_efs_mount_target.main[*].id
+  value       = var.enable_pro_features ? aws_efs_mount_target.main[*].id : []
 }
 
 output "eventbridge_bus_name" {
@@ -1057,7 +1082,7 @@ output "eventbridge_bus_arn" {
 
 output "eventbridge_asg_rule_arn" {
   description = "ARN of the EventBridge ASG events rule"
-  value       = aws_cloudwatch_event_rule.asg_events.arn
+  value       = var.enable_pro_features ? aws_cloudwatch_event_rule.asg_events[0].arn : ""
 }
 
 output "eventbridge_app_rule_arn" {
