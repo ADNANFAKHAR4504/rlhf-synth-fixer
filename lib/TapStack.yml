@@ -107,13 +107,17 @@ Resources:
   # S3 Bucket for CloudTrail logs
   CloudTrailBucket:
     Type: AWS::S3::Bucket
+    DependsOn:
+      - DataEncryptionKey
+      - DataEncryptionKeyAlias
     Properties:
       BucketName: !Sub '${BucketPrefix}-audit-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: 'aws:kms'
-              KMSMasterKeyID: !Ref DataEncryptionKey
+              KMSMasterKeyID: !GetAtt DataEncryptionKey.Arn
+            BucketKeyEnabled: true
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
@@ -208,13 +212,16 @@ Resources:
   # Primary S3 Bucket for sensitive data storage
   SensitiveDataBucket:
     Type: AWS::S3::Bucket
+    DependsOn:
+      - DataEncryptionKey
+      - DataEncryptionKeyAlias
     Properties:
       BucketName: !Sub '${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: 'aws:kms'
-              KMSMasterKeyID: !Ref DataEncryptionKey
+              KMSMasterKeyID: !GetAtt DataEncryptionKey.Arn
             BucketKeyEnabled: true
       VersioningConfiguration:
         Status: Enabled

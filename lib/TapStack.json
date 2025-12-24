@@ -164,9 +164,13 @@
                             "ServerSideEncryptionByDefault": {
                                 "SSEAlgorithm": "aws:kms",
                                 "KMSMasterKeyID": {
-                                    "Ref": "DataEncryptionKey"
+                                    "Fn::GetAtt": [
+                                        "DataEncryptionKey",
+                                        "Arn"
+                                    ]
                                 }
-                            }
+                            },
+                            "BucketKeyEnabled": true
                         }
                     ]
                 },
@@ -210,7 +214,11 @@
                         "Value": "Audit Logs"
                     }
                 ]
-            }
+            },
+            "DependsOn": [
+                "DataEncryptionKey",
+                "DataEncryptionKeyAlias"
+            ]
         },
         "CloudTrailBucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
@@ -349,7 +357,10 @@
                             "ServerSideEncryptionByDefault": {
                                 "SSEAlgorithm": "aws:kms",
                                 "KMSMasterKeyID": {
-                                    "Ref": "DataEncryptionKey"
+                                    "Fn::GetAtt": [
+                                        "DataEncryptionKey",
+                                        "Arn"
+                                    ]
                                 }
                             },
                             "BucketKeyEnabled": true
@@ -452,7 +463,11 @@
                         "Value": "Required"
                     }
                 ]
-            }
+            },
+            "DependsOn": [
+                "DataEncryptionKey",
+                "DataEncryptionKeyAlias"
+            ]
         },
         "ReplicationBucket": {
             "Type": "AWS::S3::Bucket",
