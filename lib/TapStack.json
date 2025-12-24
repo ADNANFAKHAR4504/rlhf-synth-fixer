@@ -1,0 +1,2893 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack.yml — Production-grade, from-scratch ECS Fargate microservices stack (payment, fraud, reporting) with VPC (3 AZ), ALB + path routing, Cloud Map, autoscaling, CloudWatch logging, least-privilege security groups, and ECS Exec enabled.\n",
+    "Metadata": {
+        "TemplateName": "TapStack-ECS-Fargate",
+        "Version": "1.3",
+        "Purpose": "Multi-service containerized application orchestration for a fintech startup",
+        "Owners": "SAARZ Int. Platform Engineering"
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "prod-us",
+            "Description": "Short environment suffix appended to all resource names. Examples: prod-us, production, qa. Must match a safe naming regex to keep the stack resilient across environments.\n",
+            "AllowedPattern": "^[a-z0-9-]{3,20}$",
+            "ConstraintDescription": "Must be 3–20 chars of lowercase letters, digits, or dashes."
+        },
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.20.0.0/16",
+            "Description": "CIDR for the new VPC."
+        },
+        "PublicSubnetCidrsAz1": {
+            "Type": "String",
+            "Default": "10.20.0.0/24"
+        },
+        "PublicSubnetCidrsAz2": {
+            "Type": "String",
+            "Default": "10.20.1.0/24"
+        },
+        "PublicSubnetCidrsAz3": {
+            "Type": "String",
+            "Default": "10.20.2.0/24"
+        },
+        "PrivateSubnetCidrsAz1": {
+            "Type": "String",
+            "Default": "10.20.100.0/24"
+        },
+        "PrivateSubnetCidrsAz2": {
+            "Type": "String",
+            "Default": "10.20.101.0/24"
+        },
+        "PrivateSubnetCidrsAz3": {
+            "Type": "String",
+            "Default": "10.20.102.0/24"
+        },
+        "AcmCertificateArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "(Optional) ACM certificate ARN in us-east-1 for the HTTPS listener on the ALB. Leave blank to use HTTP only."
+        },
+        "PaymentImageUri": {
+            "Type": "String",
+            "Default": "",
+            "Description": "(Optional) ECR image URI for payment-service. Leave blank to use repo created in this stack with :latest."
+        },
+        "FraudImageUri": {
+            "Type": "String",
+            "Default": "",
+            "Description": "(Optional) ECR image URI for fraud-service. Leave blank to use repo created in this stack with :latest."
+        },
+        "ReportingImageUri": {
+            "Type": "String",
+            "Default": "",
+            "Description": "(Optional) ECR image URI for reporting-service. Leave blank to use repo created in this stack with :latest."
+        },
+        "DesiredCount": {
+            "Type": "Number",
+            "Default": 2,
+            "MinValue": 2,
+            "Description": "Minimum desired tasks per service (must be >= 2)."
+        },
+        "MaxCount": {
+            "Type": "Number",
+            "Default": 10,
+            "MinValue": 2,
+            "Description": "Maximum tasks for autoscaling per service."
+        },
+        "TargetCpuPercent": {
+            "Type": "Number",
+            "Default": 70,
+            "MinValue": 10,
+            "MaxValue": 90,
+            "Description": "Target CPU utilization percentage for autoscaling."
+        },
+        "LogRetentionDays": {
+            "Type": "Number",
+            "Default": 7,
+            "AllowedValues": [
+                1,
+                3,
+                5,
+                7,
+                14,
+                30,
+                60,
+                90,
+                120,
+                150,
+                180,
+                365,
+                400,
+                545,
+                731,
+                1827,
+                3653
+            ],
+            "Description": "CloudWatch Logs retention in days."
+        },
+        "PaymentContainerPort": {
+            "Type": "Number",
+            "Default": 8080
+        },
+        "FraudContainerPort": {
+            "Type": "Number",
+            "Default": 8081
+        },
+        "ReportingContainerPort": {
+            "Type": "Number",
+            "Default": 8082
+        },
+        "HealthCheckPathPayment": {
+            "Type": "String",
+            "Default": "/health"
+        },
+        "HealthCheckPathFraud": {
+            "Type": "String",
+            "Default": "/health"
+        },
+        "HealthCheckPathReporting": {
+            "Type": "String",
+            "Default": "/health"
+        },
+        "NamespaceName": {
+            "Type": "String",
+            "Default": "svc.local",
+            "Description": "Private DNS namespace for service discovery (Cloud Map)."
+        }
+    },
+    "Conditions": {
+        "HasCertificate": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "AcmCertificateArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasPaymentImage": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "PaymentImageUri"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasFraudImage": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "FraudImageUri"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasReportingImage": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ReportingImageUri"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Mappings": {},
+    "Resources": {
+        "Vpc": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "igw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "VpcGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "rtb-public-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetAz1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnetCidrsAz1"
+                },
+                "MapPublicIpOnLaunch": true,
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "subnet-public-az1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PublicSubnetAz2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnetCidrsAz2"
+                },
+                "MapPublicIpOnLaunch": true,
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "subnet-public-az2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PublicSubnetAz3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnetCidrsAz3"
+                },
+                "MapPublicIpOnLaunch": true,
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "subnet-public-az3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PublicSubnetAz1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetAz1"
+                }
+            }
+        },
+        "PublicSubnetAz2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetAz2"
+                }
+            }
+        },
+        "PublicSubnetAz3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetAz3"
+                }
+            }
+        },
+        "NatEipAz1": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eip-nat-az1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "NatEipAz2": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eip-nat-az2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "NatEipAz3": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "eip-nat-az3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "NatGatewayAz1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEipAz1",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetAz1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "nat-az1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "NatGatewayAz2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEipAz2",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetAz2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "nat-az2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "NatGatewayAz3": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEipAz3",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetAz3"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "nat-az3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTableAz1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "rtb-private-az1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTableAz2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "rtb-private-az2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTableAz3": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "rtb-private-az3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PrivateRouteAz1": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableAz1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGatewayAz1"
+                }
+            }
+        },
+        "PrivateRouteAz2": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableAz2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGatewayAz2"
+                }
+            }
+        },
+        "PrivateRouteAz3": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableAz3"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGatewayAz3"
+                }
+            }
+        },
+        "PrivateSubnetAz1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnetCidrsAz1"
+                },
+                "MapPublicIpOnLaunch": false,
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "subnet-private-az1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetAz2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnetCidrsAz2"
+                },
+                "MapPublicIpOnLaunch": false,
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "subnet-private-az2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetAz3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnetCidrsAz3"
+                },
+                "MapPublicIpOnLaunch": false,
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "subnet-private-az3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetAz1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableAz1"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnetAz1"
+                }
+            }
+        },
+        "PrivateSubnetAz2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableAz2"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnetAz2"
+                }
+            }
+        },
+        "PrivateSubnetAz3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableAz3"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnetAz3"
+                }
+            }
+        },
+        "EcrRepoPayment": {
+            "Type": "AWS::ECR::Repository",
+            "Properties": {
+                "RepositoryName": {
+                    "Fn::Sub": "payment-${EnvironmentSuffix}"
+                },
+                "ImageScanningConfiguration": {
+                    "ScanOnPush": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "ecr-payment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "EcrRepoFraud": {
+            "Type": "AWS::ECR::Repository",
+            "Properties": {
+                "RepositoryName": {
+                    "Fn::Sub": "fraud-${EnvironmentSuffix}"
+                },
+                "ImageScanningConfiguration": {
+                    "ScanOnPush": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "ecr-fraud-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "EcrRepoReporting": {
+            "Type": "AWS::ECR::Repository",
+            "Properties": {
+                "RepositoryName": {
+                    "Fn::Sub": "reporting-${EnvironmentSuffix}"
+                },
+                "ImageScanningConfiguration": {
+                    "ScanOnPush": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "ecr-reporting-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "AlbSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": {
+                    "Fn::Sub": "ALB SG ${EnvironmentSuffix}"
+                },
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "sg-alb-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ServicesMeshSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": {
+                    "Fn::Sub": "Shared SG for inter-service traffic ${EnvironmentSuffix}"
+                },
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "sg-mesh-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PaymentServiceSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": {
+                    "Fn::Sub": "Payment service SG ${EnvironmentSuffix}"
+                },
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "Description": "From ALB to payment",
+                        "IpProtocol": "tcp",
+                        "FromPort": {
+                            "Ref": "PaymentContainerPort"
+                        },
+                        "ToPort": {
+                            "Ref": "PaymentContainerPort"
+                        },
+                        "SourceSecurityGroupId": {
+                            "Ref": "AlbSecurityGroup"
+                        }
+                    },
+                    {
+                        "Description": "From services mesh (inter-service)",
+                        "IpProtocol": "tcp",
+                        "FromPort": {
+                            "Ref": "PaymentContainerPort"
+                        },
+                        "ToPort": {
+                            "Ref": "PaymentContainerPort"
+                        },
+                        "SourceSecurityGroupId": {
+                            "Ref": "ServicesMeshSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "sg-payment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "FraudServiceSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": {
+                    "Fn::Sub": "Fraud service SG ${EnvironmentSuffix}"
+                },
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "Description": "From ALB to fraud",
+                        "IpProtocol": "tcp",
+                        "FromPort": {
+                            "Ref": "FraudContainerPort"
+                        },
+                        "ToPort": {
+                            "Ref": "FraudContainerPort"
+                        },
+                        "SourceSecurityGroupId": {
+                            "Ref": "AlbSecurityGroup"
+                        }
+                    },
+                    {
+                        "Description": "From services mesh (inter-service)",
+                        "IpProtocol": "tcp",
+                        "FromPort": {
+                            "Ref": "FraudContainerPort"
+                        },
+                        "ToPort": {
+                            "Ref": "FraudContainerPort"
+                        },
+                        "SourceSecurityGroupId": {
+                            "Ref": "ServicesMeshSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "sg-fraud-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ReportingServiceSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": {
+                    "Fn::Sub": "Reporting service SG ${EnvironmentSuffix}"
+                },
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "Description": "From ALB to reporting",
+                        "IpProtocol": "tcp",
+                        "FromPort": {
+                            "Ref": "ReportingContainerPort"
+                        },
+                        "ToPort": {
+                            "Ref": "ReportingContainerPort"
+                        },
+                        "SourceSecurityGroupId": {
+                            "Ref": "AlbSecurityGroup"
+                        }
+                    },
+                    {
+                        "Description": "From services mesh (inter-service)",
+                        "IpProtocol": "tcp",
+                        "FromPort": {
+                            "Ref": "ReportingContainerPort"
+                        },
+                        "ToPort": {
+                            "Ref": "ReportingContainerPort"
+                        },
+                        "SourceSecurityGroupId": {
+                            "Ref": "ServicesMeshSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "sg-reporting-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "Alb": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "alb-${EnvironmentSuffix}"
+                },
+                "Scheme": "internet-facing",
+                "Type": "application",
+                "IpAddressType": "ipv4",
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnetAz1"
+                    },
+                    {
+                        "Ref": "PublicSubnetAz2"
+                    },
+                    {
+                        "Ref": "PublicSubnetAz3"
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "AlbSecurityGroup"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "alb-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PaymentTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tg-payment-${EnvironmentSuffix}"
+                },
+                "TargetType": "ip",
+                "Port": {
+                    "Ref": "PaymentContainerPort"
+                },
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "HealthCheckPath": {
+                    "Ref": "HealthCheckPathPayment"
+                },
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckPort": "traffic-port",
+                "HealthCheckIntervalSeconds": 20,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 5,
+                "Matcher": {
+                    "HttpCode": "200-399"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "tg-payment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "FraudTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tg-fraud-${EnvironmentSuffix}"
+                },
+                "TargetType": "ip",
+                "Port": {
+                    "Ref": "FraudContainerPort"
+                },
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "HealthCheckPath": {
+                    "Ref": "HealthCheckPathFraud"
+                },
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckPort": "traffic-port",
+                "HealthCheckIntervalSeconds": 20,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 5,
+                "Matcher": {
+                    "HttpCode": "200-399"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "tg-fraud-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ReportingTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tg-reporting-${EnvironmentSuffix}"
+                },
+                "TargetType": "ip",
+                "Port": {
+                    "Ref": "ReportingContainerPort"
+                },
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "HealthCheckPath": {
+                    "Ref": "HealthCheckPathReporting"
+                },
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckPort": "traffic-port",
+                "HealthCheckIntervalSeconds": 20,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 5,
+                "Matcher": {
+                    "HttpCode": "200-399"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "tg-reporting-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "AlbHttpListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "Alb"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Fn::If": [
+                            "HasCertificate",
+                            {
+                                "Type": "redirect",
+                                "RedirectConfig": {
+                                    "Protocol": "HTTPS",
+                                    "Port": "443",
+                                    "StatusCode": "HTTP_301"
+                                }
+                            },
+                            {
+                                "Type": "fixed-response",
+                                "FixedResponseConfig": {
+                                    "StatusCode": "404",
+                                    "ContentType": "text/plain",
+                                    "MessageBody": "Not Found"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "AlbHttpsListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "HasCertificate",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "Alb"
+                },
+                "Port": 443,
+                "Protocol": "HTTPS",
+                "Certificates": [
+                    {
+                        "CertificateArn": {
+                            "Ref": "AcmCertificateArn"
+                        }
+                    }
+                ],
+                "DefaultActions": [
+                    {
+                        "Type": "fixed-response",
+                        "FixedResponseConfig": {
+                            "StatusCode": "404",
+                            "ContentType": "text/plain",
+                            "MessageBody": "Not Found"
+                        }
+                    }
+                ]
+            }
+        },
+        "PaymentPathRule": {
+            "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+            "Properties": {
+                "ListenerArn": {
+                    "Fn::If": [
+                        "HasCertificate",
+                        {
+                            "Ref": "AlbHttpsListener"
+                        },
+                        {
+                            "Ref": "AlbHttpListener"
+                        }
+                    ]
+                },
+                "Priority": 10,
+                "Conditions": [
+                    {
+                        "Field": "path-pattern",
+                        "Values": [
+                            "/payment/*"
+                        ]
+                    }
+                ],
+                "Actions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "PaymentTargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "FraudPathRule": {
+            "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+            "Properties": {
+                "ListenerArn": {
+                    "Fn::If": [
+                        "HasCertificate",
+                        {
+                            "Ref": "AlbHttpsListener"
+                        },
+                        {
+                            "Ref": "AlbHttpListener"
+                        }
+                    ]
+                },
+                "Priority": 20,
+                "Conditions": [
+                    {
+                        "Field": "path-pattern",
+                        "Values": [
+                            "/fraud/*"
+                        ]
+                    }
+                ],
+                "Actions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "FraudTargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "ReportingPathRule": {
+            "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+            "Properties": {
+                "ListenerArn": {
+                    "Fn::If": [
+                        "HasCertificate",
+                        {
+                            "Ref": "AlbHttpsListener"
+                        },
+                        {
+                            "Ref": "AlbHttpListener"
+                        }
+                    ]
+                },
+                "Priority": 30,
+                "Conditions": [
+                    {
+                        "Field": "path-pattern",
+                        "Values": [
+                            "/reporting/*"
+                        ]
+                    }
+                ],
+                "Actions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ReportingTargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudMapNamespace": {
+            "Type": "AWS::ServiceDiscovery::PrivateDnsNamespace",
+            "Properties": {
+                "Name": {
+                    "Ref": "NamespaceName"
+                },
+                "Vpc": {
+                    "Ref": "Vpc"
+                },
+                "Description": {
+                    "Fn::Sub": "Private DNS namespace for ECS services - ${EnvironmentSuffix}"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "ns-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PaymentDiscoveryService": {
+            "Type": "AWS::ServiceDiscovery::Service",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-${EnvironmentSuffix}"
+                },
+                "NamespaceId": {
+                    "Ref": "CloudMapNamespace"
+                },
+                "DnsConfig": {
+                    "DnsRecords": [
+                        {
+                            "TTL": 10,
+                            "Type": "A"
+                        }
+                    ]
+                },
+                "HealthCheckCustomConfig": {
+                    "FailureThreshold": 1
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "sd-payment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "FraudDiscoveryService": {
+            "Type": "AWS::ServiceDiscovery::Service",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "fraud-${EnvironmentSuffix}"
+                },
+                "NamespaceId": {
+                    "Ref": "CloudMapNamespace"
+                },
+                "DnsConfig": {
+                    "DnsRecords": [
+                        {
+                            "TTL": 10,
+                            "Type": "A"
+                        }
+                    ]
+                },
+                "HealthCheckCustomConfig": {
+                    "FailureThreshold": 1
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "sd-fraud-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ReportingDiscoveryService": {
+            "Type": "AWS::ServiceDiscovery::Service",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "reporting-${EnvironmentSuffix}"
+                },
+                "NamespaceId": {
+                    "Ref": "CloudMapNamespace"
+                },
+                "DnsConfig": {
+                    "DnsRecords": [
+                        {
+                            "TTL": 10,
+                            "Type": "A"
+                        }
+                    ]
+                },
+                "HealthCheckCustomConfig": {
+                    "FailureThreshold": 1
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "sd-reporting-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "EcsCluster": {
+            "Type": "AWS::ECS::Cluster",
+            "Properties": {
+                "ClusterName": {
+                    "Fn::Sub": "ecs-${EnvironmentSuffix}"
+                },
+                "ClusterSettings": [
+                    {
+                        "Name": "containerInsights",
+                        "Value": "enabled"
+                    }
+                ],
+                "Configuration": {
+                    "ExecuteCommandConfiguration": {
+                        "Logging": "DEFAULT"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "ecs-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "TaskExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "ecsTaskExecutionRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ecs-exec-logs-ssm",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "SSMExecChannels",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ssmmessages:CreateControlChannel",
+                                        "ssmmessages:CreateDataChannel",
+                                        "ssmmessages:OpenControlChannel",
+                                        "ssmmessages:OpenDataChannel"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "LogsCreateAndWrite",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "ECRPullBasic",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ecr:GetAuthorizationToken",
+                                        "ecr:BatchCheckLayerAvailability",
+                                        "ecr:GetDownloadUrlForLayer",
+                                        "ecr:BatchGetImage"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "role-ecs-exec-execution-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PaymentTaskRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "paymentTaskRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "role-payment-task-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "FraudTaskRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "fraudTaskRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "role-fraud-task-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ReportingTaskRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "reportingTaskRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "role-reporting-task-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "LogGroupPayment": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/ecs/payment-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "lg-payment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "LogGroupFraud": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/ecs/fraud-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "lg-fraud-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "LogGroupReporting": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/ecs/reporting-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "lg-reporting-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PaymentTaskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Properties": {
+                "Family": {
+                    "Fn::Sub": "payment-${EnvironmentSuffix}"
+                },
+                "RequiresCompatibilities": [
+                    "FARGATE"
+                ],
+                "Cpu": "1024",
+                "Memory": "2048",
+                "NetworkMode": "awsvpc",
+                "ExecutionRoleArn": {
+                    "Fn::GetAtt": [
+                        "TaskExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "TaskRoleArn": {
+                    "Fn::GetAtt": [
+                        "PaymentTaskRole",
+                        "Arn"
+                    ]
+                },
+                "RuntimePlatform": {
+                    "CpuArchitecture": "X86_64",
+                    "OperatingSystemFamily": "LINUX"
+                },
+                "ContainerDefinitions": [
+                    {
+                        "Name": {
+                            "Fn::Sub": "payment-${EnvironmentSuffix}"
+                        },
+                        "Image": {
+                            "Fn::If": [
+                                "HasPaymentImage",
+                                {
+                                    "Ref": "PaymentImageUri"
+                                },
+                                {
+                                    "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/payment-${EnvironmentSuffix}:latest"
+                                }
+                            ]
+                        },
+                        "PortMappings": [
+                            {
+                                "ContainerPort": {
+                                    "Ref": "PaymentContainerPort"
+                                },
+                                "Protocol": "tcp"
+                            }
+                        ],
+                        "LogConfiguration": {
+                            "LogDriver": "awslogs",
+                            "Options": {
+                                "awslogs-group": {
+                                    "Ref": "LogGroupPayment"
+                                },
+                                "awslogs-region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "awslogs-stream-prefix": "ecs"
+                            }
+                        },
+                        "Essential": true,
+                        "Environment": [
+                            {
+                                "Name": "SERVICE_NAME",
+                                "Value": "payment"
+                            },
+                            {
+                                "Name": "ENV_SUFFIX",
+                                "Value": {
+                                    "Ref": "EnvironmentSuffix"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "td-payment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "FraudTaskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Properties": {
+                "Family": {
+                    "Fn::Sub": "fraud-${EnvironmentSuffix}"
+                },
+                "RequiresCompatibilities": [
+                    "FARGATE"
+                ],
+                "Cpu": "1024",
+                "Memory": "2048",
+                "NetworkMode": "awsvpc",
+                "ExecutionRoleArn": {
+                    "Fn::GetAtt": [
+                        "TaskExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "TaskRoleArn": {
+                    "Fn::GetAtt": [
+                        "FraudTaskRole",
+                        "Arn"
+                    ]
+                },
+                "RuntimePlatform": {
+                    "CpuArchitecture": "X86_64",
+                    "OperatingSystemFamily": "LINUX"
+                },
+                "ContainerDefinitions": [
+                    {
+                        "Name": {
+                            "Fn::Sub": "fraud-${EnvironmentSuffix}"
+                        },
+                        "Image": {
+                            "Fn::If": [
+                                "HasFraudImage",
+                                {
+                                    "Ref": "FraudImageUri"
+                                },
+                                {
+                                    "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/fraud-${EnvironmentSuffix}:latest"
+                                }
+                            ]
+                        },
+                        "PortMappings": [
+                            {
+                                "ContainerPort": {
+                                    "Ref": "FraudContainerPort"
+                                },
+                                "Protocol": "tcp"
+                            }
+                        ],
+                        "LogConfiguration": {
+                            "LogDriver": "awslogs",
+                            "Options": {
+                                "awslogs-group": {
+                                    "Ref": "LogGroupFraud"
+                                },
+                                "awslogs-region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "awslogs-stream-prefix": "ecs"
+                            }
+                        },
+                        "Essential": true,
+                        "Environment": [
+                            {
+                                "Name": "SERVICE_NAME",
+                                "Value": "fraud"
+                            },
+                            {
+                                "Name": "ENV_SUFFIX",
+                                "Value": {
+                                    "Ref": "EnvironmentSuffix"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "td-fraud-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ReportingTaskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Properties": {
+                "Family": {
+                    "Fn::Sub": "reporting-${EnvironmentSuffix}"
+                },
+                "RequiresCompatibilities": [
+                    "FARGATE"
+                ],
+                "Cpu": "512",
+                "Memory": "1024",
+                "NetworkMode": "awsvpc",
+                "ExecutionRoleArn": {
+                    "Fn::GetAtt": [
+                        "TaskExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "TaskRoleArn": {
+                    "Fn::GetAtt": [
+                        "ReportingTaskRole",
+                        "Arn"
+                    ]
+                },
+                "RuntimePlatform": {
+                    "CpuArchitecture": "X86_64",
+                    "OperatingSystemFamily": "LINUX"
+                },
+                "ContainerDefinitions": [
+                    {
+                        "Name": {
+                            "Fn::Sub": "reporting-${EnvironmentSuffix}"
+                        },
+                        "Image": {
+                            "Fn::If": [
+                                "HasReportingImage",
+                                {
+                                    "Ref": "ReportingImageUri"
+                                },
+                                {
+                                    "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/reporting-${EnvironmentSuffix}:latest"
+                                }
+                            ]
+                        },
+                        "PortMappings": [
+                            {
+                                "ContainerPort": {
+                                    "Ref": "ReportingContainerPort"
+                                },
+                                "Protocol": "tcp"
+                            }
+                        ],
+                        "LogConfiguration": {
+                            "LogDriver": "awslogs",
+                            "Options": {
+                                "awslogs-group": {
+                                    "Ref": "LogGroupReporting"
+                                },
+                                "awslogs-region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "awslogs-stream-prefix": "ecs"
+                            }
+                        },
+                        "Essential": true,
+                        "Environment": [
+                            {
+                                "Name": "SERVICE_NAME",
+                                "Value": "reporting"
+                            },
+                            {
+                                "Name": "ENV_SUFFIX",
+                                "Value": {
+                                    "Ref": "EnvironmentSuffix"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "td-reporting-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PaymentService": {
+            "Type": "AWS::ECS::Service",
+            "DependsOn": [
+                "PaymentPathRule"
+            ],
+            "Properties": {
+                "ServiceName": {
+                    "Fn::Sub": "payment-${EnvironmentSuffix}"
+                },
+                "Cluster": {
+                    "Ref": "EcsCluster"
+                },
+                "LaunchType": "FARGATE",
+                "DesiredCount": {
+                    "Fn::If": [
+                        "HasPaymentImage",
+                        {
+                            "Ref": "DesiredCount"
+                        },
+                        0
+                    ]
+                },
+                "EnableExecuteCommand": true,
+                "DeploymentConfiguration": {
+                    "DeploymentCircuitBreaker": {
+                        "Enable": true,
+                        "Rollback": true
+                    },
+                    "MaximumPercent": 200,
+                    "MinimumHealthyPercent": 50
+                },
+                "HealthCheckGracePeriodSeconds": 60,
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "AssignPublicIp": "DISABLED",
+                        "Subnets": [
+                            {
+                                "Ref": "PrivateSubnetAz1"
+                            },
+                            {
+                                "Ref": "PrivateSubnetAz2"
+                            },
+                            {
+                                "Ref": "PrivateSubnetAz3"
+                            }
+                        ],
+                        "SecurityGroups": [
+                            {
+                                "Ref": "PaymentServiceSecurityGroup"
+                            },
+                            {
+                                "Ref": "ServicesMeshSecurityGroup"
+                            }
+                        ]
+                    }
+                },
+                "TaskDefinition": {
+                    "Ref": "PaymentTaskDefinition"
+                },
+                "LoadBalancers": [
+                    {
+                        "TargetGroupArn": {
+                            "Ref": "PaymentTargetGroup"
+                        },
+                        "ContainerName": {
+                            "Fn::Sub": "payment-${EnvironmentSuffix}"
+                        },
+                        "ContainerPort": {
+                            "Ref": "PaymentContainerPort"
+                        }
+                    }
+                ],
+                "ServiceRegistries": [
+                    {
+                        "RegistryArn": {
+                            "Fn::GetAtt": [
+                                "PaymentDiscoveryService",
+                                "Arn"
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "svc-payment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "FraudService": {
+            "Type": "AWS::ECS::Service",
+            "DependsOn": [
+                "FraudPathRule"
+            ],
+            "Properties": {
+                "ServiceName": {
+                    "Fn::Sub": "fraud-${EnvironmentSuffix}"
+                },
+                "Cluster": {
+                    "Ref": "EcsCluster"
+                },
+                "LaunchType": "FARGATE",
+                "DesiredCount": {
+                    "Fn::If": [
+                        "HasFraudImage",
+                        {
+                            "Ref": "DesiredCount"
+                        },
+                        0
+                    ]
+                },
+                "EnableExecuteCommand": true,
+                "DeploymentConfiguration": {
+                    "DeploymentCircuitBreaker": {
+                        "Enable": true,
+                        "Rollback": true
+                    },
+                    "MaximumPercent": 200,
+                    "MinimumHealthyPercent": 50
+                },
+                "HealthCheckGracePeriodSeconds": 60,
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "AssignPublicIp": "DISABLED",
+                        "Subnets": [
+                            {
+                                "Ref": "PrivateSubnetAz1"
+                            },
+                            {
+                                "Ref": "PrivateSubnetAz2"
+                            },
+                            {
+                                "Ref": "PrivateSubnetAz3"
+                            }
+                        ],
+                        "SecurityGroups": [
+                            {
+                                "Ref": "FraudServiceSecurityGroup"
+                            },
+                            {
+                                "Ref": "ServicesMeshSecurityGroup"
+                            }
+                        ]
+                    }
+                },
+                "TaskDefinition": {
+                    "Ref": "FraudTaskDefinition"
+                },
+                "LoadBalancers": [
+                    {
+                        "TargetGroupArn": {
+                            "Ref": "FraudTargetGroup"
+                        },
+                        "ContainerName": {
+                            "Fn::Sub": "fraud-${EnvironmentSuffix}"
+                        },
+                        "ContainerPort": {
+                            "Ref": "FraudContainerPort"
+                        }
+                    }
+                ],
+                "ServiceRegistries": [
+                    {
+                        "RegistryArn": {
+                            "Fn::GetAtt": [
+                                "FraudDiscoveryService",
+                                "Arn"
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "svc-fraud-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ReportingService": {
+            "Type": "AWS::ECS::Service",
+            "DependsOn": [
+                "ReportingPathRule"
+            ],
+            "Properties": {
+                "ServiceName": {
+                    "Fn::Sub": "reporting-${EnvironmentSuffix}"
+                },
+                "Cluster": {
+                    "Ref": "EcsCluster"
+                },
+                "LaunchType": "FARGATE",
+                "DesiredCount": {
+                    "Fn::If": [
+                        "HasReportingImage",
+                        {
+                            "Ref": "DesiredCount"
+                        },
+                        0
+                    ]
+                },
+                "EnableExecuteCommand": true,
+                "DeploymentConfiguration": {
+                    "DeploymentCircuitBreaker": {
+                        "Enable": true,
+                        "Rollback": true
+                    },
+                    "MaximumPercent": 200,
+                    "MinimumHealthyPercent": 50
+                },
+                "HealthCheckGracePeriodSeconds": 60,
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "AssignPublicIp": "DISABLED",
+                        "Subnets": [
+                            {
+                                "Ref": "PrivateSubnetAz1"
+                            },
+                            {
+                                "Ref": "PrivateSubnetAz2"
+                            },
+                            {
+                                "Ref": "PrivateSubnetAz3"
+                            }
+                        ],
+                        "SecurityGroups": [
+                            {
+                                "Ref": "ReportingServiceSecurityGroup"
+                            },
+                            {
+                                "Ref": "ServicesMeshSecurityGroup"
+                            }
+                        ]
+                    }
+                },
+                "TaskDefinition": {
+                    "Ref": "ReportingTaskDefinition"
+                },
+                "LoadBalancers": [
+                    {
+                        "TargetGroupArn": {
+                            "Ref": "ReportingTargetGroup"
+                        },
+                        "ContainerName": {
+                            "Fn::Sub": "reporting-${EnvironmentSuffix}"
+                        },
+                        "ContainerPort": {
+                            "Ref": "ReportingContainerPort"
+                        }
+                    }
+                ],
+                "ServiceRegistries": [
+                    {
+                        "RegistryArn": {
+                            "Fn::GetAtt": [
+                                "ReportingDiscoveryService",
+                                "Arn"
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "svc-reporting-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "PaymentScalableTarget": {
+            "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+            "Properties": {
+                "MaxCapacity": {
+                    "Ref": "MaxCount"
+                },
+                "MinCapacity": {
+                    "Ref": "DesiredCount"
+                },
+                "ResourceId": {
+                    "Fn::Sub": "service/${EcsCluster}/${PaymentService.Name}"
+                },
+                "ScalableDimension": "ecs:service:DesiredCount",
+                "ServiceNamespace": "ecs"
+            }
+        },
+        "FraudScalableTarget": {
+            "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+            "Properties": {
+                "MaxCapacity": {
+                    "Ref": "MaxCount"
+                },
+                "MinCapacity": {
+                    "Ref": "DesiredCount"
+                },
+                "ResourceId": {
+                    "Fn::Sub": "service/${EcsCluster}/${FraudService.Name}"
+                },
+                "ScalableDimension": "ecs:service:DesiredCount",
+                "ServiceNamespace": "ecs"
+            }
+        },
+        "ReportingScalableTarget": {
+            "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+            "Properties": {
+                "MaxCapacity": {
+                    "Ref": "MaxCount"
+                },
+                "MinCapacity": {
+                    "Ref": "DesiredCount"
+                },
+                "ResourceId": {
+                    "Fn::Sub": "service/${EcsCluster}/${ReportingService.Name}"
+                },
+                "ScalableDimension": "ecs:service:DesiredCount",
+                "ServiceNamespace": "ecs"
+            }
+        },
+        "PaymentScalingPolicyCpu": {
+            "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "cpu-policy-payment-${EnvironmentSuffix}"
+                },
+                "PolicyType": "TargetTrackingScaling",
+                "ScalingTargetId": {
+                    "Ref": "PaymentScalableTarget"
+                },
+                "TargetTrackingScalingPolicyConfiguration": {
+                    "TargetValue": {
+                        "Ref": "TargetCpuPercent"
+                    },
+                    "PredefinedMetricSpecification": {
+                        "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
+                    },
+                    "ScaleInCooldown": 60,
+                    "ScaleOutCooldown": 60
+                }
+            }
+        },
+        "FraudScalingPolicyCpu": {
+            "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "cpu-policy-fraud-${EnvironmentSuffix}"
+                },
+                "PolicyType": "TargetTrackingScaling",
+                "ScalingTargetId": {
+                    "Ref": "FraudScalableTarget"
+                },
+                "TargetTrackingScalingPolicyConfiguration": {
+                    "TargetValue": {
+                        "Ref": "TargetCpuPercent"
+                    },
+                    "PredefinedMetricSpecification": {
+                        "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
+                    },
+                    "ScaleInCooldown": 60,
+                    "ScaleOutCooldown": 60
+                }
+            }
+        },
+        "ReportingScalingPolicyCpu": {
+            "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "cpu-policy-reporting-${EnvironmentSuffix}"
+                },
+                "PolicyType": "TargetTrackingScaling",
+                "ScalingTargetId": {
+                    "Ref": "ReportingScalableTarget"
+                },
+                "TargetTrackingScalingPolicyConfiguration": {
+                    "TargetValue": {
+                        "Ref": "TargetCpuPercent"
+                    },
+                    "PredefinedMetricSpecification": {
+                        "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
+                    },
+                    "ScaleInCooldown": 60,
+                    "ScaleOutCooldown": 60
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "VpcId": {
+            "Description": "VPC Id",
+            "Value": {
+                "Ref": "Vpc"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "VpcId-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PrivateSubnetIds": {
+            "Description": "Private subnet Ids (AZ1, AZ2, AZ3)",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PrivateSubnetAz1"
+                        },
+                        {
+                            "Ref": "PrivateSubnetAz2"
+                        },
+                        {
+                            "Ref": "PrivateSubnetAz3"
+                        }
+                    ]
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "PrivateSubnetIds-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PublicSubnetIds": {
+            "Description": "Public subnet Ids (AZ1, AZ2, AZ3)",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PublicSubnetAz1"
+                        },
+                        {
+                            "Ref": "PublicSubnetAz2"
+                        },
+                        {
+                            "Ref": "PublicSubnetAz3"
+                        }
+                    ]
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "PublicSubnetIds-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "AlbArn": {
+            "Description": "ALB ARN",
+            "Value": {
+                "Ref": "Alb"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "AlbArn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "AlbDnsName": {
+            "Description": "ALB DNS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "Alb",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "AlbDnsName-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ClusterName": {
+            "Description": "ECS Cluster name",
+            "Value": {
+                "Ref": "EcsCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "ClusterName-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "CloudMapNamespaceId": {
+            "Description": "Cloud Map Namespace Id",
+            "Value": {
+                "Ref": "CloudMapNamespace"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "CloudMapNamespaceId-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "CloudMapNamespaceName": {
+            "Description": "Cloud Map Namespace name",
+            "Value": {
+                "Ref": "NamespaceName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "CloudMapNamespaceName-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PaymentServiceName": {
+            "Description": "ECS Service name (payment)",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PaymentService",
+                    "Name"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "PaymentServiceName-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "FraudServiceName": {
+            "Description": "ECS Service name (fraud)",
+            "Value": {
+                "Fn::GetAtt": [
+                    "FraudService",
+                    "Name"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "FraudServiceName-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ReportingServiceName": {
+            "Description": "ECS Service name (reporting)",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ReportingService",
+                    "Name"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "ReportingServiceName-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PaymentServiceDiscoveryName": {
+            "Description": "Cloud Map service (payment)",
+            "Value": {
+                "Ref": "PaymentDiscoveryService"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "PaymentServiceDiscovery-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "FraudServiceDiscoveryName": {
+            "Description": "Cloud Map service (fraud)",
+            "Value": {
+                "Ref": "FraudDiscoveryService"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "FraudServiceDiscovery-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ReportingServiceDiscoveryName": {
+            "Description": "Cloud Map service (reporting)",
+            "Value": {
+                "Ref": "ReportingDiscoveryService"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "ReportingServiceDiscovery-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PaymentTargetGroupArn": {
+            "Description": "Payment target group ARN",
+            "Value": {
+                "Ref": "PaymentTargetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "PaymentTgArn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "FraudTargetGroupArn": {
+            "Description": "Fraud target group ARN",
+            "Value": {
+                "Ref": "FraudTargetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "FraudTgArn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ReportingTargetGroupArn": {
+            "Description": "Reporting target group ARN",
+            "Value": {
+                "Ref": "ReportingTargetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "ReportingTgArn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "LogGroupPaymentOut": {
+            "Description": "Log group for payment service",
+            "Value": {
+                "Ref": "LogGroupPayment"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "LogPayment-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "LogGroupFraudOut": {
+            "Description": "Log group for fraud service",
+            "Value": {
+                "Ref": "LogGroupFraud"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "LogFraud-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "LogGroupReportingOut": {
+            "Description": "Log group for reporting service",
+            "Value": {
+                "Ref": "LogGroupReporting"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "LogReporting-${EnvironmentSuffix}"
+                }
+            }
+        }
+    }
+}
