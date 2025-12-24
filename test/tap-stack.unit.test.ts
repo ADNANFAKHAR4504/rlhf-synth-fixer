@@ -493,7 +493,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       const paramGroup = template.Resources.DBParameterGroup;
       expect(paramGroup).toBeDefined();
       expect(paramGroup.Type).toBe('AWS::RDS::DBParameterGroup');
-      expect(paramGroup.Properties.Family).toBe('postgres14');
+      expect(paramGroup.Properties.Family).toBe('postgres17');
     });
 
     test('should have DB password secret', () => {
@@ -527,7 +527,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
     test('DB instance should have correct engine configuration', () => {
       const db = template.Resources.DBInstance;
       expect(db.Properties.Engine).toBe('postgres');
-      expect(db.Properties.EngineVersion).toBe('14');
+      expect(db.Properties.EngineVersion).toBe('17.6');
     });
 
     test('DB instance should use Secrets Manager for password', () => {
