@@ -164,7 +164,7 @@ Resources:
               - kms:ReEncryptTo
               - kms:GenerateDataKey
               - kms:GenerateDataKeyWithoutPlaintext
-            Resource: '*'
+            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
           - Sid: Allow use of the key for S3
             Effect: Allow
             Principal:
@@ -177,7 +177,7 @@ Resources:
               - kms:GenerateDataKey
               - kms:GenerateDataKeyWithoutPlaintext
               - kms:DescribeKey
-            Resource: '*'
+            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
       Tags:
         - { Key: Environment, Value: !Ref EnvironmentParameter }
         - { Key: ProjectName, Value: !Ref ProjectName }
@@ -339,6 +339,65 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PrivateSubnet2
 
+  # -------------------- VPC Flow Logs --------------------
+  VPCFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-vpc-flow-logs-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/flowlogs/*'
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: Service, Value: Security }
+
+  VPCFlowLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${ProjectName}-${Environment}'
+      RetentionInDays: 30
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: Service, Value: Security }
+
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceIds:
+        - !Ref VPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref VPCFlowLogsLogGroup
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-vpc-flow-log' }
+        - { Key: Environment, Value: !Ref EnvironmentParameter }
+        - { Key: ProjectName, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+        - { Key: Service, Value: Security }
+
   # -------------------- Security Groups --------------------
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -349,7 +408,7 @@ Resources:
         - { IpProtocol: tcp, FromPort: 80,  ToPort: 80,  CidrIp: 0.0.0.0/0 }
         - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
       SecurityGroupEgress:
-        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, DestinationSecurityGroupId: !Ref EC2SecurityGroup, Description: 'Allow ALB to communicate with EC2 on port 80' }
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-alb-sg' }
         - { Key: Environment, Value: !Ref EnvironmentParameter }
@@ -368,7 +427,9 @@ Resources:
         - { IpProtocol: tcp, FromPort: 80, ToPort: 80, SourceSecurityGroupId: !Ref ALBSecurityGroup }
         - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref AllowedCIDR }
       SecurityGroupEgress:
-        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0, Description: 'Allow HTTP for package updates' }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: 'Allow HTTPS for package updates' }
+        - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, DestinationSecurityGroupId: !Ref RDSSecurityGroup, Description: 'Allow EC2 to connect to RDS' }
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-ec2-sg' }
         - { Key: Environment, Value: !Ref EnvironmentParameter }
@@ -384,7 +445,8 @@ Resources:
       GroupDescription: Security group for Lambda functions
       VpcId: !Ref VPC
       SecurityGroupEgress:
-        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: 'Allow HTTPS for S3 and SSM access' }
+        - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, DestinationSecurityGroupId: !Ref RDSSecurityGroup, Description: 'Allow Lambda to connect to RDS' }
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-lambda-sg' }
         - { Key: Environment, Value: !Ref EnvironmentParameter }
@@ -402,8 +464,6 @@ Resources:
       SecurityGroupIngress:
         - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref LambdaSecurityGroup, Description: 'Allow Lambda access to RDS' }
         - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref EC2SecurityGroup, Description: 'Allow EC2 access to RDS' }
-      SecurityGroupEgress:
-        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-rds-sg' }
         - { Key: Environment, Value: !Ref EnvironmentParameter }
@@ -418,18 +478,18 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub '${SSMParameterPrefix}/database/password'
-      Type: String
+      Type: SecureString
       Value: ChangeMe123!
-      Description: Database password
+      Description: Database password (encrypted)
       Tags: { Environment: !Ref Environment, ProjectName: !Ref ProjectName }
 
   APIKeyParameter:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub '${SSMParameterPrefix}/api/key'
-      Type: String
+      Type: SecureString
       Value: api-key-placeholder
-      Description: API key for external services
+      Description: API key for external services (encrypted)
       Tags: { Environment: !Ref Environment, ProjectName: !Ref ProjectName }
 
   # -------------------- S3 Buckets --------------------
