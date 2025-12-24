@@ -929,7 +929,8 @@ Resources:
         Origins:
           - Id: AppDataBucketOrigin
             DomainName: !GetAtt AppDataBucket.RegionalDomainName
-            S3OriginConfig: {}
+            S3OriginConfig:
+              OriginAccessIdentity: ''
             OriginAccessControlId: !Ref CloudFrontOriginAccessControl
         DefaultCacheBehavior:
           TargetOriginId: AppDataBucketOrigin
