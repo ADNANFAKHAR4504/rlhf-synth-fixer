@@ -59,7 +59,7 @@ Create a multi-stage CI/CD pipeline using **CloudFormation with yaml** that hand
 - Use **KMS** for artifact encryption
 - Use **EventBridge** for state change notifications
 - Use **IAM** for cross-account role configuration
-- Resource names must include **environmentSuffix** for uniqueness
+- All resource names must include environmentSuffix for uniqueness
 - Follow naming convention: resource-type-environment-suffix
 - Deploy to **us-east-1** region
 
@@ -95,7 +95,7 @@ Create a multi-stage CI/CD pipeline using **CloudFormation with yaml** that hand
 - **Performance**: Build and test stages complete efficiently, artifact management is optimized
 - **Reliability**: Pipeline handles failures gracefully, state changes are properly tracked
 - **Security**: Artifacts are encrypted, cross-account access is properly scoped, IAM follows least privilege with specific actions
-- **Resource Naming**: All resources include environmentSuffix in their names
+- Resource Naming: All resources include environmentSuffix in their names
 - **Code Quality**: Clean yaml, well-structured, properly documented with deployment instructions
 
 ## What to deliver
