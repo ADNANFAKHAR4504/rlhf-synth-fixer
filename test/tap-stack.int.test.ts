@@ -37,7 +37,24 @@ import {
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
-const stackName = `TapStack${environmentSuffix}`;
+
+// For LocalStack PRs deployed to AWS, the stack name is 'localstack-stack-${suffix}'
+// For regular AWS deployments, use 'TapStack${suffix}'
+// Detect LocalStack PR by checking if metadata.json has provider=localstack
+let stackName = `TapStack${environmentSuffix}`;
+try {
+  const metadataPath = require('path').join(__dirname, '..', 'metadata.json');
+  const metadata = require('fs').existsSync(metadataPath)
+    ? require('fs').readFileSync(metadataPath, 'utf-8')
+    : '{}';
+  const metadataJson = JSON.parse(metadata);
+  if (metadataJson.provider === 'localstack') {
+    stackName = `localstack-stack-${environmentSuffix}`;
+  }
+} catch (error) {
+  // If metadata.json doesn't exist or can't be read, use default TapStack naming
+  console.log('Could not read metadata.json, using default stack naming');
+}
 
 // LocalStack endpoint configuration
 const localstackEndpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
