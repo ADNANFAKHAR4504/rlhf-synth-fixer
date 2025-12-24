@@ -91,7 +91,7 @@ variable "frontend_instance_type" {
   default     = "t3.large"
 
   validation {
-    condition     = can(regex("^[a-z][0-9][a-z]?\\.[a-z]+$", var.frontend_instance_type))
+    condition     = can(regex("^[a-z][0-9][a-z]?\\.[a-z0-9]+$", var.frontend_instance_type))
     error_message = "Instance type must be valid AWS EC2 instance type format (e.g., t3.large, m5.xlarge)."
   }
 }
@@ -102,7 +102,7 @@ variable "backend_instance_type" {
   default     = "m5.xlarge"
 
   validation {
-    condition     = can(regex("^[a-z][0-9][a-z]?\\.[a-z]+$", var.backend_instance_type))
+    condition     = can(regex("^[a-z][0-9][a-z]?\\.[a-z0-9]+$", var.backend_instance_type))
     error_message = "Instance type must be valid AWS EC2 instance type format (e.g., t3.large, m5.xlarge)."
   }
 }
@@ -113,7 +113,7 @@ variable "data_processing_instance_type" {
   default     = "c5.2xlarge"
 
   validation {
-    condition     = can(regex("^[a-z][0-9][a-z]?\\.[a-z]+$", var.data_processing_instance_type))
+    condition     = can(regex("^[a-z][0-9][a-z]?\\.[a-z0-9]+$", var.data_processing_instance_type))
     error_message = "Instance type must be valid AWS EC2 instance type format (e.g., t3.large, m5.xlarge)."
   }
 }
