@@ -48,7 +48,8 @@ describe('TapStack CloudFormation Template', () => {
         'DBName',
         'DBUser',
         'KeyPairName',
-        'EnableRDS'
+        'EnableRDS',
+        'EC2ImageId'
       ];
 
       expectedParameters.forEach(paramName => {
@@ -87,10 +88,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(enableRDSParam.AllowedValues).toContain('false');
     });
 
-    test('should have AMI mappings for EC2', () => {
-      expect(template.Mappings).toBeDefined();
-      expect(template.Mappings.RegionAMI).toBeDefined();
-      expect(template.Mappings.RegionAMI['us-east-1'].HVM64).toBeDefined();
+    test('EC2ImageId parameter should have correct properties', () => {
+      const amiParam = template.Parameters.EC2ImageId;
+      expect(amiParam.Type).toBe('AWS::EC2::Image::Id');
+      expect(amiParam.Default).toBe('ami-0c55b159cbfafe1f0');
     });
   });
 
@@ -265,9 +266,8 @@ describe('TapStack CloudFormation Template', () => {
       const props = ec2.Properties;
       expect(props.InstanceType).toBe('t3.micro');
       expect(props.Monitoring).toBe(true);
-      // ImageId uses Fn::FindInMap to lookup AMI from Mappings
-      expect(props.ImageId['Fn::FindInMap']).toBeDefined();
-      expect(props.ImageId['Fn::FindInMap'][0]).toBe('RegionAMI');
+      // ImageId uses Ref to EC2ImageId parameter
+      expect(props.ImageId.Ref).toBe('EC2ImageId');
     });
 
     test('should have conditional key pair assignment', () => {
@@ -399,7 +399,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6); // Updated count
+      expect(parameterCount).toBe(7); // Updated count for EC2ImageId
     });
 
     test('should have correct number of outputs', () => {
