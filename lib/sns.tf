@@ -89,12 +89,6 @@ resource "aws_db_event_subscription" "primary" {
     "notification",
     "maintenance"
   ]
-
-  tags = {
-    Name        = "event-sub-primary-${var.environment_suffix}"
-    Environment = "production"
-    DR-Tier     = "critical"
-  }
 }
 
 # Dead Letter Queue for secondary SNS
@@ -188,10 +182,4 @@ resource "aws_db_event_subscription" "secondary" {
     "notification",
     "maintenance"
   ]
-
-  tags = {
-    Name        = "event-sub-secondary-${var.environment_suffix}"
-    Environment = "production"
-    DR-Tier     = "critical"
-  }
 }
