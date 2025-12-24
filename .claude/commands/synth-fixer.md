@@ -170,7 +170,7 @@ Pulumi.yaml   ← Pulumi settings
 {
   "team": "synth",          // ⚠️ ONLY "synth" - nothing else!
   "provider": "localstack", // ALWAYS "localstack"
-  "wave": "P0"              // ⚠️ ALWAYS "P0" - required field
+  "wave": "P1"              // ⚠️ ALWAYS "P1" - required field
 }
 ```
 
@@ -182,10 +182,10 @@ Pulumi.yaml   ← Pulumi settings
 | | Any number or synth-X format |
 
 **Wave Rule (NEW!):**
-| ✅ Valid | ❌ Invalid (add "P0" default) |
+| ✅ Valid | ❌ Invalid (add "P1" default) |
 |----------|------------------------------|
-| `"P0"` | Missing field |
-| `"P1"` | Any other value |
+| `"P1"` | Missing field |
+| | Any other value |
 
 ## Process
 
