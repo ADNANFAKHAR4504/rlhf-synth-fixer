@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr912",
+  "team": "synth-2",
+  "startedAt": "2025-08-20T12:59:17+00:00",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Access Control",
+    "Network Configuration",
+    "Monitoring Setup",
+    "Performance Optimization"
+  ],
+  "aws_services": [
+    "AWS::KMS",
+    "AWS::EC2",
+    "AWS::IAM",
+    "AWS::Logs",
+    "AWS::S3",
+    "AWS::Lambda",
+    "AWS::CloudTrail",
+    "AWS::Config",
+    "AWS::GuardDuty",
+    "AWS::SecurityHub"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr1787"
+  }
+}
