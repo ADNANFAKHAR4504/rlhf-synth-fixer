@@ -778,3 +778,39 @@ The infrastructure includes comprehensive monitoring with CloudWatch alarms for:
 - RDS instance can be scaled based on demand
 - Auto Scaling Group helps optimize costs during low traffic periods
 - All resources are properly tagged for cost allocation
+
+## Testing
+
+### Unit Tests
+
+Unit tests validate the Terraform configuration structure and syntax. They are run locally with `npm run test:unit` and verify:
+- All required variables are defined with proper defaults
+- Security groups have correct configurations
+- IAM roles and policies are properly structured
+- Resources use proper naming conventions with environment suffix
+- LocalStack compatibility with conditional resource creation
+
+### Integration Tests
+
+Integration tests validate deployed resources in LocalStack or AWS. Key features:
+
+- **Multi-path output file support**: Checks `cfn-outputs/`, `cdk-outputs/`, and root-level paths
+- **Graceful error handling**: Handles LocalStack-specific limitations with Secrets Manager
+- **Flexible assertions**: Security group lookups filter by specific GroupId
+- **LocalStack mode detection**: Skips tests for unsupported resources (ALB, RDS, ASG)
+
+The integration tests are located at `test/terraform.int.test.ts` and validate:
+- VPC and subnet creation across multiple availability zones
+- Security group rules follow least privilege principle
+- IAM roles have proper assume role policies
+- CloudWatch Log Groups and Alarms are configured correctly
+- Secrets Manager secrets are created for database passwords
+- Resource tagging meets production requirements
+
+### LocalStack Compatibility
+
+The infrastructure supports LocalStack deployment for local testing:
+- `localstack_mode` variable enables conditional resource creation
+- Resources not supported by LocalStack Community Edition (ELBv2, RDS, ASG) are skipped
+- Security groups, IAM roles, VPC, and CloudWatch resources are always created
+- Outputs provide placeholder values for skipped resources
