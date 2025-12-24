@@ -6,11 +6,19 @@
   "po_id": "LS-291912",
   "team": "synth-2",
   "startedAt": "2025-08-06T16:38:12.065Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "KMS",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
   "wave": "P0"
 }
