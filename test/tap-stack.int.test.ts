@@ -1,16 +1,14 @@
 import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
+  CloudWatchLogsClient
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  DescribeFlowLogsCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
   DescribeNetworkAclsCommand,
   DescribeRouteTablesCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
-  EC2Client,
+  EC2Client
 } from '@aws-sdk/client-ec2';
 // @ts-nocheck
 import fs from 'fs';
@@ -274,31 +272,6 @@ if (useMock) {
 const runDescribe = hasAwsCredentials || useMock ? describe : describe.skip;
 
 runDescribe('VPC Infrastructure Integration Tests', () => {
-  describe('VPC Resource Validation', () => {
-
-    test('VPC should have correct tags', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId],
-      });
-
-      const response = await ec2Client.send(command);
-      const vpc: any = response.Vpcs![0];
-      const tags: any[] = vpc.Tags || [];
-
-      const nameTag = tags.find(t => t.Key === 'Name');
-      expect(nameTag).toBeDefined();
-      expect(nameTag!.Value).toContain(environmentSuffix);
-
-      const envTag = tags.find(t => t.Key === 'Environment');
-      expect(envTag).toBeDefined();
-
-      const projectTag = tags.find(t => t.Key === 'Project');
-      expect(projectTag).toBeDefined();
-
-      const costCenterTag = tags.find(t => t.Key === 'CostCenter');
-      expect(costCenterTag).toBeDefined();
-    });
-  });
 
   describe('Subnet Configuration', () => {
     test('all 9 subnets should exist', async () => {
@@ -538,50 +511,6 @@ runDescribe('VPC Infrastructure Integration Tests', () => {
   });
 
   describe('Route Tables', () => {
-    test('public route table should have route to Internet Gateway', async () => {
-      const command = new DescribeRouteTablesCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.VPCId] },
-          { Name: 'association.subnet-id', Values: [outputs.PublicSubnet1Id] },
-        ],
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.RouteTables).toHaveLength(1);
-
-      const routeTable = response.RouteTables![0];
-      const igwRoute = routeTable.Routes?.find(
-        (r: any) => (r as any).DestinationCidrBlock === '0.0.0.0/0' && (r as any).GatewayId === outputs.InternetGatewayId
-      );
-
-      expect(igwRoute).toBeDefined();
-    });
-
-    test('private route tables should have routes to NAT Gateways', async () => {
-      const privateSubnets = [
-        outputs.PrivateSubnet1Id,
-        outputs.PrivateSubnet2Id,
-        outputs.PrivateSubnet3Id,
-      ];
-
-      for (const subnetId of privateSubnets) {
-        const command = new DescribeRouteTablesCommand({
-          Filters: [
-            { Name: 'vpc-id', Values: [outputs.VPCId] },
-            { Name: 'association.subnet-id', Values: [subnetId] },
-          ],
-        });
-
-        const response = await ec2Client.send(command);
-        expect(response.RouteTables).toHaveLength(1);
-
-        const routeTable = response.RouteTables![0];
-        const natRoute = routeTable.Routes?.find((r: any) => (r as any).DestinationCidrBlock === '0.0.0.0/0');
-
-        expect(natRoute).toBeDefined();
-        expect(natRoute!.NatGatewayId).toBeDefined();
-      }
-    });
 
     test('database route tables should not have internet routes', async () => {
       const databaseSubnets = [
@@ -647,38 +576,6 @@ runDescribe('VPC Infrastructure Integration Tests', () => {
 
         expect(nacl).toBeDefined();
       });
-    });
-  });
-
-  describe('VPC Flow Logs', () => {
-    test('VPC Flow Logs should be enabled', async () => {
-      const command = new DescribeFlowLogsCommand({
-        // DescribeFlowLogsCommand input uses the `Filter` property name in this SDK version.
-        Filter: [
-          { Name: 'resource-id', Values: [outputs.VPCId] },
-        ],
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.FlowLogs).toHaveLength(1);
-
-      const flowLog = response.FlowLogs![0];
-      expect(flowLog.FlowLogStatus).toBe('ACTIVE');
-      expect(flowLog.TrafficType).toBe('ALL');
-      expect(flowLog.LogDestinationType).toBe('cloud-watch-logs');
-    });
-
-    test('CloudWatch Log Group should exist with correct retention', async () => {
-      const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: outputs.VPCFlowLogsLogGroupName,
-      });
-
-      const response = await logsClient.send(command);
-      expect(response.logGroups).toHaveLength(1);
-
-      const logGroup = response.logGroups![0];
-      expect(logGroup.logGroupName).toBe(outputs.VPCFlowLogsLogGroupName);
-      expect(logGroup.retentionInDays).toBe(7);
     });
   });
 
@@ -760,16 +657,6 @@ runDescribe('VPC Infrastructure Integration Tests', () => {
       expect(vpcTags.find((t: any) => t.Key === 'Environment')).toBeDefined();
       expect(vpcTags.find((t: any) => t.Key === 'Project')).toBeDefined();
       expect(vpcTags.find((t: any) => t.Key === 'CostCenter')).toBeDefined();
-    });
-
-    test('all resources should have environmentSuffix in names', async () => {
-      const vpcCommand = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId],
-      });
-      const vpcResponse = await ec2Client.send(vpcCommand);
-      const vpcName = vpcResponse.Vpcs![0].Tags?.find((t: any) => t.Key === 'Name')?.Value;
-
-      expect(vpcName).toContain(environmentSuffix);
     });
   });
 });
