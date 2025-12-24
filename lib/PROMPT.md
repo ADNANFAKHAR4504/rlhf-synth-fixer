@@ -1,56 +1,42 @@
-## CDK Stack for AWS Infrastructure
+Need to build out our AWS infrastructure using CDK for multiple environments. We're running dev, staging, and prod in separate accounts under one org, all in us-west-2.
 
-Your task is to act as a senior cloud infrastructure engineer specializing in secure, scalable, and reusable AWS deployments using with CDK
+Here's what we need set up:
 
-**Environment Overview:**  
-Your organization manages multiple AWS accounts within a single AWS Organization, each representing a stage of the application lifecycle: development, staging, and production. All resources are provisioned in the `us-west-2` region. Required resources include VPCs, IAM roles, S3 buckets, and other essential AWS components.
+**VPC Setup**
+- Need a VPC with 10.0.0.0/16 CIDR
+- Make sure it follows standard security practices for network isolation
 
-**Requirements:**
+**IAM Permissions**
+- All roles need to follow least privilege - only give what's actually needed
+- No wildcard actions or resources in IAM policies - specify exact S3 bucket ARNs and specific actions like s3:GetObject, s3:PutObject
+- Don't want any overly broad permissions floating around
 
-1. **VPC Creation:**  
-   - Deploy a VPC with a CIDR block of `10.0.0.0/16`.
-   - Ensure VPC configuration supports common best practices for isolation and security.
+**Tagging Strategy**
+- Everything needs Environment, Owner, and Project tags so we can track costs and know who owns what
 
-2. **IAM Security:**  
-   - Implement IAM roles with least privilege, granting only necessary permissions for each resource.
-   - No excessive privileges are permitted.
+**S3 Security**
+- All buckets must be encrypted at rest using KMS
+- The Lambda functions will need to read/write to these buckets so make sure the IAM roles allow that
 
-3. **Resource Tagging:**  
-   - Tag all AWS resources with `Environment`, `Owner`, and `Project` for governance and cost tracking.
+**Audit Logging**
+- Turn on CloudTrail to capture all API calls across the account
+- CloudTrail logs should go to a dedicated S3 bucket that only audit team can access
 
-4. **S3 Encryption:**  
-   - Use AWS Key Management Service (KMS) to encrypt all S3 buckets at rest.
+**Code Organization**
+- Keep the CDK code modular so we can reuse components
+- Don't want duplicate code all over the place
 
-5. **API Logging:**  
-   - Enable AWS CloudTrail to log all AWS API calls for compliance and auditing.
+**Dynamic Configuration**
+- Use variables for things like environment names and bucket lists so we can easily add more later
+- Should be easy to spin up a new environment without copying/pasting code
 
-6. **Modular Structure:**  
-   - Organize the configuration for to allow reuse.
-   - Ensure modules are clean, maintainable, and adhere to the DRY (Don't Repeat Yourself) principle.
+**Security Requirements**
+- Follow AWS security best practices for IAM, networking, encryption, logging, and secrets
+- Never hardcode credentials or sensitive data
 
-7. **Dynamic Resource Creation:**  
-   - Use CDK to dynamically create resources based on input variables (e.g., accounts, environments, bucket lists).
+**Service Connectivity**
+- Lambda functions need to access S3 buckets through VPC endpoints for security
+- CloudTrail writes logs to S3 and publishes notifications to SNS when new logs arrive
+- All services should communicate through private networking where possible
 
-8. **Security Best Practices:**  
-   - Follow all AWS security audit recommendations (IAM, networking, encryption, logging, secrets management, etc.).
-   - Do not hardcode any confidential data within the configuration files.
-
-9. **Code Quality:**  
-   - Ensure the CDK is reusable and passes any provided infrastructure correctness and security tests.
-
-**Expected Output:**  
-Produce a CDK stack in a single file with class name TapStack that, when applied, deploys the described infrastructure in AWS. All constraints and requirements must be clearly addressed. The solution should demonstrate expert-level practices in AWS security, modular CDK code, and scalable infrastructure design.
-
-**Constraints Checklist:**  
-- IAM roles must be least privilege.
-- Use `for_each` for dynamic resource creation.
-- Tag all resources with `Environment`, `Owner`, and `Project`.
-- VPC CIDR block must be `10.0.0.0/16`.
-- All S3 buckets must use AWS KMS encryption at rest.
-- Strict adherence to the DRY principle in CDK code.
-- CloudTrail must log all AWS API calls.
-- Follow AWS security audit best practices.
-- Do not hardcode confidential information in any file.
-
-**Note:**  
-You should deliver a production-ready CDK solution that is secure, scalable, and modular, demonstrating mastery of AWS deployment patterns and modern infrastructure automation with CDK
+Put everything in a single CDK file with a class called TapStack. Make sure it's production-ready and would pass our security team's review.
