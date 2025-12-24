@@ -26,12 +26,12 @@ The requirements for this template include:
 - **Tagging**: All resources should be tagged with 'Environment' and 'Project' tags for cost allocation
 
 ## Constraints
-1. The S3 buckets must have server-side encryption enabled using AWS Key Management Service (KMS) with a custom key
+1. The S3 buckets must have server-side encryption enabled using AWS Key Management Service with a custom key
 2. IAM roles should be created with least privilege principle in mind, granting only necessary permissions
 3. All EC2 instances should belong to a VPC with public and private subnets set up according to AWS best practices
 4. Enable detailed CloudWatch monitoring for all EC2 instances but do not exceed a 1-minute granularity
-5. All security groups should only allow inbound traffic from a specific IP range (e.g., 192.168.1.0/24) and block all others
-6. Create an IAM policy that limits S3 bucket access to specific actions (ListBucket and GetObject) only for a specified user group
+5. All security groups should only allow inbound traffic from a specific IP range like 192.168.1.0/24 and block all others
+6. Create an IAM policy that limits S3 bucket access to specific actions - ListBucket and GetObject only for a specified user group
 7. Ensure that CloudTrail is enabled and logs are stored with at least 90 days of retention in an encrypted S3 bucket
 8. All RDS instances should be encrypted at rest and in transit
 9. Specify that the IAM policy and roles, once attached, should not be easily detachable unless via change control procedures
