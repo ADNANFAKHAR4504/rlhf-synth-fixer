@@ -13,23 +13,23 @@ Design an infrastructure that supports automated **failover and failback** betwe
 
 2. **Route 53 DNS & Health Checks**
    - Use **Route 53 failover routing policy** to manage traffic between primary and standby.
-   - Create a **Route 53 health check** to continuously monitor the health of the primary instance (e.g., HTTP port 80).
+   - Create a **Route 53 health check** to continuously monitor the health of the primary instance on HTTP port 80.
    - Create two **Route 53 DNS records** pointing to the EC2 public IPs with the failover routing policy:
-     - Primary: `SetIdentifier = Primary`, `Failover = PRIMARY`
-     - Standby: `SetIdentifier = Standby`, `Failover = SECONDARY`, associated with health check
+     - Primary: SetIdentifier = Primary, Failover = PRIMARY
+     - Standby: SetIdentifier = Standby, Failover = SECONDARY, associated with health check
 
 3. **Automation**
    - Ensure **automatic failover** if the primary becomes unhealthy.
-   - Ensure **automatic recovery** (failback) once the primary instance is healthy again.
+   - Ensure **automatic failback** once the primary instance is healthy again.
 
 4. **IAM and Security**
    - Add necessary IAM roles or security groups for EC2 and Route 53.
-   - Allow HTTP (80) and SSH (22) access from public sources.
+   - Allow HTTP port 80 and SSH port 22 access from public sources.
 
 5. **Parameters**
    - Include parameters for:
      - KeyPairName
-     - InstanceType (default: t3.micro)
+     - InstanceType with default t3.micro
      - HostedZoneId
      - DomainName
 
@@ -50,5 +50,5 @@ Follow AWS best practices as described in:
 ## Deliverable:
 A single CloudFormation **YAML file** with:
 - All resources interconnected
-- Tags for each resource (e.g., Project: Route53FailoverDemo)
+- Tags for each resource like Project: Route53FailoverDemo
 - No manual steps required post-deployment
