@@ -2,7 +2,7 @@ I'll create a secure, highly available serverless infrastructure using CDKTF in 
 
 ## File Structure
 
-```
+```text
 root/
 ├── tap.py (entrypoint that synthesizes the CDK stack)
 └── lib/
