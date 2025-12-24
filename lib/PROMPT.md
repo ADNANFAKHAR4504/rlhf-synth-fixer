@@ -14,7 +14,7 @@ You are tasked with setting up a cloud environment using AWS CloudFormation. The
 2. **Auto Scaling Group Setup**
    - Deploy an EC2 instance in each public subnet
    - These instances should be part of an Auto Scaling Group
-   - Ensure there are always two instances running (MinSize, MaxSize, and DesiredCapacity all set to 2)
+   - Ensure there are always two instances running with MinSize, MaxSize, and DesiredCapacity all set to 2
 
 3. **Network Gateway Configuration**
    - Set up a NAT Gateway for the private subnets to enable outbound internet access
@@ -46,8 +46,8 @@ You are tasked with setting up a cloud environment using AWS CloudFormation. The
 ### 1. VPC and Networking
 
 - VPC with CIDR 10.0.0.0/16
-- 2 Public subnets (us-east-1a, us-east-1b)
-- 2 Private subnets (us-east-1a, us-east-1b)
+- 2 Public subnets distributed across us-east-1a and us-east-1b availability zones
+- 2 Private subnets distributed across us-east-1a and us-east-1b availability zones
 - Internet Gateway attached to VPC
 - NAT Gateway in one of the public subnets
 - Route tables for public and private subnets
