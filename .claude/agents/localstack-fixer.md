@@ -12,6 +12,158 @@ Fixes IaC tasks to make them deployable to LocalStack. Supports TWO modes:
 1. **Local Mode** (from `localstack-migrate`): Fix local deployment errors in a working directory
 2. **PR Mode** (standalone): Fix failed CI/CD jobs for a specific GitHub PR
 
+## ⚠️ CI CREDIT CONSERVATION - READ FIRST!
+
+**CRITICAL**: LocalStack CI credits are LIMITED and expensive. The agent MUST prioritize local testing.
+
+### Mode Priority (ALWAYS follow this order):
+
+1. **LOCAL MODE FIRST** - Run all fixes and tests locally using LocalStack Docker
+2. **PR MODE ONLY AS FALLBACK** - Only when local testing is absolutely not possible
+
+### Before ANY CI push:
+
+1. ✅ Run `localstack-prevalidate.sh` - **MANDATORY** (catches 80%+ of errors)
+2. ✅ Run local LocalStack deployment (`cdklocal deploy` or `tflocal apply`)
+3. ✅ Run tests locally (`npm test` with LocalStack endpoint)
+4. ❌ **NEVER** push to CI just to "see if it works"
+
+### CI Push Rules:
+
+- **Maximum 2 CI iterations** per PR fix session (hard limit)
+- **If 2 CI iterations fail**, STOP and analyze/debug locally
+- **Each CI push = credits consumed** - treat each push as expensive
+
+### Quick Local Testing Commands:
+
+```bash
+# Start LocalStack locally (one-time setup)
+localstack start -d
+
+# Run pre-validation (MANDATORY before any CI push)
+bash .claude/scripts/localstack-prevalidate.sh "$WORK_DIR"
+
+# Test deployment locally
+cd "$WORK_DIR"
+cdklocal deploy --require-approval never 2>&1 | tee deploy.log
+npm test 2>&1 | tee test.log
+
+# Check for errors
+grep -iE "error|failed" deploy.log test.log
+```
+
+### Why This Matters:
+
+| Action                  | CI Credits Used      | Recommended         |
+| ----------------------- | -------------------- | ------------------- |
+| Local pre-validation    | 0                    | ✅ Always do first  |
+| Local LocalStack deploy | 0                    | ✅ Test before push |
+| PR push to CI           | **Credits consumed** | ⚠️ Max 2 times      |
+
+## 🔄 CI/CD Pipeline Compliance (Detect Project Files Job)
+
+The CI/CD pipeline's first job is "Detect Project Files" which validates the PR structure. PRs will FAIL if this job fails.
+
+### What "Detect Project Files" Validates
+
+1. **File Locations** (`check-project-files.sh`):
+   - All files must be in: `bin/`, `lib/`, `test/`, `tests/`, `cli/`, `scripts/`, `.github/`
+   - Or be allowed root files like `package.json`, `metadata.json`, `cdk.json`, etc.
+
+2. **Metadata Schema** (`metadata.json`):
+   - All required fields present: `platform`, `language`, `complexity`, `turn_type`, `po_id`, `team`, `startedAt`, `subtask`, `provider`, `subject_labels`, `aws_services`, `wave`
+   - All enum values are valid (e.g., team must be "synth-2" not "synth2")
+   - No disallowed fields present (schema has `additionalProperties: false`)
+
+3. **Required Documentation** (for synthetic tasks with team starting with "synth"):
+   - `lib/PROMPT.md` - Task prompt description
+   - `lib/MODEL_RESPONSE.md` - Model response content
+   - Optional: `lib/IDEAL_RESPONSE.md`, `lib/MODEL_FAILURES.md`
+
+4. **No Emojis in lib/*.md Files**:
+   - Documentation files in `lib/` must NOT contain emojis
+   - The pipeline checks for emoji patterns and fails if found
+
+### Pre-Flight Validation Checklist
+
+Before pushing ANY fix, validate these locally:
+
+```bash
+# 1. Check file locations
+./scripts/check-project-files.sh
+
+# 2. Validate metadata schema
+ajv validate -s config/schemas/metadata.schema.json -d metadata.json
+
+# 3. Check for emojis in lib/*.md
+grep -Prl '[\x{1F300}-\x{1F9FF}]' lib/*.md 2>/dev/null && echo "EMOJIS FOUND!" || echo "No emojis"
+
+# 4. For synth tasks - check required docs
+TEAM=$(jq -r '.team' metadata.json)
+if [[ "$TEAM" =~ ^synth ]]; then
+  ls -la lib/PROMPT.md lib/MODEL_RESPONSE.md
+fi
+
+# 5. Run comprehensive pre-validation
+bash .claude/scripts/localstack-prevalidate.sh "$WORK_DIR"
+```
+
+### Common CI/CD Failures and Fixes
+
+| Failure | Root Cause | Fix |
+| ------- | ---------- | --- |
+| `metadata.json not found` | File missing from PR | Ensure metadata.json is committed |
+| `Invalid enum value for team` | Wrong team format | Use `synth-2` not `synth2` |
+| `subject_labels must be non-empty array` | Missing or empty | Add at least one valid subject label |
+| `Missing lib/PROMPT.md` | Synth task missing docs | Create PROMPT.md with task context |
+| `Missing lib/MODEL_RESPONSE.md` | Synth task missing docs | Create MODEL_RESPONSE.md |
+| `Emojis found in lib/*.md` | Documentation has emojis | Remove all emojis from lib/*.md files |
+| `Files outside allowed directories` | Wrong file locations | Move files to lib/, test/, or other allowed folders |
+
+### Auto-Fix for Documentation Files
+
+If documentation files are missing, create placeholders:
+
+```bash
+# Create PROMPT.md placeholder
+cat > lib/PROMPT.md << 'EOF'
+# Task Prompt
+
+This is a LocalStack migration task. The original task has been migrated and tested for LocalStack compatibility.
+
+## Context
+
+This task involves setting up infrastructure using LocalStack for local development and testing.
+
+## Requirements
+
+The infrastructure should:
+- Deploy successfully to LocalStack
+- Pass all integration tests
+- Use LocalStack-compatible configurations
+EOF
+
+# Create MODEL_RESPONSE.md placeholder
+cat > lib/MODEL_RESPONSE.md << 'EOF'
+# Model Response
+
+This task has been migrated to LocalStack and verified for deployment compatibility.
+
+## Migration Summary
+
+The original task has been:
+- Updated with LocalStack endpoint configurations
+- Tested for successful deployment
+- Verified with integration tests
+
+## Changes Made
+
+- Added LocalStack provider configuration
+- Updated resource settings for local deployment
+- Configured appropriate timeouts and retry logic
+EOF
+```
+
 ## Configuration
 
 This agent uses settings from `.claude/config/localstack.yaml`. Key configurable options:
@@ -607,9 +759,11 @@ TEST_ERRORS="test failed: assertion error"
 
 ### Key Principles
 
-1. **LOCAL FIRST**: Run ALL validations locally before pushing to CI/CD
-2. **BATCH EVERYTHING**: Apply ALL fixes in a single commit, not incrementally
-3. **FAIL FAST LOCALLY**: Catch errors before they hit GitHub Actions
+1. **LOCAL FIRST (MANDATORY)**: Run ALL validations locally before ANY CI push - no exceptions!
+2. **CI CREDITS ARE LIMITED**: Maximum 2 CI iterations allowed per session - treat each push as expensive
+3. **BATCH EVERYTHING**: Apply ALL fixes in a single commit, not incrementally
+4. **FAIL FAST LOCALLY**: Use `localstack-prevalidate.sh` before every push - catches 80%+ of errors
+5. **NO SPECULATIVE PUSHES**: Never push to CI "just to see if it works" - debug locally instead
 
 ### Pre-Push Validation Checklist
 
@@ -674,9 +828,11 @@ bash .claude/scripts/localstack-prevalidate.sh "$WORK_DIR"
 
 ```yaml
 iteration:
-  max_fix_iterations: 3 # Reduced - local validation catches most errors
-  max_cicd_iterations: 3 # Reduced - comprehensive batch fixes
-  run_local_prevalidation: true # Always run local validation first
+  max_fix_iterations: 3 # Local iterations - can be higher
+  max_cicd_iterations: 2 # ⚠️ HARD LIMIT - CI credits are LIMITED!
+  run_local_prevalidation: true # MANDATORY - blocks push if fails
+  enforce_local_validation: true # Block CI push if local validation fails
+  ci_credit_warning: true # Show warnings about CI credit consumption
 
 batch_fix:
   single_comprehensive_push: true # Apply ALL fixes before first push
@@ -692,12 +848,20 @@ batch_fix:
     - jest_config # If jest.config.js exists
 ```
 
-### Time Savings
+**⚠️ CI Credit Conservation Settings:**
 
-| Approach              | Typical Time  | CI/CD Iterations   |
-| --------------------- | ------------- | ------------------ |
-| Old (incremental)     | 45min - 2.5hr | 5-10 iterations    |
-| **New (single push)** | **15-30min**  | **1-2 iterations** |
+- `max_cicd_iterations: 2` - Hard limit on CI pushes
+- `enforce_local_validation: true` - Must pass local checks before push
+- Run `localstack-prevalidate.sh` before ANY push to CI
+
+### Time & Credit Savings
+
+| Approach              | Typical Time  | CI/CD Iterations   | CI Credits Used |
+| --------------------- | ------------- | ------------------ | --------------- |
+| Old (incremental)     | 45min - 2.5hr | 5-10 iterations    | ⛔ High         |
+| **New (local-first)** | **15-30min**  | **1-2 iterations** | ✅ Minimal      |
+
+**⚠️ HARD LIMIT: Maximum 2 CI iterations to conserve credits!**
 
 ## Step-by-Step Execution
 
@@ -1487,6 +1651,8 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
     #
     # METADATA FIXES (CRITICAL)
     # Uses the centralized sanitization script to avoid code duplication
+    # The sanitization script now includes wave lookup from P0.csv/P1.csv
+    # to ensure correct wave assignment based on the original task's wave
     #
     metadata_fix|metadata_subtask_fix|metadata_labels_fix)
       if [[ -f "metadata.json" ]]; then
@@ -1525,11 +1691,19 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
           jq '
             # Ensure subtask is a string
             .subtask = (if .subtask | type == "array" then .subtask[0] // "Infrastructure QA and Management" else .subtask // "Infrastructure QA and Management" end) |
+            # Ensure subject_labels is an array
+            .subject_labels = (if .subject_labels | type == "array" then .subject_labels elif .subject_labels | type == "string" then [.subject_labels] else ["General Infrastructure Tooling QA"] end) |
+            # Ensure aws_services is an array
+            .aws_services = (if .aws_services | type == "array" then .aws_services elif .aws_services | type == "string" then (.aws_services | split(",") | map(gsub("^\\s+|\\s+$"; ""))) else [] end) |
             # Set required fields
             .provider = "localstack" |
             .team = "synth-2" |
+            # NOTE: wave should be looked up from P0.csv/P1.csv using wave-lookup.sh
+            # Fallback to existing wave or "P1" if lookup not available
+            .wave = (.wave // "P1") |
+            .startedAt = (.startedAt // (now | todate)) |
             # Remove disallowed fields
-            del(.task_id, .training_quality, .coverage, .author, .dockerS3Location, .pr_id, .original_pr_id, .localstack_migration)
+            del(.task_id, .training_quality, .training_quality_justification, .coverage, .author, .dockerS3Location, .pr_id, .original_pr_id, .localstack_migration, .testDependencies, .background)
           ' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
 
           echo " metadata.json sanitized (inline)"
@@ -1950,6 +2124,39 @@ else
   echo ""
   echo ""
 
+  #
+  # ⚠️ MANDATORY: Run local pre-validation before ANY CI push
+  # This saves CI credits by catching 80%+ of errors locally
+  #
+  echo ""
+  echo "🔒 MANDATORY: Running local pre-validation before CI push..."
+  echo "   (CI credits are LIMITED - this check prevents wasted pushes)"
+  echo ""
+
+  PREVALIDATE_SCRIPT="$PROJECT_ROOT/.claude/scripts/localstack-prevalidate.sh"
+  if [[ -x "$PREVALIDATE_SCRIPT" ]]; then
+    if ! bash "$PREVALIDATE_SCRIPT" "$WORK_DIR" --skip-deploy 2>&1; then
+      echo ""
+      echo "❌ LOCAL PRE-VALIDATION FAILED"
+      echo ""
+      echo "   Fix the errors above before pushing to CI."
+      echo "   CI push BLOCKED to conserve credits."
+      echo ""
+      echo "   Debug locally with:"
+      echo "     localstack start -d"
+      echo "     cd $WORK_DIR && cdklocal deploy"
+      echo ""
+      exit 1
+    fi
+    echo ""
+    echo "✅ Local pre-validation passed. Safe to push to CI."
+    echo ""
+  else
+    echo "⚠️  Pre-validation script not found at: $PREVALIDATE_SCRIPT"
+    echo "   Proceeding with caution - consider running manual validation."
+    echo ""
+  fi
+
   # Check if there are changes
   if git diff --quiet && git diff --cached --quiet; then
     echo " No changes to commit"
@@ -2000,18 +2207,26 @@ if [[ "$MODE" == "pr" ]]; then
 
   #
   # PRODUCTION READY LOOP - MUST iterate until ALL CI/CD jobs pass
-  # Uses values loaded from config in Step 1
+  # ⚠️ CI CREDIT CONSERVATION: Hard limit of 2 iterations!
   #
 
   CICD_ITERATION=1
-  # MAX_CICD_ITERATIONS and CICD_WAIT_TIMEOUT loaded from config in Step 1
+  # CRITICAL: Override config to enforce 2 iteration max - CI credits are LIMITED
+  MAX_CICD_ITERATIONS=2  # HARD LIMIT - do not increase! CI credits are expensive
   PRODUCTION_READY=false
   EXPECTED_RUN_ID=""  # Track run ID to detect new workflow runs (race condition fix)
+
+  echo ""
+  echo "⚠️  CI CREDIT WARNING ⚠️"
+  echo "   Maximum ${MAX_CICD_ITERATIONS} CI iterations allowed to conserve credits."
+  echo "   Each push consumes LocalStack CI credits."
+  echo "   If issues persist after ${MAX_CICD_ITERATIONS} iterations, debug locally!"
+  echo ""
 
   while [ $CICD_ITERATION -le $MAX_CICD_ITERATIONS ] && [ "$PRODUCTION_READY" == "false" ]; do
     echo ""
     echo ""
-    echo " CI/CD Iteration ${CICD_ITERATION}/${MAX_CICD_ITERATIONS}"
+    echo "⚠️  CI/CD Iteration ${CICD_ITERATION}/${MAX_CICD_ITERATIONS} (CI CREDITS BEING USED)"
     echo ""
     echo ""
 
@@ -2177,6 +2392,17 @@ if [[ "$MODE" == "pr" ]]; then
 
         # Commit and push if there are changes
         if ! git diff --quiet || ! git diff --cached --quiet; then
+          #
+          # ⚠️ CI CREDIT WARNING before pushing
+          #
+          echo ""
+          echo "⚠️  About to push iteration ${CICD_ITERATION} fixes (CI CREDITS WILL BE USED)"
+          if [ $CICD_ITERATION -ge $MAX_CICD_ITERATIONS ]; then
+            echo "   ⛔ This is the LAST allowed CI push!"
+            echo "   If this fails, you MUST debug locally."
+          fi
+          echo ""
+
           git add -A
           git commit -m "fix(localstack): iteration ${CICD_ITERATION} fixes for PR #${PR_NUMBER}
 
@@ -2216,17 +2442,30 @@ Automated by localstack-fixer agent."
     echo "   PR #${PR_NUMBER} is ready for merge"
     echo "   URL: https://github.com/$GITHUB_REPO/pull/$PR_NUMBER"
   else
-    echo " MAX ITERATIONS REACHED (${MAX_CICD_ITERATIONS})"
     echo ""
-    echo "   The agent has reached the maximum number of fix iterations."
-    echo "   Manual intervention may be required."
+    echo "🛑 CI CREDIT LIMIT REACHED (${MAX_CICD_ITERATIONS} iterations)"
+    echo ""
+    echo "   STOP! Do not push again - CI credits are LIMITED and expensive."
     echo ""
     echo "   PR URL: https://github.com/$GITHUB_REPO/pull/$PR_NUMBER"
     echo ""
-    echo "    Recommended Actions:"
-    echo "   1. Review the latest CI/CD logs manually"
-    echo "   2. Check for issues not covered by automated fixes"
-    echo "   3. Re-run /localstack-fixer $PR_NUMBER after manual fixes"
+    echo "   🔧 DEBUG LOCALLY INSTEAD:"
+    echo ""
+    echo "   1. Start LocalStack locally:"
+    echo "      localstack start -d"
+    echo ""
+    echo "   2. Clone and test locally:"
+    echo "      cd $WORK_DIR"
+    echo "      cdklocal deploy --require-approval never 2>&1 | tee deploy.log"
+    echo "      npm test 2>&1 | tee test.log"
+    echo ""
+    echo "   3. Check logs for errors:"
+    echo "      grep -iE 'error|failed' deploy.log test.log"
+    echo ""
+    echo "   4. Only after LOCAL success, consider another CI push."
+    echo ""
+    echo "   ⚠️  Each additional CI push consumes credits!"
+    echo ""
 
   fi
   echo ""

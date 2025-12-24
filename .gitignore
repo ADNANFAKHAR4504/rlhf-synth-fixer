@@ -113,6 +113,8 @@ build
 .claude/synth_pr_status.json.backup
 .claude/synth_pr_status.json.lock/
 .claude/reports/
+.claude/cache/
+.claude/snapshots/
 .sherlock/data
 .sherlock/reports
 

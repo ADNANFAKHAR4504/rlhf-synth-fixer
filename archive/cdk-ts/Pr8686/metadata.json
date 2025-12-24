@@ -1,0 +1,40 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291766_ls",
+  "team": "2",
+  "startedAt": "2025-12-22T11:36:29.448Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "wave": "P0",
+  "aws_services": [
+    "VPC",
+    "VPC Subnets",
+    "VPC Flow Logs",
+    "VPC Gateway Endpoints",
+    "Security Groups",
+    "IAM Roles",
+    "EC2 Launch Template",
+    "Auto Scaling Group",
+    "Application Load Balancer",
+    "EFS File System",
+    "CloudWatch Dashboard",
+    "CloudWatch Alarms",
+    "CloudWatch LogGroup",
+    "CloudTrail",
+    "SNS Topic",
+    "S3 Bucket"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
