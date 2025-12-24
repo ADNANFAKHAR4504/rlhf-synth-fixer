@@ -1,1091 +1,865 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import { 
-  S3Client, GetObjectCommand, PutObjectCommand, ListObjectVersionsCommand,
-  HeadObjectCommand, GetBucketVersioningCommand, GetBucketEncryptionCommand,
-  DeleteObjectCommand
-} from '@aws-sdk/client-s3';
-import {
-  APIGatewayClient, GetRestApiCommand, GetResourceCommand,
-  GetMethodCommand, GetIntegrationCommand,
-  GetResourcesCommand
-} from '@aws-sdk/client-api-gateway';
-import {
-  LambdaClient, InvokeCommand, GetFunctionCommand,
-  GetFunctionConfigurationCommand
-} from '@aws-sdk/client-lambda';
-import {
-  SQSClient, SendMessageCommand, ReceiveMessageCommand,
-  GetQueueAttributesCommand, PurgeQueueCommand
-} from '@aws-sdk/client-sqs';
-import {
-  RDSClient, DescribeDBInstancesCommand, DescribeDBInstancesCommandOutput
-} from '@aws-sdk/client-rds';
-import {
-  SecretsManagerClient, GetSecretValueCommand, DescribeSecretCommand
-} from '@aws-sdk/client-secrets-manager';
-import {
-  EC2Client, DescribeInstancesCommand, DescribeSecurityGroupsCommand,
-  DescribeVpcsCommand, DescribeSubnetsCommand
-} from '@aws-sdk/client-ec2';
-import {
-  CloudTrailClient, LookupEventsCommand, DescribeTrailsCommand,
-  GetTrailCommand
-} from '@aws-sdk/client-cloudtrail';
-import {
-  CloudWatchLogsClient, DescribeLogGroupsCommand, GetLogEventsCommand,
-  FilterLogEventsCommand
-} from '@aws-sdk/client-cloudwatch-logs';
-import {
-  CloudFrontClient, GetDistributionCommand, ListDistributionsCommand
-} from '@aws-sdk/client-cloudfront';
-import {
-  WAFV2Client, GetWebACLCommand, ListResourcesForWebACLCommand
-} from '@aws-sdk/client-wafv2';
-import {
-  KMSClient, DescribeKeyCommand, GetKeyPolicyCommand
-} from '@aws-sdk/client-kms';
-import {
-  SSMClient, SendCommandCommand, GetCommandInvocationCommand, ListCommandInvocationsCommand, DescribeInstanceInformationCommand
-} from '@aws-sdk/client-ssm';
+import fs from 'fs';
+import path from 'path';
 
-// Load CloudFormation outputs
-const outputsPath = join(__dirname, '../cfn-outputs/flat-outputs.json');
-let outputs: Record<string, any> = {};
+describe('NovaCart Secure Foundation CloudFormation Template - Unit Tests', () => {
+  let template: any;
 
-try {
-  outputs = JSON.parse(readFileSync(outputsPath, 'utf-8'));
-} catch (error) {
-  throw new Error(
-    `Failed to load CloudFormation outputs from ${outputsPath}. ` +
-    `Ensure the stack is deployed and outputs are generated. Error: ${error}`
-  );
-}
-
-// AWS Region - read from file or environment variable
-let AWS_REGION: string;
-try {
-  AWS_REGION = readFileSync(join(__dirname, '../lib/AWS_REGION'), 'utf-8').trim();
-} catch {
-  AWS_REGION = process.env.AWS_REGION!;
-}
-if (!AWS_REGION) {
-  throw new Error('AWS_REGION must be set in AWS_REGION file or AWS_REGION environment variable');
-}
-
-// Initialize AWS SDK clients
-const s3Client = new S3Client({ region: AWS_REGION });
-const apiGatewayClient = new APIGatewayClient({ region: AWS_REGION });
-const lambdaClient = new LambdaClient({ region: AWS_REGION });
-const sqsClient = new SQSClient({ region: AWS_REGION });
-const rdsClient = new RDSClient({ region: AWS_REGION });
-const secretsManagerClient = new SecretsManagerClient({ region: AWS_REGION });
-const ec2Client = new EC2Client({ region: AWS_REGION });
-const cloudTrailClient = new CloudTrailClient({ region: AWS_REGION });
-const cloudWatchLogsClient = new CloudWatchLogsClient({ region: AWS_REGION });
-const cloudFrontClient = new CloudFrontClient({ region: AWS_REGION });
-const wafv2Client = new WAFV2Client({ region: 'us-east-1' }); // WAFv2 CloudFront scope is always us-east-1
-const kmsClient = new KMSClient({ region: AWS_REGION });
-const ssmClient = new SSMClient({ region: AWS_REGION });
-
-// Extract output values from JSON file
-const vpcId = outputs.VpcId;
-const cloudTrailLogGroupArn = outputs.CloudTrailLogGroupArn;
-const rdsEndpoint = outputs.RdsInstanceEndpoint;
-const cloudTrailBucketName = outputs.S3BucketName;
-const appDataBucketName = outputs.AppDataBucketName;
-const appConfigBucketName = outputs.AppConfigBucketName;
-const dbPasswordSecretArn = outputs.DBPasswordSecretArn;
-const dlqUrl = outputs.DlqUrl;
-const apiGatewayId = outputs.ApiGatewayId;
-const apiGatewayUrl = outputs.ApiGatewayUrl;
-const ec2InstanceId = outputs.Ec2InstanceId;
-const ec2InstanceIdAz2 = outputs.Ec2InstanceIdAz2;
-const cloudFrontDomainName = outputs.CloudFrontDomainName;
-const kmsKeyId = outputs.KmsKeyId;
-const lambdaFunctionArn = outputs.LambdaFunctionArn;
-const wafWebAclArn = outputs.WafWebAclArn;
-
-// Validate required outputs exist
-const requiredOutputs = {
-  VpcId: vpcId,
-  CloudTrailLogGroupArn: cloudTrailLogGroupArn,
-  RdsInstanceEndpoint: rdsEndpoint,
-  S3BucketName: cloudTrailBucketName,
-  AppDataBucketName: appDataBucketName,
-  AppConfigBucketName: appConfigBucketName,
-  DBPasswordSecretArn: dbPasswordSecretArn,
-  DlqUrl: dlqUrl,
-  ApiGatewayId: apiGatewayId,
-  ApiGatewayUrl: apiGatewayUrl,
-  Ec2InstanceId: ec2InstanceId,
-  Ec2InstanceIdAz2: ec2InstanceIdAz2,
-  KmsKeyId: kmsKeyId,
-  LambdaFunctionArn: lambdaFunctionArn,
-};
-
-for (const [key, value] of Object.entries(requiredOutputs)) {
-  if (!value) {
-    throw new Error(`Required CloudFormation output '${key}' is missing from outputs file. Ensure stack is deployed.`);
-  }
-}
-
-// Test data setup
-const TEST_OBJECT_KEY = `test/integration-test-${Date.now()}.txt`;
-const TEST_OBJECT_CONTENT = 'Integration test content for NovaCart workflow validation';
-
-describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
-
-  // WORKFLOW 1: Static Content Delivery
-  describe('Workflow 1: Static Content Delivery (User → CloudFront → WAF → S3 → CloudTrail)', () => {
-
-    test('S3 AppDataBucket stores encrypted content with versioning', async () => {
-      // Verify bucket exists and is accessible
-      expect(appDataBucketName).toBeTruthy();
-      const bucketName = appDataBucketName;
-      
-      // Check versioning is enabled
-      const versioningResponse = await s3Client.send(
-        new GetBucketVersioningCommand({ Bucket: bucketName })
-      );
-      expect(versioningResponse.Status).toBe('Enabled');
-      
-      // Check encryption is enabled
-      const encryptionResponse = await s3Client.send(
-        new GetBucketEncryptionCommand({ Bucket: bucketName })
-      );
-      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
-      expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
-      
-      // Upload test object to S3
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: bucketName,
-          Key: TEST_OBJECT_KEY,
-          Body: TEST_OBJECT_CONTENT,
-          ContentType: 'text/plain',
-        })
-      );
-      
-      // Verify object exists
-      const headResponse = await s3Client.send(
-        new HeadObjectCommand({ Bucket: bucketName, Key: TEST_OBJECT_KEY })
-      );
-      expect(headResponse.ETag).toBeDefined();
-      
-      // Verify versioning created a version
-      const versionsResponse = await s3Client.send(
-        new ListObjectVersionsCommand({ Bucket: bucketName, Prefix: TEST_OBJECT_KEY })
-      );
-      expect(versionsResponse.Versions?.length).toBeGreaterThan(0);
-    }, 30000);
-
-    test('CloudTrail logs S3 API operations', async () => {
-      // Wait a moment for CloudTrail to log the S3 operation
-      await new Promise(resolve => setTimeout(resolve, 15000));
-      
-      // Query CloudTrail for S3 GetObject/PutObject events
-      const lookupEventsResponse = await cloudTrailClient.send(
-        new LookupEventsCommand({
-          LookupAttributes: [
-            { AttributeKey: 'ResourceName', AttributeValue: cloudTrailBucketName }
-          ],
-          StartTime: new Date(Date.now() - 5 * 60 * 1000), // Last 5 minutes
-        })
-      );
-      
-      // Verify CloudTrail is logging
-      expect(lookupEventsResponse.Events).toBeDefined();
-      
-      // Check CloudTrail log group exists
-      // Extract log group name from ARN format: arn:aws:logs:region:account-id:log-group:log-group-name:*
-      // Use regex to extract log group name more reliably
-      const arnMatch = cloudTrailLogGroupArn.match(/arn:aws:logs:[^:]+:[^:]+:log-group:([^:*]+)/);
-      if (!arnMatch || !arnMatch[1]) {
-        throw new Error(`Invalid CloudTrail log group ARN format: ${cloudTrailLogGroupArn}`);
-      }
-      const cleanLogGroupName = arnMatch[1];
-      
-      expect(cleanLogGroupName).toBeTruthy();
-      expect(cleanLogGroupName).not.toBe('');
-      expect(cleanLogGroupName).not.toBe('*');
-      
-      const describeLogGroupsResponse = await cloudWatchLogsClient.send(
-        new DescribeLogGroupsCommand({ logGroupNamePrefix: cleanLogGroupName })
-      );
-      
-      expect(describeLogGroupsResponse.logGroups?.some(lg => lg.logGroupName === cleanLogGroupName)).toBe(true);
-      
-      // Verify logs are being written
-      const filterLogsResponse = await cloudWatchLogsClient.send(
-        new FilterLogEventsCommand({
-          logGroupName: cleanLogGroupName,
-          startTime: Date.now() - 10 * 60 * 1000, // Last 10 minutes
-          limit: 10,
-        })
-      );
-      
-      expect(filterLogsResponse.events).toBeDefined();
-    }, 60000);
-
-    test('CloudFront Distribution is protected by WAF', async () => {
-      // CloudFront/WAF only created in us-east-1 (due to AWS requirement for CLOUDFRONT scope WAF)
-      if (AWS_REGION !== 'us-east-1') {
-        // Verify outputs are not present when not in us-east-1
-        expect(wafWebAclArn).toBeUndefined();
-        expect(cloudFrontDomainName).toBeUndefined();
-        return;
-      }
-      
-      // Verify WAF WebACL exists (only in us-east-1)
-      expect(wafWebAclArn).toBeTruthy();
-      expect(wafWebAclArn).not.toBe('');
-      
-      // Extract WebACL ID and scope from ARN
-      // ARN format: arn:aws:wafv2:region:account-id:global/webacl/name/id
-      const arnParts = wafWebAclArn.split('/');
-      const webAclId = arnParts[arnParts.length - 1];
-      const webAclName = arnParts[arnParts.length - 2];
-      
-      expect(webAclId).toBeTruthy();
-      expect(webAclName).toBeTruthy();
-      
-      // Verify WAF WebACL exists
-      // CLOUDFRONT scope WAFs are always in us-east-1 regardless of stack region
-      const getWebAclResponse = await wafv2Client.send(
-        new GetWebACLCommand({
-          Scope: 'CLOUDFRONT',
-          Id: webAclId,
-          Name: webAclName,
-        })
-      );
-      
-      expect(getWebAclResponse.WebACL).toBeDefined();
-      expect(getWebAclResponse.WebACL?.Name).toBeDefined();
-      
-      // Verify CloudFront exists and is configured
-      expect(cloudFrontDomainName).toBeTruthy();
-      expect(cloudFrontDomainName).not.toBe('');
-      
-      // Verify CloudFront distribution exists
-      const distributionsResponse = await cloudFrontClient.send(new ListDistributionsCommand({}));
-      const distribution = distributionsResponse.DistributionList?.Items?.find(
-        d => d.DomainName === cloudFrontDomainName
-      );
-      
-      expect(distribution).toBeDefined();
-      expect(distribution?.Status).toBe('Deployed');
-      
-      // Verify WAF WebACL ARN matches the distribution configuration
-      expect(distribution?.WebACLId).toBeDefined();
-      expect(distribution?.WebACLId).toBe(wafWebAclArn);
-    }, 60000);
+  beforeAll(() => {
+    // Load the JSON template (converted from YAML)
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    if (!fs.existsSync(templatePath)) {
+      throw new Error(`Template file not found at: ${templatePath}`);
+    }
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    template = JSON.parse(templateContent);
   });
 
-  // WORKFLOW 2: API Request Flow
-  describe('Workflow 2: API Request Flow (API Gateway → Lambda → S3 → CloudTrail)', () => {
+  // KMS KEY VALIDATION
+  describe('KMS Keys and Encryption', () => {
+    test('should have MasterKMSKey resource', () => {
+      expect(template.Resources.MasterKMSKey).toBeDefined();
+      const key = template.Resources.MasterKMSKey;
+      expect(key.Type).toBe('AWS::KMS::Key');
+      expect(key.Properties.EnableKeyRotation).toBe(true);
+    });
 
-    test('API Gateway validates request and forwards to Lambda', async () => {
-      // Verify API Gateway ID is available
-      expect(apiGatewayId).toBeTruthy();
-      
-      // Verify API Gateway exists
-      const getApiResponse = await apiGatewayClient.send(
-        new GetRestApiCommand({ restApiId: apiGatewayId })
-      );
-      expect(getApiResponse.id).toBe(apiGatewayId);
-      
-      // Get the root resource first, then find /order
-      // GetResourcesCommand lists all resources
-      const getResourcesResponse = await apiGatewayClient.send(
-        new GetResourcesCommand({
-          restApiId: apiGatewayId,
-        })
-      );
-      
-      const orderResource = getResourcesResponse.items?.find(
-        resource => resource.path === '/order'
-      );
-      
-      expect(orderResource).toBeDefined();
-      const orderResourceId = orderResource!.id!;
-      
-      const getResourceResponse = { id: orderResourceId };
-      
-      expect(getResourceResponse.id).toBeDefined();
-      
-      // Verify POST method exists with validation
-      const getMethodResponse = await apiGatewayClient.send(
-        new GetMethodCommand({
-          restApiId: apiGatewayId,
-          resourceId: getResourceResponse.id!,
-          httpMethod: 'POST',
-        })
-      );
-      
-      expect(getMethodResponse.httpMethod).toBe('POST');
-      expect(getMethodResponse.requestValidatorId).toBeDefined();
-      
-      // Verify Lambda integration
-      const getIntegrationResponse = await apiGatewayClient.send(
-        new GetIntegrationCommand({
-          restApiId: apiGatewayId,
-          resourceId: getResourceResponse.id!,
-          httpMethod: 'POST',
-        })
-      );
-      
-      expect(getIntegrationResponse.type).toBe('AWS');
-      expect(getIntegrationResponse.uri).toContain('lambda');
-    }, 30000);
+    test('MasterKMSKey should have proper key policy statements', () => {
+      const key = template.Resources.MasterKMSKey;
+      const statements = key.Properties.KeyPolicy.Statement;
 
-    test('Valid API request triggers Lambda successfully', async () => {
-      const validRequestBody = JSON.stringify({
-        customerId: 'cust-test-123',
-        items: [
-          { productId: 'prod-456', quantity: 2 }
-        ]
-      });
-      
-      // Invoke API Gateway endpoint
-      const fetchResponse = await fetch(`${apiGatewayUrl}/order?customerId=cust-test-123`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: validRequestBody,
-      });
-      
-      expect(fetchResponse.status).toBe(200);
-      const responseBody = await fetchResponse.json();
-      expect(responseBody).toBeDefined();
-    }, 30000);
+      // Should have admin permissions
+      const adminStatement = statements.find((s: any) => s.Sid === 'Enable IAM User Permissions');
+      expect(adminStatement).toBeDefined();
+      expect(adminStatement.Effect).toBe('Allow');
+      expect(adminStatement.Action).toBe('kms:*');
 
-    test('API Gateway rejects invalid request (validation)', async () => {
-      // Missing required customerId in query string
-      const invalidResponse1 = await fetch(`${apiGatewayUrl}/order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId: 'test', items: [] }),
-      });
-      
-      expect(invalidResponse1.status).toBe(400);
-      
-      // Invalid request body (missing items)
-      const invalidResponse2 = await fetch(`${apiGatewayUrl}/order?customerId=test`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId: 'test' }), // Missing items
-      });
-      
-      expect(invalidResponse2.status).toBe(400);
-      
-      // Invalid quantity (exceeds max)
-      const invalidResponse3 = await fetch(`${apiGatewayUrl}/order?customerId=test`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerId: 'test',
-          items: [{ productId: 'prod-1', quantity: 101 }] // Exceeds max 100
-        }),
-      });
-      
-      expect(invalidResponse3.status).toBe(400);
-    }, 45000);
+      // Should have CloudTrail permissions
+      const cloudtrailEncrypt = statements.find((s: any) => s.Sid === 'Allow CloudTrail to encrypt logs');
+      expect(cloudtrailEncrypt).toBeDefined();
+      expect(cloudtrailEncrypt.Principal.Service).toBe('cloudtrail.amazonaws.com');
 
-    test('Lambda execution creates logs and can send to DLQ on failure', async () => {
-      // Verify Lambda function exists and is configured
-      const getFunctionResponse = await lambdaClient.send(
-        new GetFunctionCommand({ FunctionName: lambdaFunctionArn })
-      );
-      
-      expect(getFunctionResponse.Configuration?.FunctionName).toBeDefined();
-      expect(getFunctionResponse.Configuration?.DeadLetterConfig?.TargetArn).toBeDefined();
-      
-      // Verify DLQ exists
-      const queueAttributesResponse = await sqsClient.send(
-        new GetQueueAttributesCommand({
-          QueueUrl: dlqUrl,
-          AttributeNames: ['All'],
-        })
-      );
-      
-      expect(queueAttributesResponse.Attributes).toBeDefined();
-      expect(queueAttributesResponse.Attributes?.QueueArn).toBeDefined();
-      
-      // Verify Lambda has permission to send to DLQ
-      const functionConfig = await lambdaClient.send(
-        new GetFunctionConfigurationCommand({ FunctionName: lambdaFunctionArn })
-      );
-      
-      expect(functionConfig.DeadLetterConfig?.TargetArn).toContain('sqs');
-    }, 30000);
+      // Should have CloudWatch Logs permissions
+      const cloudwatchLogs = statements.find((s: any) => s.Sid === 'Allow CloudWatch Logs');
+      expect(cloudwatchLogs).toBeDefined();
+      expect(cloudwatchLogs.Principal.Service).toBeDefined();
 
-    test('CloudTrail logs API Gateway and Lambda invocations', async () => {
-      // Wait for CloudTrail to log API Gateway invocation
-      await new Promise(resolve => setTimeout(resolve, 15000));
-      
-      // Query CloudTrail for API Gateway events
-      const lookupEventsResponse = await cloudTrailClient.send(
-        new LookupEventsCommand({
-          LookupAttributes: [
-            { AttributeKey: 'ResourceType', AttributeValue: 'AWS::ApiGateway::RestApi' }
-          ],
-          StartTime: new Date(Date.now() - 10 * 60 * 1000),
-        })
-      );
-      
-      expect(lookupEventsResponse.Events).toBeDefined();
-    }, 60000);
+      // Should have S3 permissions
+      const s3Statement = statements.find((s: any) => s.Sid === 'Allow S3 service');
+      expect(s3Statement).toBeDefined();
+      expect(s3Statement.Principal.Service).toBe('s3.amazonaws.com');
+    });
+
+    test('should have MasterKMSKeyAlias', () => {
+      expect(template.Resources.MasterKMSKeyAlias).toBeDefined();
+      const alias = template.Resources.MasterKMSKeyAlias;
+      expect(alias.Type).toBe('AWS::KMS::Alias');
+      expect(alias.Properties.TargetKeyId).toEqual({ Ref: 'MasterKMSKey' });
+      expect(alias.Properties.AliasName['Fn::Sub']).toContain('master-key');
+    });
   });
 
-  // WORKFLOW 3: Application Server Flow
-  describe('Workflow 3: Application Server Flow (EC2 → AppConfig → Secrets Manager → RDS → CloudWatch)', () => {
+  // VPC AND NETWORK VALIDATION
+  describe('VPC and Network Configuration', () => {
+    test('should have VPC resource', () => {
+      expect(template.Resources.VPC).toBeDefined();
+      const vpc = template.Resources.VPC;
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+    });
 
-    test('EC2 instances can access S3 AppConfigBucket via IAM role', async () => {
-      // Verify EC2 instances exist and are running
-      const describeInstancesResponse = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [ec2InstanceId],
-        })
-      );
-      
-      const instance = describeInstancesResponse.Reservations?.[0]?.Instances?.[0];
-      expect(instance?.InstanceId).toBe(ec2InstanceId);
-      expect(instance?.State?.Name).toBe('running');
-      
-      // Verify IAM instance profile is attached
-      const instanceProfile = instance?.IamInstanceProfile;
-      expect(instanceProfile).toBeDefined();
-      
-      // Verify AppConfigBucket exists
-      expect(appConfigBucketName).toBeTruthy();
-      
-      // Verify bucket encryption
-      const encryptionResponse = await s3Client.send(
-        new GetBucketEncryptionCommand({ Bucket: appConfigBucketName })
-      );
-      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
-      
-      // Check if instance is registered with SSM (required for SSM commands)
-      let ssmReady = false;
-      try {
-        const ssmInstanceInfo = await ssmClient.send(
-          new DescribeInstanceInformationCommand({
-            Filters: [
-              { Key: 'InstanceIds', Values: [ec2InstanceId] }
-            ],
-          })
-        );
-        ssmReady = (ssmInstanceInfo.InstanceInformationList?.length ?? 0) > 0 &&
-                   ssmInstanceInfo.InstanceInformationList?.[0]?.PingStatus === 'Online';
-      } catch (error) {
-        // SSM not available or instance not registered
-        ssmReady = false;
-      }
-      
-      // If SSM is available, execute command to verify actual access
-      if (ssmReady) {
-        const ssmCommand = `aws s3 ls s3://${appConfigBucketName}/ --region ${AWS_REGION}`;
-        
-        const sendCommandResponse = await ssmClient.send(
-          new SendCommandCommand({
-            InstanceIds: [ec2InstanceId],
-            DocumentName: 'AWS-RunShellScript',
-            Parameters: {
-              commands: [ssmCommand],
-            },
-          })
-        );
-        
-        expect(sendCommandResponse.Command?.CommandId).toBeDefined();
-        const commandId = sendCommandResponse.Command!.CommandId!;
-        
-        // Wait for command to complete
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        
-        // Get command invocation result
-        let invocationResponse;
-        let attempts = 0;
-        const maxAttempts = 12; // Wait up to 60 seconds
-        
-        while (attempts < maxAttempts) {
-          invocationResponse = await ssmClient.send(
-            new GetCommandInvocationCommand({
-              CommandId: commandId,
-              InstanceId: ec2InstanceId,
-            })
-          );
-          
-          if (invocationResponse.Status === 'Success' || invocationResponse.Status === 'Failed') {
-            break;
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          attempts++;
-        }
-        
-        expect(invocationResponse?.Status).toBe('Success');
-        expect(invocationResponse?.StandardOutputContent).toBeDefined();
-        // Verify output contains bucket name or access confirmation
-        expect(invocationResponse?.StandardOutputContent).toContain(appConfigBucketName);
-      } else {
-        // SSM not available - verify IAM permissions are configured correctly instead
-        // This validates that the infrastructure is set up correctly even if SSM isn't configured
-        expect(instanceProfile?.Arn).toBeDefined();
-      }
-    }, 90000);
+    test('should have InternetGateway and attachment', () => {
+      expect(template.Resources.InternetGateway).toBeDefined();
+      expect(template.Resources.AttachGateway).toBeDefined();
+      const attach = template.Resources.AttachGateway;
+      expect(attach.Type).toBe('AWS::EC2::VPCGatewayAttachment');
+      expect(attach.Properties.VpcId).toEqual({ Ref: 'VPC' });
+      expect(attach.Properties.InternetGatewayId).toEqual({ Ref: 'InternetGateway' });
+    });
 
-    test('EC2 can access Secrets Manager to retrieve encrypted RDS credentials', async () => {
-      // Verify EC2 instance is running
-      const describeInstancesResponse = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [ec2InstanceId],
-        })
-      );
-      
-      const instance = describeInstancesResponse.Reservations?.[0]?.Instances?.[0];
-      expect(instance?.State?.Name).toBe('running');
-      
-      // Verify RDS endpoint exists
-      expect(rdsEndpoint).toBeTruthy();
-      
-      // Verify RDS instance is accessible
-      const describeDbResponse = await rdsClient.send(
-        new DescribeDBInstancesCommand({})
-      );
-      
-      const dbInstance = describeDbResponse.DBInstances?.find(
-        db => db.Endpoint?.Address === rdsEndpoint
-      );
-      
-      expect(dbInstance).toBeDefined();
-      expect(dbInstance?.StorageEncrypted).toBe(true);
-      expect(dbInstance?.MultiAZ).toBe(true);
-      
-      // Verify secret exists and is encrypted
-      expect(dbPasswordSecretArn).toBeTruthy();
-      const describeSecretResponse = await secretsManagerClient.send(
-        new DescribeSecretCommand({ SecretId: dbPasswordSecretArn })
-      );
-      
-      expect(describeSecretResponse.ARN).toBe(dbPasswordSecretArn);
-      expect(describeSecretResponse.KmsKeyId).toBeDefined();
-      
-      // Extract secret name from ARN
-      const secretName = dbPasswordSecretArn.split(':').pop()?.split('/').pop();
-      expect(secretName).toBeTruthy();
-      
-      // Check if instance is registered with SSM (required for SSM commands)
-      let ssmReady = false;
-      try {
-        const ssmInstanceInfo = await ssmClient.send(
-          new DescribeInstanceInformationCommand({
-            Filters: [
-              { Key: 'InstanceIds', Values: [ec2InstanceId] }
-            ],
-          })
-        );
-        ssmReady = (ssmInstanceInfo.InstanceInformationList?.length ?? 0) > 0 &&
-                   ssmInstanceInfo.InstanceInformationList?.[0]?.PingStatus === 'Online';
-      } catch (error) {
-        // SSM not available or instance not registered
-        ssmReady = false;
-      }
-      
-      // If SSM is available, execute command to verify actual access
-      if (ssmReady) {
-        const ssmCommand = `aws secretsmanager describe-secret --secret-id ${secretName} --region ${AWS_REGION}`;
-        
-        const sendCommandResponse = await ssmClient.send(
-          new SendCommandCommand({
-            InstanceIds: [ec2InstanceId],
-            DocumentName: 'AWS-RunShellScript',
-            Parameters: {
-              commands: [ssmCommand],
-            },
-          })
-        );
-        
-        expect(sendCommandResponse.Command?.CommandId).toBeDefined();
-        const commandId = sendCommandResponse.Command!.CommandId!;
-        
-        // Wait for command to complete
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        
-        // Get command invocation result
-        let invocationResponse;
-        let attempts = 0;
-        const maxAttempts = 12;
-        
-        while (attempts < maxAttempts) {
-          invocationResponse = await ssmClient.send(
-            new GetCommandInvocationCommand({
-              CommandId: commandId,
-              InstanceId: ec2InstanceId,
-            })
-          );
-          
-          if (invocationResponse.Status === 'Success' || invocationResponse.Status === 'Failed') {
-            break;
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          attempts++;
-        }
-        
-        expect(invocationResponse?.Status).toBe('Success');
-        expect(invocationResponse?.StandardOutputContent).toBeDefined();
-        // Verify output contains secret ARN or name
-        expect(invocationResponse?.StandardOutputContent).toContain(secretName!);
-      } else {
-        // SSM not available - verify IAM permissions and secret configuration instead
-        // This validates that the infrastructure is set up correctly even if SSM isn't configured
-        expect(instance?.IamInstanceProfile?.Arn).toBeDefined();
-        expect(describeSecretResponse.KmsKeyId).toBeDefined();
-      }
-    }, 90000);
+    test('should have public and private subnets in different AZs', () => {
+      expect(template.Resources.PublicSubnet1).toBeDefined();
+      expect(template.Resources.PublicSubnet2).toBeDefined();
+      expect(template.Resources.PrivateSubnet1).toBeDefined();
+      expect(template.Resources.PrivateSubnet2).toBeDefined();
 
-    test('EC2 can connect to RDS via VPC', async () => {
-      // Verify EC2 and RDS are in the same VPC
-      const describeInstancesResponse = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [ec2InstanceId],
-        })
-      );
-      
-      const ec2VpcId = describeInstancesResponse.Reservations?.[0]?.Instances?.[0]?.VpcId;
-      expect(ec2VpcId).toBe(vpcId);
-      
-      // Verify RDS is in the same VPC
-      const describeDbResponse = await rdsClient.send(
-        new DescribeDBInstancesCommand({})
-      );
-      
-      const dbInstance = describeDbResponse.DBInstances?.find(
-        db => db.Endpoint?.Address === rdsEndpoint
-      );
-      
-      expect(dbInstance?.DBSubnetGroup?.VpcId).toBe(vpcId);
-      
-      // Verify security groups allow connection
-      const ec2SecurityGroupId = describeInstancesResponse.Reservations?.[0]?.Instances?.[0]?.SecurityGroups?.[0]?.GroupId;
-      
-      const describeSecurityGroupsResponse = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({
-          GroupIds: [ec2SecurityGroupId!],
-        })
-      );
-      
-      const egressRule = describeSecurityGroupsResponse.SecurityGroups?.[0]?.IpPermissionsEgress?.find(
-        rule => rule.FromPort === 3306 && rule.ToPort === 3306
-      );
-      
-      expect(egressRule).toBeDefined();
-    }, 30000);
+      // Verify public subnets don't auto-assign public IPs
+      expect(template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch).toBe(false);
+      expect(template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch).toBe(false);
 
-    test('CloudWatch monitors EC2 and RDS metrics', async () => {
-      // Verify EC2 instance has monitoring enabled
-      const describeInstancesResponse = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [ec2InstanceId],
-        })
-      );
-      
-      expect(describeInstancesResponse.Reservations?.[0]?.Instances?.[0]?.Monitoring?.State).toBe('enabled');
-      
-      // RDS monitoring is verified in the RDS instance configuration
-      const describeDbResponse = await rdsClient.send(
-        new DescribeDBInstancesCommand({})
-      );
-      
-      const dbInstance = describeDbResponse.DBInstances?.find(
-        db => db.Endpoint?.Address === rdsEndpoint
-      );
-      
-      // Verify monitoring is configured
-      // MonitoringInterval: 0 = basic monitoring (free), > 0 = enhanced monitoring (60, 10, 5, 1)
-      // If enhanced monitoring is configured, MonitoringRoleArn should be defined
-      if (dbInstance?.MonitoringInterval && dbInstance.MonitoringInterval > 0) {
-        // Enhanced monitoring is enabled
-        expect(dbInstance.MonitoringInterval).toBe(60); // Template sets this to 60 seconds
-        expect(dbInstance?.MonitoringRoleArn).toBeDefined();
-      } else {
-        // Basic monitoring (MonitoringInterval = 0) - verify at least basic monitoring exists
-        expect(dbInstance?.MonitoringInterval).toBe(0);
-        // With basic monitoring, MonitoringRoleArn may not be defined
-      }
-    }, 30000);
+      // Verify subnets reference VPC
+      expect(template.Resources.PublicSubnet1.Properties.VpcId).toEqual({ Ref: 'VPC' });
+      expect(template.Resources.PrivateSubnet1.Properties.VpcId).toEqual({ Ref: 'VPC' });
+    });
 
-    test('Multi-AZ deployment: EC2 instances exist in different AZs', async () => {
-      // Verify EC2 instance in AZ1
-      const describeInstances1 = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [ec2InstanceId],
-        })
-      );
-      
-      const az1 = describeInstances1.Reservations?.[0]?.Instances?.[0]?.Placement?.AvailabilityZone;
-      expect(az1).toBeDefined();
-      
-      // Verify EC2 instance in AZ2
-      const describeInstances2 = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [ec2InstanceIdAz2],
-        })
-      );
-      
-      const az2 = describeInstances2.Reservations?.[0]?.Instances?.[0]?.Placement?.AvailabilityZone;
-      expect(az2).toBeDefined();
-      
-      // Verify they are in different AZs
-      expect(az1).not.toBe(az2);
-    }, 30000);
+    test('should have route tables and associations', () => {
+      expect(template.Resources.PublicRouteTable).toBeDefined();
+      expect(template.Resources.PublicRoute).toBeDefined();
+      expect(template.Resources.PublicSubnet1RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PublicSubnet2RouteTableAssociation).toBeDefined();
+
+      const route = template.Resources.PublicRoute;
+      expect(route.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+      expect(route.Properties.GatewayId).toEqual({ Ref: 'InternetGateway' });
+      expect(route.DependsOn).toContain('AttachGateway');
+    });
   });
 
-  // WORKFLOW 4: Audit & Compliance Flow
-  describe('Workflow 4: Audit & Compliance Flow (All Actions → CloudTrail → S3 + CloudWatch Logs)', () => {
-    test('CloudTrail is logging to S3 bucket', async () => {
-      // Verify CloudTrail trail exists
-      const describeTrailsResponse = await cloudTrailClient.send(
-        new DescribeTrailsCommand({})
-      );
-      
-      const trail = describeTrailsResponse.trailList?.find(
-        t => t.S3BucketName === cloudTrailBucketName
-      );
-      
-      expect(trail).toBeDefined();
-      // IsLogging may be checked differently in API response
-      // Verify trail is configured and active
-      expect(trail?.S3BucketName).toBe(cloudTrailBucketName);
-      expect(trail?.KmsKeyId).toBeDefined();
-      
-      // Verify CloudTrail bucket exists
-      try {
-        await s3Client.send(
-          new HeadObjectCommand({
-            Bucket: cloudTrailBucketName,
-            Key: 'AWSLogs/',
-          })
-        );
-      } catch (error: any) {
-        // Bucket exists even if prefix doesn't
-        if (error.name === 'NotFound' || error.name === 'NoSuchKey') {
-          // This is acceptable - bucket exists
-        } else {
-          throw error;
-        }
-      }
-      
-      // Verify bucket versioning
-      const versioningResponse = await s3Client.send(
-        new GetBucketVersioningCommand({ Bucket: cloudTrailBucketName })
-      );
-      expect(versioningResponse.Status).toBe('Enabled');
-      
-      // Verify bucket encryption
-      const encryptionResponse = await s3Client.send(
-        new GetBucketEncryptionCommand({ Bucket: cloudTrailBucketName })
-      );
-      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
-    }, 30000);
+  // SECURITY GROUPS VALIDATION
+  describe('Security Groups', () => {
+    test('should have WebServerSecurityGroup with minimal rules', () => {
+      const sg = template.Resources.WebServerSecurityGroup;
+      expect(sg).toBeDefined();
+      expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(sg.Properties.VpcId).toEqual({ Ref: 'VPC' });
 
-    test('CloudTrail logs are delivered to CloudWatch Logs', async () => {
-      // Verify CloudTrail is configured to send to CloudWatch Logs
-      const describeTrailsResponse = await cloudTrailClient.send(
-        new DescribeTrailsCommand({})
+      const ingress = sg.Properties.SecurityGroupIngress;
+      expect(ingress).toHaveLength(2);
+      expect(ingress[0].IpProtocol).toBe('tcp');
+      expect(ingress[0].FromPort).toBe(80);
+      expect(ingress[0].ToPort).toBe(80);
+      expect(ingress[0].CidrIp).toBe('10.0.0.0/16'); // VPC only
+
+      expect(ingress[1].FromPort).toBe(22);
+      expect(ingress[1].CidrIp).toEqual({ Ref: 'AllowedSSHIP' }); // Restricted SSH
+
+      const egress = sg.Properties.SecurityGroupEgress;
+      expect(egress[0].FromPort).toBe(443); // HTTPS outbound
+      expect(egress[1].FromPort).toBe(3306); // MySQL to RDS
+    });
+
+    test('should have DatabaseSecurityGroup with VPC-only access', () => {
+      const sg = template.Resources.DatabaseSecurityGroup;
+      expect(sg).toBeDefined();
+      expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
+
+      const ingress = sg.Properties.SecurityGroupIngress;
+      expect(ingress).toHaveLength(1);
+      expect(ingress[0].FromPort).toBe(3306);
+      expect(ingress[0].CidrIp).toBe('10.0.0.0/16'); // VPC only
+      expect(sg.Properties.SecurityGroupEgress).toBeUndefined(); // No egress needed
+    });
+  });
+
+  // IAM ROLES AND POLICIES VALIDATION
+  describe('IAM Roles and Permission Boundaries', () => {
+    test('should have PermissionBoundaryPolicy', () => {
+      const policy = template.Resources.PermissionBoundaryPolicy;
+      expect(policy).toBeDefined();
+      expect(policy.Type).toBe('AWS::IAM::ManagedPolicy');
+
+      const statements = policy.Properties.PolicyDocument.Statement;
+      expect(statements.length).toBeGreaterThan(0);
+
+      // Should deny IAM operations
+      const denyStatement = statements.find((s: any) => s.Effect === 'Deny');
+      expect(denyStatement).toBeDefined();
+      expect(denyStatement.Action).toContain('iam:*');
+    });
+
+    test('should have EC2InstanceRole with permission boundary', () => {
+      const role = template.Resources.EC2InstanceRole;
+      expect(role).toBeDefined();
+      expect(role.Type).toBe('AWS::IAM::Role');
+      expect(role.Properties.PermissionsBoundary).toEqual({ Ref: 'PermissionBoundaryPolicy' });
+
+      const assumePolicy = role.Properties.AssumeRolePolicyDocument;
+      expect(assumePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
+
+      // Should have CloudWatch Agent policy
+      expect(role.Properties.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
       );
-      
-      const trail = describeTrailsResponse.trailList?.find(
-        t => t.S3BucketName === cloudTrailBucketName
+    });
+
+    test('should have EC2InstanceProfile', () => {
+      const profile = template.Resources.EC2InstanceProfile;
+      expect(profile).toBeDefined();
+      expect(profile.Type).toBe('AWS::IAM::InstanceProfile');
+      expect(profile.Properties.Roles).toContainEqual({ Ref: 'EC2InstanceRole' });
+    });
+
+    test('should have LambdaExecutionRole with DLQ permissions', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      expect(role).toBeDefined();
+      expect(role.Properties.PermissionsBoundary).toEqual({ Ref: 'PermissionBoundaryPolicy' });
+
+      const policies = role.Properties.Policies;
+      const lambdaPolicy = policies.find((p: any) => p.PolicyName === 'LambdaBasicPermissions');
+      expect(lambdaPolicy).toBeDefined();
+
+      const sqsStatement = lambdaPolicy.PolicyDocument.Statement.find(
+        (s: any) => s.Action && s.Action.includes('sqs:SendMessage')
       );
-      
-      expect(trail?.CloudWatchLogsLogGroupArn).toBe(cloudTrailLogGroupArn);
-      expect(trail?.CloudWatchLogsRoleArn).toBeDefined();
-      
-      // Verify CloudWatch Log Group exists
-      // Extract log group name from ARN format: arn:aws:logs:region:account-id:log-group:log-group-name:*
-      const arnMatch = cloudTrailLogGroupArn.match(/arn:aws:logs:[^:]+:[^:]+:log-group:([^:*]+)/);
-      if (!arnMatch || !arnMatch[1]) {
-        throw new Error(`Invalid CloudTrail log group ARN format: ${cloudTrailLogGroupArn}`);
-      }
-      const cleanLogGroupName = arnMatch[1];
-      
-      expect(cleanLogGroupName).toBeTruthy();
-      expect(cleanLogGroupName).not.toBe('');
-      expect(cleanLogGroupName).not.toBe('*');
-      
-      const describeLogGroupsResponse = await cloudWatchLogsClient.send(
-        new DescribeLogGroupsCommand({ logGroupNamePrefix: cleanLogGroupName })
-      );
-      
-      const logGroup = describeLogGroupsResponse.logGroups?.find(
-        lg => lg.logGroupName === cleanLogGroupName
-      );
-      
+      expect(sqsStatement).toBeDefined();
+    });
+
+    test('should have CloudTrailLogRole', () => {
+      const role = template.Resources.CloudTrailLogRole;
+      expect(role).toBeDefined();
+      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service)
+        .toBe('cloudtrail.amazonaws.com');
+      expect(role.Properties.PermissionsBoundary).toEqual({ Ref: 'PermissionBoundaryPolicy' });
+    });
+
+    test('should have RDSMonitoringRole', () => {
+      const role = template.Resources.RDSMonitoringRole;
+      expect(role).toBeDefined();
+      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service)
+        .toBe('monitoring.rds.amazonaws.com');
+      expect(role.Properties.PermissionsBoundary).toEqual({ Ref: 'PermissionBoundaryPolicy' });
+    });
+  });
+
+  // S3 BUCKETS VALIDATION
+  describe('S3 Buckets', () => {
+    const s3Buckets = ['AppDataBucket', 'AppConfigBucket', 'CloudTrailBucket'];
+
+    test('should have all required S3 buckets', () => {
+      s3Buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        expect(bucket).toBeDefined();
+        expect(bucket.Type).toBe('AWS::S3::Bucket');
+      });
+    });
+
+    test('all buckets should have versioning enabled', () => {
+      s3Buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      });
+    });
+
+    test('all buckets should have KMS encryption', () => {
+      s3Buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
+        expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+        expect(encryption.ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({
+          'Fn::GetAtt': ['MasterKMSKey', 'Arn'],
+        });
+      });
+    });
+
+    test('all buckets should have public access block', () => {
+      s3Buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        const pubAccess = bucket.Properties.PublicAccessBlockConfiguration;
+        expect(pubAccess.BlockPublicAcls).toBe(true);
+        expect(pubAccess.BlockPublicPolicy).toBe(true);
+        expect(pubAccess.IgnorePublicAcls).toBe(true);
+        expect(pubAccess.RestrictPublicBuckets).toBe(true);
+      });
+    });
+
+    test('CloudTrailBucket should have lifecycle configuration', () => {
+      const bucket = template.Resources.CloudTrailBucket;
+      expect(bucket.Properties.LifecycleConfiguration).toBeDefined();
+      const rules = bucket.Properties.LifecycleConfiguration.Rules;
+      expect(rules[0].Status).toBe('Enabled');
+      expect(rules[0].NoncurrentVersionExpirationInDays).toBe(90);
+    });
+
+    test('should have CloudTrailBucketPolicy with correct permissions', () => {
+      const policy = template.Resources.CloudTrailBucketPolicy;
+      expect(policy).toBeDefined();
+      expect(policy.Properties.Bucket).toEqual({ Ref: 'CloudTrailBucket' });
+
+      const statements = policy.Properties.PolicyDocument.Statement;
+      const aclCheck = statements.find((s: any) => s.Sid === 'AWSCloudTrailAclCheck');
+      expect(aclCheck).toBeDefined();
+      expect(aclCheck.Principal.Service).toBe('cloudtrail.amazonaws.com');
+
+      const write = statements.find((s: any) => s.Sid === 'AWSCloudTrailWrite');
+      expect(write).toBeDefined();
+      expect(write.Action).toBe('s3:PutObject');
+      expect(write.Condition.StringEquals['s3:x-amz-acl']).toBe('bucket-owner-full-control');
+    });
+
+    test('should have AppDataBucketPolicyForCloudFront with condition for CloudFront access', () => {
+      const policy = template.Resources.AppDataBucketPolicyForCloudFront;
+      expect(policy).toBeDefined();
+      expect(policy.Condition).toBe('CreateCloudFront');
+      expect(policy.Properties.Bucket).toEqual({ Ref: 'AppDataBucket' });
+    });
+  });
+
+  // RDS DATABASE VALIDATION
+  describe('RDS Database', () => {
+    test('should have DBSubnetGroup', () => {
+      const subnetGroup = template.Resources.DBSubnetGroup;
+      expect(subnetGroup).toBeDefined();
+      expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
+      expect(subnetGroup.Properties.SubnetIds).toHaveLength(2);
+      expect(subnetGroup.Properties.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(subnetGroup.Properties.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet2' });
+    });
+
+    test('should have DBPasswordSecret with KMS encryption', () => {
+      const secret = template.Resources.DBPasswordSecret;
+      expect(secret).toBeDefined();
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(secret.Properties.KmsKeyId).toEqual({ Ref: 'MasterKMSKey' });
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
+      expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(32);
+    });
+
+    test('should have RDSDatabase with security configuration', () => {
+      const db = template.Resources.RDSDatabase;
+      expect(db).toBeDefined();
+      expect(db.Type).toBe('AWS::RDS::DBInstance');
+
+      expect(db.Properties.StorageEncrypted).toBe(true);
+      expect(db.Properties.KmsKeyId).toEqual({ 'Fn::GetAtt': ['MasterKMSKey', 'Arn'] });
+      expect(db.Properties.MultiAZ).toBe(true);
+      expect(db.Properties.BackupRetentionPeriod).toBe(7);
+      expect(db.Properties.MonitoringInterval).toBe(60);
+      expect(db.Properties.Engine).toBe('mysql');
+      expect(db.Properties.EngineVersion).toBe('8.0.43');
+      expect(db.Properties.DBInstanceClass).toBe('db.t3.medium');
+      expect(db.Properties.StorageType).toBe('gp3');
+    });
+
+    test('RDSDatabase should use Secrets Manager for credentials', () => {
+      const db = template.Resources.RDSDatabase;
+      const username = db.Properties.MasterUsername;
+      const password = db.Properties.MasterUserPassword;
+
+      expect(username['Fn::Sub']).toContain('resolve:secretsmanager');
+      expect(password['Fn::Sub']).toContain('resolve:secretsmanager');
+      expect(username['Fn::Sub']).toContain('DBPasswordSecret');
+    });
+
+    test('RDSDatabase should have CloudWatch logs export enabled', () => {
+      const db = template.Resources.RDSDatabase;
+      expect(db.Properties.EnableCloudwatchLogsExports).toContain('error');
+      expect(db.Properties.EnableCloudwatchLogsExports).toContain('general');
+      expect(db.Properties.EnableCloudwatchLogsExports).toContain('slowquery');
+    });
+  });
+
+  // CLOUDTRAIL VALIDATION
+  describe('CloudTrail', () => {
+    test('should have CloudTrailLogGroup with KMS encryption', () => {
+      const logGroup = template.Resources.CloudTrailLogGroup;
       expect(logGroup).toBeDefined();
-      expect(logGroup?.kmsKeyId).toBeDefined();
-      
-      // Verify logs are being written (at least log group structure exists)
-      expect(logGroup?.arn).toBe(cloudTrailLogGroupArn);
-    }, 30000);
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(logGroup.Properties.RetentionInDays).toBe(90);
+      expect(logGroup.Properties.KmsKeyId).toEqual({ 'Fn::GetAtt': ['MasterKMSKey', 'Arn'] });
+    });
 
-    test('CloudTrail captures API activity across services', async () => {
-      // Trigger some API activity
-      await lambdaClient.send(
-        new GetFunctionCommand({ FunctionName: lambdaFunctionArn })
-      );
-      
-      // Wait for CloudTrail to log
-      await new Promise(resolve => setTimeout(resolve, 15000));
-      
-      // Query CloudTrail for recent Lambda API calls
-      const lookupEventsResponse = await cloudTrailClient.send(
-        new LookupEventsCommand({
-          LookupAttributes: [
-            { AttributeKey: 'EventName', AttributeValue: 'GetFunction' }
-          ],
-          StartTime: new Date(Date.now() - 5 * 60 * 1000),
-        })
-      );
-      
-      expect(lookupEventsResponse.Events).toBeDefined();
-      
-      // Verify CloudTrail log file validation is enabled
-      const trailName = cloudTrailBucketName.split('-cloudtrail-')[0] + '-trail-' + AWS_REGION;
-      const getTrailResponse = await cloudTrailClient.send(
-        new GetTrailCommand({ Name: trailName })
-      );
-      
-      expect(getTrailResponse.Trail?.LogFileValidationEnabled).toBe(true);
-    }, 60000);
-  });
+    test('should have CloudTrail with correct configuration', () => {
+      const trail = template.Resources.CloudTrail;
+      expect(trail).toBeDefined();
+      expect(trail.Type).toBe('AWS::CloudTrail::Trail');
 
+      expect(trail.Properties.IncludeGlobalServiceEvents).toBe(true);
+      expect(trail.Properties.IsLogging).toBe(true);
+      expect(trail.Properties.IsMultiRegionTrail).toBe(false);
+      expect(trail.Properties.EnableLogFileValidation).toBe(true);
+      expect(trail.Properties.KMSKeyId).toEqual({ 'Fn::GetAtt': ['MasterKMSKey', 'Arn'] });
+      expect(trail.Properties.S3BucketName).toEqual({ Ref: 'CloudTrailBucket' });
+    });
 
-  // WORKFLOW 5: Administrative Access Flow
-  describe('Workflow 5: Administrative Access Flow (Administrator → Security Group → EC2 → Secure Operations)', () => {
-    test('Security Group restricts SSH to allowed IP only', async () => {
-      // Get EC2 instance security groups
-      const describeInstancesResponse = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [ec2InstanceId],
-        })
-      );
-      
-      const securityGroupId = describeInstancesResponse.Reservations?.[0]?.Instances?.[0]?.SecurityGroups?.[0]?.GroupId;
-      
-      // Get security group rules
-      const describeSecurityGroupsResponse = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({
-          GroupIds: [securityGroupId!],
-        })
-      );
-      
-      const securityGroup = describeSecurityGroupsResponse.SecurityGroups?.[0];
-      
-      // Verify SSH rule exists and is restricted
-      const sshRule = securityGroup?.IpPermissions?.find(
-        rule => rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === 'tcp'
-      );
-      
-      expect(sshRule).toBeDefined();
-      expect(sshRule?.IpRanges?.length).toBe(1);
-      // The IP should be restricted (not 0.0.0.0/0)
-      expect(sshRule?.IpRanges?.[0]?.CidrIp).not.toBe('0.0.0.0/0');
-    }, 30000);
-
-    test('EC2 instances are in private subnets', async () => {
-      // Verify EC2 instance is in a private subnet
-      const describeInstancesResponse = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [ec2InstanceId],
-        })
-      );
-      
-      const subnetId = describeInstancesResponse.Reservations?.[0]?.Instances?.[0]?.SubnetId;
-      
-      // Get subnet details
-      const describeSubnetsResponse = await ec2Client.send(
-        new DescribeSubnetsCommand({
-          SubnetIds: [subnetId!],
-        })
-      );
-      
-      const subnet = describeSubnetsResponse.Subnets?.[0];
-      
-      // Verify subnet is in the VPC
-      expect(subnet?.VpcId).toBe(vpcId);
-      
-      // Verify subnet doesn't have auto-assign public IP (indicates private subnet)
-      expect(subnet?.MapPublicIpOnLaunch).toBe(false);
-    }, 30000);
-
-
-    test('All EC2 operations are logged in CloudTrail', async () => {
-      // Perform an EC2 API operation
-      await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [ec2InstanceId],
-        })
-      );
-      
-      // Wait for CloudTrail
-      await new Promise(resolve => setTimeout(resolve, 15000));
-      
-      // Query CloudTrail for EC2 DescribeInstances events
-      const lookupEventsResponse = await cloudTrailClient.send(
-        new LookupEventsCommand({
-          LookupAttributes: [
-            { AttributeKey: 'EventName', AttributeValue: 'DescribeInstances' }
-          ],
-          StartTime: new Date(Date.now() - 5 * 60 * 1000),
-        })
-      );
-      
-      expect(lookupEventsResponse.Events).toBeDefined();
-    }, 60000);
-  });
-
-  // Cross-Workflow Security Validations
-  describe('Cross-Workflow: Security Controls', () => {
-    test('KMS encryption is used across all storage services', async () => {
-      // Verify KMS key exists
-      const describeKeyResponse = await kmsClient.send(
-        new DescribeKeyCommand({ KeyId: kmsKeyId })
-      );
-      
-      expect(describeKeyResponse.KeyMetadata).toBeDefined();
-      expect(describeKeyResponse.KeyMetadata?.KeyId).toBe(kmsKeyId);
-      expect(describeKeyResponse.KeyMetadata?.KeyState).toBe('Enabled');
-      
-      // Key rotation is enabled at key creation (EnableKeyRotation: true in template)
-      
-      // Verify KMS key is used for:
-      // - S3 buckets (checked in Workflow 1)
-      // - RDS encryption (checked in Workflow 3)
-      // - CloudTrail logs (checked in Workflow 4)
-      // - Secrets Manager (verified by KmsKeyId in secret)
-      // - Lambda logs (verified by log group encryption)
-    }, 30000);
-
-    test('VPC isolation: Resources are properly network-isolated', async () => {
-      // Verify VPC exists
-      const describeVpcsResponse = await ec2Client.send(
-        new DescribeVpcsCommand({
-          VpcIds: [vpcId],
-        })
-      );
-      
-      expect(describeVpcsResponse.Vpcs?.[0]?.VpcId).toBe(vpcId);
-      
-      // Verify VPC exists and is configured
-      const vpc = describeVpcsResponse.Vpcs?.[0];
-      expect(vpc).toBeDefined();
-      expect(vpc?.VpcId).toBe(vpcId);
-      // DNS settings are configured in template (EnableDnsHostnames, EnableDnsSupport: true)
-      
-      // EC2 instances are in private subnets (verified in Workflow 5)
-      // RDS is in private subnets (verified in Workflow 3)
-      // Security groups restrict access (verified in Workflow 5)
-    }, 30000);
-  });
-
-  // Error Scenarios Across System Boundaries
-  describe('Error Scenarios: System Boundary Testing', () => {
-    test('API Gateway validation prevents malformed requests from reaching Lambda', async () => {
-      // Malformed JSON
-      const malformedResponse = await fetch(`${apiGatewayUrl}/order?customerId=test`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{"invalid": json}', // Invalid JSON
+    test('CloudTrail should have CloudWatch Logs integration', () => {
+      const trail = template.Resources.CloudTrail;
+      expect(trail.Properties.CloudWatchLogsLogGroupArn).toEqual({
+        'Fn::GetAtt': ['CloudTrailLogGroup', 'Arn'],
       });
-      
-      expect(malformedResponse.status).toBe(400);
-      
-      // Invalid content type
-      const wrongContentTypeResponse = await fetch(`${apiGatewayUrl}/order?customerId=test`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: 'plain text',
+      expect(trail.Properties.CloudWatchLogsRoleArn).toEqual({
+        'Fn::GetAtt': ['CloudTrailLogRole', 'Arn'],
       });
-      
-      expect(wrongContentTypeResponse.status).toBe(415); // Unsupported Media Type
-    }, 30000);
+    });
 
-    test('S3 bucket blocks public access', async () => {
-      // Verify AppDataBucket blocks public access
-      expect(appDataBucketName).toBeTruthy();
-      const bucketName = appDataBucketName;
-      
-      // Attempt to access bucket - should require authentication
-      // Public access block is enforced at bucket level
-      // This test verifies bucket exists and requires authentication
-      const versioningResponse = await s3Client.send(
-        new GetBucketVersioningCommand({ Bucket: bucketName })
-      );
-      expect(versioningResponse.Status).toBeDefined();
-    }, 30000);
+    test('CloudTrail should have event selectors for S3 buckets', () => {
+      const trail = template.Resources.CloudTrail;
+      const selectors = trail.Properties.EventSelectors;
+      expect(selectors).toBeDefined();
+      expect(selectors[0].IncludeManagementEvents).toBe(true);
+      expect(selectors[0].ReadWriteType).toBe('All');
+      expect(selectors[0].DataResources[0].Type).toBe('AWS::S3::Object');
+      expect(selectors[0].DataResources[0].Values.length).toBe(2);
+    });
 
-    test('Security groups enforce network isolation', async () => {
-      // Verify database security group only allows VPC traffic
-      const describeDbResponse = await rdsClient.send(
-        new DescribeDBInstancesCommand({})
-      );
-      
-      const dbInstance = describeDbResponse.DBInstances?.find(
-        db => db.Endpoint?.Address === rdsEndpoint
-      );
-      
-      const dbSecurityGroupId = dbInstance?.VpcSecurityGroups?.[0]?.VpcSecurityGroupId;
-      
-      expect(dbSecurityGroupId).toBeTruthy();
-      
-      const describeSecurityGroupsResponse = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({
-          GroupIds: [dbSecurityGroupId!],
-        })
-      );
-      
-      const securityGroup = describeSecurityGroupsResponse.SecurityGroups?.[0];
-      expect(securityGroup).toBeDefined();
-      
-      // Verify ingress rules only allow VPC CIDR (10.0.0.0/16)
-      const mysqlRule = securityGroup?.IpPermissions?.find(
-        rule => rule.FromPort === 3306 && rule.ToPort === 3306
-      );
-      
-      expect(mysqlRule).toBeDefined();
-      expect(mysqlRule?.IpRanges).toBeDefined();
-      expect(mysqlRule?.IpRanges?.length).toBeGreaterThan(0);
-      expect(mysqlRule?.IpRanges?.[0]?.CidrIp).toBe('10.0.0.0/16');
-    }, 30000);
+    test('CloudTrail should depend on CloudTrailBucketPolicy', () => {
+      const trail = template.Resources.CloudTrail;
+      expect(trail.DependsOn).toContain('CloudTrailBucketPolicy');
+    });
   });
 
-  // Cleanup: Remove test data
-  afterAll(async () => {
-    // Clean up test object from S3
-    try {
-      expect(appDataBucketName).toBeTruthy();
-      await s3Client.send(
-        new DeleteObjectCommand({
-          Bucket: appDataBucketName,
-          Key: TEST_OBJECT_KEY,
-        })
-      );
-    } catch (error) {
-      // Ignore cleanup errors
-      console.warn('Cleanup warning:', error);
-    }
-    
-    // Clean up DLQ messages (if any test messages were added)
-    try {
-      await sqsClient.send(
-        new PurgeQueueCommand({ QueueUrl: dlqUrl })
-      );
-    } catch (error) {
-      // Ignore cleanup errors
-      console.warn('Cleanup warning:', error);
-    }
-  }, 60000);
+  // WAF AND CLOUDFRONT VALIDATION
+  describe('WAF and CloudFront', () => {
+    test('CreateCloudFront condition should exist', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.CreateCloudFront).toBeDefined();
+      expect(template.Conditions.CreateCloudFront['Fn::Equals']).toEqual([
+        { Ref: 'AWS::Region' },
+        'us-east-1'
+      ]);
+    });
+
+    test('WebACL should be created only in us-east-1', () => {
+      const webacl = template.Resources.WebACL;
+      expect(webacl).toBeDefined();
+      expect(webacl.Condition).toBe('CreateCloudFront');
+      expect(webacl.Type).toBe('AWS::WAFv2::WebACL');
+      expect(webacl.Properties.Scope).toBe('CLOUDFRONT');
+    });
+
+    test('WebACL should have AWS managed rules', () => {
+      const webacl = template.Resources.WebACL;
+      const rules = webacl.Properties.Rules;
+      expect(rules.length).toBeGreaterThan(0);
+
+      const commonRuleSet = rules.find((r: any) => r.Name === 'AWSManagedRulesCommonRuleSet');
+      expect(commonRuleSet).toBeDefined();
+      expect(commonRuleSet.Statement.ManagedRuleGroupStatement.VendorName).toBe('AWS');
+    });
+
+    test('CloudFrontDistribution should be created only in us-east-1', () => {
+      const distribution = template.Resources.CloudFrontDistribution;
+      expect(distribution).toBeDefined();
+      expect(distribution.Condition).toBe('CreateCloudFront');
+      expect(distribution.Type).toBe('AWS::CloudFront::Distribution');
+    });
+
+    test('CloudFrontDistribution should use WAF', () => {
+      const distribution = template.Resources.CloudFrontDistribution;
+      expect(distribution.Properties.DistributionConfig.WebACLId).toEqual({
+        'Fn::GetAtt': ['WebACL', 'Arn'],
+      });
+    });
+
+    test('CloudFrontDistribution should enforce HTTPS', () => {
+      const distribution = template.Resources.CloudFrontDistribution;
+      const config = distribution.Properties.DistributionConfig;
+      expect(config.DefaultCacheBehavior.ViewerProtocolPolicy).toBe('redirect-to-https');
+    });
+
+    test('CloudFrontDistribution should use Origin Access Control', () => {
+      const distribution = template.Resources.CloudFrontDistribution;
+      const origins = distribution.Properties.DistributionConfig.Origins;
+      expect(origins[0].OriginAccessControlId).toEqual({
+        Ref: 'CloudFrontOriginAccessControl',
+      });
+    });
+
+    test('should have CloudFrontOriginAccessControl with condition', () => {
+      const oac = template.Resources.CloudFrontOriginAccessControl;
+      expect(oac).toBeDefined();
+      expect(oac.Condition).toBe('CreateCloudFront');
+      expect(oac.Type).toBe('AWS::CloudFront::OriginAccessControl');
+      expect(oac.Properties.OriginAccessControlConfig.SigningProtocol).toBe('sigv4');
+    });
+  });
+
+  // LAMBDA VALIDATION
+  describe('Lambda Function', () => {
+    test('should have LambdaDeadLetterQueue with KMS encryption', () => {
+      const dlq = template.Resources.LambdaDeadLetterQueue;
+      expect(dlq).toBeDefined();
+      expect(dlq.Type).toBe('AWS::SQS::Queue');
+      expect(dlq.Properties.KmsMasterKeyId).toEqual({ Ref: 'MasterKMSKey' });
+      expect(dlq.Properties.MessageRetentionPeriod).toBe(1209600); // 14 days
+    });
+
+    test('should have SampleLambdaFunction with DLQ configuration', () => {
+      const func = template.Resources.SampleLambdaFunction;
+      expect(func).toBeDefined();
+      expect(func.Type).toBe('AWS::Lambda::Function');
+      expect(func.Properties.DeadLetterConfig.TargetArn).toEqual({
+        'Fn::GetAtt': ['LambdaDeadLetterQueue', 'Arn'],
+      });
+      expect(func.Properties.Runtime).toBe('python3.9');
+      expect(func.Properties.Timeout).toBe(30);
+      expect(func.Properties.MemorySize).toBe(128);
+    });
+
+    test('Lambda function should have environment variables', () => {
+      const func = template.Resources.SampleLambdaFunction;
+      expect(func.Properties.Environment.Variables.ENVIRONMENT).toEqual({
+        Ref: 'EnvironmentName',
+      });
+      expect(func.Properties.Environment.Variables.PROJECT).toEqual({
+        Ref: 'ProjectName',
+      });
+    });
+
+    test('should have LambdaLogGroup with KMS encryption', () => {
+      const logGroup = template.Resources.LambdaLogGroup;
+      expect(logGroup).toBeDefined();
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(logGroup.Properties.RetentionInDays).toBe(30);
+      expect(logGroup.Properties.KmsKeyId).toEqual({ 'Fn::GetAtt': ['MasterKMSKey', 'Arn'] });
+    });
+  });
+
+  // API GATEWAY VALIDATION
+  describe('API Gateway', () => {
+    test('should have RestApi', () => {
+      const api = template.Resources.RestApi;
+      expect(api).toBeDefined();
+      expect(api.Type).toBe('AWS::ApiGateway::RestApi');
+      expect(api.Properties.EndpointConfiguration.Types).toContain('REGIONAL');
+    });
+
+    test('should have ApiRequestValidator', () => {
+      const validator = template.Resources.ApiRequestValidator;
+      expect(validator).toBeDefined();
+      expect(validator.Properties.ValidateRequestBody).toBe(true);
+      expect(validator.Properties.ValidateRequestParameters).toBe(true);
+    });
+
+    test('should have ApiModel with JSON schema', () => {
+      const model = template.Resources.ApiModel;
+      expect(model).toBeDefined();
+      expect(model.Properties.ContentType).toBe('application/json');
+      expect(model.Properties.Schema).toBeDefined();
+      expect(model.Properties.Schema.type).toBe('object');
+      expect(model.Properties.Schema.required).toContain('customerId');
+      expect(model.Properties.Schema.required).toContain('items');
+    });
+
+    test('ApiMethod should use request validator', () => {
+      const method = template.Resources.ApiMethod;
+      expect(method).toBeDefined();
+      expect(method.Properties.RequestValidatorId).toEqual({ Ref: 'ApiRequestValidator' });
+      expect(method.Properties.RequestModels['application/json']).toEqual({ Ref: 'ApiModel' });
+    });
+
+    test('ApiMethod should integrate with Lambda', () => {
+      const method = template.Resources.ApiMethod;
+      const integration = method.Properties.Integration;
+      expect(integration.Type).toBe('AWS');
+      expect(integration.Uri['Fn::Sub']).toContain('lambda');
+      expect(integration.Uri['Fn::Sub']).toContain('SampleLambdaFunction');
+    });
+
+    test('should have ApiGatewayInvokeLambdaPermission', () => {
+      const permission = template.Resources.ApiGatewayInvokeLambdaPermission;
+      expect(permission).toBeDefined();
+      expect(permission.Type).toBe('AWS::Lambda::Permission');
+      expect(permission.Properties.Principal).toBe('apigateway.amazonaws.com');
+      expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
+    });
+  });
+
+  // EC2 INSTANCES VALIDATION
+  describe('EC2 Instances', () => {
+    test('should have WebServerInstance in private subnet', () => {
+      const instance = template.Resources.WebServerInstance;
+      expect(instance).toBeDefined();
+      expect(instance.Type).toBe('AWS::EC2::Instance');
+      expect(instance.Properties.SubnetId).toEqual({ Ref: 'PrivateSubnet1' });
+      expect(instance.Properties.Monitoring).toBe(true);
+    });
+
+    test('WebServerInstance should have encrypted EBS volume', () => {
+      const instance = template.Resources.WebServerInstance;
+      const blockDevice = instance.Properties.BlockDeviceMappings[0];
+      expect(blockDevice.Ebs.Encrypted).toBe(true);
+      expect(blockDevice.Ebs.KmsKeyId).toEqual({ 'Fn::GetAtt': ['MasterKMSKey', 'Arn'] });
+      expect(blockDevice.Ebs.VolumeType).toBe('gp3');
+      expect(blockDevice.Ebs.DeleteOnTermination).toBe(true);
+    });
+
+    test('WebServerInstance should use dynamic AMI', () => {
+      const instance = template.Resources.WebServerInstance;
+      expect(instance.Properties.ImageId).toContain('resolve:ssm');
+      expect(instance.Properties.ImageId).toContain('al2023-ami-kernel-default-x86_64');
+    });
+
+    test('WebServerInstance should have IAM instance profile', () => {
+      const instance = template.Resources.WebServerInstance;
+      expect(instance.Properties.IamInstanceProfile).toEqual({ Ref: 'EC2InstanceProfile' });
+    });
+
+    test('should have WebServerInstanceAz2 in different AZ', () => {
+      const instance = template.Resources.WebServerInstanceAz2;
+      expect(instance).toBeDefined();
+      expect(instance.Properties.SubnetId).toEqual({ Ref: 'PrivateSubnet2' });
+    });
+  });
+
+  // CLOUDWATCH ALARMS VALIDATION
+  describe('CloudWatch Alarms', () => {
+    test('should have EC2CPUAlarm', () => {
+      const alarm = template.Resources.EC2CPUAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(alarm.Properties.MetricName).toBe('CPUUtilization');
+      expect(alarm.Properties.Namespace).toBe('AWS/EC2');
+      expect(alarm.Properties.Threshold).toBe(80);
+      expect(alarm.Properties.EvaluationPeriods).toBe(2);
+    });
+
+    test('should have EC2CPUAlarmAz2', () => {
+      const alarm = template.Resources.EC2CPUAlarmAz2;
+      expect(alarm).toBeDefined();
+      expect(alarm.Properties.Dimensions[0].Value).toEqual({ Ref: 'WebServerInstanceAz2' });
+    });
+
+    test('should have RDSCPUAlarm', () => {
+      const alarm = template.Resources.RDSCPUAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Properties.Namespace).toBe('AWS/RDS');
+      expect(alarm.Properties.Dimensions[0].Name).toBe('DBInstanceIdentifier');
+      expect(alarm.Properties.Dimensions[0].Value).toEqual({ Ref: 'RDSDatabase' });
+    });
+  });
+
+  // RESOURCE TAGGING VALIDATION
+  describe('Resource Tagging', () => {
+    const requiredTags = ['Name', 'Project', 'Department', 'Owner', 'team', 'iac-rlhf-amazon'];
+    const resourcesWithTags = [
+      'VPC',
+      'InternetGateway',
+      'PublicSubnet1',
+      'PrivateSubnet1',
+      'WebServerSecurityGroup',
+      'DatabaseSecurityGroup',
+      'EC2InstanceRole',
+      'AppDataBucket',
+      'RDSDatabase',
+      'CloudTrail',
+      'SampleLambdaFunction',
+    ];
+
+    test('all tagged resources should have required tags', () => {
+      resourcesWithTags.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (!resource || !resource.Properties.Tags) return;
+
+        const tags = resource.Properties.Tags;
+        const tagKeys = tags.map((t: any) => t.Key);
+
+        requiredTags.forEach(requiredTag => {
+          const tag = tags.find((t: any) => t.Key === requiredTag);
+          expect(tag).toBeDefined();
+        });
+      });
+    });
+
+    test('all resources should reference parameter values for tags', () => {
+      const vpc = template.Resources.VPC;
+      const projectTag = vpc.Properties.Tags.find((t: any) => t.Key === 'Project');
+      expect(projectTag.Value).toEqual({ Ref: 'ProjectName' });
+
+      const deptTag = vpc.Properties.Tags.find((t: any) => t.Key === 'Department');
+      expect(deptTag.Value).toEqual({ Ref: 'Department' });
+    });
+  });
+
+  // OUTPUTS VALIDATION
+  describe('Outputs', () => {
+    const requiredOutputs = [
+      'VpcId',
+      'WafWebAclArn',
+      'CloudFrontDomainName',
+      'CloudTrailLogGroupArn',
+      'RdsInstanceEndpoint',
+      'S3BucketName',
+      'AppDataBucketName',
+      'AppConfigBucketName',
+      'DBPasswordSecretArn',
+      'ApiGatewayId',
+      'DlqUrl',
+      'ApiGatewayUrl',
+      'Ec2InstanceId',
+      'Ec2InstanceIdAz2',
+      'KmsKeyId',
+      'LambdaFunctionArn',
+      'SecurityStatus',
+    ];
+
+    test('should have all required outputs', () => {
+      requiredOutputs.forEach(outputName => {
+        expect(template.Outputs[outputName]).toBeDefined();
+      });
+    });
+
+    test('all outputs should have exports', () => {
+      Object.keys(template.Outputs).forEach(outputName => {
+        const output = template.Outputs[outputName];
+        expect(output.Export).toBeDefined();
+        expect(output.Export.Name).toBeDefined();
+      });
+    });
+
+    test('WafWebAclArn output should be conditional', () => {
+      const output = template.Outputs.WafWebAclArn;
+      expect(output).toBeDefined();
+      expect(output.Condition).toBe('CreateCloudFront');
+      expect(output.Value).toBeDefined();
+      expect(output.Value['Fn::GetAtt']).toEqual(['WebACL', 'Arn']);
+    });
+
+    test('CloudFrontDomainName output should be conditional', () => {
+      const output = template.Outputs.CloudFrontDomainName;
+      expect(output).toBeDefined();
+      expect(output.Condition).toBe('CreateCloudFront');
+      expect(output.Value).toBeDefined();
+      expect(output.Value['Fn::GetAtt']).toEqual(['CloudFrontDistribution', 'DomainName']);
+    });
+
+    test('SecurityStatus should provide comprehensive status', () => {
+      const output = template.Outputs.SecurityStatus;
+      expect(output.Value['Fn::Sub']).toContain('Security Baseline Status');
+      expect(output.Value['Fn::Sub']).toContain('Multi-AZ VPC');
+      expect(output.Value['Fn::Sub']).toContain('KMS encryption');
+    });
+  });
+
+  // CROSS-VERIFICATION AND DEPENDENCIES
+  describe('Resource Dependencies and Cross-Verification', () => {
+    test('all security groups should reference VPC', () => {
+      const webSG = template.Resources.WebServerSecurityGroup;
+      const dbSG = template.Resources.DatabaseSecurityGroup;
+      expect(webSG.Properties.VpcId).toEqual({ Ref: 'VPC' });
+      expect(dbSG.Properties.VpcId).toEqual({ Ref: 'VPC' });
+    });
+
+    test('all IAM roles should have permission boundaries', () => {
+      const roles = [
+        'EC2InstanceRole',
+        'LambdaExecutionRole',
+        'RDSMonitoringRole',
+        'CloudTrailLogRole',
+      ];
+      roles.forEach(roleName => {
+        const role = template.Resources[roleName];
+        expect(role.Properties.PermissionsBoundary).toEqual({
+          Ref: 'PermissionBoundaryPolicy',
+        });
+      });
+    });
+
+    test('all encrypted resources should reference MasterKMSKey', () => {
+      const encryptedResources = [
+        { resource: 'AppDataBucket', path: ['Properties', 'BucketEncryption', 'ServerSideEncryptionConfiguration', '0', 'ServerSideEncryptionByDefault', 'KMSMasterKeyID'] },
+        { resource: 'CloudTrailBucket', path: ['Properties', 'BucketEncryption', 'ServerSideEncryptionConfiguration', '0', 'ServerSideEncryptionByDefault', 'KMSMasterKeyID'] },
+        { resource: 'RDSDatabase', path: ['Properties', 'KmsKeyId'] },
+        { resource: 'CloudTrailLogGroup', path: ['Properties', 'KmsKeyId'] },
+        { resource: 'LambdaLogGroup', path: ['Properties', 'KmsKeyId'] },
+      ];
+
+      encryptedResources.forEach(({ resource, path }) => {
+        const res = template.Resources[resource];
+        let value = res;
+        path.forEach(p => {
+          value = value[p];
+        });
+        expect(value['Fn::GetAtt']).toEqual(['MasterKMSKey', 'Arn']);
+      });
+    });
+
+    test('RDS should use database security group', () => {
+      const db = template.Resources.RDSDatabase;
+      expect(db.Properties.VPCSecurityGroups[0]['Fn::GetAtt']).toEqual([
+        'DatabaseSecurityGroup',
+        'GroupId',
+      ]);
+    });
+
+    test('EC2 instances should use web server security group', () => {
+      const instance1 = template.Resources.WebServerInstance;
+      const instance2 = template.Resources.WebServerInstanceAz2;
+      expect(instance1.Properties.SecurityGroupIds[0]['Fn::GetAtt']).toEqual([
+        'WebServerSecurityGroup',
+        'GroupId',
+      ]);
+      expect(instance2.Properties.SecurityGroupIds[0]['Fn::GetAtt']).toEqual([
+        'WebServerSecurityGroup',
+        'GroupId',
+      ]);
+    });
+  });
+
+  // BOUNDARY CONDITIONS AND EDGE CASES
+  describe('Boundary Conditions and Edge Cases', () => {
+    test('DBMasterUsername should enforce length constraints', () => {
+      const param = template.Parameters.DBMasterUsername;
+      expect(param.MinLength).toBe(1);
+      expect(param.MaxLength).toBe(16);
+    });
+
+    test('environment name should enforce lowercase pattern', () => {
+      const param = template.Parameters.EnvironmentName;
+      expect(param.AllowedPattern).toBe('^[a-z][a-z0-9-]*$');
+      // Should start with lowercase letter
+      expect('TestEnv'.match(param.AllowedPattern)).toBeNull();
+      expect('test-env'.match(param.AllowedPattern)).not.toBeNull();
+    });
+
+    test('CIDR patterns should validate IP ranges', () => {
+      const vpcParam = template.Parameters.VPCCidr;
+      expect(vpcParam.AllowedPattern).toContain('/');
+      // Should validate CIDR notation
+      expect(vpcParam.Default).toMatch(/\d+\.\d+\.\d+\.\d+\/\d+/);
+    });
+
+    test('EC2 instance type should be limited to allowed values', () => {
+      const param = template.Parameters.EC2InstanceType;
+      expect(param.AllowedValues.length).toBe(4);
+      expect(param.AllowedValues).not.toContain('m5.large'); // Not in allowed list
+    });
+  });
+
+  // INVERSE CHECKS (What should NOT exist)
+  describe('Inverse Checks - Security Hardening', () => {
+    test('public subnets should NOT auto-assign public IPs', () => {
+      const publicSubnet1 = template.Resources.PublicSubnet1;
+      const publicSubnet2 = template.Resources.PublicSubnet2;
+      expect(publicSubnet1.Properties.MapPublicIpOnLaunch).toBe(false);
+      expect(publicSubnet2.Properties.MapPublicIpOnLaunch).toBe(false);
+    });
+
+    test('S3 buckets should NOT allow public access', () => {
+      const buckets = ['AppDataBucket', 'AppConfigBucket', 'CloudTrailBucket'];
+      buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        const pubAccess = bucket.Properties.PublicAccessBlockConfiguration;
+        expect(pubAccess.BlockPublicAcls).toBe(true);
+        expect(pubAccess.RestrictPublicBuckets).toBe(true);
+      });
+    });
+
+    test('permission boundary should deny IAM operations', () => {
+      const policy = template.Resources.PermissionBoundaryPolicy;
+      const statements = policy.Properties.PolicyDocument.Statement;
+      const denyStatement = statements.find((s: any) => s.Effect === 'Deny');
+      expect(denyStatement.Action).toContain('iam:*');
+      expect(denyStatement.Action).toContain('organizations:*');
+    });
+  });
+
+  // PERFORMANCE AND RESOURCE LIMITS
+  describe('Performance and Resource Configuration', () => {
+    test('Lambda function should have reasonable timeout', () => {
+      const func = template.Resources.SampleLambdaFunction;
+      expect(func.Properties.Timeout).toBe(30);
+      expect(func.Properties.MemorySize).toBe(128);
+    });
+
+    test('RDS should use gp3 storage for better performance', () => {
+      const db = template.Resources.RDSDatabase;
+      expect(db.Properties.StorageType).toBe('gp3');
+    });
+
+    test('CloudWatch alarms should use appropriate periods', () => {
+      const alarms = [
+        template.Resources.EC2CPUAlarm,
+        template.Resources.RDSCPUAlarm,
+      ];
+      alarms.forEach(alarm => {
+        expect(alarm.Properties.Period).toBe(300); // 5 minutes
+        expect(alarm.Properties.EvaluationPeriods).toBe(2);
+      });
+    });
+
+    test('CloudFront should use HTTP/2', () => {
+      const distribution = template.Resources.CloudFrontDistribution;
+      expect(distribution.Properties.DistributionConfig.HttpVersion).toBe('http2');
+    });
+  });
 });
