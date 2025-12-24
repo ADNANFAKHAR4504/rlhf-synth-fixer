@@ -417,7 +417,7 @@ Resources:
                 - Name: SecurityScanOutput
               RunOrder: 1
 
-  # EventBridge Rule to trigger pipeline on CodeCommit changes
+Outputs:
   PipelineName:
     Description: Name of the CodePipeline
     Value: !Ref CodePipeline
