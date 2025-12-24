@@ -9,7 +9,11 @@ import axios from 'axios';
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
-const stackName = `TapStack${environmentSuffix}`;
+
+// Determine stack name based on whether we're using LocalStack or real AWS
+const stackName = process.env.AWS_ENDPOINT_URL
+  ? `localstack-stack-${environmentSuffix}` // LocalStack uses this naming convention
+  : `TapStack${environmentSuffix}`; // Real AWS uses TapStack prefix
 
 // LocalStack endpoint configuration
 const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
