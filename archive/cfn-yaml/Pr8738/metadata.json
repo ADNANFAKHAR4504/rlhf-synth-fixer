@@ -1,0 +1,44 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291903_ls",
+  "team": "2",
+  "startedAt": "2025-12-22T14:39:29.908Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "VPCGatewayAttachment",
+    "RouteTable",
+    "SubnetRouteTableAssociation",
+    "Route",
+    "SecurityGroup",
+    "LaunchTemplate",
+    "AutoScalingGroup",
+    "LoadBalancer",
+    "TargetGroup",
+    "Listener",
+    "Bucket",
+    "Key",
+    "Role",
+    "InstanceProfile",
+    "Trail",
+    "ConfigurationRecorder",
+    "DeliveryChannel"
+  ],
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

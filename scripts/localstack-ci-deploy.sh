@@ -352,7 +352,7 @@ deploy_cdk() {
 
     # Bootstrap CDK for LocalStack
     print_status $YELLOW "🔧 Bootstrapping CDK..."
-    cdklocal bootstrap -c environmentSuffix="$env_suffix" || true
+    cdklocal bootstrap -c environmentSuffix="$env_suffix"
 
     # Deploy based on language
     print_status $YELLOW "🚀 Deploying stacks..."
@@ -711,6 +711,24 @@ deploy_cloudformation() {
         esac
     fi
 
+    # Prepare CloudFormation parameters
+    local env_suffix="${ENVIRONMENT_SUFFIX:-dev}"
+    local key_pair_name="${KEY_PAIR_NAME:-localstack-key}"
+
+    print_status $BLUE "📌 Parameters:"
+    print_status $BLUE "   Environment Suffix: $env_suffix"
+    print_status $BLUE "   Key Pair Name: $key_pair_name"
+
+    # Create key pair if it doesn't exist
+    print_status $YELLOW "🔑 Ensuring key pair exists..."
+    if ! awslocal ec2 describe-key-pairs --key-names "$key_pair_name" > /dev/null 2>&1; then
+        print_status $BLUE "   Creating key pair: $key_pair_name"
+        awslocal ec2 create-key-pair --key-name "$key_pair_name" --output json > /dev/null
+        print_status $GREEN "✅ Key pair created: $key_pair_name"
+    else
+        print_status $GREEN "✅ Key pair already exists: $key_pair_name"
+    fi
+
     # Deploy based on template size
     local deploy_exit=0
     if [ "$use_s3" = true ]; then
@@ -719,6 +737,10 @@ deploy_cloudformation() {
         awslocal cloudformation create-stack \
             --stack-name "$stack_name" \
             --template-url "$template_url" \
+            --parameters \
+                ParameterKey=EnvironmentSuffix,ParameterValue="$env_suffix" \
+                ParameterKey=KeyPairName,ParameterValue="$key_pair_name" \
+                ParameterKey=UseLocalStack,ParameterValue=true \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --on-failure DO_NOTHING 2>&1 || deploy_exit=$?
     else
@@ -727,6 +749,10 @@ deploy_cloudformation() {
         awslocal cloudformation create-stack \
             --stack-name "$stack_name" \
             --template-body "file://$template" \
+            --parameters \
+                ParameterKey=EnvironmentSuffix,ParameterValue="$env_suffix" \
+                ParameterKey=KeyPairName,ParameterValue="$key_pair_name" \
+                ParameterKey=UseLocalStack,ParameterValue=true \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --on-failure DO_NOTHING 2>&1 || deploy_exit=$?
     fi
@@ -807,6 +833,15 @@ except Exception as e:
     fi
 
     save_outputs "$output_json"
+
+    # Apply LocalStack-specific fixes
+    print_status $CYAN "🔧 Applying LocalStack post-deployment fixes..."
+    if [ -f "$PROJECT_ROOT/scripts/localstack-cloudformation-post-deploy-fix.sh" ]; then
+        cd "$PROJECT_ROOT"
+        bash scripts/localstack-cloudformation-post-deploy-fix.sh
+    else
+        print_status $YELLOW "⚠️  Post-deploy fix script not found, skipping fixes"
+    fi
 }
 
 # Terraform deployment

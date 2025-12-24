@@ -589,13 +589,13 @@
     "EC2InstanceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
+<<<<<<< HEAD
         "RoleName": {
           "Fn::Sub": "${EnvironmentSuffix}-EC2-Role"
         },
+>>>>>>> c658322929b9d05b8ab3ba98180196289aa8510a
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
-          "Statement": [
-            {
               "Effect": "Allow",
               "Principal": {
                 "Service": "ec2.amazonaws.com"
