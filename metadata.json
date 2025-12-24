@@ -23,5 +23,6 @@
     "DynamoDB"
   ],
   "provider": "localstack",
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality_score": 7
 }
