@@ -350,6 +350,14 @@ Resources:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
+    # cfn-lint suppression for LocalStack compatibility
+    # LocalStack doesn't support {{resolve:secretsmanager:...}} dynamic references
+    # Using parameter reference instead for compatibility
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W1011
+            reason: "Using parameter for LocalStack compatibility - dynamic references not supported"
     Properties:
       DBInstanceClass: db.t3.medium
       Engine: postgres
