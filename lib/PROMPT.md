@@ -12,7 +12,7 @@ Deploy a secure multi-tier web application on AWS using CloudFormation. The envi
 ## Requirements
 
 ### Security Requirements
-1. **IAM Roles with Least Privilege**: Ensure that all IAM roles have the least privilege possible, defining only necessary permissions.
+1. **IAM Roles with Least Privilege**: Ensure IAM roles follow the principle of least privilege, defining only necessary permissions.
 2. **S3 Bucket Encryption**: Encrypt all S3 buckets using AWS-managed keys (SSE-S3).
 3. **VPC-Specific Deployment**: Deploy EC2 instances within the specific VPC identified by ID 'vpc-0abcd1234'.
 4. **Lambda Logging**: Set up comprehensive logging for AWS Lambda functions with AWS CloudWatch.
