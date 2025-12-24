@@ -5,7 +5,7 @@ resource "aws_lambda_function" "validator" {
   package_type  = "Image"
   image_uri     = "${aws_ecr_repository.lambda_images.repository_url}:validator-latest"
 
-  architectures = ["x86_64"]
+  architectures = ["arm64"]
   memory_size   = var.lambda_memory_size
   timeout       = var.lambda_timeout
 
@@ -40,7 +40,7 @@ resource "aws_lambda_function" "processor" {
   package_type  = "Image"
   image_uri     = "${aws_ecr_repository.lambda_images.repository_url}:processor-latest"
 
-  architectures = ["x86_64"]
+  architectures = ["arm64"]
   memory_size   = var.lambda_memory_size
   timeout       = var.lambda_timeout
 
@@ -75,7 +75,7 @@ resource "aws_lambda_function" "enricher" {
   package_type  = "Image"
   image_uri     = "${aws_ecr_repository.lambda_images.repository_url}:enricher-latest"
 
-  architectures = ["x86_64"]
+  architectures = ["arm64"]
   memory_size   = var.lambda_memory_size
   timeout       = var.lambda_timeout
 
@@ -110,7 +110,7 @@ resource "aws_lambda_function" "event_trigger" {
   package_type  = "Image"
   image_uri     = "${aws_ecr_repository.lambda_images.repository_url}:trigger-latest"
 
-  architectures = ["x86_64"]
+  architectures = ["arm64"]
   memory_size   = 256
   timeout       = 30
 
