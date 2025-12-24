@@ -2,6 +2,7 @@
 
 # tap_stack.py
 ```python
+# tap_stack.py
 from typing import Optional
 import pulumi
 import pulumi_aws as aws
