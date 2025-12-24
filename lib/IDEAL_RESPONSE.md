@@ -509,7 +509,7 @@ Resources:
       AutoScalingGroupName: !Sub '${AWS::StackName}-ASG'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
