@@ -584,8 +584,8 @@ Resources:
   Database:
     Type: AWS::RDS::DBInstance
     DependsOn: DatabaseSecret
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier:
         Fn::Sub: ${ProjectName}-db-${Environment}
@@ -595,7 +595,7 @@ Resources:
         - Ref: Environment
         - DBInstanceClass
       Engine: mysql
-      EngineVersion: 8.0.40
+      EngineVersion: '8.0'
       AllocatedStorage:
         Fn::FindInMap:
         - EnvironmentConfig
@@ -611,21 +611,9 @@ Resources:
       - Ref: DatabaseSecurityGroup
       DBSubnetGroupName:
         Ref: DBSubnetGroup
-      MultiAZ:
-        Fn::FindInMap:
-        - EnvironmentConfig
-        - Ref: Environment
-        - MultiAZ
-      BackupRetentionPeriod:
-        Fn::If:
-        - IsProductionLike
-        - 7
-        - 1
-      DeletionProtection:
-        Fn::If:
-        - IsProductionLike
-        - true
-        - false
+      MultiAZ: false
+      BackupRetentionPeriod: 1
+      DeletionProtection: false
       Tags:
       - Key: Name
         Value:
