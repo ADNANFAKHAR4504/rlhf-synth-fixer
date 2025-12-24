@@ -598,7 +598,7 @@ Resources:
         - !Ref PrivateSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref WebServerLaunchTemplate
-        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+        Version: '$Latest'
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
@@ -615,7 +615,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-alb-${AWSRegion}'
+      Name: !Sub 'tap-alb-${AWSRegion}'
       Scheme: internet-facing
       Type: application
       SecurityGroups:
@@ -630,7 +630,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-tg-${AWSRegion}'
+      Name: !Sub 'tap-tg-${AWSRegion}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref SecureVPC
@@ -816,6 +816,10 @@ Resources:
         SourceIdentifier: ROOT_ACCOUNT_MFA_ENABLED
 
 Outputs:
+  StackName:
+    Description: 'Stack name for LocalStack output validation'
+    Value: !Ref AWS::StackName
+
   VPCId:
     Description: 'VPC ID'
     Value: !Ref SecureVPC

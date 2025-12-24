@@ -855,12 +855,7 @@
                     "LaunchTemplateId": {
                         "Ref": "WebServerLaunchTemplate"
                     },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "WebServerLaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
+                    "Version": "$Latest"
                 },
                 "MinSize": 2,
                 "MaxSize": 6,
@@ -885,7 +880,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-alb-${AWSRegion}"
+                    "Fn::Sub": "tap-alb-${AWSRegion}"
                 },
                 "Scheme": "internet-facing",
                 "Type": "application",
@@ -914,7 +909,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-tg-${AWSRegion}"
+                    "Fn::Sub": "tap-tg-${AWSRegion}"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -1207,6 +1202,12 @@
         }
     },
     "Outputs": {
+        "StackName": {
+            "Description": "Stack name for LocalStack output validation",
+            "Value": {
+                "Ref": "AWS::StackName"
+            }
+        },
         "VPCId": {
             "Description": "VPC ID",
             "Value": {
