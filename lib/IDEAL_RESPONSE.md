@@ -334,8 +334,8 @@ export interface ApiStackProps extends cdk.NestedStackProps {
  * LANGUAGE CLARIFICATION:
  * This is a TypeScript CDK stack. The API Gateway request/response templates
  * use Velocity Template Language (VTL), which is AWS's templating language
- * (NOT Java). VTL syntax like $util.escapeJavaScript() is standard for
- * API Gateway integrations and should not be confused with Java code.
+ * for API Gateway integrations. VTL is a separate templating system used
+ * for request/response transformations in API Gateway.
  */
 export class ApiStack extends cdk.NestedStack {
   public readonly restApi: apigateway.RestApi;
@@ -414,17 +414,17 @@ export class ApiStack extends cdk.NestedStack {
           'application/json': JSON.stringify({
             body: '$input.json("$")',
             headers: {
-              // VTL syntax for iterating headers (not Java)
+              // VTL syntax for iterating headers
               '#foreach($header in $input.params().header.keySet())':
                 '"$header": "$util.escapeJavaScript($input.params().header.get($header))"#if($foreach.hasNext),#end#end',
             },
             pathParameters: {
-              // VTL syntax for iterating path params (not Java)
+              // VTL syntax for iterating path params
               '#foreach($param in $input.params().path.keySet())':
                 '"$param": "$util.escapeJavaScript($input.params().path.get($param))"#if($foreach.hasNext),#end#end',
             },
             queryStringParameters: {
-              // VTL syntax for iterating query params (not Java)
+              // VTL syntax for iterating query params
               '#foreach($queryParam in $input.params().querystring.keySet())':
                 '"$queryParam": "$util.escapeJavaScript($input.params().querystring.get($queryParam))"#if($foreach.hasNext),#end#end',
             },
@@ -592,7 +592,7 @@ export class ApiStack extends cdk.NestedStack {
 
 **Description**: Core Lambda function that processes uploaded images using Amazon Rekognition, stores results in DynamoDB, and triggers notifications.
 
-```javascript
+```js
 const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
 
