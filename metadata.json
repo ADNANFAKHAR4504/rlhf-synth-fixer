@@ -1,6 +1,6 @@
 {
-  "platform": "cfn",
-  "language": "yaml",
+  "platform": "analysis",
+  "language": "py",
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "LS-291849",
