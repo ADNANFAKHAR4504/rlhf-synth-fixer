@@ -10,7 +10,7 @@ Production-grade ECS Fargate orchestration for a fintech microservices stack (pa
 * ECS cluster with container insights enabled and ECS Exec allowed for all tasks.
 * Three independent ECS services (payment, fraud, reporting), each with its own task definition, security group, target group, and CloudWatch log group.
 * Application Load Balancer with path-based routing: `/payment/*`, `/fraud/*`, `/reporting/*`.
-* AWS Cloud Map private DNS namespace with one registry entry per service for inter-service discovery.
+* AWS Cloud Map private DNS name-space with one registry entry per service for inter-service discovery.
 * Application Auto Scaling targeting 70% CPU per service with safe min/max bounds.
 * Uniform, production-ready tagging: `Environment=Production`, `ManagedBy=CloudFormation`.
 
@@ -154,7 +154,7 @@ Parameters:
   NamespaceName:
     Type: String
     Default: svc.local
-    Description: Private DNS namespace for service discovery (Cloud Map).
+    Description: Private DNS name-space for service discovery (Cloud Map).
 
 Conditions:
   HasCertificate: !Not [!Equals [!Ref AcmCertificateArn, ""]]
@@ -705,7 +705,7 @@ Resources:
     Properties:
       Name: !Ref NamespaceName
       Vpc: !Ref Vpc
-      Description: !Sub "Private DNS namespace for ECS services - ${EnvironmentSuffix}"
+      Description: !Sub "Private DNS name-space for ECS services - ${EnvironmentSuffix}"
       Tags:
         - { Key: Name,        Value: !Sub "ns-${EnvironmentSuffix}" }
         - { Key: Environment, Value: Production }

@@ -134,7 +134,7 @@
     "NamespaceName": {
       "Type": "String",
       "Default": "svc.local",
-      "Description": "Private DNS namespace for service discovery (Cloud Map)."
+      "Description": "Private DNS name-space for service discovery (Cloud Map)."
     }
   },
   "Conditions": {
@@ -1485,7 +1485,7 @@
           "Ref": "Vpc"
         },
         "Description": {
-          "Fn::Sub": "Private DNS namespace for ECS services - ${EnvironmentSuffix}"
+          "Fn::Sub": "Private DNS name-space for ECS services - ${EnvironmentSuffix}"
         },
         "Tags": [
           {
