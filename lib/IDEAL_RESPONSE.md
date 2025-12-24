@@ -1,26 +1,3 @@
-### Reasoning Trace
-
----
-
-This request requires a comprehensive CloudFormation template that deploys environment-specific infrastructure (dev, staging, prod) with the following critical requirements:
-
-1. Single parameterized template with environment-driven resource configuration
-2. Isolated VPCs with non-overlapping CIDR ranges for each environment
-3. Environment-specific resource sizing using CloudFormation Mappings
-4. Complete security implementation (encryption, IAM, network isolation)
-5. Comprehensive monitoring with CloudWatch dashboards and alarms
-6. Multi-AZ deployment for high availability
-7. Proper tagging and naming conventions
-8. Production-ready with automated backups and lifecycle policies
-
-The solution must pass comprehensive integration tests validating actual resource connectivity, security controls, and end-to-end workflows without mocking.
-
-### Answer
-
----
-
-Below is the complete, production-ready CloudFormation template. All code is included as a single block representing the actual working implementation.
-
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Multi-environment infrastructure with VPC isolation, RDS, Auto Scaling, S3, monitoring, and security controls'
@@ -804,7 +781,7 @@ Resources:
     Properties:
       DBParameterGroupName: !Sub '${Environment}-${EnvironmentSuffix}-pg-params'
       Description: !Sub 'PostgreSQL parameter group for ${Environment}-${EnvironmentSuffix}'
-      Family: postgres14
+      Family: postgres17
       Parameters:
         log_statement: 'all'
         log_duration: 'on'
@@ -847,7 +824,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${Environment}-${EnvironmentSuffix}-postgres-db'
       DBInstanceClass: !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
       Engine: postgres
-      EngineVersion: '14'
+      EngineVersion: '17.6'
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       AllocatedStorage: !FindInMap [EnvironmentConfig, !Ref Environment, DBAllocatedStorage]
@@ -1143,7 +1120,7 @@ Resources:
       AutoScalingGroupName: !Sub '${Environment}-${EnvironmentSuffix}-asg'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: !FindInMap [EnvironmentConfig, !Ref Environment, ASGMinSize]
       MaxSize: !FindInMap [EnvironmentConfig, !Ref Environment, ASGMaxSize]
       DesiredCapacity: !FindInMap [EnvironmentConfig, !Ref Environment, ASGDesiredCapacity]
@@ -1411,376 +1388,34 @@ Outputs:
     Value: !Ref AutoScalingGroup
     Export:
       Name: !Sub '${Environment}-${EnvironmentSuffix}-asg-name'
+
+  SecurityGroupId:
+    Description: Web Server Security Group ID
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-web-sg-id'
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-igw-id'
+
+  NATGatewayId:
+    Description: NAT Gateway 1 ID
+    Value: !Ref NATGateway1
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-nat-gw-1-id'
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-public-subnet-1-id'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-private-subnet-1-id'
 ```
-
-## Key Implementation Features
-
-### 1. Environment Isolation and Multi-Environment Support
-- Dedicated VPCs with non-overlapping CIDR ranges:
-  - Dev: 10.0.0.0/16
-  - Staging: 10.1.0.0/16  
-  - Prod: 10.2.0.0/16
-- Separate subnets across 2 availability zones per environment:
-  - Public subnets for ALB (10.x.1.0/24, 10.x.2.0/24)
-  - Private subnets for EC2 instances (10.x.10.0/24, 10.x.11.0/24)
-  - Database subnets for RDS (10.x.20.0/24, 10.x.21.0/24)
-- Environment-specific security groups preventing cross-environment communication
-- EnvironmentSuffix parameter for deploying multiple instances of same environment
-
-### 2. Environment-Specific Resource Sizing
-All sizing controlled via CloudFormation Mappings (EnvironmentConfig):
-
-**Development:**
-- RDS: db.t3.micro, 20GB storage, 1-day backup retention
-- EC2: t3.micro instances
-- Auto Scaling: 1-3 instances (desired: 1)
-- Health checks: 30 second intervals
-- S3 lifecycle: 7 days
-- Alarm thresholds: 80% CPU, 80% memory
-
-**Staging:**
-- RDS: db.t3.small, 50GB storage, 7-day backup retention
-- EC2: t3.small instances
-- Auto Scaling: 2-6 instances (desired: 2)
-- Health checks: 15 second intervals
-- S3 lifecycle: 30 days
-- Alarm thresholds: 70% CPU, 75% memory
-
-**Production:**
-- RDS: db.t3.small, 100GB storage, 7-day backup retention
-- EC2: t3.small instances
-- Auto Scaling: 2-8 instances (desired: 2)
-- Health checks: 5 second intervals
-- S3 lifecycle: 90 days
-- Alarm thresholds: 60% CPU, 70% memory
-
-### 3. Comprehensive Security Controls
-
-**Encryption at Rest:**
-- KMS key with automatic rotation enabled
-- S3 bucket encryption using KMS
-- RDS database encryption using KMS
-- SNS topic encryption using KMS
-- Secrets Manager secrets encrypted with KMS
-
-**IAM Security:**
-- EC2 IAM role with least privilege access:
-  - S3: Limited to specific bucket and objects
-  - Secrets Manager: Scoped to environment-specific secrets
-  - SSM: Parameter access limited to environment path
-  - KMS: Decrypt-only permissions
-- Managed policies: CloudWatch Agent, SSM Managed Instance Core
-- No inline credentials - all secrets in AWS Secrets Manager
-
-**Network Security:**
-- Security groups with minimal required access:
-  - ALB: Allows HTTP/HTTPS from internet
-  - EC2: Allows traffic only from ALB
-  - RDS: Allows PostgreSQL only from EC2 instances
-- Public access blocked on S3 buckets
-- Database not publicly accessible
-- VPC endpoint for S3 (private access)
-- NAT Gateways for private subnet internet access
-
-**Transport Security:**
-- S3 bucket policy denying non-SSL connections
-- All secrets transmitted via AWS Secrets Manager
-
-### 4. High Availability Architecture
-
-**Multi-AZ Deployment:**
-- Resources distributed across 2 availability zones
-- Redundant NAT Gateways (one per AZ)
-- Private subnets in each AZ
-- Database subnets in each AZ for future Multi-AZ RDS
-
-**Load Balancing:**
-- Application Load Balancer in public subnets
-- Target group with environment-tuned health checks
-- Auto Scaling across availability zones
-
-**Auto Scaling:**
-- Target tracking scaling policy based on CPU utilization
-- Environment-specific min/max/desired capacity
-- Health checks with grace period
-- Integration with ALB target group
-
-### 5. Monitoring and Alerting
-
-**CloudWatch Dashboards:**
-- Unified dashboard per environment showing:
-  - EC2 metrics: CPU, Memory, Disk utilization
-  - RDS metrics: CPU, Connections, Freeable memory
-  - ALB metrics: Response time, Request count, HTTP status codes
-  - S3 metrics: Bucket size, Object count
-
-**CloudWatch Alarms:**
-- High CPU alarm with environment-specific thresholds
-- Database connections alarm (40 for dev/staging, 80 for prod)
-- Unhealthy targets alarm for ALB
-- All alarms publish to SNS topic for email notifications
-
-**CloudWatch Logs:**
-- Apache access logs: /aws/ec2/${Environment}/${EnvironmentSuffix}/httpd/access
-- Apache error logs: /aws/ec2/${Environment}/${EnvironmentSuffix}/httpd/error
-- 7-day retention period
-- KMS encryption for log data
-
-**SNS Notifications:**
-- Dedicated topic per environment
-- Email subscription from AlertEmail parameter
-- KMS-encrypted messages
-
-### 6. Database Management
-
-**RDS PostgreSQL:**
-- PostgreSQL 14 engine
-- Storage encryption with KMS
-- Automated backups with environment-specific retention
-- Backup window: 03:00-04:00 UTC
-- Maintenance window: Sunday 04:00-05:00 UTC
-- Custom parameter group with logging enabled
-- Private subnet placement
-- Secrets Manager integration for password management
-
-**Secrets Management:**
-- Auto-generated 32-character passwords
-- Stored in AWS Secrets Manager with KMS encryption
-- Accessed by EC2 instances via IAM role
-- Secret name includes environment for isolation
-
-### 7. Storage Management
-
-**S3 Bucket Configuration:**
-- Versioning enabled
-- KMS encryption with bucket keys
-- Lifecycle policies:
-  - Transition to STANDARD_IA after 30 days
-  - Transition to GLACIER after 90 days
-  - Delete noncurrent versions based on environment
-  - Abort incomplete multipart uploads after 7 days
-- Public access completely blocked
-- SSL-only access enforced via bucket policy
-- EC2 role access granted via bucket policy
-
-**VPC Endpoint:**
-- S3 VPC endpoint for private access
-- Associated with private route tables
-- Reduces NAT Gateway costs for S3 access
-
-### 8. Compute Infrastructure
-
-**Launch Template:**
-- Latest Amazon Linux 2 AMI via SSM parameter
-- Environment-specific instance types
-- IAM instance profile attached
-- EC2 key pair for SSH access
-- Security group assignment
-- User data script for automatic configuration:
-  - Apache web server installation
-  - Health check endpoint creation
-  - CloudWatch agent configuration
-  - Custom metrics collection (memory, disk)
-
-**Auto Scaling Group:**
-- Launch template integration
-- Private subnet placement
-- ALB target group integration
-- ELB health checks with 300s grace period
-- Automatic scaling based on CPU utilization
-- Instance tags propagated from ASG
-
-### 9. Operational Excellence
-
-**Tagging Strategy:**
-- Environment: dev/staging/prod
-- CostCenter: For cost allocation
-- project: iac-rlhf-amazon
-- team-number: 2
-- Consistent across all resources
-
-**Naming Conventions:**
-- Format: `${Environment}-${EnvironmentSuffix}-<resource-type>`
-- Examples:
-  - VPC: dev-dev-vpc
-  - S3: dev-dev-tap-025323792109-bucket
-  - RDS: dev-dev-postgres-db
-  - ASG: dev-dev-asg
-
-**Exported Outputs:**
-- VPCId for cross-stack references
-- ALBDNSName for application access
-- DBEndpoint for database connections
-- S3BucketName for application configuration
-- SNSTopicArn for alerting integration
-- KMSKeyId for encryption references
-- AutoScalingGroupName for management
-- DBPasswordSecretArn for secure access
-- EC2KeyPairName for SSH access
-- DashboardURL for monitoring access
-
-### 10. Deletion and Update Policies
-
-**Deletion Policies:**
-- All resources set to `Delete` for easy cleanup
-- Appropriate for dev/test environments
-- Production should use `Retain` or `Snapshot` for critical resources
-
-**Update Replace Policies:**
-- All resources set to `Delete`
-- Allows CloudFormation to replace resources during updates
-- Ensures clean state management
-
-### 11. Validated Implementation
-
-All features validated through comprehensive integration tests (22 tests, 100% passing):
-
-**Resource Existence Validation (6 tests):**
-- S3 bucket accessibility
-- S3 encryption configuration
-- Auto Scaling Group configuration
-- SNS topic accessibility
-- RDS database configuration
-- Secrets Manager secret existence
-
-**Resource Connectivity Validation (5 tests):**
-- EC2 to S3 access via IAM role
-- EC2 to Secrets Manager access
-- EC2 to RDS DNS resolution
-- EC2 internet connectivity via NAT
-- EC2 VPC and security group configuration
-
-**Complete Workflow Tests (4 tests):**
-- Data processing: S3 → EC2 → S3 with IAM role validation
-- Monitoring: EC2 → SNS alert workflow
-- Database: EC2 → RDS connectivity via PostgreSQL client
-- Multi-service integration across S3, RDS, Secrets Manager
-
-**Failure Scenario Tests (4 tests):**
-- Non-existent S3 object access denial
-- Non-existent secret access denial
-- Non-existent SNS topic publish failure
-- Invalid S3 bucket access rejection
-
-**Security Validation Tests (3 tests):**
-- RDS not publicly accessible (private subnet)
-- S3 KMS encryption properly configured
-- EC2 IAM role properly attached and functional
-
-## Deployment Instructions
-
-### Prerequisites
-- AWS CLI configured with appropriate credentials
-- Permissions to create VPC, EC2, RDS, S3, KMS, IAM resources
-- Valid email address for SNS notifications
-
-### Deploy to Development
-```bash
-aws cloudformation create-stack \
-  --stack-name dev-infrastructure \
-  --template-body file://lib/TapStack.yml \
-  --parameters \
-    ParameterKey=Environment,ParameterValue=dev \
-    ParameterKey=EnvironmentSuffix,ParameterValue=dev \
-    ParameterKey=AlertEmail,ParameterValue=dev-team@example.com \
-    ParameterKey=DBMasterUsername,ParameterValue=dbadmin \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --tags Key=Environment,Value=dev Key=ManagedBy,Value=CloudFormation
-```
-
-### Deploy to Staging
-```bash
-aws cloudformation create-stack \
-  --stack-name staging-infrastructure \
-  --template-body file://lib/TapStack.yml \
-  --parameters \
-    ParameterKey=Environment,ParameterValue=staging \
-    ParameterKey=EnvironmentSuffix,ParameterValue=staging \
-    ParameterKey=AlertEmail,ParameterValue=staging-team@example.com \
-    ParameterKey=DBMasterUsername,ParameterValue=dbadmin \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --tags Key=Environment,Value=staging Key=ManagedBy,Value=CloudFormation
-```
-
-### Deploy to Production
-```bash
-aws cloudformation create-stack \
-  --stack-name prod-infrastructure \
-  --template-body file://lib/TapStack.yml \
-  --parameters \
-    ParameterKey=Environment,ParameterValue=prod \
-    ParameterKey=EnvironmentSuffix,ParameterValue=prod \
-    ParameterKey=AlertEmail,ParameterValue=prod-team@example.com \
-    ParameterKey=DBMasterUsername,ParameterValue=dbadmin \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --tags Key=Environment,Value=prod Key=ManagedBy,Value=CloudFormation
-```
-
-### Monitor Deployment
-```bash
-aws cloudformation describe-stack-events \
-  --stack-name dev-infrastructure \
-  --max-items 20
-```
-
-### Access Outputs
-```bash
-aws cloudformation describe-stacks \
-  --stack-name dev-infrastructure \
-  --query 'Stacks[0].Outputs'
-```
-
-## Testing
-
-Run the comprehensive integration test suite:
-
-```bash
-# Ensure outputs are extracted
-./scripts/extract-outputs.sh
-
-# Run integration tests
-./scripts/integration-tests.sh
-```
-
-Expected results: 22 tests passing, validating all infrastructure components and workflows.
-
-## Cost Optimization Considerations
-
-1. **Development Environment:**
-   - Minimal instance sizes (t3.micro)
-   - Single instance Auto Scaling
-   - Shortest backup retention
-   - Suitable for testing and development
-
-2. **Staging Environment:**
-   - Medium instance sizes (t3.small)
-   - 2 instances for redundancy
-   - 7-day backup retention
-   - Mirrors production configuration at lower scale
-
-3. **Production Environment:**
-   - Appropriately sized instances
-   - Higher instance count for availability
-   - Longer backup retention
-   - Stricter alarm thresholds
-
-4. **Shared Optimizations:**
-   - S3 lifecycle policies reduce storage costs
-   - VPC endpoint reduces NAT Gateway data transfer costs
-   - Target tracking scaling prevents over-provisioning
-   - KMS key rotation for security without additional cost
-
-## Summary
-
-This CloudFormation template provides a complete, production-ready infrastructure solution that:
-
-- Deploys identical infrastructure across dev, staging, and production with appropriate sizing
-- Implements comprehensive security controls (encryption, IAM, network isolation)
-- Provides high availability through Multi-AZ deployment
-- Includes complete monitoring and alerting
-- Follows AWS best practices for tagging, naming, and resource organization
-- Has been validated with 22 integration tests achieving 100% pass rate
-- Supports easy deployment via AWS CLI with parameter-driven configuration
-- Maintains environment isolation while using a single template
-
-The implementation successfully meets all requirements for a scalable, secure, and production-ready multi-environment AWS infrastructure.

@@ -49,7 +49,10 @@ const outputs = stackDeployed ? JSON.parse(fs.readFileSync(outputsPath, 'utf8'))
 
 // AWS SDK clients
 const region = process.env.AWS_REGION || 'us-east-1';
-const s3Client = new S3Client({ region });
+const s3Client = new S3Client({
+  region,
+  forcePathStyle: true,
+ });
 const asgClient = new AutoScalingClient({ region });
 const ssmClient = new SSMClient({ region });
 const snsClient = new SNSClient({ region });

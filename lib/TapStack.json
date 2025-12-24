@@ -1515,7 +1515,7 @@
                     ]
                 },
                 "Engine": "postgres",
-                "EngineVersion": "17",
+                "EngineVersion": "17.6",
                 "MasterUsername": {
                     "Ref": "DBMasterUsername"
                 },
@@ -2383,6 +2383,61 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${Environment}-${EnvironmentSuffix}-asg-name"
+                }
+            }
+        },
+        "SecurityGroupId": {
+            "Description": "Web Server Security Group ID",
+            "Value": {
+                "Ref": "WebServerSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-web-sg-id"
+                }
+            }
+        },
+        "InternetGatewayId": {
+            "Description": "Internet Gateway ID",
+            "Value": {
+                "Ref": "InternetGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-igw-id"
+                }
+            }
+        },
+        "NATGatewayId": {
+            "Description": "NAT Gateway 1 ID",
+            "Value": {
+                "Ref": "NATGateway1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-nat-gw-1-id"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-public-subnet-1-id"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-private-subnet-1-id"
                 }
             }
         }
