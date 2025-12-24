@@ -24,5 +24,12 @@
   "migrated_from": {
     "po_id": "268",
     "pr": "Pr268"
-  }
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "abubakarTuring",
+  "dockerS3Location": ""
 }
