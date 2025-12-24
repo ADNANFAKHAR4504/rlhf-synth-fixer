@@ -87,9 +87,10 @@ type TfOutputs = {
 
 function loadOutputs(): FlatOutputs {
   // Check multiple possible paths for the outputs file
+  // Prioritize cdk-outputs since CI/CD saves there
   const possiblePaths = [
-    path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json"),
     path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json"),
+    path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json"),
     path.resolve(process.cwd(), "flat-outputs.json")
   ];
 
@@ -109,28 +110,45 @@ function loadOutputs(): FlatOutputs {
   }
 
   try {
-    const raw = JSON.parse(fs.readFileSync(outputsPath, "utf8")) as TfOutputs;
+    const raw = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+    console.log(`Loaded outputs with keys: ${Object.keys(raw).join(', ')}`);
 
-    // Extract values from nested Terraform output format
-    return {
-      aws_region: raw.aws_region?.value,
-      alb_dns_name: raw.alb_dns_name?.value,
-      alb_zone_id: raw.alb_zone_id?.value,
-      rds_endpoint: raw.rds_endpoint?.value,
-      rds_port: raw.rds_port?.value,
-      asg_name: raw.asg_name?.value,
-      asg_arn: raw.asg_arn?.value,
-      vpc_id: raw.vpc_id?.value,
-      subnet_ids: raw.subnet_ids?.value,
-      security_group_alb_id: raw.security_group_alb_id?.value,
-      security_group_ec2_id: raw.security_group_ec2_id?.value,
-      security_group_rds_id: raw.security_group_rds_id?.value,
-      iam_role_arn: raw.iam_role_arn?.value,
-      launch_template_id: raw.launch_template_id?.value,
-      secrets_manager_secret_arn: raw.secrets_manager_secret_arn?.value,
-      cloudwatch_log_group_name: raw.cloudwatch_log_group_name?.value,
-      localstack_mode: raw.localstack_mode?.value,
+    // Helper to extract value - handles both nested {sensitive, type, value} and flat formats
+    const extractValue = <T>(key: string): T | undefined => {
+      const val = raw[key];
+      if (val === undefined || val === null) return undefined;
+      // Check if it's nested format with 'value' property
+      if (typeof val === 'object' && 'value' in val) {
+        return val.value as T;
+      }
+      // Otherwise it's already the direct value
+      return val as T;
     };
+
+    const result: FlatOutputs = {
+      aws_region: extractValue<string>('aws_region'),
+      alb_dns_name: extractValue<string>('alb_dns_name'),
+      alb_zone_id: extractValue<string>('alb_zone_id'),
+      rds_endpoint: extractValue<string>('rds_endpoint'),
+      rds_port: extractValue<number>('rds_port'),
+      asg_name: extractValue<string>('asg_name'),
+      asg_arn: extractValue<string>('asg_arn'),
+      vpc_id: extractValue<string>('vpc_id'),
+      subnet_ids: extractValue<string[]>('subnet_ids'),
+      security_group_alb_id: extractValue<string>('security_group_alb_id'),
+      security_group_ec2_id: extractValue<string>('security_group_ec2_id'),
+      security_group_rds_id: extractValue<string>('security_group_rds_id'),
+      iam_role_arn: extractValue<string>('iam_role_arn'),
+      launch_template_id: extractValue<string>('launch_template_id'),
+      secrets_manager_secret_arn: extractValue<string>('secrets_manager_secret_arn'),
+      cloudwatch_log_group_name: extractValue<string>('cloudwatch_log_group_name'),
+      localstack_mode: extractValue<boolean>('localstack_mode'),
+    };
+
+    console.log(`Extracted vpc_id: ${result.vpc_id}`);
+    console.log(`Extracted localstack_mode: ${result.localstack_mode}`);
+
+    return result;
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Error reading outputs file: ${error.message}`);
