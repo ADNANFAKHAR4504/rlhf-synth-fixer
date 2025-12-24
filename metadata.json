@@ -6,13 +6,10 @@
   "po_id": "LS-291272",
   "team": "synth-2",
   "startedAt": "2025-08-14T16:18:58.483Z",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
   "subject_labels": [
-    "Cloud Environment Setup",
-    "General Infrastructure Tooling QA",
-    "Infrastructure Analysis/Monitoring",
-    "Web Application Deployment"
+    "General Infrastructure Tooling QA"
   ],
   "aws_services": [],
   "wave": "P1"
