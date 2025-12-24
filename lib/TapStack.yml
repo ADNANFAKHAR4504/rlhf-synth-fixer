@@ -543,15 +543,15 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
+          FromPort: 3306
+          ToPort: 3306
           SourceSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: Allow PostgreSQL from web servers
+          Description: Allow MariaDB from web servers
         - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
+          FromPort: 3306
+          ToPort: 3306
           SourceSecurityGroupId: !Ref BastionSecurityGroup
-          Description: Allow PostgreSQL from Bastion for maintenance
+          Description: Allow MariaDB from Bastion for maintenance
       Tags:
         - Key: Name
           Value: webapp-database-sg
@@ -1145,8 +1145,8 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       DBName: !Ref DatabaseName
-      Engine: postgres
-      EngineVersion: '17'
+      Engine: mariadb
+      EngineVersion: '10.11'
       DBInstanceClass: !Ref DatabaseInstanceClass
       AllocatedStorage: 20
       MaxAllocatedStorage: 100
