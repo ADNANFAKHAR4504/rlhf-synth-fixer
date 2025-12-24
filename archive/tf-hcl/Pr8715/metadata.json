@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912596",
+  "team": "synth",
+  "startedAt": "2025-11-24T01:32:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "RDS",
+    "ALB",
+    "S3",
+    "CloudWatch",
+    "ECR",
+    "Systems Manager",
+    "IAM",
+    "KMS",
+    "VPC Endpoints"
+  ],
+  "provider": "localstack",
+  "wave": "P1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
