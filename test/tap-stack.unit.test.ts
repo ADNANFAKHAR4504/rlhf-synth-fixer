@@ -330,10 +330,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(db.PubliclyAccessible).toBe(false);
     });
 
-    test('database should have CloudWatch logs exports', () => {
+    test('database should have CloudWatch logs disabled for LocalStack compatibility', () => {
       const db = template.Resources.DatabaseInstance.Properties;
-      expect(db.EnableCloudwatchLogsExports).toContain('error');
-      expect(db.EnableCloudwatchLogsExports).toContain('general');
+      expect(db.EnableCloudwatchLogsExports).toBeUndefined();
+      // CloudWatch logs exports not supported in LocalStack Community
     });
 
     test('database should have Delete deletion policy', () => {
@@ -355,9 +355,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(blockDevice.VolumeType).toBe('gp3');
     });
 
-    test('EC2 instance should be in private subnet', () => {
+    test('EC2 instance should be in public subnet for LocalStack compatibility', () => {
       const instance = template.Resources.WebServerInstance.Properties;
-      expect(instance.SubnetId).toEqual({ Ref: 'PrivateSubnet' });
+      expect(instance.SubnetId).toEqual({ Ref: 'PublicSubnet' });
+      // LocalStack Community does not support NAT Gateway, so instance must be in public subnet
     });
 
     test('EC2 instance should have detailed monitoring enabled', () => {
