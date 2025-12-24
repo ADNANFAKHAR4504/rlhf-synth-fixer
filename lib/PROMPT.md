@@ -25,17 +25,17 @@ Your solution should implement the following service integrations:
 
 6. **ALB to EC2 Integration**: Application Load Balancers in each region distribute incoming requests across EC2 instances in multiple availability zones. Target groups perform health checks on EC2 instances every 30 seconds, automatically removing unhealthy instances from rotation.
 
-7. **IAM Cross-Service Permissions**: EC2 instance IAM role grants permissions to read from and write to DynamoDB tables in local region, upload objects to S3 buckets in local region, and publish CloudWatch metrics. S3 replication IAM role grants S3 service permission to GetObjectVersion from source bucket and ReplicateObject to destination bucket. DynamoDB global tables IAM role grants DynamoDB streams read access for replication.
+7. **IAM Cross-Service Permissions**: EC2 instance IAM role grants permissions scoped to specific DynamoDB table ARNs in local region for read and write operations, specific S3 bucket ARNs in local region for object uploads, and CloudWatch metrics namespace for publishing custom metrics. S3 replication IAM role grants S3 service permission to GetObjectVersion from source bucket ARN and ReplicateObject to destination bucket ARN. DynamoDB global tables IAM role grants DynamoDB streams read access scoped to specific stream ARNs for replication.
 
 8. **CloudWatch Monitoring Integration**: EC2 instances publish custom application metrics to CloudWatch in their local region. CloudWatch alarms monitor ALB UnHealthyHostCount metric, triggering SNS notifications when threshold breached. Route 53 health checks integrate with CloudWatch alarms to track endpoint availability.
 
-9. **Resource Dependencies**: CloudFormation template defines explicit dependencies ensuring VPCs created before subnets, subnets created before EC2 instances, IAM roles created before resources that assume them, and S3 buckets created before replication configuration applied.
+9. **Infrastructure Dependencies**: CloudFormation template defines explicit dependencies ensuring VPCs created before subnets, subnets created before EC2 instances, IAM roles created before resources that assume them, and S3 buckets created before replication configuration applied.
 
 10. **Parameterized Deployment**: CloudFormation parameters specify environment name, region, VPC CIDR blocks, subnet CIDR ranges, EC2 instance types, and resource naming prefixes. All resources tagged with Environment tag derived from parameters for cost tracking and resource management.
 
 ## Environment Details
 
-- **Target Regions**: us-east-1 (primary) and eu-west-1 (secondary)
+- **Target Regions**: us-east-1 as primary region and eu-west-1 as secondary region
 - **Deployment Method**: CloudFormation StackSets orchestrating cross-region deployment
 - **Tagging**: All resources tagged with Environment: Production for cost allocation and resource tracking
 
@@ -48,7 +48,7 @@ A complete CloudFormation StackSet template in YAML format that deploys synchron
 - S3 cross-region replication copying objects from us-east-1 source bucket to eu-west-1 destination bucket with versioning
 - VPC peering enabling private communication between EC2 instances across regions through updated route tables and security groups
 - ALBs distributing requests to EC2 target groups with health check-based traffic routing
-- IAM roles scoped with least privilege permissions for EC2 to DynamoDB access, S3 replication service role, and CloudWatch metrics publishing
+- IAM roles scoped with least privilege using specific resource ARNs for EC2 to DynamoDB access, S3 replication service role, and CloudWatch metrics publishing
 - CloudFormation changesets tracking infrastructure modifications before applying stack updates
 
 ## Constraints
@@ -58,7 +58,7 @@ A complete CloudFormation StackSet template in YAML format that deploys synchron
 3. S3 replication configuration must copy objects from us-east-1 bucket to eu-west-1 bucket with versioning enabled on both buckets
 4. VPC peering must connect us-east-1 VPC to eu-west-1 VPC with route table entries directing cross-region traffic through peering connection
 5. ALBs in each region must distribute traffic across EC2 instances in multiple availability zones with target group health checks
-6. EC2 IAM role must grant specific permissions to access DynamoDB tables, upload to S3 buckets, and publish CloudWatch metrics without wildcard permissions
+6. EC2 IAM role must grant specific permissions to access DynamoDB tables, upload to S3 buckets, and publish CloudWatch metrics using explicit resource ARNs - no wildcard resource ARNs allowed
 7. S3 replication IAM role must grant S3 service permission to GetObjectVersion from source bucket and ReplicateObject to destination bucket
 8. CloudFormation StackSets must deploy identical VPC topology, subnet configuration, security groups, and application resources across both regions
 9. All resources must use parameterized naming with stack name prefix for environment identification
