@@ -14,9 +14,6 @@ from pulumi.automation import LocalWorkspace, Stack
 class TestTapStackDeployedResources(unittest.TestCase):
     """Test AWS resources after Pulumi stack is deployed."""
 
-    from pulumi.automation import LocalWorkspace, Stack
-
-
     @classmethod
     def setUpClass(cls):
         cls.stack_name = os.getenv("PULUMI_STACK", "TapStackpr505")

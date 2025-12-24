@@ -10,13 +10,12 @@ Secure production-ready Pulumi stack for a web application using:
 """
 import ipaddress
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 import pulumi
 from pulumi import ResourceOptions
 import pulumi_aws as aws
-from datetime import datetime, timedelta
 
 
 
@@ -44,8 +43,8 @@ class TapStack(pulumi.ComponentResource):
             for cidr in cidrs:
                 try:
                     ipaddress.IPv4Network(cidr)
-                except ValueError:
-                    raise ValueError(f"Invalid CIDR block: {cidr}")
+                except ValueError as exc:
+                    raise ValueError(f"Invalid CIDR block: {cidr}") from exc
             return cidrs
 
         allowed_cidrs = validate_cidr_list(config.get_object("allowed_cidrs") or [])
@@ -69,7 +68,11 @@ class TapStack(pulumi.ComponentResource):
                 for cidr in cidrs
             ]
 
-        def egress_rules(ips: List[str], ports: List[int], prefix_list_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        def egress_rules(
+            ips: List[str],
+            ports: List[int],
+            prefix_list_id: Optional[str] = None
+        ) -> List[Dict[str, Any]]:
             rules = [
                 {
                     "protocol": "tcp",
@@ -241,36 +244,36 @@ class TapStack(pulumi.ComponentResource):
 
     @staticmethod
     def rotation_policy(user_creation_time: datetime) -> str:
-            expiry_date = (user_creation_time + timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        expiry_date = (user_creation_time + timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-            policy = {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                            {
-                                    "Sid": "AllowAccessKeyManagement",
-                                    "Effect": "Allow",
-                                    "Action": [
-                                            "iam:CreateAccessKey",
-                                            "iam:DeleteAccessKey",
-                                            "iam:UpdateAccessKey",
-                                            "iam:ListAccessKeys"
-                                    ],
-                                    "Resource": "*"
-                            },
-                            {
-                                    "Sid": "DenyAllActionsAfterExpiry",
-                                    "Effect": "Deny",
-                                    "Action": "*",
-                                    "Resource": "*",
-                                    "Condition": {
-                                            "DateGreaterThan": {
-                                                    "aws:CurrentTime": expiry_date
-                                            }
-                                    }
-                            }
-                    ]
-            }
-            return json.dumps(policy, indent=2)
+        policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "AllowAccessKeyManagement",
+                    "Effect": "Allow",
+                    "Action": [
+                        "iam:CreateAccessKey",
+                        "iam:DeleteAccessKey",
+                        "iam:UpdateAccessKey",
+                        "iam:ListAccessKeys"
+                    ],
+                    "Resource": "*"
+                },
+                {
+                    "Sid": "DenyAllActionsAfterExpiry",
+                    "Effect": "Deny",
+                    "Action": "*",
+                    "Resource": "*",
+                    "Condition": {
+                        "DateGreaterThan": {
+                            "aws:CurrentTime": expiry_date
+                        }
+                    }
+                }
+            ]
+        }
+        return json.dumps(policy, indent=2)
 
 
     @staticmethod
