@@ -147,7 +147,7 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttles" {
 ## Expected Outcome
 
 - **Before**: 7/10
-- **After IAM fix**: 8/10 ✅ (meets threshold!)
+- **After IAM fix**: 8/10  (meets threshold!)
 - **After all fixes**: 8.5-9/10 (exceeds threshold significantly)
 
 ## Files to Modify
