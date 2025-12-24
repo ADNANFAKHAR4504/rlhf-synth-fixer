@@ -1,869 +1,854 @@
 {
-    "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Multi-environment serverless application template for AWS StackSets deployment. Creates Lambda function, API Gateway, S3 bucket, and associated IAM resources with environment-specific configurations and validation rules.\n",
-    "Metadata": {
-        "AWS::CloudFormation::Interface": {
-            "ParameterGroups": [
-                {
-                    "Label": {
-                        "default": "Environment Configuration"
-                    },
-                    "Parameters": [
-                        "EnvironmentSuffixName"
-                    ]
-                },
-                {
-                    "Label": {
-                        "default": "Artifact Configuration"
-                    },
-                    "Parameters": [
-                        "ArtifactBucketName",
-                        "ArtifactS3Key"
-                    ]
-                }
-            ],
-            "ParameterLabels": {
-                "EnvironmentSuffixName": {
-                    "default": "Environment Suffix"
-                },
-                "ArtifactBucketName": {
-                    "default": "Artifact Bucket Name"
-                },
-                "ArtifactS3Key": {
-                    "default": "Artifact S3 Key"
-                }
-            }
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Multi-environment serverless application template for AWS StackSets deployment. Creates Lambda function, API Gateway, S3 bucket, and associated IAM resources with environment-specific configurations and validation rules.\n",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffixName"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Artifact Configuration"
+          },
+          "Parameters": [
+            "ArtifactBucketName",
+            "ArtifactS3Key"
+          ]
         }
-    },
-    "Parameters": {
+      ],
+      "ParameterLabels": {
         "EnvironmentSuffixName": {
-            "Type": "String",
-            "Description": "Environment suffix for resource naming and configuration",
-            "AllowedPattern": "^(dev|staging|prod|pr[0-9]+)$",
-            "Default": "dev",
-            "ConstraintDescription": "Must be one of dev, staging, prod, or pr followed by numbers (e.g., pr553)"
+          "default": "Environment Suffix"
         },
         "ArtifactBucketName": {
-            "Type": "String",
-            "Description": "S3 bucket name containing Lambda deployment packages",
-            "Default": "iac-rlhf-cfn-states",
-            "MinLength": 3,
-            "MaxLength": 63,
-            "AllowedPattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
-            "ConstraintDescription": "Must be a valid S3 bucket name (lowercase, alphanumeric, hyphens)"
+          "default": "Artifact Bucket Name"
         },
         "ArtifactS3Key": {
-            "Type": "String",
-            "Description": "S3 key for the Lambda deployment package",
-            "Default": "lambda-function.zip",
-            "AllowedPattern": "^[a-zA-Z0-9/._-]+$",
-            "ConstraintDescription": "Must be a valid S3 key (alphanumeric, forward slash, dot, underscore, hyphen)"
+          "default": "Artifact S3 Key"
         }
-    },
-    "Mappings": {
-        "EnvironmentConfig": {
-            "dev": {
-                "LambdaMemorySize": 128,
-                "ResourcePrefix": "tap-app-dev",
-                "LogRetentionDays": 7,
-                "ApiGatewayStageName": "dev"
-            },
-            "staging": {
-                "LambdaMemorySize": 256,
-                "ResourcePrefix": "tap-app-staging",
-                "LogRetentionDays": 14,
-                "ApiGatewayStageName": "staging"
-            },
-            "prod": {
-                "LambdaMemorySize": 512,
-                "ResourcePrefix": "tap-app-prod",
-                "LogRetentionDays": 30,
-                "ApiGatewayStageName": "prod"
-            }
-        }
-    },
-    "Rules": {
-        "ValidateArtifactBucket": {
-            "Assertions": [
-                {
-                    "Assert": {
-                        "Fn::Not": [
-                            {
-                                "Fn::Equals": [
-                                    {
-                                        "Ref": "ArtifactBucketName"
-                                    },
-                                    ""
-                                ]
-                            }
-                        ]
-                    },
-                    "AssertDescription": "ArtifactBucketName must be provided and cannot be empty"
-                }
-            ]
-        },
-        "ValidateArtifactS3Key": {
-            "Assertions": [
-                {
-                    "Assert": {
-                        "Fn::Not": [
-                            {
-                                "Fn::Equals": [
-                                    {
-                                        "Ref": "ArtifactS3Key"
-                                    },
-                                    ""
-                                ]
-                            }
-                        ]
-                    },
-                    "AssertDescription": "ArtifactS3Key must be provided and cannot be empty"
-                }
-            ]
-        }
-    },
-    "Conditions": {
-        "IsProductionEnvironment": {
-            "Fn::Equals": [
-                {
-                    "Ref": "EnvironmentSuffixName"
-                },
-                "prod"
-            ]
-        },
-        "CreateAccessLogsBucket": {
-            "Condition": "IsProductionEnvironment"
-        }
-    },
-    "Resources": {
-        "LambdaArtifactsBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": [
-                        "${ResourcePrefix}-artifacts-${AWS::AccountId}-${AWS::Region}",
-                        {
-                            "ResourcePrefix": {
-                                "Fn::FindInMap": [
-                                    "EnvironmentConfig",
-                                    {
-                                        "Ref": "EnvironmentSuffixName"
-                                    },
-                                    "ResourcePrefix"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffixName"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": "ServerlessApp"
-                    }
-                ]
-            }
-        },
-        "AccessLogsBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Condition": "CreateAccessLogsBucket",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": [
-                        "${ResourcePrefix}-access-logs-${AWS::AccountId}-${AWS::Region}",
-                        {
-                            "ResourcePrefix": {
-                                "Fn::FindInMap": [
-                                    "EnvironmentConfig",
-                                    {
-                                        "Ref": "EnvironmentSuffixName"
-                                    },
-                                    "ResourcePrefix"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffixName"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": "ServerlessApp"
-                    }
-                ]
-            }
-        },
-        "AccessLogsBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Condition": "CreateAccessLogsBucket",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "AccessLogsBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "apigateway.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${AccessLogsBucket}/api-gateway-logs/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "aws:SourceAccount": {
-                                        "Ref": "AWS::AccountId"
-                                    }
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "LambdaExecutionRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "lambda.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "S3AccessPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetObject"
-                                    ],
-                                    "Resource": [
-                                        {
-                                            "Fn::Sub": "arn:aws:s3:::${ArtifactBucketName}/*"
-                                        },
-                                        {
-                                            "Fn::Sub": "arn:aws:s3:::${LambdaArtifactsBucket}/*"
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffixName"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": "ServerlessApp"
-                    }
-                ]
-            }
-        },
-        "LambdaLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": [
-                        "/aws/lambda/${ResourcePrefix}-function-${AWS::StackName}",
-                        {
-                            "ResourcePrefix": {
-                                "Fn::FindInMap": [
-                                    "EnvironmentConfig",
-                                    {
-                                        "Ref": "EnvironmentSuffixName"
-                                    },
-                                    "ResourcePrefix"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "RetentionInDays": {
-                    "Fn::FindInMap": [
-                        "EnvironmentConfig",
-                        {
-                            "Ref": "EnvironmentSuffixName"
-                        },
-                        "LogRetentionDays"
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffixName"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": "ServerlessApp"
-                    }
-                ]
-            }
-        },
-        "ArtifactValidation": {
-            "Type": "AWS::CloudFormation::CustomResource",
-            "Properties": {
-                "ServiceToken": {
-                    "Fn::GetAtt": [
-                        "ArtifactValidationFunction",
-                        "Arn"
-                    ]
-                },
-                "ArtifactBucketName": {
-                    "Ref": "ArtifactBucketName"
-                },
-                "ArtifactS3Key": {
-                    "Ref": "ArtifactS3Key"
-                }
-            }
-        },
-        "ArtifactValidationFunction": {
-            "Type": "AWS::Lambda::Function",
-            "Properties": {
-                "FunctionName": {
-                    "Fn::Sub": [
-                        "${ResourcePrefix}-artifact-validation-${AWS::StackName}",
-                        {
-                            "ResourcePrefix": {
-                                "Fn::FindInMap": [
-                                    "EnvironmentConfig",
-                                    {
-                                        "Ref": "EnvironmentSuffixName"
-                                    },
-                                    "ResourcePrefix"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "Runtime": "python3.12",
-                "Handler": "index.lambda_handler",
-                "Role": {
-                    "Fn::GetAtt": [
-                        "ArtifactValidationRole",
-                        "Arn"
-                    ]
-                },
-                "MemorySize": 128,
-                "Timeout": 60,
-                "Code": {
-                    "ZipFile": "import json\nimport boto3\nimport urllib3\n\ns3 = boto3.client('s3')\nhttp = urllib3.PoolManager()\n\ndef send_response(event, context, response_status, response_data):\n    response_body = {\n        'Status': response_status,\n        'Reason': response_data.get('Error', 'Validation passed successfully'),\n        'PhysicalResourceId': context.log_stream_name or context.aws_request_id,\n        'StackId': event['StackId'],\n        'RequestId': event['RequestId'],\n        'LogicalResourceId': event['LogicalResourceId'],\n        'Data': response_data,\n    }\n\n    json_response_body = json.dumps(response_body)\n\n    try:\n        response = http.request(\n            method='PUT',\n            url=event['ResponseURL'],\n            body=json_response_body,\n            headers={\n                'Content-Type': '',\n                'Content-Length': str(len(json_response_body))\n            }\n        )\n        print(f\"send_response status: {response.status}\")\n    except Exception as e:\n        print(f\"send_response failed: {e}\")\n\ndef lambda_handler(event, context):\n    print(\"Received event:\", json.dumps(event, indent=2))\n\n    try:\n        props = event.get('ResourceProperties', {})\n        bucket = props.get('ArtifactBucketName')\n        key = props.get('ArtifactS3Key')\n\n        try:\n            s3.head_object(Bucket=bucket, Key=key)\n            print(f\"Artifact exists: s3://{bucket}/{key}\")\n        except Exception as e:\n            print(f\"Artifact check skipped or failed: {e}\")\n\n        send_response(event, context, 'SUCCESS', {\n            'ArtifactBucketName': bucket,\n            'ArtifactS3Key': key,\n            'ValidationStatus': 'SKIPPED_OR_PASSED'\n        })\n\n    except Exception as e:\n        print(f\"Unexpected error: {e}\")\n        send_response(event, context, 'SUCCESS', {\n            'Error': 'Unexpected error occurred, but validation bypassed.'\n        })\n"
-                },
-                "Environment": {
-                    "Variables": {
-                        "ENVIRONMENT": {
-                            "Ref": "EnvironmentSuffixName"
-                        }
-                    }
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffixName"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": "ServerlessApp"
-                    }
-                ]
-            }
-        },
-        "ArtifactValidationRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "lambda.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "S3ValidationPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetObject"
-                                    ],
-                                    "Resource": [
-                                        {
-                                            "Fn::Sub": "arn:aws:s3:::${ArtifactBucketName}/*"
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffixName"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": "ServerlessApp"
-                    }
-                ]
-            }
-        },
-        "HelloWorldFunction": {
-            "Type": "AWS::Lambda::Function",
-            "DependsOn": [
-                "ArtifactValidation",
-                "LambdaLogGroup",
-                "ArtifactValidationFunction"
-            ],
-            "Properties": {
-                "FunctionName": {
-                    "Fn::Sub": [
-                        "${ResourcePrefix}-function-${AWS::StackName}",
-                        {
-                            "ResourcePrefix": {
-                                "Fn::FindInMap": [
-                                    "EnvironmentConfig",
-                                    {
-                                        "Ref": "EnvironmentSuffixName"
-                                    },
-                                    "ResourcePrefix"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "Runtime": "nodejs22.x",
-                "Handler": "index.handler",
-                "Role": {
-                    "Fn::GetAtt": [
-                        "LambdaExecutionRole",
-                        "Arn"
-                    ]
-                },
-                "MemorySize": {
-                    "Fn::FindInMap": [
-                        "EnvironmentConfig",
-                        {
-                            "Ref": "EnvironmentSuffixName"
-                        },
-                        "LambdaMemorySize"
-                    ]
-                },
-                "Timeout": 30,
-                "Code": {
-                    "ZipFile": "exports.handler = async (event) => {\n    console.log('Event:', JSON.stringify(event, null, 2));\n    \n    const response = {\n        statusCode: 200,\n        headers: {\n            'Content-Type': 'application/json',\n            'Access-Control-Allow-Origin': '*',\n            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',\n            'Access-Control-Allow-Headers': 'Content-Type, Authorization'\n        },\n        body: JSON.stringify({\n            message: 'Hello World from Lambda!',\n            environment: process.env.ENVIRONMENT,\n            resourcePrefix: process.env.RESOURCE_PREFIX,\n            timestamp: new Date().toISOString(),\n            requestId: event.requestContext?.requestId || 'unknown'\n        })\n    };\n    \n    console.log('Response:', JSON.stringify(response, null, 2));\n    return response;\n};\n"
-                },
-                "Environment": {
-                    "Variables": {
-                        "ENVIRONMENT": {
-                            "Ref": "EnvironmentSuffixName"
-                        },
-                        "RESOURCE_PREFIX": {
-                            "Fn::FindInMap": [
-                                "EnvironmentConfig",
-                                {
-                                    "Ref": "EnvironmentSuffixName"
-                                },
-                                "ResourcePrefix"
-                            ]
-                        },
-                        "LOG_LEVEL": {
-                            "Fn::If": [
-                                "IsProductionEnvironment",
-                                "WARN",
-                                "DEBUG"
-                            ]
-                        }
-                    }
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffixName"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": "ServerlessApp"
-                    }
-                ]
-            }
-        },
-        "LambdaApiGatewayPermission": {
-            "Type": "AWS::Lambda::Permission",
-            "Properties": {
-                "FunctionName": {
-                    "Ref": "HelloWorldFunction"
-                },
-                "Action": "lambda:InvokeFunction",
-                "Principal": "apigateway.amazonaws.com",
-                "SourceArn": {
-                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HelloWorldApi}/*/*"
-                }
-            }
-        },
-        "HelloWorldApi": {
-            "Type": "AWS::ApiGateway::RestApi",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": [
-                        "${ResourcePrefix}-api-${AWS::StackName}",
-                        {
-                            "ResourcePrefix": {
-                                "Fn::FindInMap": [
-                                    "EnvironmentConfig",
-                                    {
-                                        "Ref": "EnvironmentSuffixName"
-                                    },
-                                    "ResourcePrefix"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "Description": {
-                    "Fn::Sub": "Hello World API for ${EnvironmentSuffixName} environment"
-                },
-                "EndpointConfiguration": {
-                    "Types": [
-                        "REGIONAL"
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffixName"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": "ServerlessApp"
-                    }
-                ]
-            }
-        },
-        "HelloResource": {
-            "Type": "AWS::ApiGateway::Resource",
-            "Properties": {
-                "RestApiId": {
-                    "Ref": "HelloWorldApi"
-                },
-                "ParentId": {
-                    "Fn::GetAtt": [
-                        "HelloWorldApi",
-                        "RootResourceId"
-                    ]
-                },
-                "PathPart": "hello"
-            }
-        },
-        "HelloMethod": {
-            "Type": "AWS::ApiGateway::Method",
-            "Properties": {
-                "RestApiId": {
-                    "Ref": "HelloWorldApi"
-                },
-                "ResourceId": {
-                    "Ref": "HelloResource"
-                },
-                "HttpMethod": "ANY",
-                "AuthorizationType": "NONE",
-                "Integration": {
-                    "Type": "AWS_PROXY",
-                    "IntegrationHttpMethod": "POST",
-                    "Uri": {
-                        "Fn::Sub": [
-                            "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations",
-                            {
-                                "LambdaArn": {
-                                    "Fn::GetAtt": [
-                                        "HelloWorldFunction",
-                                        "Arn"
-                                    ]
-                                }
-                            }
-                        ]
-                    }
-                }
-            }
-        },
-        "ApiDeployment": {
-            "Type": "AWS::ApiGateway::Deployment",
-            "Properties": {
-                "RestApiId": {
-                    "Ref": "HelloWorldApi"
-                },
-                "Description": {
-                    "Fn::Sub": "Deployment for ${EnvironmentSuffixName} environment"
-                }
-            },
-            "DependsOn": [
-                "HelloMethod"
-            ]
-        },
-        "ApiStage": {
-            "Type": "AWS::ApiGateway::Stage",
-            "Properties": {
-                "RestApiId": {
-                    "Ref": "HelloWorldApi"
-                },
-                "DeploymentId": {
-                    "Ref": "ApiDeployment"
-                },
-                "StageName": {
-                    "Fn::FindInMap": [
-                        "EnvironmentConfig",
-                        {
-                            "Ref": "EnvironmentSuffixName"
-                        },
-                        "ApiGatewayStageName"
-                    ]
-                },
-                "Description": {
-                    "Fn::Sub": "Stage for ${EnvironmentSuffixName} environment"
-                },
-                "Variables": {
-                    "Environment": {
-                        "Ref": "EnvironmentSuffixName"
-                    }
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffixName"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": "ServerlessApp"
-                    }
-                ]
-            }
-        }
-    },
-    "Outputs": {
-        "ApiGatewayInvokeUrl": {
-            "Description": "URL for the deployed API Gateway",
-            "Value": {
-                "Fn::Sub": [
-                    "https://${ApiId}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/hello",
-                    {
-                        "ApiId": {
-                            "Ref": "HelloWorldApi"
-                        },
-                        "StageName": {
-                            "Fn::FindInMap": [
-                                "EnvironmentConfig",
-                                {
-                                    "Ref": "EnvironmentSuffixName"
-                                },
-                                "ApiGatewayStageName"
-                            ]
-                        }
-                    }
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": [
-                        "${ResourcePrefix}-api-url",
-                        {
-                            "ResourcePrefix": {
-                                "Fn::FindInMap": [
-                                    "EnvironmentConfig",
-                                    {
-                                        "Ref": "EnvironmentSuffixName"
-                                    },
-                                    "ResourcePrefix"
-                                ]
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "LambdaFunctionArn": {
-            "Description": "ARN of the Lambda function",
-            "Value": {
-                "Fn::GetAtt": [
-                    "HelloWorldFunction",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": [
-                        "${ResourcePrefix}-lambda-arn",
-                        {
-                            "ResourcePrefix": {
-                                "Fn::FindInMap": [
-                                    "EnvironmentConfig",
-                                    {
-                                        "Ref": "EnvironmentSuffixName"
-                                    },
-                                    "ResourcePrefix"
-                                ]
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "ArtifactsBucketName": {
-            "Description": "Name of the S3 bucket for Lambda artifacts",
-            "Value": {
-                "Ref": "LambdaArtifactsBucket"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": [
-                        "${ResourcePrefix}-artifacts-bucket",
-                        {
-                            "ResourcePrefix": {
-                                "Fn::FindInMap": [
-                                    "EnvironmentConfig",
-                                    {
-                                        "Ref": "EnvironmentSuffixName"
-                                    },
-                                    "ResourcePrefix"
-                                ]
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "AccessLogsBucketName": {
-            "Condition": "CreateAccessLogsBucket",
-            "Description": "Name of the S3 bucket for access logs (production only)",
-            "Value": {
-                "Ref": "AccessLogsBucket"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": [
-                        "${ResourcePrefix}-access-logs-bucket",
-                        {
-                            "ResourcePrefix": {
-                                "Fn::FindInMap": [
-                                    "EnvironmentConfig",
-                                    {
-                                        "Ref": "EnvironmentSuffixName"
-                                    },
-                                    "ResourcePrefix"
-                                ]
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "EnvironmentName": {
-            "Description": "Environment name used for this deployment",
-            "Value": {
-                "Ref": "EnvironmentSuffixName"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": [
-                        "${ResourcePrefix}-environment",
-                        {
-                            "ResourcePrefix": {
-                                "Fn::FindInMap": [
-                                    "EnvironmentConfig",
-                                    {
-                                        "Ref": "EnvironmentSuffixName"
-                                    },
-                                    "ResourcePrefix"
-                                ]
-                            }
-                        }
-                    ]
-                }
-            }
-        }
+      }
     }
+  },
+  "Parameters": {
+    "EnvironmentSuffixName": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming and configuration",
+      "AllowedPattern": "^(dev|staging|prod|pr[0-9]+)$",
+      "Default": "dev",
+      "ConstraintDescription": "Must be one of dev, staging, prod, or pr followed by numbers (e.g., pr553)"
+    },
+    "ArtifactBucketName": {
+      "Type": "String",
+      "Description": "S3 bucket name containing Lambda deployment packages",
+      "Default": "iac-rlhf-cfn-states",
+      "MinLength": 3,
+      "MaxLength": 63,
+      "AllowedPattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+      "ConstraintDescription": "Must be a valid S3 bucket name (lowercase, alphanumeric, hyphens)"
+    },
+    "ArtifactS3Key": {
+      "Type": "String",
+      "Description": "S3 key for the Lambda deployment package",
+      "Default": "lambda-function.zip",
+      "AllowedPattern": "^[a-zA-Z0-9/._-]+$",
+      "ConstraintDescription": "Must be a valid S3 key (alphanumeric, forward slash, dot, underscore, hyphen)"
+    }
+  },
+  "Mappings": {
+    "EnvironmentConfig": {
+      "dev": {
+        "LambdaMemorySize": 128,
+        "ResourcePrefix": "tap-app-dev",
+        "LogRetentionDays": 7,
+        "ApiGatewayStageName": "dev"
+      },
+      "staging": {
+        "LambdaMemorySize": 256,
+        "ResourcePrefix": "tap-app-staging",
+        "LogRetentionDays": 14,
+        "ApiGatewayStageName": "staging"
+      },
+      "prod": {
+        "LambdaMemorySize": 512,
+        "ResourcePrefix": "tap-app-prod",
+        "LogRetentionDays": 30,
+        "ApiGatewayStageName": "prod"
+      }
+    }
+  },
+  "Rules": {
+    "ValidateArtifactBucket": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "ArtifactBucketName"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "ArtifactBucketName must be provided and cannot be empty"
+        }
+      ]
+    },
+    "ValidateArtifactS3Key": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "ArtifactS3Key"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "ArtifactS3Key must be provided and cannot be empty"
+        }
+      ]
+    }
+  },
+  "Conditions": {
+    "IsProductionEnvironment": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnvironmentSuffixName"
+        },
+        "prod"
+      ]
+    },
+    "CreateAccessLogsBucket": {
+      "Condition": "IsProductionEnvironment"
+    }
+  },
+  "Resources": {
+    "LambdaArtifactsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": [
+            "${ResourcePrefix}-artifacts-${AWS::AccountId}-${AWS::Region}",
+            {
+              "ResourcePrefix": {
+                "Fn::FindInMap": [
+                  "EnvironmentConfig",
+                  {
+                    "Ref": "EnvironmentSuffixName"
+                  },
+                  "ResourcePrefix"
+                ]
+              }
+            }
+          ]
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffixName"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ServerlessApp"
+          }
+        ]
+      }
+    },
+    "AccessLogsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "CreateAccessLogsBucket",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": [
+            "${ResourcePrefix}-access-logs-${AWS::AccountId}-${AWS::Region}",
+            {
+              "ResourcePrefix": {
+                "Fn::FindInMap": [
+                  "EnvironmentConfig",
+                  {
+                    "Ref": "EnvironmentSuffixName"
+                  },
+                  "ResourcePrefix"
+                ]
+              }
+            }
+          ]
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffixName"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ServerlessApp"
+          }
+        ]
+      }
+    },
+    "AccessLogsBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Condition": "CreateAccessLogsBucket",
+      "Properties": {
+        "Bucket": {
+          "Ref": "AccessLogsBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "apigateway.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${AccessLogsBucket}/api-gateway-logs/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3AccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${ArtifactBucketName}/*"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${LambdaArtifactsBucket}/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffixName"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ServerlessApp"
+          }
+        ]
+      }
+    },
+    "LambdaLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": [
+            "/aws/lambda/${ResourcePrefix}-function-${AWS::StackName}",
+            {
+              "ResourcePrefix": {
+                "Fn::FindInMap": [
+                  "EnvironmentConfig",
+                  {
+                    "Ref": "EnvironmentSuffixName"
+                  },
+                  "ResourcePrefix"
+                ]
+              }
+            }
+          ]
+        },
+        "RetentionInDays": {
+          "Fn::FindInMap": [
+            "EnvironmentConfig",
+            {
+              "Ref": "EnvironmentSuffixName"
+            },
+            "LogRetentionDays"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffixName"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ServerlessApp"
+          }
+        ]
+      }
+    },
+    "ArtifactValidation": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "ArtifactValidationFunction",
+            "Arn"
+          ]
+        },
+        "ArtifactBucketName": {
+          "Ref": "ArtifactBucketName"
+        },
+        "ArtifactS3Key": {
+          "Ref": "ArtifactS3Key"
+        }
+      }
+    },
+    "ArtifactValidationFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": [
+            "${ResourcePrefix}-artifact-validation-${AWS::StackName}",
+            {
+              "ResourcePrefix": {
+                "Fn::FindInMap": [
+                  "EnvironmentConfig",
+                  {
+                    "Ref": "EnvironmentSuffixName"
+                  },
+                  "ResourcePrefix"
+                ]
+              }
+            }
+          ]
+        },
+        "Runtime": "python3.12",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "ArtifactValidationRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 128,
+        "Timeout": 60,
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport urllib3\n\ns3 = boto3.client('s3')\nhttp = urllib3.PoolManager()\n\ndef send_response(event, context, response_status, response_data):\n    response_body = {\n        'Status': response_status,\n        'Reason': response_data.get('Error', 'Validation passed successfully'),\n        'PhysicalResourceId': context.log_stream_name or context.aws_request_id,\n        'StackId': event['StackId'],\n        'RequestId': event['RequestId'],\n        'LogicalResourceId': event['LogicalResourceId'],\n        'Data': response_data,\n    }\n\n    json_response_body = json.dumps(response_body)\n\n    try:\n        response = http.request(\n            method='PUT',\n            url=event['ResponseURL'],\n            body=json_response_body,\n            headers={\n                'Content-Type': '',\n                'Content-Length': str(len(json_response_body))\n            }\n        )\n        print(f\"send_response status: {response.status}\")\n    except Exception as e:\n        print(f\"send_response failed: {e}\")\n\ndef lambda_handler(event, context):\n    print(\"Received event:\", json.dumps(event, indent=2))\n\n    try:\n        props = event.get('ResourceProperties', {})\n        bucket = props.get('ArtifactBucketName')\n        key = props.get('ArtifactS3Key')\n\n        try:\n            s3.head_object(Bucket=bucket, Key=key)\n            print(f\"Artifact exists: s3://{bucket}/{key}\")\n        except Exception as e:\n            print(f\"Artifact check skipped or failed: {e}\")\n\n        send_response(event, context, 'SUCCESS', {\n            'ArtifactBucketName': bucket,\n            'ArtifactS3Key': key,\n            'ValidationStatus': 'SKIPPED_OR_PASSED'\n        })\n\n    except Exception as e:\n        print(f\"Unexpected error: {e}\")\n        send_response(event, context, 'SUCCESS', {\n            'Error': 'Unexpected error occurred, but validation bypassed.'\n        })\n"
+        },
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffixName"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffixName"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ServerlessApp"
+          }
+        ]
+      }
+    },
+    "ArtifactValidationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3ValidationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${ArtifactBucketName}/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffixName"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ServerlessApp"
+          }
+        ]
+      }
+    },
+    "HelloWorldFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DependsOn": [
+        "ArtifactValidation",
+        "LambdaLogGroup",
+        "ArtifactValidationFunction"
+      ],
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": [
+            "${ResourcePrefix}-function-${AWS::StackName}",
+            {
+              "ResourcePrefix": {
+                "Fn::FindInMap": [
+                  "EnvironmentConfig",
+                  {
+                    "Ref": "EnvironmentSuffixName"
+                  },
+                  "ResourcePrefix"
+                ]
+              }
+            }
+          ]
+        },
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": {
+          "Fn::FindInMap": [
+            "EnvironmentConfig",
+            {
+              "Ref": "EnvironmentSuffixName"
+            },
+            "LambdaMemorySize"
+          ]
+        },
+        "Timeout": 30,
+        "Code": {
+          "ZipFile": "exports.handler = async (event) => {\n    console.log('Event:', JSON.stringify(event, null, 2));\n    \n    const response = {\n        statusCode: 200,\n        headers: {\n            'Content-Type': 'application/json',\n            'Access-Control-Allow-Origin': '*',\n            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',\n            'Access-Control-Allow-Headers': 'Content-Type, Authorization'\n        },\n        body: JSON.stringify({\n            message: 'Hello World from Lambda!',\n            environment: process.env.ENVIRONMENT,\n            resourcePrefix: process.env.RESOURCE_PREFIX,\n            timestamp: new Date().toISOString(),\n            requestId: event.requestContext?.requestId || 'unknown'\n        })\n    };\n    \n    console.log('Response:', JSON.stringify(response, null, 2));\n    return response;\n};\n"
+        },
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffixName"
+            },
+            "RESOURCE_PREFIX": {
+              "Fn::FindInMap": [
+                "EnvironmentConfig",
+                {
+                  "Ref": "EnvironmentSuffixName"
+                },
+                "ResourcePrefix"
+              ]
+            },
+            "LOG_LEVEL": {
+              "Fn::If": [
+                "IsProductionEnvironment",
+                "WARN",
+                "DEBUG"
+              ]
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffixName"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ServerlessApp"
+          }
+        ]
+      }
+    },
+    "HelloWorldApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": [
+            "${ResourcePrefix}-api-${AWS::StackName}",
+            {
+              "ResourcePrefix": {
+                "Fn::FindInMap": [
+                  "EnvironmentConfig",
+                  {
+                    "Ref": "EnvironmentSuffixName"
+                  },
+                  "ResourcePrefix"
+                ]
+              }
+            }
+          ]
+        },
+        "Description": {
+          "Fn::Sub": "API Gateway for ${AWS::StackName} serverless application"
+        },
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffixName"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ServerlessApp"
+          }
+        ]
+      }
+    },
+    "HelloResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "HelloWorldApi"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "HelloWorldApi",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "hello"
+      }
+    },
+    "HelloMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "HelloWorldApi"
+        },
+        "ResourceId": {
+          "Ref": "HelloResource"
+        },
+        "HttpMethod": "ANY",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloWorldFunction.Arn}/invocations"
+          },
+          "IntegrationResponses": [
+            {
+              "StatusCode": 200
+            }
+          ]
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": 200,
+            "ResponseModels": {
+              "application/json": "Empty"
+            }
+          }
+        ]
+      }
+    },
+    "ApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": [
+        "HelloMethod"
+      ],
+      "Properties": {
+        "RestApiId": {
+          "Ref": "HelloWorldApi"
+        },
+        "Description": {
+          "Fn::Sub": "Deployment for ${AWS::StackName}"
+        }
+      }
+    },
+    "ApiStage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "HelloWorldApi"
+        },
+        "DeploymentId": {
+          "Ref": "ApiDeployment"
+        },
+        "StageName": {
+          "Fn::FindInMap": [
+            "EnvironmentConfig",
+            {
+              "Ref": "EnvironmentSuffixName"
+            },
+            "ApiGatewayStageName"
+          ]
+        },
+        "Description": {
+          "Fn::Sub": "${EnvironmentSuffixName} stage for ${AWS::StackName}"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffixName"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ServerlessApp"
+          }
+        ]
+      }
+    },
+    "ApiGatewayLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "HelloWorldFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HelloWorldApi}/*/*"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ApiGatewayInvokeUrl": {
+      "Description": "URL for the API Gateway endpoint with /hello path",
+      "Value": {
+        "Fn::Sub": "https://${HelloWorldApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStage}/hello"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": [
+            "${ResourcePrefix}-api-url",
+            {
+              "ResourcePrefix": {
+                "Fn::FindInMap": [
+                  "EnvironmentConfig",
+                  {
+                    "Ref": "EnvironmentSuffixName"
+                  },
+                  "ResourcePrefix"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "ARN of the Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "HelloWorldFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": [
+            "${ResourcePrefix}-lambda-arn",
+            {
+              "ResourcePrefix": {
+                "Fn::FindInMap": [
+                  "EnvironmentConfig",
+                  {
+                    "Ref": "EnvironmentSuffixName"
+                  },
+                  "ResourcePrefix"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ArtifactsBucketName": {
+      "Description": "Name of the S3 bucket for Lambda artifacts",
+      "Value": {
+        "Ref": "LambdaArtifactsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": [
+            "${ResourcePrefix}-artifacts-bucket",
+            {
+              "ResourcePrefix": {
+                "Fn::FindInMap": [
+                  "EnvironmentConfig",
+                  {
+                    "Ref": "EnvironmentSuffixName"
+                  },
+                  "ResourcePrefix"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "AccessLogsBucketName": {
+      "Condition": "CreateAccessLogsBucket",
+      "Description": "Name of the S3 bucket for access logs (production only)",
+      "Value": {
+        "Ref": "AccessLogsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": [
+            "${ResourcePrefix}-access-logs-bucket",
+            {
+              "ResourcePrefix": {
+                "Fn::FindInMap": [
+                  "EnvironmentConfig",
+                  {
+                    "Ref": "EnvironmentSuffixName"
+                  },
+                  "ResourcePrefix"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "EnvironmentName": {
+      "Description": "Environment name used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffixName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": [
+            "${ResourcePrefix}-environment",
+            {
+              "ResourcePrefix": {
+                "Fn::FindInMap": [
+                  "EnvironmentConfig",
+                  {
+                    "Ref": "EnvironmentSuffixName"
+                  },
+                  "ResourcePrefix"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
 }

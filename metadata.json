@@ -16,7 +16,8 @@
     "lambda",
     "s3",
     "iam",
-    "logs"
+    "logs",
+    "apigateway"
   ],
   "wave": "P0",
   "migrated_from": {

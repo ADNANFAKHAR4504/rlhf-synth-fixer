@@ -34,17 +34,47 @@ HelloWorldFunction:
   Runtime: nodejs22.x
 ```
 
-### 3. **Removed Problematic API Gateway Logging**
-**Issue**: API Gateway access logs were incorrectly configured to send to S3.
+### 3. **Implemented API Gateway REST API with /hello Path**
+**Issue**: Template needs to follow PROMPT requirements for API Gateway REST API.
 
-**Solution**: Removed the incorrect S3-based access logging configuration. The template now includes a proper S3 bucket policy for API Gateway logging if needed.
+**Solution**: Implemented full API Gateway REST API with proper proxy integration to Lambda:
+```yaml
+# API Gateway REST API with /hello path
+HelloWorldApi:
+  Type: AWS::ApiGateway::RestApi
 
-### 4. **Optimized Resource Dependencies**
+HelloResource:
+  Type: AWS::ApiGateway::Resource
+  PathPart: hello
+
+HelloMethod:
+  Type: AWS::ApiGateway::Method
+  HttpMethod: ANY
+  Integration:
+    Type: AWS_PROXY
+```
+
+### 4. **API Gateway Stage and Deployment**
+**Issue**: API Gateway needs proper deployment and stage configuration.
+
+**Solution**: Added deployment and stage resources with environment-specific stage names:
+```yaml
+ApiDeployment:
+  Type: AWS::ApiGateway::Deployment
+  DependsOn:
+    - HelloMethod
+
+ApiStage:
+  Type: AWS::ApiGateway::Stage
+  StageName: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ApiGatewayStageName]
+```
+
+### 5. **Optimized Resource Dependencies**
 **Issue**: Complex custom resource dependency chain could cause deployment ordering issues.
 
 **Solution**: Maintained the validation pattern but ensured clean dependency flow with explicit `DependsOn` statements.
 
-### 5. **Enhanced Template Structure**
+### 6. **Enhanced Template Structure**
 **Issue**: Template lacked proper organization and user experience.
 
 **Solution**: Added comprehensive metadata configuration and improved parameter organization:

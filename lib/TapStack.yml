@@ -370,42 +370,90 @@ Resources:
         - Key: Application
           Value: ServerlessApp
 
-  # Lambda Function URL (LocalStack Community compatible - replaces API Gateway)
-  HelloWorldFunctionUrl:
-    Type: AWS::Lambda::Url
+  # API Gateway REST API
+  HelloWorldApi:
+    Type: AWS::ApiGateway::RestApi
     Properties:
-      TargetFunctionArn: !GetAtt HelloWorldFunction.Arn
-      AuthType: NONE
-      Cors:
-        AllowOrigins:
-          - "*"
-        AllowMethods:
-          - GET
-          - POST
-          - PUT
-          - DELETE
-        AllowHeaders:
-          - Content-Type
-          - Authorization
-        MaxAge: 300
+      Name: !Sub
+        - ${ResourcePrefix}-api-${AWS::StackName}
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+      Description: !Sub "API Gateway for ${AWS::StackName} serverless application"
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffixName
+        - Key: Application
+          Value: ServerlessApp
 
-  # Lambda permission for Function URL invocation
-  HelloWorldFunctionUrlPermission:
+  # API Gateway Resource for /hello path
+  HelloResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref HelloWorldApi
+      ParentId: !GetAtt HelloWorldApi.RootResourceId
+      PathPart: hello
+
+  # API Gateway Method for /hello (ANY method for proxy integration)
+  HelloMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref HelloWorldApi
+      ResourceId: !Ref HelloResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HelloWorldFunction.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 200
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - HelloMethod
+    Properties:
+      RestApiId: !Ref HelloWorldApi
+      Description: !Sub "Deployment for ${AWS::StackName}"
+
+  # API Gateway Stage
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref HelloWorldApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ApiGatewayStageName]
+      Description: !Sub "${EnvironmentSuffixName} stage for ${AWS::StackName}"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffixName
+        - Key: Application
+          Value: ServerlessApp
+
+  # Lambda permission for API Gateway invocation
+  ApiGatewayLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref HelloWorldFunction
-      Action: lambda:InvokeFunctionUrl
-      Principal: "*"
-      FunctionUrlAuthType: NONE
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HelloWorldApi}/*/*"
 
 # Outputs section
 Outputs:
-  FunctionUrl:
-    Description: URL for the Lambda Function URL endpoint
-    Value: !GetAtt HelloWorldFunctionUrl.FunctionUrl
+  ApiGatewayInvokeUrl:
+    Description: URL for the API Gateway endpoint with /hello path
+    Value: !Sub "https://${HelloWorldApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStage}/hello"
     Export:
       Name: !Sub
-        - ${ResourcePrefix}-function-url
+        - ${ResourcePrefix}-api-url
         - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
 
   LambdaFunctionArn:
