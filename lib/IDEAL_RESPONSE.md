@@ -40,10 +40,16 @@
       "Default": "",
       "Description": "Name of an existing EC2 KeyPair (leave empty if no SSH access needed)"
     },
-    "LatestAmiId": {
-      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
-      "Description": "Latest Amazon Linux 2 AMI ID"
+    "EnableRDS": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": ["true", "false"],
+      "Description": "Enable RDS database (set to false for LocalStack)"
+    },
+    "EC2ImageId": {
+      "Type": "String",
+      "Default": "ami-0c55b159cbfafe1f0",
+      "Description": "EC2 AMI ID for the instance"
     }
   },
   "Conditions": {
@@ -57,6 +63,14 @@
             ""
           ]
         }
+      ]
+    },
+    "CreateRDS": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableRDS"
+        },
+        "true"
       ]
     }
   },
@@ -384,6 +398,7 @@
     },
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
+      "Condition": "CreateRDS",
       "Properties": {
         "DBSubnetGroupName": {
           "Fn::Sub": "${EnvironmentSuffix}-db-subnet-group"
@@ -415,6 +430,7 @@
     },
     "DatabaseSecret": {
       "Type": "AWS::SecretsManager::Secret",
+      "Condition": "CreateRDS",
       "Properties": {
         "Name": {
           "Fn::Sub": "${EnvironmentSuffix}-db-credentials"
@@ -498,6 +514,7 @@
     },
     "RDSInstance": {
       "Type": "AWS::RDS::DBInstance",
+      "Condition": "CreateRDS",
       "DeletionPolicy": "Snapshot",
       "UpdateReplacePolicy": "Snapshot",
       "Properties": {
@@ -560,6 +577,7 @@
     },
     "RDSMonitoringRole": {
       "Type": "AWS::IAM::Role",
+      "Condition": "CreateRDS",
       "Properties": {
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -589,9 +607,6 @@
     "EC2InstanceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${EnvironmentSuffix}-EC2-Role"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -613,51 +628,94 @@
             "PolicyName": "S3Access",
             "PolicyDocument": {
               "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetObject",
-                    "s3:PutObject",
-                    "s3:ListBucket"
-                  ],
-                  "Resource": [
+              "Statement": {
+                "Fn::If": [
+                  "CreateRDS",
+                  [
                     {
-                      "Fn::GetAtt": [
-                        "S3Bucket",
-                        "Arn"
+                      "Effect": "Allow",
+                      "Action": [
+                        "s3:GetObject",
+                        "s3:PutObject",
+                        "s3:ListBucket"
+                      ],
+                      "Resource": [
+                        {
+                          "Fn::GetAtt": [
+                            "S3Bucket",
+                            "Arn"
+                          ]
+                        },
+                        {
+                          "Fn::Join": [
+                            "",
+                            [
+                              {
+                                "Fn::GetAtt": [
+                                  "S3Bucket",
+                                  "Arn"
+                                ]
+                              },
+                              "/*"
+                            ]
+                          ]
+                        }
                       ]
                     },
                     {
-                      "Fn::Join": [
-                        "",
-                        [
-                          {
-                            "Fn::GetAtt": [
-                              "S3Bucket",
-                              "Arn"
+                      "Effect": "Allow",
+                      "Action": [
+                        "secretsmanager:GetSecretValue"
+                      ],
+                      "Resource": {
+                        "Ref": "DatabaseSecret"
+                      }
+                    }
+                  ],
+                  [
+                    {
+                      "Effect": "Allow",
+                      "Action": [
+                        "s3:GetObject",
+                        "s3:PutObject",
+                        "s3:ListBucket"
+                      ],
+                      "Resource": [
+                        {
+                          "Fn::GetAtt": [
+                            "S3Bucket",
+                            "Arn"
+                          ]
+                        },
+                        {
+                          "Fn::Join": [
+                            "",
+                            [
+                              {
+                                "Fn::GetAtt": [
+                                  "S3Bucket",
+                                  "Arn"
+                                ]
+                              },
+                              "/*"
                             ]
-                          },
-                          "/*"
-                        ]
+                          ]
+                        }
                       ]
                     }
                   ]
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "secretsmanager:GetSecretValue"
-                  ],
-                  "Resource": {
-                    "Ref": "DatabaseSecret"
-                  }
-                }
-              ]
+                ]
+              }
             }
           }
         ],
         "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentSuffix}-EC2-Role"
+            }
+          },
           {
             "Key": "Environment",
             "Value": {
@@ -670,9 +728,6 @@
     "EC2InstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "${EnvironmentSuffix}-EC2-InstanceProfile"
-        },
         "Roles": [
           {
             "Ref": "EC2InstanceRole"
@@ -682,16 +737,9 @@
     },
     "EC2Instance": {
       "Type": "AWS::EC2::Instance",
-      "CreationPolicy": {
-        "ResourceSignal": {
-          "Timeout": "PT10M"
-        }
-      },
       "Properties": {
         "InstanceType": "t3.micro",
-        "ImageId": {
-          "Ref": "LatestAmiId"
-        },
+        "ImageId": { "Ref": "EC2ImageId" },
         "KeyName": {
           "Fn::If": [
             "HasKeyPair",
@@ -717,7 +765,7 @@
         "Monitoring": true,
         "UserData": {
           "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y postgresql amazon-cloudwatch-agent\necho 'Development environment setup complete' > /var/log/setup.log\necho 'Environment: ${EnvironmentSuffix}' >> /var/log/setup.log\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2Instance --region ${AWS::Region}\n"
+            "Fn::Sub": "#!/bin/bash\necho 'Development environment setup complete' > /var/log/setup.log\necho 'Environment: ${EnvironmentSuffix}' >> /var/log/setup.log\n"
           }
         },
         "Tags": [
@@ -823,21 +871,33 @@
     },
     "RDSEndpoint": {
       "Value": {
-        "Fn::GetAtt": [
-          "RDSInstance",
-          "Endpoint.Address"
+        "Fn::If": [
+          "CreateRDS",
+          {
+            "Fn::GetAtt": [
+              "RDSInstance",
+              "Endpoint.Address"
+            ]
+          },
+          "RDS-NOT-ENABLED"
         ]
       },
-      "Description": "RDS PostgreSQL endpoint address"
+      "Description": "RDS PostgreSQL endpoint address (or RDS-NOT-ENABLED if disabled)"
     },
     "RDSPort": {
       "Value": {
-        "Fn::GetAtt": [
-          "RDSInstance",
-          "Endpoint.Port"
+        "Fn::If": [
+          "CreateRDS",
+          {
+            "Fn::GetAtt": [
+              "RDSInstance",
+              "Endpoint.Port"
+            ]
+          },
+          "5432"
         ]
       },
-      "Description": "RDS PostgreSQL port"
+      "Description": "RDS PostgreSQL port (default 5432)"
     },
     "EC2InstanceId": {
       "Value": {
@@ -861,9 +921,15 @@
     },
     "DatabaseCredentialsSecret": {
       "Value": {
-        "Ref": "DatabaseSecret"
+        "Fn::If": [
+          "CreateRDS",
+          {
+            "Ref": "DatabaseSecret"
+          },
+          "RDS-NOT-ENABLED"
+        ]
       },
-      "Description": "AWS Secrets Manager secret containing database credentials"
+      "Description": "AWS Secrets Manager secret containing database credentials (or RDS-NOT-ENABLED if disabled)"
     },
     "EnvironmentSuffix": {
       "Value": {
@@ -877,6 +943,4 @@
       }
     }
   }
-}
-
-```
+}```
