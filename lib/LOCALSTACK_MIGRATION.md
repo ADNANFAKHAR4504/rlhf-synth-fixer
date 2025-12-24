@@ -129,12 +129,12 @@ npm test
 
 | Feature | LocalStack Community | LocalStack Pro |
 |---------|---------------------|----------------|
-| S3 | ✅ Full Support | ✅ Full Support |
-| IAM | ✅ Full Support | ✅ Full Support |
-| CloudWatch Logs | ✅ Full Support | ✅ Full Support |
-| KMS | ✅ Full Support | ✅ Full Support |
-| SSM Parameter Store | ✅ Full Support | ✅ Full Support |
-| **DynamoDB** | ❌ Not Available | ✅ **Full Support** |
+| S3 | Yes (Full Support) | Yes (Full Support) |
+| IAM | Yes (Full Support) | Yes (Full Support) |
+| CloudWatch Logs | Yes (Full Support) | Yes (Full Support) |
+| KMS | Yes (Full Support) | Yes (Full Support) |
+| SSM Parameter Store | Yes (Full Support) | Yes (Full Support) |
+| **DynamoDB** | **No (Not Available)** | **Yes (Full Support)** |
 
 ### Alternative: AWS Deployment
 
