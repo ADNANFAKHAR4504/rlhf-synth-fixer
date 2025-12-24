@@ -1,0 +1,7 @@
+{
+  "AppBucketName": "securewebapp-app-us-east-1",
+  "CloudTrailArn": "arn:aws:cloudtrail:us-east-1:000000000000:trail/securewebapp-trail",
+  "CloudTrailS3Bucket": "securewebapp-logs-us-east-1",
+  "DynamoTableName": "securewebapp-AppData",
+  "VPCId": "vpc-d7d7596a1ec2495d5"
+}

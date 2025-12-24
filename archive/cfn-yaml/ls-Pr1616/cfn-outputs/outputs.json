@@ -1,0 +1,22 @@
+[
+    {
+        "OutputKey": "AppBucketName",
+        "OutputValue": "securewebapp-app-us-east-1"
+    },
+    {
+        "OutputKey": "CloudTrailArn",
+        "OutputValue": "arn:aws:cloudtrail:us-east-1:000000000000:trail/securewebapp-trail"
+    },
+    {
+        "OutputKey": "CloudTrailS3Bucket",
+        "OutputValue": "securewebapp-logs-us-east-1"
+    },
+    {
+        "OutputKey": "DynamoTableName",
+        "OutputValue": "securewebapp-AppData"
+    },
+    {
+        "OutputKey": "VPCId",
+        "OutputValue": "vpc-d7d7596a1ec2495d5"
+    }
+]
