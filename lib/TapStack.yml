@@ -354,6 +354,8 @@ Resources:
             Resource: !Ref PipelineNotificationTopic
 
   # EventBridge Role for Pipeline Execution
+  # NOTE: CodePipeline as EventBridge target is not supported in LocalStack
+  # This role is defined but not used until LocalStack adds support
   EventBridgePipelineRole:
     Type: AWS::IAM::Role
     Properties:
@@ -373,9 +375,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - codepipeline:StartPipelineExecution
-                Resource: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${CodePipeline}
+                Resource: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:*
 
   # EventBridge Rule for Pipeline Trigger
+  # NOTE: Disabled - CodePipeline as EventBridge target is not supported in LocalStack
   PipelineTriggerRule:
     Type: AWS::Events::Rule
     Properties:
@@ -396,11 +399,10 @@ Resources:
             - !Ref SourceBranchName
         resources:
           - !Sub arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${SourceRepositoryName}
-      State: ENABLED
+      State: DISABLED
       Targets:
-        - Arn: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${CodePipeline}
-          RoleArn: !GetAtt EventBridgePipelineRole.Arn
-          Id: CodePipelineTarget
+        - Arn: !Ref PipelineNotificationTopic
+          Id: PipelineNotificationTarget
 
   # CodePipeline
   CodePipeline:

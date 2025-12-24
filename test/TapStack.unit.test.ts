@@ -331,6 +331,7 @@ describe('CI/CD Pipeline CloudFormation Templates', () => {
       expect(rule.Properties.Name).toEqual({
         'Fn::Sub': 'pipeline-trigger-${EnvironmentSuffix}'
       });
+      expect(rule.Properties.Targets[0].Arn).toEqual({ Ref: 'PipelineNotificationTopic' });
     });
   });
 
@@ -627,9 +628,9 @@ describe('CI/CD Pipeline CloudFormation Templates', () => {
       expect(sourceAction.Configuration.PollForSourceChanges).toBe(false);
     });
 
-    test('EventBridge trigger rule should be enabled', () => {
+    test('EventBridge trigger rule should be disabled for LocalStack compatibility', () => {
       const rule = pipelineTemplate.Resources.PipelineTriggerRule;
-      expect(rule.Properties.State).toBe('ENABLED');
+      expect(rule.Properties.State).toBe('DISABLED');
     });
   });
 
