@@ -1,25 +1,29 @@
-### **Prompt Details**
+Need to build secure CDK infrastructure with proper encryption and IAM.
 
-- **Environment:** Your task is to set up a secure infrastructure configuration using CDK Typescript. Specifically, you should focus on ensuring that data is both encrypted at rest and in transit, and that IAM permissions adhere to best practices.
-- **Constraints Items:**
-  - Use AWS KMS to encrypt S3 bucket data at rest.
-  - Ensure data is encrypted in transit using SSL certificates.
-  - Implement IAM roles with the principle of least privilege.
-- **Proposed Statement:** You are to configure infrastructure using CDK for an existing multi-region setup, spanning us-west-2 and eu-central-1. The environment includes multiple VPCs, S3 buckets, and EC2 instances. The solution will be in Typescript.
+We have a multi-region setup running in us-west-2 and eu-central-1 with VPCs, S3, and EC2. Need to add proper security controls around data storage and API access.
 
-### **Requirements (Steps for the AI)**
+## What I need:
 
-1. **Repository Setup:** Create a new branch named secure-setup for the CDK project.
-2. **AWS Services:** The infrastructure should include an S3 bucket for data storage and a public-facing endpoint (e.g., API Gateway) that interacts with the data.
-3. **CDK Code:**
-   - Write a Typescript program using the CDK library to define the infrastructure.
-   - The S3 bucket must be configured to use a new or existing AWS KMS key for default encryption. This should apply to all existing and future objects in the buckets.
-   - The public endpoint must enforce the use of SSL/TLS with valid SSL certificates to secure data in transit.
-   - Define an IAM role with the minimum necessary permissions for the services to function, ensuring it can only access the specified resources.
-4. **Testing:** Include a section with unit tests for the CDK program.
-   - The tests should verify that the S3 bucket's encryption configuration is correct (e.g., checks the default encryption settings).
-   - The tests should also confirm that the IAM role's policy adheres to the principle of least privilege by checking its policy document.
+**S3 bucket for data storage**
+- Must use KMS encryption for everything at rest
+- Need to enforce encryption on all objects, not just defaults
 
-### **Expected Output**
+**API Gateway as the public endpoint**
+- Should connect to Lambda functions that read/write S3
+- Must enforce SSL/TLS - no plain HTTP allowed
+- Lambda needs IAM role with specific S3 and KMS permissions only
 
-The final output should be a complete and well-commented Typescript program using the CDK library that defines infrastructure as code to meet the above requirements. The code should include unit tests verifying encryption and IAM configurations, and all tests should pass without errors.
+**IAM setup**
+- Lambda role should have:
+  - GetObject and PutObject on the bucket only
+  - KMS encrypt/decrypt for the specific key
+  - CloudWatch logs access
+- Don't give it ListBucket or any wildcards
+
+**Tests**
+Write unit tests that check:
+- S3 bucket has KMS encryption enabled
+- IAM policy doesn't use wildcards or overly broad permissions
+- API Gateway enforces SSL
+
+Use CDK with TypeScript. Keep the infrastructure modular - separate constructs for S3, Lambda, IAM role, and API Gateway.
