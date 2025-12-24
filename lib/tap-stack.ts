@@ -124,7 +124,17 @@ export class TapStack extends cdk.Stack {
       {
         autoScalingGroupName: `${namePrefix}-asg`,
         vpc,
-        launchTemplate,
+        mixedInstancesPolicy: {
+          launchTemplate: launchTemplate,
+          launchTemplateOverrides: [
+            {
+              instanceType: ec2.InstanceType.of(
+                ec2.InstanceClass.T3,
+                ec2.InstanceSize.MICRO
+              ),
+            },
+          ],
+        },
         minCapacity: 2,
         maxCapacity: 4,
         desiredCapacity: 2,
@@ -139,6 +149,17 @@ export class TapStack extends cdk.Stack {
         }),
       }
     );
+
+    // For LocalStack: Override the launch template version to use $Latest string
+    // instead of Fn::GetAtt which LocalStack doesn't support
+    if (isLocalStack) {
+      const cfnAsg = autoScalingGroup.node
+        .defaultChild as autoscaling.CfnAutoScalingGroup;
+      cfnAsg.addPropertyOverride(
+        'MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification.Version',
+        '$Latest'
+      );
+    }
 
     // Add scaling policies for cost optimization
     autoScalingGroup.scaleOnCpuUtilization('CpuScaleUp', {

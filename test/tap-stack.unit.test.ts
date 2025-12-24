@@ -355,11 +355,15 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('Auto Scaling Group uses launch template', () => {
+    test('Auto Scaling Group uses launch template via MixedInstancesPolicy', () => {
       template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        LaunchTemplate: Match.objectLike({
-          LaunchTemplateId: Match.objectLike({
-            Ref: Match.stringLikeRegexp('LaunchTemplate.*'),
+        MixedInstancesPolicy: Match.objectLike({
+          LaunchTemplate: Match.objectLike({
+            LaunchTemplateSpecification: Match.objectLike({
+              LaunchTemplateId: Match.objectLike({
+                Ref: Match.stringLikeRegexp('LaunchTemplate.*'),
+              }),
+            }),
           }),
         }),
       });
@@ -711,6 +715,18 @@ describe('TapStack Unit Tests', () => {
 
       const asg = asgResources[asgKeys[0]];
       expect(asg.DeletionPolicy).toBe('Delete');
+    });
+
+    test('Auto Scaling Group uses $Latest version for launch template in LocalStack mode', () => {
+      const asgResources = localStackTemplate.findResources('AWS::AutoScaling::AutoScalingGroup');
+      const asgKeys = Object.keys(asgResources);
+      expect(asgKeys.length).toBeGreaterThan(0);
+
+      const asg = asgResources[asgKeys[0]];
+      // In LocalStack mode, the version should be overridden to $Latest string
+      // instead of Fn::GetAtt which LocalStack doesn't support
+      const version = asg.Properties.MixedInstancesPolicy?.LaunchTemplate?.LaunchTemplateSpecification?.Version;
+      expect(version).toBe('$Latest');
     });
 
     test('No NAT Gateway is created in LocalStack mode', () => {
