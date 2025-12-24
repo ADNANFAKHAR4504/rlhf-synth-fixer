@@ -14,10 +14,16 @@
   "aws_services": [
     "S3",
     "IAM",
-    "EventBridge",
     "Lambda",
-    "CloudWatch"
+    "CloudWatch",
+    "EventBridge"
   ],
   "wave": "P0",
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
 }
