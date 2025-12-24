@@ -13,7 +13,7 @@ Set up a REST API with these pieces:
 
 The Lambda should read/write from S3. API Gateway triggers the Lambda when requests come in.
 
-## Security Requirements (Critical)
+## Security Requirements - Critical
 
 This is going into production so security is non-negotiable:
 
@@ -21,16 +21,16 @@ This is going into production so security is non-negotiable:
 - Lambda needs minimal permissions - only what it needs for S3
 - API Gateway can invoke Lambda, nothing else can
 - S3 is private, no public access at all
-- Encrypt S3 at rest (KMS preferred but SSE-S3 is fine)
+- Encrypt S3 at rest with KMS or SSE-S3
 - Force HTTPS for all S3 access
 
 **API Protection:**
-- Need auth on API Gateway - either API keys or Cognito (your call)
+- Need auth on API Gateway - either API keys or Cognito, your call
 - Set up WAF rules for the API
 - Usage plans and throttling to prevent abuse
 
 **Monitoring & Compliance:**
-- Turn on logging for everything (API access logs, Lambda logs, S3 logs)
+- Turn on logging for everything - API access logs, Lambda logs, S3 logs
 - Tag all resources with environment, owner, cost center, compliance
 - CloudWatch alarms if Lambda starts erroring out
 - X-Ray tracing so we can debug issues
@@ -42,7 +42,7 @@ Some things to make this easier to run:
 - S3 versioning turned on
 - Lambda timeout and memory sized appropriately
 - Support for deploying to dev/staging/prod via CDK context
-- Tests included (at least basic unit tests for the stack)
+- Tests included - at least basic unit tests for the stack
 
 ## Implementation Notes
 
