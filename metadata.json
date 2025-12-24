@@ -44,7 +44,6 @@
     "VisibilityTimeoutParameter",
     "TrustedAccountParameter"
   ],
-  "background": "Deploy a new, self-contained asynchronous processing stack using a single TapStack.yml. The design provisions FIFO SQS queues with DLQs, Lambda consumers with reserved concurrency, and a DynamoDB PAY_PER_REQUEST table for idempotent state. EventBridge routes alarm events, CloudWatch provides alarms and a processing dashboard, and SSM parameters expose queue URLs/ARNs for dynamic configuration. The stack is deployed in us-east-1 (primary) with a mirrored DR deployment in us-west-2; a replication Lambda forwards messages to the DR queue using an SSM-resolved URL. All resource names include an EnvironmentSuffix to allow safe parallel environments.",
   "provider": "localstack",
   "wave": "P1"
 }
