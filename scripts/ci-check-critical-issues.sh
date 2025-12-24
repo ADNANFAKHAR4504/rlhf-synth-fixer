@@ -55,6 +55,25 @@ echo "$CLAUDE_COMMENT" > latest_claude_comment.txt
 echo "📝 Checking Claude's review comment ($(echo "$CLAUDE_COMMENT" | wc -c) bytes)"
 
 # ============================================================
+# LOCALSTACK MIGRATION DETECTION
+# LocalStack migrations have adjusted review criteria
+# ============================================================
+
+IS_LOCALSTACK_MIGRATION=false
+
+# Check branch name for LocalStack indicators
+BRANCH_NAME=$(gh api \
+  -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+  --jq '.head.ref // empty' 2>/dev/null || echo "")
+
+if [[ "$BRANCH_NAME" == ls-* ]] || [[ "$BRANCH_NAME" == *localstack* ]] || [[ "$BRANCH_NAME" == *LS-* ]]; then
+  IS_LOCALSTACK_MIGRATION=true
+  echo "🔧 LocalStack migration detected (branch: $BRANCH_NAME) - applying adjusted criteria"
+fi
+
+# ============================================================
 # IMPROVED ERROR DETECTION WITH CLEAR, USER-FRIENDLY MESSAGES
 # Each issue type has: detection, explanation, and fix steps
 # ============================================================
@@ -275,6 +294,57 @@ elif grep -q "Exit with code 1 to fail the job" latest_claude_comment.txt; then
     "  1. Read Claude's full review comment above
   2. Address all issues mentioned
   3. Push your fixes"
+fi
+
+# -------------------------------------------------------------------
+# LOCALSTACK MIGRATION: Downgrade certain issues to warnings
+# -------------------------------------------------------------------
+if [ "$IS_LOCALSTACK_MIGRATION" = true ] && [ "$CRITICAL_FOUND" = true ]; then
+  echo "🔧 LocalStack migration: Evaluating if issue should be downgraded..."
+  
+  # Check if the Claude review mentions LocalStack compatibility
+  HAS_LOCALSTACK_DOCS=false
+  if grep -qiE "LocalStack Compatibility|localstack.*adjustment|localstack.*limitation" latest_claude_comment.txt; then
+    HAS_LOCALSTACK_DOCS=true
+    echo "✅ LocalStack compatibility is documented in the review"
+  fi
+  
+  # Issues that can be downgraded for LocalStack migrations with proper documentation
+  case "$ISSUE_TYPE" in
+    missing_files)
+      # Check if it's about missing services (not actual file structure)
+      if echo "$ISSUE_QUOTE" | grep -qiE "service|CloudFront|Route53|WAF|EKS|AppSync|Cognito"; then
+        if [ "$HAS_LOCALSTACK_DOCS" = true ]; then
+          echo "⚠️ Missing services warning downgraded - LocalStack compatibility documented"
+          CRITICAL_FOUND=false
+        fi
+      fi
+      ;;
+    score_zero)
+      # Check if score 0 was given due to LocalStack limitations being misunderstood
+      if grep -qiE "missing.*services|unsupported.*feature|localstack" latest_claude_comment.txt; then
+        if [ "$HAS_LOCALSTACK_DOCS" = true ]; then
+          echo "⚠️ Score 0 may be due to LocalStack limitations - check if properly documented"
+          # Don't auto-downgrade score 0, but add context
+          echo "Note: This appears to be a LocalStack migration. If the low score is due to unsupported services,"
+          echo "ensure MODEL_FAILURES.md has a 'LocalStack Compatibility Adjustments' table."
+        fi
+      fi
+      ;;
+    blocked)
+      # Check if blocked due to LocalStack limitations
+      if echo "$ISSUE_QUOTE" | grep -qiE "service|CloudFront|Route53|WAF|EKS|NAT Gateway"; then
+        if [ "$HAS_LOCALSTACK_DOCS" = true ]; then
+          echo "⚠️ BLOCKED status may be due to LocalStack limitations - reviewing..."
+          echo "Note: Ensure MODEL_FAILURES.md documents these as intentional LocalStack adaptations"
+        fi
+      fi
+      ;;
+  esac
+  
+  if [ "$CRITICAL_FOUND" = false ]; then
+    echo "✅ Issue downgraded for LocalStack migration - proceeding with adjusted criteria"
+  fi
 fi
 
 # -------------------------------------------------------------------

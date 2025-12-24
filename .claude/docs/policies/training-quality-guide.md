@@ -279,6 +279,41 @@ Final Score = Base (8) + MODEL_FAILURES Adjustment + Complexity Adjustment
 
 **Action**: Block PR, redeploy to correct region, re-assess
 
+### Case 5: LocalStack Migration PR
+**Symptom**: PR is a LocalStack migration (branch starts with `ls-` or contains `localstack`)
+
+**Key Principle**: LocalStack compatibility modifications are **intentional architectural decisions**, not defects.
+
+**What to Expect**:
+- Conditional code using `isLocalStack` environment detection
+- Disabled/removed pro-only services (EKS, AppSync, Cognito-idp)
+- Simplified IAM policies
+- Removed NAT Gateways, CloudFront, Route53, WAF
+- Conditional KMS encryption
+
+**How to Categorize LocalStack Changes**:
+
+| LocalStack Change Type | Category | Score Impact | Condition |
+|------------------------|----------|--------------|-----------|
+| Conditional deployment (`isLocalStack` pattern) | Category B | ±0 | Shows environment awareness |
+| Documented service removal with table | Category B | ±0 | Valid architectural decision |
+| `isLocalStack` detection + conditional logic | Category A | +1 | Security-conscious pattern |
+| Undocumented commenting-out | Category C | -1 | Needs documentation |
+
+**Critical Rule**: Do NOT apply "missing services" penalty if:
+1. MODEL_FAILURES.md has a "LocalStack Compatibility Adjustments" section
+2. Removed services are documented with justification
+3. Services are in the pro-only or unsupported list (see `.claude/config/localstack.yaml`)
+
+**Score Calculation Example**:
+- Task requires: S3, Lambda, DynamoDB, CloudFront, Route53
+- LocalStack PR implements: S3, Lambda, DynamoDB (CloudFront/Route53 documented as unsupported)
+- MODEL_FAILURES.md includes LocalStack compatibility table
+- Result: Do NOT penalize for "missing 40% of services" - these are documented limitations
+- Base: 8, apply normal Category A/B/C adjustments for actual code fixes
+
+**Action**: Verify MODEL_FAILURES.md contains LocalStack section, then score based on actual code quality improvements (not LocalStack adaptations)
+
 ---
 
 ## Decision Tree
@@ -286,7 +321,14 @@ Final Score = Base (8) + MODEL_FAILURES Adjustment + Complexity Adjustment
 ```
 START
   ↓
-Critical Blocker? (Platform mismatch, wrong region, wrong account, missing 50%+ services)
+LocalStack Migration? (branch starts with ls- or contains localstack)
+  YES → Check MODEL_FAILURES.md for LocalStack Compatibility section
+    ├─ Has section → Exclude documented LocalStack changes from "missing services" check
+    └─ No section → Warn: recommend adding LocalStack documentation (-1 if missing)
+  NO → Continue normal evaluation
+  ↓
+Critical Blocker? (Platform mismatch, wrong region, wrong account, missing 50%+ services*)
+  * For LocalStack PRs: Only count services NOT documented as LocalStack limitations
   YES → Set score to blocker value (3-5) → BLOCK PR → END
   NO → Continue
   ↓

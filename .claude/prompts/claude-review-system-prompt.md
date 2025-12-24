@@ -51,6 +51,78 @@ Based on the output from Step 0.2, follow the appropriate review section:
 
 ---
 
+## LocalStack Compatibility Considerations
+
+**IMPORTANT**: For PRs that deploy to LocalStack (identified by branch names starting with `ls-` or containing `localstack`), apply the following adjusted review criteria.
+
+### Detecting LocalStack PRs
+
+Check if this is a LocalStack migration:
+```bash
+# Check branch name
+BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+if [[ "$BRANCH_NAME" == ls-* ]] || [[ "$BRANCH_NAME" == *localstack* ]]; then
+  echo "LOCALSTACK_MIGRATION=true"
+else
+  echo "LOCALSTACK_MIGRATION=false"
+fi
+```
+
+### Acceptable LocalStack Adaptations (DO NOT PENALIZE)
+
+The following modifications are **ACCEPTABLE** and should **NOT** reduce the training quality score when properly documented in MODEL_FAILURES.md:
+
+| Adaptation Type | Example | Why Acceptable |
+|-----------------|---------|----------------|
+| **Conditional feature deployment** | `natGateways: isLocalStack ? 0 : 2` | Best practice for multi-environment |
+| **Pro-only service removal** | Removing EKS, AppSync, Cognito-idp | Not available in LocalStack Community |
+| **Simplified IAM policies** | Using basic IAM instead of complex policies | LocalStack IAM is simplified |
+| **Disabled NAT Gateways** | `natGateways: 0` | EIP allocation issues in LocalStack |
+| **Removed CloudFront/Route53/WAF** | Conditional or removed | Not supported in Community Edition |
+| **Disabled autoDeleteObjects** | Removed from S3 buckets | Lambda custom resources cause issues |
+| **Conditional KMS encryption** | Using default encryption vs KMS keys | LocalStack KMS is basic |
+
+### How to Score LocalStack Adaptations
+
+1. **If using conditional patterns** (`isLocalStack` checks):
+   - Treat as **Category B** (moderate improvement) - shows environment awareness
+   - Example: `const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost')`
+
+2. **If documented in MODEL_FAILURES.md with table format**:
+   - **DO NOT penalize** for "missing services"
+   - Count documented LocalStack changes as **intentional architectural decisions**
+
+3. **If simply commented out without documentation**:
+   - Treat as **Category C** (minor fix needed) - needs documentation
+   - Recommend adding LocalStack compatibility section to MODEL_FAILURES.md
+
+### Required MODEL_FAILURES.md Documentation
+
+For LocalStack PRs, verify MODEL_FAILURES.md contains a section like:
+
+```markdown
+## LocalStack Compatibility Adjustments
+
+| Feature | LocalStack Limitation | Solution Applied | Production Status |
+|---------|----------------------|------------------|-------------------|
+| NAT Gateway | EIP allocation fails | Conditional: `natGateways: 0` | Enabled in AWS |
+| CloudTrail | Limited support | Disabled | Enabled in AWS |
+```
+
+**If this section exists and is complete**: Do not apply "missing services" penalties.
+
+**If this section is missing**: Deduct 1 point and recommend adding it.
+
+### Services Known to Have LocalStack Limitations
+
+Reference `.claude/config/localstack.yaml` for the official compatibility list:
+
+- **Pro-only (remove/mock)**: EKS, AppSync, Amplify, SageMaker, Cognito-idp
+- **Limited (simplify)**: ECS, RDS, EC2, ElastiCache
+- **Not supported (remove)**: CloudFront, Route53, WAF, ACM
+
+---
+
 ## CI/CD Pipeline Review (task type: cicd-pipeline)
 
 Follow `.claude/prompts/cicd-pipeline-review.md` for complete scoring criteria.
