@@ -389,17 +389,39 @@ if [[ -d "lib" ]]; then
   fi
 fi
 
-# Check wave field
+# Check wave field - use wave lookup to determine correct wave from P0/P1 CSV
 WAVE=$(jq -r '.wave // ""' metadata.json 2>/dev/null || echo "")
+
+# Source wave lookup if available
+WAVE_LOOKUP_SCRIPT="$SCRIPT_DIR/wave-lookup.sh"
+EXPECTED_WAVE=""
+if [[ -f "$WAVE_LOOKUP_SCRIPT" ]]; then
+  source "$WAVE_LOOKUP_SCRIPT" 2>/dev/null || true
+  EXPECTED_WAVE=$(get_wave_for_task "metadata.json" 2>/dev/null || echo "")
+fi
+
 if [[ -z "$WAVE" ]] || [[ "$WAVE" == "null" ]]; then
   log_warning "Missing 'wave' field in metadata.json"
   if [[ "$FIX_ERRORS" == "true" ]]; then
-    log_fix "Setting wave to 'P1'"
-    jq '.wave = "P1"' metadata.json > metadata.json.tmp
+    # Use looked up wave if available, otherwise default to P1
+    FIX_WAVE="${EXPECTED_WAVE:-P1}"
+    log_fix "Setting wave to '$FIX_WAVE' (from CSV lookup or default)"
+    jq --arg wave "$FIX_WAVE" '.wave = $wave' metadata.json > metadata.json.tmp
     mv metadata.json.tmp metadata.json
+    VALIDATION_PASSED=true
   fi
 elif [[ ! "$WAVE" =~ ^(P0|P1)$ ]]; then
   log_error "Invalid wave value: '$WAVE' (must be P0 or P1)"
+elif [[ -n "$EXPECTED_WAVE" ]] && [[ "$WAVE" != "$EXPECTED_WAVE" ]]; then
+  log_warning "Wave mismatch: metadata has '$WAVE' but CSV says '$EXPECTED_WAVE'"
+  if [[ "$FIX_ERRORS" == "true" ]]; then
+    log_fix "Correcting wave to '$EXPECTED_WAVE' (from CSV reference)"
+    jq --arg wave "$EXPECTED_WAVE" '.wave = $wave' metadata.json > metadata.json.tmp
+    mv metadata.json.tmp metadata.json
+    VALIDATION_PASSED=true
+  fi
+else
+  log_success "Wave field is valid: $WAVE"
 fi
 
 echo ""
