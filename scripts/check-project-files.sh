@@ -2,7 +2,7 @@
 
 set -e
 
-ALLOWED_FOLDERS=("bin" "lib" "test" "tests" "cli" "scripts" ".github" "archive")
+ALLOWED_FOLDERS=("bin" "lib" "test" "tests" "cli" "scripts" ".github")
 ALLOWED_FILES=(
   "package.json"
   "package-lock.json"

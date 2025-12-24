@@ -19,12 +19,9 @@
     "IAM"
   ],
   "training_quality": 8,
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "localstack-migration",
-  "dockerS3Location": "",
-  "localstack_compatible": true,
-  "migrated_from_pr": 441
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291480",
+    "pr": "Pr441"
+  }
 }
