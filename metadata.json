@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291296",
+  "team": "synth-2",
+  "startedAt": "2025-08-15T11:09:58.097Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Application Load Balancer",
+    "Auto Scaling Group",
+    "CloudWatch",
+    "Internet Gateway",
+    "Security Groups",
+    "Route Tables",
+    "Subnets"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291296",
+    "pr": "Pr1349"
+  }
+}
