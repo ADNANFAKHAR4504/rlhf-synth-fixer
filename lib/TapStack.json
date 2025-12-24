@@ -284,7 +284,7 @@
         "FunctionName": {
           "Fn::Sub": "ProcessPriceChecks-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs22.x",
+        "Runtime": "nodejs18.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -297,6 +297,7 @@
         ],
         "MemorySize": 512,
         "Timeout": 60,
+        "ReservedConcurrentExecutions": 100,
         "Code": {
           "ZipFile": "exports.handler = async (event) => {\n  console.log('Processing price check event:', JSON.stringify(event, null, 2));\n  \n  const AWS = require('aws-sdk');\n  const dynamodb = new AWS.DynamoDB.DocumentClient();\n  const sns = new AWS.SNS();\n  \n  const tableName = process.env.DYNAMODB_TABLE_NAME;\n  const snsTopicArn = process.env.SNS_TOPIC_ARN;\n  \n  try {\n    // Example: Query alerts for a specific user\n    const userId = event.userId || 'test-user';\n    const params = {\n      TableName: tableName,\n      KeyConditionExpression: 'userId = :userId',\n      ExpressionAttributeValues: {\n        ':userId': userId\n      }\n    };\n    \n    const result = await dynamodb.query(params).promise();\n    console.log(`Found ${result.Items.length} alerts for user ${userId}`);\n    \n    // Example: Send notification if price threshold is met\n    if (event.priceAlert && event.currentPrice >= event.priceAlert.targetPrice) {\n      const message = `Price alert triggered! ${event.priceAlert.cryptocurrency} reached ${event.currentPrice}`;\n      await sns.publish({\n        TopicArn: snsTopicArn,\n        Message: message,\n        Subject: 'Cryptocurrency Price Alert'\n      }).promise();\n      console.log('Notification sent:', message);\n    }\n    \n    return {\n      statusCode: 200,\n      body: JSON.stringify({\n        message: 'Price check processed successfully',\n        alertsChecked: result.Items.length\n      })\n    };\n  } catch (error) {\n    console.error('Error processing price check:', error);\n    throw error;\n  }\n};\n"
         },
