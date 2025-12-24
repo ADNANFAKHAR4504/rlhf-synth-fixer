@@ -29,7 +29,7 @@ The template should deploy an **AWS Lambda function** that is automatically trig
 
    * The template is **fully self-contained** and **passes AWS CloudFormation validation**.
    * No attempt is made to create the existing resources again.
-   * All required permissions and resource relationships are correctly defined.
+   * Necessary IAM permissions and resource relationships are correctly defined.
 
 **Constraints:**
 
