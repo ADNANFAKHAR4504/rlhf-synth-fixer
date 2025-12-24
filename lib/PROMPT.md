@@ -18,12 +18,12 @@ Build all five items below.
 ### One optional enhancement
 Implement exactly one optional enhancement and make it conditional.
 
-Choose Synthetics canary as the optional enhancement and only create it when SyntheticCanaryUrl is not empty.
+Pick a Synthetics canary as the optional enhancement and only create it when SyntheticCanaryUrl is not empty.
 
 ## Deployment and cross-region visibility
 - Primary deployment region is us-east-1
-- The dashboard must show cross-region visibility for us-west-2 and eu-west-1 by using per-metric region settings in dashboard widgets where CloudWatch supports it
-- If CloudWatch alarms do not support cross-region metric math in CloudFormation for a specific case, document that limitation in a short template comment and still provide cross-region visibility in the dashboard
+- The dashboard must show cross-region visibility for us-west-2 and eu-west-1 using per-metric region settings in dashboard widgets where CloudWatch supports it
+- If CloudWatch alarms cannot do cross-region metric math through CloudFormation for a specific case, add a short template comment stating the limitation and still provide cross-region visibility in the dashboard
 
 ## Compliance and operational requirements
 - Metrics and logs retained for at least 90 days
@@ -31,7 +31,7 @@ Choose Synthetics canary as the optional enhancement and only create it when Syn
 - Use CloudWatch Logs Insights for investigation, not third-party tools
 - Metric math must compute a composite health indicator that combines latency, error rate, and success rate with weights
 - Dashboard should be set up for fast refresh during business hours using live data behavior where supported
-  - If CloudWatch does not support true business-hours scheduling in dashboards, add a short comment stating the limitation and still enable the closest supported live behavior on widgets
+  - If CloudWatch does not support business-hours scheduling in dashboards, add a short comment stating the limitation and still enable the closest supported live behavior on widgets
 - Cost control matters
   - Consolidate metric filters where reasonable
   - Avoid duplicate metrics
@@ -51,7 +51,9 @@ Choose Synthetics canary as the optional enhancement and only create it when Syn
 ## Parameters to include in TapStack.yml
 Declare all parameters below.
 
-- EnvironmentSuffix as a String with AllowedPattern set to ^[a-z0-9-]{3,30}$
+- EnvironmentSuffix as a String
+  - Restrict it with a safe AllowedPattern that allows only lowercase letters, digits, and hyphens
+  - Enforce a length between 3 and 30 characters
 - PrimaryEmailCritical, PrimaryEmailWarning, PrimaryEmailInfo
 - PrimarySmsCritical, PrimarySmsWarning, PrimarySmsInfo
 - MetricNamespace as a String with default Payments/Observability
@@ -124,10 +126,7 @@ Critical alarms
 
 Composite alarm
 - Create a composite alarm named ServiceHealthCritical-EnvironmentSuffix
-- Use metric math to compute a health score that combines
-  - error rate
-  - latency
-  - success rate
+- Use metric math to compute a health score that combines error rate, latency, and success rate
 - Trigger when health score is below an SSM-driven threshold
 - Ensure the composite alarm depends on its member alarms
 
