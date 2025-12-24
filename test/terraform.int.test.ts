@@ -26,10 +26,18 @@ type OutputsFile = {
 };
 
 function loadOutputs() {
-  const file =
-    process.env.OUTPUTS_FILE ||
-    path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
-  if (!fs.existsSync(file)) throw new Error(`Outputs file not found at ${file}`);
+  // Try multiple possible output file locations
+  const possiblePaths = [
+    process.env.OUTPUTS_FILE,
+    path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json"),
+    path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json"),
+    path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"),
+  ].filter(Boolean) as string[];
+
+  const file = possiblePaths.find(p => fs.existsSync(p));
+  if (!file) {
+    throw new Error(`Outputs file not found. Tried: ${possiblePaths.join(", ")}`);
+  }
 
   const raw = JSON.parse(fs.readFileSync(file, "utf8")) as OutputsFile;
 
