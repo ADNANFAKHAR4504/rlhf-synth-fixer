@@ -1,0 +1,26 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "508400",
+  "team": "synth",
+  "startedAt": "2025-11-24T07:09:45.599Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "AWS::SNS::Topic",
+    "AWS::SQS::Queue",
+    "AWS::DynamoDB::Table"
+  ],
+  "provider": "localstack",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

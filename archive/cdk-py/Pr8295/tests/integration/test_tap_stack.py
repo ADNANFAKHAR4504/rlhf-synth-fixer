@@ -1,0 +1,111 @@
+import json
+import os
+import unittest
+import boto3
+from botocore.exceptions import ClientError
+from pytest import mark
+import pytest
+
+# Load outputs from cfn-outputs/flat-outputs.json
+base_dir = os.path.dirname(os.path.abspath(__file__))
+flat_outputs_path = os.path.join(
+    base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json'
+)
+
+if os.path.exists(flat_outputs_path):
+    with open(flat_outputs_path, 'r', encoding='utf-8') as f:
+        flat_outputs = json.load(f)
+else:
+    flat_outputs = {}
+
+# Use region from environment variable or default to us-west-2
+REGION = os.environ.get('AWS_REGION', os.environ.get('AWS_DEFAULT_REGION', 'us-west-2'))
+
+# Check if running in LocalStack environment
+IS_LOCALSTACK = os.environ.get('AWS_ENDPOINT_URL', '').startswith('http://localhost') or \
+                os.environ.get('LOCALSTACK_HOSTNAME') is not None
+
+# LocalStack endpoint configuration
+ENDPOINT_URL = os.environ.get('AWS_ENDPOINT_URL', 'http://localhost:4566') if IS_LOCALSTACK else None
+
+def get_boto3_client(service_name, region_name=REGION):
+    """Get a boto3 client configured for LocalStack or AWS"""
+    if IS_LOCALSTACK:
+        return boto3.client(
+            service_name,
+            region_name=region_name,
+            endpoint_url=ENDPOINT_URL,
+            aws_access_key_id='test',
+            aws_secret_access_key='test'
+        )
+    return boto3.client(service_name, region_name=region_name)
+
+@mark.describe("TapStack Integration")
+class TestTapStackIntegration(unittest.TestCase):
+    """Integration tests for the deployed TapStack resources using boto3"""
+
+    @mark.it("VPC exists")
+    def test_vpc_exists(self):
+        vpc_id = flat_outputs.get("VpcId")
+        self.assertIsNotNone(vpc_id, "VpcId output is missing")
+        ec2 = get_boto3_client("ec2")
+        try:
+            response = ec2.describe_vpcs(VpcIds=[vpc_id])
+            self.assertEqual(len(response["Vpcs"]), 1)
+        except ClientError as e:
+            self.fail(f"VPC '{vpc_id}' does not exist: {e}")
+
+    @mark.it("Bastion host EC2 instance exists")
+    def test_bastion_host_exists(self):
+        instance_id = flat_outputs.get("BastionHostId")
+        self.assertIsNotNone(instance_id, "BastionHostId output is missing")
+        ec2 = get_boto3_client("ec2")
+        try:
+            response = ec2.describe_instances(InstanceIds=[instance_id])
+            self.assertGreaterEqual(len(response["Reservations"]), 1)
+            self.assertEqual(response["Reservations"][0]["Instances"][0]["InstanceId"], instance_id)
+        except ClientError as e:
+            self.fail(f"Bastion host instance '{instance_id}' does not exist: {e}")
+
+    @mark.it("S3 bucket for app data exists and is encrypted")
+    def test_app_data_bucket_exists_and_encrypted(self):
+        bucket_name = flat_outputs.get("AppDataBucketName")
+        self.assertIsNotNone(bucket_name, "AppDataBucketName output is missing")
+        s3 = get_boto3_client("s3")
+        try:
+            s3.head_bucket(Bucket=bucket_name)
+            # LocalStack Community has limited support for S3 bucket encryption details
+            # In LocalStack, verify bucket exists; in AWS, verify KMS encryption
+            if not IS_LOCALSTACK:
+                enc = s3.get_bucket_encryption(Bucket=bucket_name)
+                rules = enc["ServerSideEncryptionConfiguration"]["Rules"]
+                self.assertTrue(any(
+                    rule["ApplyServerSideEncryptionByDefault"]["SSEAlgorithm"] == "aws:kms"
+                    for rule in rules
+                ), "S3 bucket should use aws:kms encryption")
+        except ClientError as e:
+            self.fail(f"S3 bucket '{bucket_name}' does not exist or is not encrypted: {e}")
+
+    @pytest.mark.skipif(IS_LOCALSTACK, reason="RDS is not created in LocalStack mode")
+    @mark.it("RDS instance endpoint is reachable")
+    def test_rds_instance_exists(self):
+        endpoint = flat_outputs.get("DatabaseEndpoint")
+        self.assertIsNotNone(endpoint, "DatabaseEndpoint output is missing")
+        rds = get_boto3_client("rds")
+        try:
+            instances = rds.describe_db_instances()
+            found = any(db["Endpoint"]["Address"] == endpoint for db in instances["DBInstances"])
+            self.assertTrue(found, f"RDS instance with endpoint '{endpoint}' not found")
+        except ClientError as e:
+            self.fail(f"RDS instance with endpoint '{endpoint}' does not exist: {e}")
+
+    @mark.it("Database secret exists in Secrets Manager")
+    def test_database_secret_exists(self):
+        secret_arn = flat_outputs.get("DatabaseSecretArn")
+        self.assertIsNotNone(secret_arn, "DatabaseSecretArn output is missing")
+        sm = get_boto3_client("secretsmanager")
+        try:
+            response = sm.describe_secret(SecretId=secret_arn)
+            self.assertEqual(response["ARN"], secret_arn)
+        except ClientError as e:
+            self.fail(f"Database secret '{secret_arn}' does not exist: {e}")

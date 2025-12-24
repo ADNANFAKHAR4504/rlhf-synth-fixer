@@ -1,0 +1,9 @@
+{
+  "name": "search-function",
+  "version": "1.0.0",
+  "description": "Search Lambda function with Redis caching",
+  "main": "index.js",
+  "dependencies": {
+    "redis": "^4.6.7"
+  }
+}
