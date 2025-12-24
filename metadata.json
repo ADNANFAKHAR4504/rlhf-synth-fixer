@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr926",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T00:00:00.000Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Web Application Deployment",
+    "Database Management",
+    "Security Configuration",
+    "Performance Optimization",
+    "Access Control",
+    "Monitoring Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Route53",
+    "DynamoDB",
+    "S3",
+    "ElasticLoadBalancingV2",
+    "CloudWatch",
+    "IAM"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr2004"
+  }
+}
