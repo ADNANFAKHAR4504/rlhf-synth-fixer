@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912287",
+  "wave": "P0",
+  "team": "synth-1",
+  "startedAt": "2025-12-24T10:00:43.371Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "LogGroup",
+    "MetricFilter",
+    "Dashboard",
+    "Alarm",
+    "CompositeAlarm",
+    "Topic",
+    "Subscription",
+    "Rule",
+    "Function",
+    "Permission",
+    "Role",
+    "Policy",
+    "QueryDefinition",
+    "MetricStream",
+    "Bucket",
+    "BucketPolicy",
+    "DeliveryStream",
+    "Canary",
+    "InsightRule",
+    "FlowLog"
+  ]
+}
