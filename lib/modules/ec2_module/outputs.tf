@@ -15,5 +15,5 @@ output "launch_template_id" {
 
 output "instance_id" {
   description = "ID of the EC2 instance (used when ASG is disabled for LocalStack)"
-  value       = var.enable_asg ? "" : aws_instance.main[0].id
+  value       = var.enable_asg ? "" : (var.enable_ec2 ? aws_instance.main[0].id : "")
 }

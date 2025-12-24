@@ -33,6 +33,7 @@ type StructuredOutputs = {
   instance_id?: TfOutputValue<string>;
   enable_alb?: TfOutputValue<boolean>;
   enable_asg?: TfOutputValue<boolean>;
+  enable_ec2?: TfOutputValue<boolean>;
 };
 
 function readStructuredOutputs(): StructuredOutputs {
@@ -68,6 +69,7 @@ const instanceId = outputs.instance_id?.value || "";
 const lbDomain = outputs.lb_domain?.value || "";
 const albEnabled = outputs.enable_alb?.value ?? true;
 const asgEnabled = outputs.enable_asg?.value ?? true;
+const ec2Enabled = outputs.enable_ec2?.value ?? true;
 
 async function retry<T>(fn: () => Promise<T>, attempts = 12, baseMs = 2000): Promise<T> {
   let lastErr: any;
@@ -466,10 +468,12 @@ describe("Infrastructure Integration Tests", () => {
       expect(typeof outputs.enable_asg?.value).toBe("boolean");
     });
 
-    test("instance_id is set when ASG is disabled", () => {
-      if (asgEnabled) {
+    test("instance_id is set when ASG is disabled and EC2 is enabled", () => {
+      if (asgEnabled || !ec2Enabled) {
+        // When ASG is enabled or EC2 is disabled, instance_id should be empty
         expect(instanceId).toBe("");
       } else {
+        // When ASG is disabled but EC2 is enabled, instance_id should be set
         expect(instanceId).toBeTruthy();
       }
     });

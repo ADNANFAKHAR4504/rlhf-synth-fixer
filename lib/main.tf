@@ -49,6 +49,7 @@ module "ec2_module" {
   desired_capacity      = module.env_module.as_group_desired
   common_tags           = module.env_module.common_tags
   enable_asg            = module.env_module.enable_asg
+  enable_ec2            = module.env_module.enable_ec2
 
   depends_on = [module.lb_module, module.security_group_module]
 }
@@ -77,6 +78,11 @@ output "enable_alb" {
 output "enable_asg" {
   description = "Whether Auto Scaling Group is enabled"
   value       = module.env_module.enable_asg
+}
+
+output "enable_ec2" {
+  description = "Whether EC2 instance creation is enabled"
+  value       = module.env_module.enable_ec2
 }
 
 output "instance_id" {

@@ -58,9 +58,10 @@ resource "aws_launch_template" "main" {
   })
 }
 
-# Simple EC2 Instance for LocalStack (when ASG is disabled)
+# Simple EC2 Instance for LocalStack (when ASG is disabled and EC2 is enabled)
+# Note: EC2 instance creation can hang in LocalStack Community - set enable_ec2 = false to skip
 resource "aws_instance" "main" {
-  count = var.enable_asg ? 0 : 1
+  count = var.enable_asg ? 0 : (var.enable_ec2 ? 1 : 0)
 
   ami                    = local.ami_id
   instance_type          = var.instance_type

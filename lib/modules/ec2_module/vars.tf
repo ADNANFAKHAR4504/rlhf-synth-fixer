@@ -59,3 +59,9 @@ variable "enable_asg" {
   type        = bool
   default     = true
 }
+
+variable "enable_ec2" {
+  description = "Whether to create EC2 instance when ASG is disabled (disabled for LocalStack to avoid timeout)"
+  type        = bool
+  default     = true
+}

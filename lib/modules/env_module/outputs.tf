@@ -43,3 +43,8 @@ output "enable_asg" {
   description = "Whether to enable Auto Scaling Group (disabled for LocalStack)"
   value       = local.enable_asg
 }
+
+output "enable_ec2" {
+  description = "Whether to enable EC2 instance creation (disabled for LocalStack)"
+  value       = local.enable_ec2
+}

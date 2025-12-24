@@ -7,10 +7,11 @@ locals {
 
   project = "HCLTuring"
 
-  # LocalStack does not support ELBv2 (ALB) or Auto Scaling in Community Edition
+  # LocalStack does not support ELBv2 (ALB), Auto Scaling, or full EC2 in Community Edition
   # Set to false for LocalStack testing, true for real AWS
   enable_alb = false
   enable_asg = false
+  enable_ec2 = false # Disable EC2 instance creation to avoid LocalStack timeout
 
   common_tags = {
     "Application" : "multi-env",
