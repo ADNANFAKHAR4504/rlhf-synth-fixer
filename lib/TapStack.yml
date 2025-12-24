@@ -630,23 +630,21 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub 'rds-postgres-${EnvironmentSuffix}'
       Engine: postgres
-      EngineVersion: '15.14'
+      EngineVersion: '15'
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: 20
-      StorageType: gp3
-      StorageEncrypted: true
+      StorageType: gp2
+      StorageEncrypted: false
       DBName: !Ref DBName
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSMasterPasswordSecret}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
-      MultiAZ: true
+      MultiAZ: false
       BackupRetentionPeriod: !Ref DBBackupRetentionPeriod
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      EnableCloudwatchLogsExports:
-        - postgresql
       PubliclyAccessible: false
       DeletionProtection: false
       Tags:
