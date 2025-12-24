@@ -1,19 +1,24 @@
 """
 tap_stack.py
 
-This module defines the TapStack class, the main Pulumi ComponentResource for 
+This module defines the TapStack class, the main Pulumi ComponentResource for
 the TAP (Test Automation Platform) project.
 
-It orchestrates the instantiation of other resource-specific components 
+It orchestrates the instantiation of other resource-specific components
 and manages environment-specific configurations.
 """
 
 import json
+import os
 from typing import Optional
 
 import pulumi
 import pulumi_aws as aws
 from pulumi import Output, ResourceOptions
+
+# LocalStack detection
+IS_LOCALSTACK = "localhost" in os.environ.get("AWS_ENDPOINT_URL", "") or \
+                "4566" in os.environ.get("AWS_ENDPOINT_URL", "")
 
 # Import your nested stacks here
 # from .dynamodb_stack import DynamoDBStack
@@ -263,6 +268,10 @@ class TapStack(pulumi.ComponentResource):
     import random
     from typing import Dict, Any
 
+    # LocalStack configuration
+    endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
+    boto_config = {'endpoint_url': endpoint_url} if endpoint_url else {}
+
     def exponential_backoff_retry(func, max_retries=3):
         \"\"\"Retry function with exponential backoff\"\"\"
         for attempt in range(max_retries + 1):
@@ -279,10 +288,10 @@ class TapStack(pulumi.ComponentResource):
         Process S3 events with idempotency and retry logic
         \"\"\"
         print(f"Processing event: {json.dumps(event)}")
-        
+
         try:
             # Get secrets from Secrets Manager
-            secrets_client = boto3.client('secretsmanager')
+            secrets_client = boto3.client('secretsmanager', **boto_config)
             secret_arn = os.environ['SECRET_ARN']
             
             def get_secret():
@@ -337,18 +346,22 @@ class TapStack(pulumi.ComponentResource):
     import os
     from typing import Dict, Any
 
+    # LocalStack configuration
+    endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
+    boto_config = {'endpoint_url': endpoint_url} if endpoint_url else {}
+
     def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         \"\"\"
         Handle API Gateway requests
         \"\"\"
         print(f"API Gateway event: {json.dumps(event)}")
-        
+
         try:
             http_method = event.get('httpMethod', 'GET')
             path = event.get('path', '/')
-            
+
             # Get secrets from Secrets Manager
-            secrets_client = boto3.client('secretsmanager')
+            secrets_client = boto3.client('secretsmanager', **boto_config)
             secret_arn = os.environ['SECRET_ARN']
             
             response = secrets_client.get_secret_value(SecretId=secret_arn)
